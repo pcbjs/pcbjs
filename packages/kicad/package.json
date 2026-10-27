@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/kicad",
-  "version": "0.0.0",
+  "version": "0.0.1-beta.0",
   "description": "pcbjs KiCad reader: s-expressions, .kicad_mod footprints as pcbjs footprints, kicadFootprint() against the installed KiCad library, and the .kicad_pcb importer behind pcbjs import.",
   "type": "module",
   "license": "MIT",
@@ -36,10 +36,10 @@
     "postpack": "node ../../scripts/pack-files.mjs post"
   },
   "dependencies": {
-    "@pcbjs/compile": "^0.0.0"
+    "@pcbjs/compile": "^0.0.1-beta.0"
   },
   "peerDependencies": {
-    "@pcbjs/core": "^0.0.0"
+    "@pcbjs/core": "^0.0.1-beta.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0"

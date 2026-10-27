@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/fab",
-  "version": "0.0.0",
+  "version": "0.0.1-beta.0",
   "description": "pcbjs fab presets: <PCB> components bound to a fab stackup, rules and colours, such as @pcbjs/fab/JLCPCB/2-Layer.",
   "type": "module",
   "license": "MIT",
@@ -36,10 +36,10 @@
     "postpack": "node ../../scripts/pack-files.mjs post"
   },
   "dependencies": {
-    "@pcbjs/lib": "^0.0.0"
+    "@pcbjs/lib": "^0.0.1-beta.0"
   },
   "peerDependencies": {
-    "@pcbjs/core": "^0.0.0"
+    "@pcbjs/core": "^0.0.1-beta.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0"
