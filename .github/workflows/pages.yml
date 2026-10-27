@@ -61,7 +61,7 @@ jobs:
       # vitepress empties its outDir, so the root tree goes first
       - name: Stable tree from main
         if: steps.stable.outputs.tag == ''
-        run: npm run docs:build -- --outDir "$OUT"
+        run: npm run build -w pcbjs-site -- --outDir "$OUT"
       - name: Check out the train
         if: steps.stable.outputs.tag != ''
         run: git worktree add "$RUNNER_TEMP/stable" "${{ steps.stable.outputs.tag }}"
@@ -80,9 +80,9 @@ jobs:
         run: |
           npm ci
           npm run build
-          npm run docs:build -- --outDir "$OUT"
+          npm run build -w pcbjs-site -- --outDir "$OUT"
       - name: Next tree, main at /next/
-        run: npm run docs:build -- --outDir "$OUT/next"
+        run: npm run build -w pcbjs-site -- --outDir "$OUT/next"
         env:
           PCBJS_SITE_BASE: /next/
       - name: Domain and no Jekyll
