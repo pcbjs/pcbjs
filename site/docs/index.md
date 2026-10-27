@@ -4,7 +4,7 @@ description: Every pcbjs topic, the same files `pcbjs docs <topic>` prints in th
 ---
 
 <script setup>
-import { useData } from 'vitepress'
+import { useData, withBase } from 'vitepress'
 const { theme } = useData()
 const groups = theme.value.sidebar['/docs/']
 </script>
@@ -16,6 +16,6 @@ Each page is one topic file from `docs/`, the same text `pcbjs docs <topic>` pri
 <template v-for="g in groups" :key="g.text">
   <h2>{{ g.text }}</h2>
   <ul>
-    <li v-for="i in g.items" :key="i.link"><a :href="i.link">{{ i.text }}</a></li>
+    <li v-for="i in g.items" :key="i.link"><a :href="withBase(i.link)">{{ i.text }}</a></li>
   </ul>
 </template>

@@ -1,6 +1,6 @@
 # The pcbjs docs site
 
-The VitePress project behind https://pcbjs.dev, with the docs of `main` at https://next.pcbjs.dev. It renders the topic files in `docs/` where they are, the same files `pcbjs docs` prints, and adds its own pages beside them.
+The VitePress project behind https://pcbjs.dev, with the docs of `main` at https://pcbjs.dev/next/. It renders the topic files in `docs/` where they are, the same files `pcbjs docs` prints, and adds its own pages beside them.
 
 ## Commands
 
@@ -27,35 +27,21 @@ npm run boards -w pcbjs-site -- --commit   # refresh the committed gallery fallb
 | `data/boards.json`, `public/shots/` | the committed fallbacks, used when a build has no Chrome; keep `public/shots` under 3 MB |
 | `.shots/` | what `docs:build` generated, untracked; preferred over the fallbacks and copied over them into the build |
 | `brand/` | `logo.svg` and `favicon.svg`, the nav logo and the favicon when the files exist, and `og.png`, the Open Graph image |
-| `public/CNAME`, `public/.nojekyll` | copied into every build; the CNAME says `pcbjs.dev` and the workflows overwrite it per target |
 
 A new topic file in `docs/` becomes a page on the next build. Put it in a sidebar group in `groups` in `.vitepress/topics.ts`; a topic in no group lands in Background. Topic files keep their plain style for the terminal: a mention such as `board.md` in prose becomes a link on the site, and the page is wrapped in `v-pre`, so `{{` in a sample is safe.
 
 ## Deployment
 
-Two targets, each its own repository with its own deploy key, so no key can write to both:
+`.github/workflows/pages.yml` builds both trees into one GitHub Pages artifact of `pcbjs/pcbjs`, since every deploy replaces the whole site, and deploys it with `actions/deploy-pages` under the workflow's own token; no secret and no other repository. It runs on every push to `main`, by hand with Run workflow, and from `release.yml` after a publish.
 
-| Site | Repository | Workflow | When | Secret |
-| --- | --- | --- | --- | --- |
-| https://pcbjs.dev | `pcbjs/pcbjs.github.io` | `release.yml`, job `site` | after a publish that released packages, and by hand with Run workflow, which takes a ref | `PAGES_DEPLOY_KEY` |
-| https://next.pcbjs.dev | `pcbjs/next.pcbjs.dev` | `docs.yml` | every push to `main`, and by hand | `NEXT_PAGES_DEPLOY_KEY` |
+| Path | Tree | Built from |
+| --- | --- | --- |
+| https://pcbjs.dev/ | the stable docs | the tag `@pcbjs/pcbjs@<version>` with the highest version, the last published train; `main` while no train is tagged |
+| https://pcbjs.dev/next/ | the docs of `main` | `main`, with `PCBJS_SITE_BASE=/next/` and a `noindex` robots meta |
 
-Both run `npm ci`, `npm run build` and `npm run docs:build` on ubuntu-latest, which has Chrome, write the target's host into `dist/CNAME`, and push `site/.vitepress/dist` to the `main` branch of the target with `peaceiris/actions-gh-pages`. `PCBJS_SITE_URL` sets the host in the sitemap, the canonical links and the Open Graph tags; it defaults to `https://pcbjs.dev`.
+Each tree runs `npm ci`, `npm run build` and `npm run docs:build -- --outDir <dir>` on ubuntu-latest, which has Chrome; the workflow caches the examples' route files, and `site/.shots` until a package changes, so a docs-only push shoots only the examples that changed and every check routes warm. `scripts/boards.mjs` takes the three views of a project in one `pcbjs shot --view all`. `PCBJS_SITE_URL` sets the host in the sitemap, the canonical links and the Open Graph tags, `https://pcbjs.dev` by default; `PCBJS_SITE_BASE` sets the VitePress `base`, `/` by default, and any other base adds the `noindex` meta. The workflow writes `CNAME` and `.nojekyll` at the artifact root.
 
-### One-time setup, per repository
-
-Do this once for `pcbjs/pcbjs.github.io` with the secret `PAGES_DEPLOY_KEY` and the domain `pcbjs.dev`, and once for `pcbjs/next.pcbjs.dev` with `NEXT_PAGES_DEPLOY_KEY` and `next.pcbjs.dev`.
-
-1. Create the public repository with a `main` branch; an empty initial commit is enough.
-2. Make a deploy key pair on your machine, with no passphrase, outside any repository: `ssh-keygen -t ed25519 -C "pcbjs site deploy" -N "" -f site-deploy`.
-3. In the site repository, Settings, Deploy keys, Add deploy key: paste `site-deploy.pub`, title it `site deploy from pcbjs/pcbjs`, and tick Allow write access.
-4. In `pcbjs/pcbjs`, Settings, Secrets and variables, Actions, New repository secret: the secret name above, and the whole private key file `site-deploy`, header and footer lines included.
-5. Delete both key files from your machine.
-6. In the site repository, Settings, Pages: Source Deploy from a branch, branch `main`, folder `/ (root)`.
-7. Run the workflow once, then in Settings, Pages, Custom domain enter the domain above and Save; GitHub checks the DNS records below.
-8. When the certificate is issued, tick Enforce HTTPS.
-
-To rotate a key, repeat steps 2 to 5 for that repository and remove the old deploy key.
+The one-time setup is in RELEASING.md, Owner setup: Pages source "GitHub Actions" and the custom domain `pcbjs.dev` with HTTPS enforced.
 
 ### DNS for pcbjs.dev
 
@@ -72,13 +58,11 @@ At the registrar, with no other `A`, `AAAA` or `CNAME` records on these names:
 | `@` | `AAAA` | `2606:50c0:8002::153` |
 | `@` | `AAAA` | `2606:50c0:8003::153` |
 | `www` | `CNAME` | `pcbjs.github.io` |
-| `next` | `CNAME` | `pcbjs.github.io` |
 
-- `next` points at the organisation host too; GitHub serves `pcbjs/next.pcbjs.dev` there because that repository claims `next.pcbjs.dev` in its Pages custom domain.
-- `www.pcbjs.dev` redirects to `pcbjs.dev` once `pcbjs.dev` is the custom domain of `pcbjs/pcbjs.github.io`; nothing else is needed for it.
+- `www.pcbjs.dev` redirects to `pcbjs.dev` once `pcbjs.dev` is the Pages custom domain of `pcbjs/pcbjs`; nothing else is needed for it.
 - Verify the domain for the organisation, Settings, Pages, Add a domain, with the `TXT` record GitHub shows, so no other account can claim a subdomain.
 - `.dev` is on the HSTS preload list, so browsers only ever load the site over HTTPS; until the certificate is issued the site does not open.
-- Check with `dig +short pcbjs.dev A`, `dig +short pcbjs.dev AAAA` and `dig +short next.pcbjs.dev CNAME`.
+- Check with `dig +short pcbjs.dev A` and `dig +short pcbjs.dev AAAA`.
 
 Reserved names, no records yet:
 
@@ -87,9 +71,8 @@ Reserved names, no records yet:
 
 ## Versioned docs, later
 
-pcbjs.dev holds the docs of the last release and next.pcbjs.dev those of `main`. When 0.1 ships and 0.2 starts to differ, each minor gets a frozen copy under its own path:
+pcbjs.dev holds the docs of the last release and pcbjs.dev/next/ those of `main`. When 0.1 ships and 0.2 starts to differ, each minor gets a frozen copy under its own path:
 
-- Add a `release-docs` job, run on a `v0.1.*` tag, that checks the tag out, builds with `base: '/0.1/'` passed through an environment variable read in `config.mts`, and deploys with `peaceiris/actions-gh-pages` using `destination_dir: 0.1` and `keep_files: true`, so the root build and the other minors stay.
-- Make the stable deploy in `release.yml` keep the minor folders: `keep_files: true` instead of `force_orphan: true`.
-- Add a version menu to the nav, an item per minor linking to `/0.1/` and so on, with the root labelled as the latest release and a link to next.pcbjs.dev for `main`.
+- In `pages.yml`, build the newest tag of each minor into `/0.1/` and so on, with `PCBJS_SITE_BASE=/0.1/`, beside the stable and next trees in the same artifact.
+- Add a version menu to the nav, an item per minor linking to `/0.1/` and so on, with the root labelled as the latest release and a link to `/next/` for `main`.
 - Point `pcbjs docs` of a released package at its minor in its output, since the terminal docs are already versioned by the installed package.

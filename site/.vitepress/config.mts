@@ -8,6 +8,9 @@ const brand = join(site, 'brand')
 const hasBrand = (f: string) => existsSync(join(brand, f))
 const github = 'https://github.com/pcbjs/pcbjs'
 const host = process.env.PCBJS_SITE_URL ?? 'https://pcbjs.dev'
+// '/next/' for the docs of main beside the stable tree; any base but the root is kept out of search engines
+const base = process.env.PCBJS_SITE_BASE ?? '/'
+const root = `${host}${base}`
 
 /** Serves and emits site/brand/* at /brand/, so the logo worker's files need no copy in public/. */
 function brandFiles(): Plugin {
@@ -32,16 +35,18 @@ export default defineConfig({
   title: 'pcbjs',
   description: 'PCB design as TypeScript and JSX: a board is a module, the compiler routes, checks and writes the fab set.',
   lang: 'en-US',
+  base,
   cleanUrls: true,
   lastUpdated: false,
   srcExclude: ['README.md', 'brand/**', 'scripts/**', 'data/**'],
-  sitemap: { hostname: host },
+  sitemap: { hostname: root },
   head: [
-    ...(hasBrand('favicon.svg') ? [['link', { rel: 'icon', type: 'image/svg+xml', href: '/brand/favicon.svg' }] as [string, Record<string, string>]] : []),
+    ...(hasBrand('favicon.svg') ? [['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}brand/favicon.svg` }] as [string, Record<string, string>]] : []),
+    ...(base === '/' ? [] : [['meta', { name: 'robots', content: 'noindex' }] as [string, Record<string, string>]]),
     ['meta', { name: 'theme-color', content: '#1f7a4d' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: 'pcbjs' }],
-    ['meta', { property: 'og:image', content: `${host}/brand/og.png` }],
+    ['meta', { property: 'og:image', content: `${root}brand/og.png` }],
     ['meta', { property: 'og:image:width', content: '1200' }],
     ['meta', { property: 'og:image:height', content: '630' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
@@ -50,7 +55,7 @@ export default defineConfig({
     const p = page.params
     if (p?.title) page.title = p.title
     if (p?.description) page.description = p.description
-    const url = `${host}/${page.relativePath.replace(/(^|\/)index\.md$/, '$1').replace(/\.md$/, '')}`
+    const url = `${root}${page.relativePath.replace(/(^|\/)index\.md$/, '$1').replace(/\.md$/, '')}`
     page.frontmatter.head = [
       ...(page.frontmatter.head ?? []),
       ['link', { rel: 'canonical', href: url }],

@@ -3,11 +3,6 @@ name: Release
 on:
   push:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      ref:
-        description: Commit, branch or tag to build the stable site from
-        default: main
 
 concurrency:
   group: release
@@ -123,40 +118,21 @@ jobs:
         run: echo "::notice title=VS Code extension::VSCE_PAT is not set, so ${{ steps.vsix.outputs.version }} was not published to the Visual Studio Marketplace"
       - name: Open VSX
         if: env.OVSX_TOKEN != ''
+        continue-on-error: true
         run: npx --yes ovsx@0 publish "${{ steps.vsix.outputs.path }}" -p "$OVSX_TOKEN"
       - name: Open VSX, no token
         if: env.OVSX_TOKEN == ''
         run: echo "::notice title=VS Code extension::OVSX_TOKEN is not set, so ${{ steps.vsix.outputs.version }} was not published to Open VSX"
 
-  site:
-    name: Deploy the stable site to pcbjs.dev
+  pages:
+    name: Refresh the stable site
     needs: publish
-    if: always() && github.repository == 'pcbjs/pcbjs' && (github.event_name == 'workflow_dispatch' || needs.publish.outputs.published == 'true')
+    if: needs.publish.outputs.published == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      PCBJS_SITE_URL: https://pcbjs.dev
+    permissions:
+      actions: write
     steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.ref || github.sha }}
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - run: npm run docs:build
-      - name: Point the CNAME at pcbjs.dev
-        run: echo pcbjs.dev > site/.vitepress/dist/CNAME
-      - uses: peaceiris/actions-gh-pages@v4
-        with:
-          deploy_key: ${{ secrets.PAGES_DEPLOY_KEY }}
-          external_repository: pcbjs/pcbjs.github.io
-          publish_branch: main
-          publish_dir: site/.vitepress/dist
-          enable_jekyll: false
-          force_orphan: true
-          user_name: github-actions[bot]
-          user_email: 41898282+github-actions[bot]@users.noreply.github.com
-          commit_message: Deploy pcbjs.dev from ${{ inputs.ref || github.sha }}
+      # a push by GITHUB_TOKEN starts no workflow, but a workflow_dispatch through the API does
+      - run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

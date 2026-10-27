@@ -29,6 +29,11 @@ jobs:
       - run: npm run build
       - name: Snapshot versions from the pending changesets
         run: |
+          if [ -z "$(find .changeset -maxdepth 1 -name '*.md' ! -name README.md -print -quit)" ]; then
+            echo "No pending changesets, nothing to publish."
+            echo "publish=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
           rm -rf .changeset/pre.json .changeset/pre
           npx changeset version --snapshot next
           if git diff --quiet -- 'packages/*/package.json'; then

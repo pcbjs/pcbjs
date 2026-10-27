@@ -23,7 +23,7 @@ npm run docs:dev                    # the docs site with hot reload; docs:build 
 
 The CLI and the tests run from each package's `dist`, so rebuild after changing any `src`. The root `tsconfig.json` lists every package as a project reference and each package references the packages it imports, so `tsc -b` builds them in order and fails when a reference is missing. From `examples/demo`, `pcbjs check` checks all four demo boards, the `entries` of its config, Multi as three targets.
 
-The docs site in `site/` renders these topic files as they are, one page each. `.github/workflows/docs.yml` deploys it from every push to `main` to https://next.pcbjs.dev, and `release.yml` deploys the stable site to https://pcbjs.dev after a publish; site/README.md has the pages, the gallery, the DNS records and the one-time deploy key setup.
+The docs site in `site/` renders these topic files as they are, one page each. `.github/workflows/pages.yml` deploys it to GitHub Pages on every push to `main` and after a publish: the last published train at https://pcbjs.dev and the docs of `main` at https://pcbjs.dev/next/; site/README.md has the pages, the gallery and the DNS records.
 
 ## Packages
 

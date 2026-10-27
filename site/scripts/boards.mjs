@@ -100,10 +100,9 @@ for (const dir of projects()) {
   }
   if (shoot) {
     const out = join(tmp, slug(project))
-    for (const view of ['2d', '3d', 'sch']) {
-      const r = pcbjs(dir, 'shot', '--view', view, '--size', '1200x750', '--theme', 'dark', '-o', out, ...(port ? ['-p', port] : []))
-      if (r.status !== 0) console.error(`boards: ${project}: shot ${view} failed\n${(r.stderr || r.stdout).trim().split('\n').slice(-3).join('\n')}`)
-    }
+    // one server and one Chrome for the three views
+    const r = pcbjs(dir, 'shot', '--view', 'all', '--size', '1200x750', '--theme', 'dark', '-o', out, ...(port ? ['-p', port] : []))
+    if (r.status !== 0) console.error(`boards: ${project}: shot failed\n${(r.stderr || r.stdout).trim().split('\n').slice(-3).join('\n')}`)
     const pngs = existsSync(out) ? readdirSync(out).filter(f => f.endsWith('.png')) : []
     for (const b of boards.filter(b => b.project === project)) {
       for (const view of ['2d', '3d', 'sch']) {

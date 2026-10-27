@@ -1,0 +1,108 @@
+# Builds the whole site into one Pages artifact, since every deploy replaces the site: the latest published train at / for https://pcbjs.dev, main at /next/.
+# release.yml runs it after a publish; it needs no secret, only Pages set to GitHub Actions, see RELEASING.md.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the stable and next trees
+    if: github.repository == 'pcbjs/pcbjs'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PCBJS_SITE_URL: https://pcbjs.dev
+      OUT: ${{ github.workspace }}/_site
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+      - id: stable
+        name: The latest published train
+        run: |
+          tag=$(git -c versionsort.suffix=- tag --list '@pcbjs/pcbjs@*' --sort=-v:refname | head -n 1)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Stable tree from ${tag:-main, no train is published yet}"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      # the gallery checks and shoots every example: the shots are kept while the packages are unchanged, the routes always, since their keys carry the router version
+      - name: Route caches of the examples
+        uses: actions/cache@v4
+        with:
+          path: |
+            examples/*/.pcbjs/routes
+            examples/*/*/.pcbjs/routes
+          key: routes-${{ github.sha }}
+          restore-keys: routes-
+      - id: packages
+        name: Hash of the packages the shots depend on
+        run: echo "hash=${{ hashFiles('packages/*/src/**', 'packages/*/package.json', 'site/scripts/boards.mjs') }}" >> "$GITHUB_OUTPUT"
+      - name: Gallery shots of main
+        uses: actions/cache@v4
+        with:
+          path: site/.shots
+          key: shots-${{ steps.packages.outputs.hash }}-${{ github.sha }}
+          restore-keys: shots-${{ steps.packages.outputs.hash }}-
+      - run: npm ci
+      - run: npm run build
+      # vitepress empties its outDir, so the root tree goes first
+      - name: Stable tree from main
+        if: steps.stable.outputs.tag == ''
+        run: npm run docs:build -- --outDir "$OUT"
+      - name: Check out the train
+        if: steps.stable.outputs.tag != ''
+        run: git worktree add "$RUNNER_TEMP/stable" "${{ steps.stable.outputs.tag }}"
+      - name: Gallery shots and route caches of the train
+        if: steps.stable.outputs.tag != ''
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/stable/site/.shots
+            ${{ runner.temp }}/stable/examples/*/.pcbjs/routes
+            ${{ runner.temp }}/stable/examples/*/*/.pcbjs/routes
+          key: site-stable-${{ steps.stable.outputs.tag }}
+      - name: Stable tree from the train
+        if: steps.stable.outputs.tag != ''
+        working-directory: ${{ runner.temp }}/stable
+        run: |
+          npm ci
+          npm run build
+          npm run docs:build -- --outDir "$OUT"
+      - name: Next tree, main at /next/
+        run: npm run docs:build -- --outDir "$OUT/next"
+        env:
+          PCBJS_SITE_BASE: /next/
+      - name: Domain and no Jekyll
+        run: |
+          echo pcbjs.dev > "$OUT/CNAME"
+          touch "$OUT/.nojekyll"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
