@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/ts-plugin",
-  "version": "0.0.0",
+  "version": "0.0.1-beta.0",
   "description": "A TypeScript language service plugin: in a file that passes a schematic module to <PCB schematic={sch}>, every export of that module is in scope by its bare name in the editor, with full types.",
   "type": "commonjs",
   "license": "MIT",
@@ -30,7 +30,7 @@
     "postpack": "node ../../scripts/pack-files.mjs post"
   },
   "devDependencies": {
-    "@pcbjs/compile": "^0.0.0",
+    "@pcbjs/compile": "^0.0.1-beta.0",
     "@types/node": "^24.0.0",
     "esbuild": "^0.28.0",
     "typescript": "~5.9.0"

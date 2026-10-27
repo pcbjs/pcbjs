@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/lsp",
-  "version": "0.0.0",
+  "version": "0.0.1-beta.0",
   "description": "The pcbjs language server: source links, hovers, code lenses, inlay hints, DRC and ERC diagnostics and editable segments for an editor, over JSON-RPC. The dev server loads it on demand; check and build never do.",
   "type": "module",
   "license": "MIT",
@@ -40,7 +40,7 @@
     "vscode-languageserver": "^9.0.1"
   },
   "peerDependencies": {
-    "@pcbjs/core": "^0.0.0"
+    "@pcbjs/core": "^0.0.1-beta.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/cli",
-  "version": "0.0.0",
+  "version": "0.0.1-beta.0",
   "description": "pcbjs command line: check, build, dev, preview, inspect, shot, docs, ide and create, with the Vite plugin, the editor bridge and the project templates. The pcbjs bin is in @pcbjs/pcbjs.",
   "type": "module",
   "license": "MIT",
@@ -39,13 +39,13 @@
     "postpack": "node ../../scripts/pack-files.mjs post"
   },
   "dependencies": {
-    "@pcbjs/compile": "^0.0.0",
-    "@pcbjs/export": "^0.0.0",
-    "@pcbjs/lib": "^0.0.0",
-    "@pcbjs/fab": "^0.0.0",
-    "@pcbjs/kicad": "^0.0.0",
-    "@pcbjs/step": "^0.0.0",
-    "@pcbjs/viewer": "^0.0.0",
+    "@pcbjs/compile": "^0.0.1-beta.0",
+    "@pcbjs/export": "^0.0.1-beta.0",
+    "@pcbjs/lib": "^0.0.1-beta.0",
+    "@pcbjs/fab": "^0.0.1-beta.0",
+    "@pcbjs/kicad": "^0.0.1-beta.0",
+    "@pcbjs/step": "^0.0.1-beta.0",
+    "@pcbjs/viewer": "^0.0.1-beta.0",
     "@vitejs/plugin-vue": "^6.0.0",
     "cac": "^7.0.0",
     "launch-editor": "^2.14.2",
@@ -56,8 +56,8 @@
     "ws": "^8.18.0"
   },
   "peerDependencies": {
-    "@pcbjs/core": "^0.0.0",
-    "@pcbjs/lsp": "^0.0.0"
+    "@pcbjs/core": "^0.0.1-beta.0",
+    "@pcbjs/lsp": "^0.0.1-beta.0"
   },
   "peerDependenciesMeta": {
     "@pcbjs/lsp": {
@@ -67,7 +67,7 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/ws": "^8.18.0",
-    "@pcbjs/lsp": "^0.0.0"
+    "@pcbjs/lsp": "^0.0.1-beta.0"
   },
   "engines": {
     "node": ">=22.12"

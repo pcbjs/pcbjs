@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/step",
-  "version": "0.0.0",
+  "version": "0.0.1-beta.0",
   "description": "pcbjs step: model files to triangle meshes for the 3D view, STEP through occt-import-js and glTF, GLB and VRML through small readers, in Node, the compact binary form the viewer loads, and the fit of a model to its footprint.",
   "type": "module",
   "license": "MIT",

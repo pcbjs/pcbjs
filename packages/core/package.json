@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/core",
-  "version": "0.0.0",
+  "version": "0.0.1-beta.0",
   "description": "pcbjs core: the board model, the JSX runtime, the schematic, circuits, variants, the defaults and the site data types.",
   "type": "module",
   "license": "MIT",
