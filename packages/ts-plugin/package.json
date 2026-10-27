@@ -1,0 +1,45 @@
+{
+  "name": "@pcbjs/ts-plugin",
+  "version": "0.0.0",
+  "description": "A TypeScript language service plugin: in a file that passes a schematic module to <PCB schematic={sch}>, every export of that module is in scope by its bare name in the editor, with full types.",
+  "type": "commonjs",
+  "license": "MIT",
+  "homepage": "https://pcbjs.dev",
+  "bugs": {
+    "url": "https://github.com/pcbjs/pcbjs/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pcbjs/pcbjs.git",
+    "directory": "packages/ts-plugin"
+  },
+  "main": "./dist/index.cjs",
+  "exports": {
+    ".": {
+      "default": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit && node scripts/bundle.mjs",
+    "test": "npm run build && node --test \"tests/**/*.test.mjs\"",
+    "prepack": "npm run build && node ../../scripts/pack-files.mjs pre",
+    "postpack": "node ../../scripts/pack-files.mjs post"
+  },
+  "devDependencies": {
+    "@pcbjs/compile": "^0.0.0",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.0",
+    "typescript": "~5.9.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

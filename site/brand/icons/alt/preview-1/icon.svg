@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<style>.b{fill:#0F2219}@media (prefers-color-scheme:dark){.b{fill:#1E6B46}}</style>
+<rect x="64" y="64" width="384" height="384" rx="24" fill="#1E6B46" class="b"/>
+<rect x="128" y="32" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="128" y="416" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="32" y="128" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="416" y="128" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="224" y="32" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="224" y="416" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="32" y="224" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="416" y="224" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="320" y="32" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="320" y="416" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="32" y="320" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="416" y="320" width="64" height="64" rx="6" fill="#E8B84F"/>
+<circle cx="224" cy="224" r="80" fill="none" stroke="#F2EFE6" stroke-width="32"/><path d="M192 256H224V192" fill="none" stroke="#D07A3C" stroke-width="32" stroke-linecap="square" stroke-linejoin="miter"/><path d="M296 296L368 368" fill="none" stroke="#F2EFE6" stroke-width="56" stroke-linecap="round" stroke-linejoin="miter"/>
+</svg>

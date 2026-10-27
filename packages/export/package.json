@@ -1,0 +1,56 @@
+{
+  "name": "@pcbjs/export",
+  "version": "0.0.0",
+  "description": "pcbjs export: Gerber, Excellon, BOM, placement, SVG, the fab set and its findings, and the site data.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://pcbjs.dev",
+  "bugs": {
+    "url": "https://github.com/pcbjs/pcbjs/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pcbjs/pcbjs.git",
+    "directory": "packages/export"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/*.tsbuildinfo"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "watch": "tsc -b --watch",
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "prepack": "node ../../scripts/pack-files.mjs pre",
+    "postpack": "node ../../scripts/pack-files.mjs post"
+  },
+  "dependencies": {
+    "@pcbjs/compile": "^0.0.0",
+    "@pcbjs/step": "^0.0.0",
+    "fflate": "^0.8.2"
+  },
+  "peerDependencies": {
+    "@pcbjs/core": "^0.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

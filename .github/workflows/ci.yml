@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test, Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Vendor models fetched from their LICENSES.md lines
+        uses: actions/cache@v4
+        with:
+          path: |
+            examples/*/models/*.step
+            examples/*/models/*.wrl
+          key: vendor-models-${{ hashFiles('examples/**/models/LICENSES.md') }}
+      - name: Fetch the vendor models the tests read
+        run: node scripts/check-examples.mjs --fetch
+      - run: npm test
+
+  boards:
+    name: Example boards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Vendor models fetched from their LICENSES.md lines
+        uses: actions/cache@v4
+        with:
+          path: |
+            examples/*/models/*.step
+            examples/*/models/*.wrl
+          key: vendor-models-${{ hashFiles('examples/**/models/LICENSES.md') }}
+      - name: Check every example, cold
+        run: node scripts/check-examples.mjs
+      - name: Build the demo boards
+        run: npm run demo:build
+      - name: Every demo fab set is orderable
+        run: |
+          files=$(find examples/demo/.pcbjs/fab -name README-fab.txt)
+          test -n "$files"
+          for f in $files; do grep -q 'STATUS: ORDERABLE' "$f" || { echo "$f is not orderable"; exit 1; }; done
+
+  pack:
+    name: Pack and install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Bundle the VS Code extension into @pcbjs/cli
+        run: npm run package -w @pcbjs/vscode
+      - name: Pack smoke test
+        run: node scripts/pack-smoke.mjs --no-shot

@@ -1,0 +1,4 @@
+.vitepress/cache/
+.vitepress/.temp/
+.vitepress/dist/
+.shots/

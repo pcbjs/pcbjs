@@ -1,0 +1,30 @@
+{
+  "name": "pcbjs-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "examples/*",
+    "site"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "watch": "tsc -b --watch",
+    "clean": "tsc -b --clean",
+    "test": "npm test --workspaces --if-present",
+    "demo:dev": "npm run dev -w demo",
+    "demo:build": "npm run build -w demo",
+    "pack-smoke": "node scripts/pack-smoke.mjs",
+    "docs:dev": "npm run dev -w pcbjs-site --",
+    "docs:build": "npm run build -w pcbjs-site",
+    "docs:preview": "npm run preview -w pcbjs-site --",
+    "changeset": "changeset",
+    "version-packages": "changeset version && npm install --package-lock-only",
+    "release": "changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "^1.0.1",
+    "@changesets/cli": "^3.0.3",
+    "typescript": "~5.9.0"
+  }
+}

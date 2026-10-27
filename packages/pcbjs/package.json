@@ -1,0 +1,51 @@
+{
+  "name": "@pcbjs/pcbjs",
+  "version": "0.0.0",
+  "description": "PCB design as TypeScript and JSX: installs every @pcbjs component and the pcbjs command. Design code imports from the components, such as @pcbjs/core, @pcbjs/lib and @pcbjs/fab/JLCPCB/2-Layer.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://pcbjs.dev",
+  "bugs": {
+    "url": "https://github.com/pcbjs/pcbjs/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pcbjs/pcbjs.git",
+    "directory": "packages/pcbjs"
+  },
+  "bin": {
+    "pcbjs": "bin/pcbjs.js"
+  },
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin"
+  ],
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "prepack": "node ../../scripts/pack-files.mjs pre",
+    "postpack": "node ../../scripts/pack-files.mjs post"
+  },
+  "dependencies": {
+    "@pcbjs/cli": "0.0.0",
+    "@pcbjs/compile": "0.0.0",
+    "@pcbjs/core": "0.0.0",
+    "@pcbjs/export": "0.0.0",
+    "@pcbjs/fab": "0.0.0",
+    "@pcbjs/kicad": "0.0.0",
+    "@pcbjs/lib": "0.0.0",
+    "@pcbjs/lsp": "0.0.0",
+    "@pcbjs/skills": "0.0.0",
+    "@pcbjs/step": "0.0.0",
+    "@pcbjs/ts-plugin": "0.0.0",
+    "@pcbjs/viewer": "0.0.0"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 296 96">
+<style>.t{fill:#16201B}.j{fill:#B8652A}@media (prefers-color-scheme:dark){.t{fill:#F2EFE6}.j{fill:#E08A4C}}</style>
+<title>pcbjs</title>
+<svg width="96" height="96" viewBox="0 0 512 512"><rect x="48" y="48" width="416" height="416" rx="40" fill="#0A0D0B"/>
+<rect x="160" y="0" width="64" height="96" rx="6" fill="#E8B84F"/><rect x="160" y="416" width="64" height="96" rx="6" fill="#E8B84F"/><rect x="0" y="160" width="96" height="64" rx="6" fill="#E8B84F"/><rect x="416" y="160" width="96" height="64" rx="6" fill="#E8B84F"/><rect x="288" y="0" width="64" height="96" rx="6" fill="#E8B84F"/><rect x="288" y="416" width="64" height="96" rx="6" fill="#E8B84F"/><rect x="0" y="288" width="96" height="64" rx="6" fill="#E8B84F"/><rect x="416" y="288" width="96" height="64" rx="6" fill="#E8B84F"/>
+<path d="M168 176L248 256L168 336" fill="none" stroke="#D07A3C" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/><rect x="288" y="320" width="64" height="32" rx="6" fill="#3FD8C8"/></svg>
+<text x="112" y="70" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="68" font-weight="650" letter-spacing="-1.5"><tspan class="t">pcb</tspan><tspan class="j">js</tspan></text>
+</svg>

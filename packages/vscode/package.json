@@ -1,0 +1,533 @@
+{
+  "name": "@pcbjs/vscode",
+  "version": "0.0.0",
+  "private": true,
+  "displayName": "pcbjs",
+  "description": "Runs the pcbjs dev server for the workspace, previews boards beside the editor, links code and board both ways, and shows the language server of the dev server: hovers, lenses, findings and inline value editors.",
+  "type": "commonjs",
+  "license": "MIT",
+  "homepage": "https://pcbjs.dev",
+  "bugs": {
+    "url": "https://github.com/pcbjs/pcbjs/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pcbjs/pcbjs.git",
+    "directory": "packages/vscode"
+  },
+  "publisher": "pcbjs",
+  "main": "./dist/extension.js",
+  "exports": {
+    ".": {
+      "default": "./dist/extension.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit && node scripts/build.mjs",
+    "test": "npm run build && node --test \"tests/*.test.mjs\"",
+    "package": "npm run build && node scripts/icon-theme.mjs && node scripts/package.mjs",
+    "vscode:prepublish": "npm run build",
+    "prepack": "node ../../scripts/pack-files.mjs pre",
+    "postpack": "node ../../scripts/pack-files.mjs post"
+  },
+  "dependencies": {
+    "@pcbjs/ts-plugin": "0.0.0"
+  },
+  "devDependencies": {
+    "@pcbjs/viewer": "0.0.0",
+    "@types/node": "^24.0.0",
+    "@types/vscode": "~1.90.0",
+    "@types/ws": "^8.18.0",
+    "esbuild": "^0.28.0",
+    "typescript": "~5.9.0",
+    "ws": "^8.18.0",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-jsonrpc": "^8.2.1"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/pcb.config.*",
+    "workspaceContains:**/pcbjs.config.*",
+    "workspaceContains:node_modules/@pcbjs/pcbjs/package.json",
+    "workspaceContains:**/.pcbjs/dev.json",
+    "onWebviewPanel:pcbjs.preview"
+  ],
+  "contributes": {
+    "typescriptServerPlugins": [
+      {
+        "name": "@pcbjs/ts-plugin",
+        "enableForWorkspaceTypeScriptVersions": true
+      }
+    ],
+    "commands": [
+      {
+        "command": "pcbjs.preview",
+        "title": "Toggle preview in the last used view",
+        "category": "pcbjs",
+        "icon": "$(circuit-board)"
+      },
+      {
+        "command": "pcbjs.open2D",
+        "title": "Open 2D view",
+        "category": "pcbjs",
+        "icon": "$(circuit-board)"
+      },
+      {
+        "command": "pcbjs.open3D",
+        "title": "Open 3D view",
+        "category": "pcbjs",
+        "icon": "$(package)"
+      },
+      {
+        "command": "pcbjs.openSchematic",
+        "title": "Open schematic view",
+        "category": "pcbjs",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "pcbjs.open2DBeside",
+        "title": "Open 2D beside",
+        "category": "pcbjs",
+        "icon": "$(circuit-board)"
+      },
+      {
+        "command": "pcbjs.open3DBeside",
+        "title": "Open 3D beside",
+        "category": "pcbjs",
+        "icon": "$(package)"
+      },
+      {
+        "command": "pcbjs.openSchematicBeside",
+        "title": "Open schematic beside",
+        "category": "pcbjs",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "pcbjs.open2DNew",
+        "title": "Open another 2D view beside",
+        "category": "pcbjs",
+        "icon": "$(circuit-board)"
+      },
+      {
+        "command": "pcbjs.open3DNew",
+        "title": "Open another 3D view beside",
+        "category": "pcbjs",
+        "icon": "$(package)"
+      },
+      {
+        "command": "pcbjs.openSchematicNew",
+        "title": "Open another schematic view beside",
+        "category": "pcbjs",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "pcbjs.openAllViews",
+        "title": "Open 2D, 3D and schematic side by side",
+        "category": "pcbjs",
+        "icon": "$(split-horizontal)"
+      },
+      {
+        "command": "pcbjs.pickView",
+        "title": "Open a view of the board",
+        "category": "pcbjs",
+        "icon": "$(circuit-board)"
+      },
+      {
+        "command": "pcbjs.board.open2D",
+        "title": "Open 2D view",
+        "category": "pcbjs",
+        "icon": "$(circuit-board)"
+      },
+      {
+        "command": "pcbjs.board.open2DNew",
+        "title": "Open another 2D view",
+        "category": "pcbjs",
+        "icon": "$(circuit-board)"
+      },
+      {
+        "command": "pcbjs.board.open3D",
+        "title": "Open 3D view",
+        "category": "pcbjs",
+        "icon": "$(package)"
+      },
+      {
+        "command": "pcbjs.board.open3DNew",
+        "title": "Open another 3D view",
+        "category": "pcbjs",
+        "icon": "$(package)"
+      },
+      {
+        "command": "pcbjs.board.openSchematic",
+        "title": "Open schematic view",
+        "category": "pcbjs",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "pcbjs.board.openSchematicNew",
+        "title": "Open another schematic view",
+        "category": "pcbjs",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "pcbjs.sidebar.open",
+        "title": "Show in the preview",
+        "category": "pcbjs"
+      },
+      {
+        "command": "pcbjs.preview.reload",
+        "title": "Reload preview",
+        "category": "pcbjs",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "pcbjs.start",
+        "title": "Start dev server",
+        "category": "pcbjs"
+      },
+      {
+        "command": "pcbjs.stop",
+        "title": "Stop dev server",
+        "category": "pcbjs"
+      },
+      {
+        "command": "pcbjs.restart",
+        "title": "Restart dev server",
+        "category": "pcbjs"
+      },
+      {
+        "command": "pcbjs.openInBrowser",
+        "title": "Open in browser",
+        "category": "pcbjs"
+      },
+      {
+        "command": "pcbjs.toggleCursorSync",
+        "title": "Toggle cursor sync",
+        "category": "pcbjs"
+      },
+      {
+        "command": "pcbjs.showOutput",
+        "title": "Show output",
+        "category": "pcbjs"
+      },
+      {
+        "command": "pcbjs.connect",
+        "title": "Connect to an externally started dev server",
+        "category": "pcbjs"
+      },
+      {
+        "command": "pcbjs.disconnect",
+        "title": "Disconnect from externally started dev servers",
+        "category": "pcbjs"
+      },
+      {
+        "command": "pcbjs.editValue",
+        "title": "Edit value",
+        "category": "pcbjs"
+      },
+      {
+        "command": "pcbjs.icons.associate",
+        "title": "Use the pcbjs file icons in Material Icon Theme or vscode-icons",
+        "category": "pcbjs"
+      },
+      {
+        "command": "pcbjs.icons.revoke",
+        "title": "Remove pcbjs file icons",
+        "category": "pcbjs"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pcbjs",
+          "title": "pcbjs",
+          "icon": "assets/icons/mark-mono.svg"
+        }
+      ]
+    },
+    "views": {
+      "pcbjs": [
+        {
+          "id": "pcbjs.boards",
+          "name": "Boards",
+          "when": "pcbjs.active"
+        },
+        {
+          "id": "pcbjs.findings",
+          "name": "Findings",
+          "when": "pcbjs.active"
+        },
+        {
+          "id": "pcbjs.nets",
+          "name": "Nets",
+          "when": "pcbjs.active",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "pcbjs.bom",
+          "name": "BOM",
+          "when": "pcbjs.active",
+          "visibility": "collapsed"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "pcbjs.boards",
+        "contents": "The boards of the project appear once its dev server has compiled them.\n[Open 2D view](command:pcbjs.open2D)\n[Open 3D view](command:pcbjs.open3D)\n[Open schematic view](command:pcbjs.openSchematic)"
+      },
+      {
+        "view": "pcbjs.findings",
+        "contents": "No DRC or ERC findings on the boards the dev server shows."
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "pcbjs",
+        "label": "pcbjs",
+        "path": "./assets/icon-theme/pcbjs.json",
+        "_watch": true
+      }
+    ],
+    "configuration": {
+      "title": "pcbjs",
+      "properties": {
+        "pcbjs.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Start the dev server when the workspace opens. When off, it starts with the first preview."
+        },
+        "pcbjs.cursorSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send the cursor position to the dev server so the viewer highlights the element under the cursor."
+        },
+        "pcbjs.followFocus": {
+          "type": "boolean",
+          "default": true,
+          "description": "Tell the dev server which file is active, so the preview shows the board that file belongs to."
+        },
+        "pcbjs.nodePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "The node binary that runs pcbjs dev. Empty means node from PATH or the usual install locations."
+        },
+        "pcbjs.followDevJson": {
+          "type": "boolean",
+          "default": true,
+          "description": "Look for dev servers started by hand through their .pcbjs/dev.json and connect to them. Off leaves them alone, as for a dev server a test or a script starts; pcbjs.connect still connects on request."
+        },
+        "pcbjs.autoConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Connect to a dev server started outside the extension as soon as its .pcbjs/dev.json appears."
+        },
+        "pcbjs.editorAutoSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Save the document after each edit from an inline value editor, so the dev server recompiles and the preview updates."
+        }
+      }
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "pcbjs.open2DBeside",
+          "alt": "pcbjs.open2DNew",
+          "when": "activeWebviewPanelId == 'pcbjs.preview'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "pcbjs.open2DBeside",
+          "alt": "pcbjs.open2DNew",
+          "when": "pcbjs.active && (resourcePath in pcbjs.entries || resourceFilename == pcb.tsx || resourceFilename =~ /\\.pcb\\.tsx$/)",
+          "group": "navigation@1"
+        },
+        {
+          "command": "pcbjs.open3DBeside",
+          "alt": "pcbjs.open3DNew",
+          "when": "activeWebviewPanelId == 'pcbjs.preview'",
+          "group": "navigation@2"
+        },
+        {
+          "command": "pcbjs.open3DBeside",
+          "alt": "pcbjs.open3DNew",
+          "when": "pcbjs.active && (resourcePath in pcbjs.entries || resourceFilename == pcb.tsx || resourceFilename =~ /\\.pcb\\.tsx$/)",
+          "group": "navigation@2"
+        },
+        {
+          "command": "pcbjs.openSchematicBeside",
+          "alt": "pcbjs.openSchematicNew",
+          "when": "activeWebviewPanelId == 'pcbjs.preview'",
+          "group": "navigation@3"
+        },
+        {
+          "command": "pcbjs.openSchematicBeside",
+          "alt": "pcbjs.openSchematicNew",
+          "when": "pcbjs.active && (resourcePath in pcbjs.entries || resourceFilename == pcb.tsx || resourceFilename =~ /\\.pcb\\.tsx$/)",
+          "group": "navigation@3"
+        },
+        {
+          "command": "pcbjs.openAllViews",
+          "when": "activeWebviewPanelId == 'pcbjs.preview'",
+          "group": "navigation@4"
+        },
+        {
+          "command": "pcbjs.openAllViews",
+          "when": "pcbjs.active && (resourcePath in pcbjs.entries || resourceFilename == pcb.tsx || resourceFilename =~ /\\.pcb\\.tsx$/)",
+          "group": "navigation@4"
+        },
+        {
+          "command": "pcbjs.preview.reload",
+          "when": "activeWebviewPanelId == 'pcbjs.preview'",
+          "group": "navigation@9"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "pcbjs.editValue",
+          "when": "resourceExtname =~ /^\\.tsx?$/ && pcbjs.active",
+          "group": "1_modification"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "pcbjs.editValue",
+          "when": "editorLangId =~ /^typescript(react)?$/ && pcbjs.active"
+        },
+        {
+          "command": "pcbjs.preview.reload",
+          "when": "pcbjs.active"
+        },
+        {
+          "command": "pcbjs.sidebar.open",
+          "when": "false"
+        },
+        {
+          "command": "pcbjs.board.open2D",
+          "when": "false"
+        },
+        {
+          "command": "pcbjs.board.open3D",
+          "when": "false"
+        },
+        {
+          "command": "pcbjs.board.openSchematic",
+          "when": "false"
+        },
+        {
+          "command": "pcbjs.open2DBeside",
+          "when": "pcbjs.active"
+        },
+        {
+          "command": "pcbjs.open3DBeside",
+          "when": "pcbjs.active"
+        },
+        {
+          "command": "pcbjs.openSchematicBeside",
+          "when": "pcbjs.active"
+        },
+        {
+          "command": "pcbjs.open2DNew",
+          "when": "pcbjs.active"
+        },
+        {
+          "command": "pcbjs.open3DNew",
+          "when": "pcbjs.active"
+        },
+        {
+          "command": "pcbjs.openSchematicNew",
+          "when": "pcbjs.active"
+        },
+        {
+          "command": "pcbjs.openAllViews",
+          "when": "pcbjs.active"
+        },
+        {
+          "command": "pcbjs.pickView",
+          "when": "pcbjs.active"
+        },
+        {
+          "command": "pcbjs.board.open2DNew",
+          "when": "false"
+        },
+        {
+          "command": "pcbjs.board.open3DNew",
+          "when": "false"
+        },
+        {
+          "command": "pcbjs.board.openSchematicNew",
+          "when": "false"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "pcbjs.board.open2D",
+          "when": "view == pcbjs.boards && viewItem == board",
+          "group": "inline@1",
+          "alt": "pcbjs.board.open2DNew"
+        },
+        {
+          "command": "pcbjs.board.open3D",
+          "when": "view == pcbjs.boards && viewItem == board",
+          "group": "inline@2",
+          "alt": "pcbjs.board.open3DNew"
+        },
+        {
+          "command": "pcbjs.board.openSchematic",
+          "when": "view == pcbjs.boards && viewItem == board",
+          "group": "inline@3",
+          "alt": "pcbjs.board.openSchematicNew"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "pcbjs.open2DBeside",
+        "key": "ctrl+alt+2",
+        "mac": "cmd+alt+2",
+        "when": "pcbjs.active"
+      },
+      {
+        "command": "pcbjs.open3DBeside",
+        "key": "ctrl+alt+3",
+        "mac": "cmd+alt+3",
+        "when": "pcbjs.active"
+      },
+      {
+        "command": "pcbjs.openSchematicBeside",
+        "key": "ctrl+alt+s",
+        "mac": "cmd+alt+s",
+        "when": "pcbjs.active"
+      },
+      {
+        "command": "pcbjs.open2DNew",
+        "key": "ctrl+alt+shift+2",
+        "mac": "cmd+alt+shift+2",
+        "when": "pcbjs.active"
+      },
+      {
+        "command": "pcbjs.open3DNew",
+        "key": "ctrl+alt+shift+3",
+        "mac": "cmd+alt+shift+3",
+        "when": "pcbjs.active"
+      },
+      {
+        "command": "pcbjs.openSchematicNew",
+        "key": "ctrl+alt+shift+s",
+        "mac": "cmd+alt+shift+s",
+        "when": "pcbjs.active"
+      }
+    ]
+  }
+}

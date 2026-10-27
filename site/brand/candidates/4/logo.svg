@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<title>pcbjs</title>
+<rect width="512" height="512" rx="112" fill="#0F2219"/>
+<path d="M144 236V424" fill="none" stroke="#F2EFE6" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/><path d="M118 236a90 90 0 1 0 180 0a90 90 0 1 0 -180 0ZM170 236a38 38 0 1 1 76 0a38 38 0 1 1 -76 0Z" fill="#F2EFE6" fill-rule="evenodd"/><path d="M368 204V372Q368 432 308 432" fill="none" stroke="#D07A3C" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/><path d="M328 116a40 40 0 1 0 80 0a40 40 0 1 0 -80 0ZM352 116a16 16 0 1 1 32 0a16 16 0 1 1 -32 0Z" fill="#E8B84F" fill-rule="evenodd"/>
+</svg>

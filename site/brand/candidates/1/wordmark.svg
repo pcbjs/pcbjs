@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 96">
+<style>.t{fill:#16201B}.j{fill:#B8652A}@media (prefers-color-scheme:dark){.t{fill:#F2EFE6}.j{fill:#E08A4C}}</style>
+<title>pcbjs</title>
+<svg width="96" height="96" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#0F2219"/>
+<path d="M184 384V128H272L328 184V240L272 296H184" fill="none" stroke="#D07A3C" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/><path d="M128 392a56 56 0 1 0 112 0a56 56 0 1 0 -112 0ZM162 392a22 22 0 1 1 44 0a22 22 0 1 1 -44 0Z" fill="#E8B84F" fill-rule="evenodd"/></svg>
+<text x="116" y="70" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="68" font-weight="650" letter-spacing="-1.5"><tspan class="t">pcb</tspan><tspan class="j">js</tspan></text>
+</svg>

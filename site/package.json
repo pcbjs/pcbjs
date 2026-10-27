@@ -1,0 +1,17 @@
+{
+  "name": "pcbjs-site",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The pcbjs docs site at https://pcbjs.dev: VitePress over the docs/ topic files, with its own pages beside them.",
+  "type": "module",
+  "scripts": {
+    "boards": "node scripts/boards.mjs",
+    "dev": "vitepress dev .",
+    "build": "node scripts/boards.mjs --if-chrome && vitepress build .",
+    "preview": "vitepress preview ."
+  },
+  "devDependencies": {
+    "sharp": "^0.35.5",
+    "vitepress": "^1.6.4"
+  }
+}

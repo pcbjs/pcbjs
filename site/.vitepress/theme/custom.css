@@ -1,0 +1,21 @@
+:root {
+  --vp-c-brand-1: #1f7a4d;
+  --vp-c-brand-2: #26915c;
+  --vp-c-brand-3: #2aa366;
+  --vp-c-brand-soft: rgba(42, 163, 102, 0.14);
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #1f7a4d 20%, #c9a227);
+}
+.dark {
+  --vp-c-brand-1: #4cc38a;
+  --vp-c-brand-2: #3fae7a;
+  --vp-c-brand-3: #2f9466;
+  --vp-c-brand-soft: rgba(76, 195, 138, 0.16);
+  --vp-home-hero-name-background: linear-gradient(120deg, #4cc38a 20%, #e3c25a);
+}
+.viewer-shot { margin: 24px 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--vp-c-divider); }
+.viewer-shot img { display: block; width: 100%; height: auto; }
+.viewer-shot.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--vp-c-divider); }
+@media (max-width: 640px) { .viewer-shot.pair { grid-template-columns: 1fr; } }
+.VPHero .image-src { border-radius: 16px; max-width: 320px; max-height: 320px; }
+@media (min-width: 960px) { .VPHero .image-src { max-width: 400px; max-height: 400px; } }

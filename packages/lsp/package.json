@@ -1,0 +1,57 @@
+{
+  "name": "@pcbjs/lsp",
+  "version": "0.0.0",
+  "description": "The pcbjs language server: source links, hovers, code lenses, inlay hints, DRC and ERC diagnostics and editable segments for an editor, over JSON-RPC. The dev server loads it on demand; check and build never do.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://pcbjs.dev",
+  "bugs": {
+    "url": "https://github.com/pcbjs/pcbjs/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pcbjs/pcbjs.git",
+    "directory": "packages/lsp"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/*.tsbuildinfo"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "prepack": "node ../../scripts/pack-files.mjs pre",
+    "postpack": "node ../../scripts/pack-files.mjs post"
+  },
+  "dependencies": {
+    "typescript": "~5.9.0",
+    "vscode-jsonrpc": "^8.2.1",
+    "vscode-languageserver": "^9.0.1"
+  },
+  "peerDependencies": {
+    "@pcbjs/core": "^0.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.0",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

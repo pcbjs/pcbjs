@@ -1,0 +1,20 @@
+.claude/
+.DS_Store
+.pcbjs/
+.vsix-stage/
+*.tsbuildinfo
+# LCSC EasyEDA models, fetched by scripts/check-examples.mjs from models/LICENSES.md
+CLAUDE.md
+dist/
+docs/reviews/
+examples/.tmp-*/
+examples/*/*/REVIEW.md
+examples/*/REVIEW.md
+examples/sensor-hat/models/TS-1187A-B-A-B.step
+examples/sensor-hat/models/TYPE-C-31-M-17.step
+examples/sensor-hat/models/WS2812B-2020.step
+node_modules/
+packages/*/LICENSE
+packages/cli/docs/
+packages/cli/vscode/
+packages/vscode/assets/

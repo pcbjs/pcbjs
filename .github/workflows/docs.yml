@@ -1,0 +1,52 @@
+# Builds the docs site from main and deploys it to pcbjs/next.pcbjs.dev, served at https://next.pcbjs.dev.
+# The stable site at https://pcbjs.dev is deployed by release.yml. Needs NEXT_PAGES_DEPLOY_KEY; site/README.md has the setup.
+name: docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: docs
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.repository == 'pcbjs/pcbjs'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PCBJS_SITE_URL: https://next.pcbjs.dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # the gallery's check and shot runs use the built CLI; ubuntu-latest has Chrome, so the shots are fresh
+      - run: npm run build
+
+      - run: npm run docs:build
+
+      - name: Point the CNAME at next.pcbjs.dev
+        run: echo next.pcbjs.dev > site/.vitepress/dist/CNAME
+
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          deploy_key: ${{ secrets.NEXT_PAGES_DEPLOY_KEY }}
+          external_repository: pcbjs/next.pcbjs.dev
+          publish_branch: main
+          publish_dir: site/.vitepress/dist
+          enable_jekyll: false
+          force_orphan: true
+          user_name: github-actions[bot]
+          user_email: 41898282+github-actions[bot]@users.noreply.github.com
+          commit_message: ${{ github.event.head_commit.message }}

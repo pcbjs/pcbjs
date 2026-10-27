@@ -1,0 +1,162 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit, branch or tag to build the stable site from
+        default: main
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  mode:
+    name: Version or publish
+    if: github.repository == 'pcbjs/pcbjs' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci
+      - id: mode
+        uses: changesets/action/select-mode@v2
+
+  version:
+    name: Open the version pull request
+    needs: mode
+    if: needs.mode.outputs.mode == 'version'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci
+      - uses: changesets/action/version@v2
+        with:
+          script: npm run version-packages
+          commit-message: Version packages
+          pr-title: Version packages
+
+  publish:
+    name: Publish to npm
+    needs: mode
+    if: needs.mode.outputs.mode == 'publish'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
+      vscode: ${{ steps.vscode.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      # no npm cache and no registry-url: npm authenticates through OIDC, never a token
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci
+      - id: vscode
+        name: Did this train move the extension
+        run: |
+          now=$(node -p "require('./packages/vscode/package.json').version")
+          was=$(git show HEAD^:packages/vscode/package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8') || '{}').version")
+          echo "changed=$([ "$now" != "$was" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - run: npm run build
+      - name: Bundle the VS Code extension into @pcbjs/cli
+        run: npm run package -w @pcbjs/vscode
+      - name: npm with trusted publishing
+        run: npm install -g npm@11.21.1
+      - id: publish
+        uses: changesets/action/publish@v2
+        with:
+          script: npm run release
+          create-github-releases: true
+        env:
+          NPM_CONFIG_PROVENANCE: true
+
+  vscode:
+    name: Publish the VS Code extension
+    needs: publish
+    if: needs.publish.outputs.published == 'true' && needs.publish.outputs.vscode == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_TOKEN: ${{ secrets.OVSX_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run package -w @pcbjs/vscode
+      - id: vsix
+        name: The packaged VSIX
+        run: |
+          m=packages/cli/vscode/manifest.json
+          echo "path=packages/cli/vscode/$(node -p "require('./$m').file")" >> "$GITHUB_OUTPUT"
+          echo "pre=$(node -p "require('./$m').preRelease ? '--pre-release' : ''")" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p "require('./$m').version")" >> "$GITHUB_OUTPUT"
+      - name: Visual Studio Marketplace
+        if: env.VSCE_PAT != ''
+        run: npx --yes @vscode/vsce@3 publish ${{ steps.vsix.outputs.pre }} --packagePath "${{ steps.vsix.outputs.path }}"
+      - name: Visual Studio Marketplace, no token
+        if: env.VSCE_PAT == ''
+        run: echo "::notice title=VS Code extension::VSCE_PAT is not set, so ${{ steps.vsix.outputs.version }} was not published to the Visual Studio Marketplace"
+      - name: Open VSX
+        if: env.OVSX_TOKEN != ''
+        run: npx --yes ovsx@0 publish "${{ steps.vsix.outputs.path }}" -p "$OVSX_TOKEN"
+      - name: Open VSX, no token
+        if: env.OVSX_TOKEN == ''
+        run: echo "::notice title=VS Code extension::OVSX_TOKEN is not set, so ${{ steps.vsix.outputs.version }} was not published to Open VSX"
+
+  site:
+    name: Deploy the stable site to pcbjs.dev
+    needs: publish
+    if: always() && github.repository == 'pcbjs/pcbjs' && (github.event_name == 'workflow_dispatch' || needs.publish.outputs.published == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PCBJS_SITE_URL: https://pcbjs.dev
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run docs:build
+      - name: Point the CNAME at pcbjs.dev
+        run: echo pcbjs.dev > site/.vitepress/dist/CNAME
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          deploy_key: ${{ secrets.PAGES_DEPLOY_KEY }}
+          external_repository: pcbjs/pcbjs.github.io
+          publish_branch: main
+          publish_dir: site/.vitepress/dist
+          enable_jekyll: false
+          force_orphan: true
+          user_name: github-actions[bot]
+          user_email: 41898282+github-actions[bot]@users.noreply.github.com
+          commit_message: Deploy pcbjs.dev from ${{ inputs.ref || github.sha }}

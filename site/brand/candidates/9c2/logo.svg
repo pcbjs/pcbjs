@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<title>pcbjs</title>
+<rect x="64" y="64" width="384" height="384" rx="24" fill="#0F2219"/><rect x="72" y="72" width="368" height="368" rx="16" fill="none" stroke="#F2EFE6" stroke-width="16"/>
+<rect x="128" y="32" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="128" y="416" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="32" y="128" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="416" y="128" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="224" y="32" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="224" y="416" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="32" y="224" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="416" y="224" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="320" y="32" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="320" y="416" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="32" y="320" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="416" y="320" width="64" height="64" rx="6" fill="#E8B84F"/>
+<path d="M168 176L248 256L168 336" fill="none" stroke="#D07A3C" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/><rect x="288" y="320" width="64" height="32" rx="6" fill="#3FD8C8"/>
+</svg>

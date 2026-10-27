@@ -1,0 +1,7 @@
+**
+!dist/extension.js
+!assets/**
+!package.json
+!README.md
+!node_modules/@pcbjs/ts-plugin/package.json
+!node_modules/@pcbjs/ts-plugin/dist/index.cjs

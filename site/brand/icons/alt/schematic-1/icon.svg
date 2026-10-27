@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<style>.b{fill:#0F2219}@media (prefers-color-scheme:dark){.b{fill:#1E6B46}}</style>
+<rect x="64" y="64" width="384" height="384" rx="24" fill="#1E6B46" class="b"/>
+<rect x="128" y="32" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="128" y="416" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="32" y="128" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="416" y="128" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="224" y="32" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="224" y="416" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="32" y="224" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="416" y="224" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="320" y="32" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="320" y="416" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="32" y="320" width="64" height="64" rx="6" fill="#E8B84F"/><rect x="416" y="320" width="64" height="64" rx="6" fill="#E8B84F"/>
+<rect x="96" y="224" width="320" height="32" fill="#F2EFE6"/><rect x="224" y="224" width="32" height="160" fill="#F2EFE6"/><circle cx="240" cy="240" r="48" fill="#F2EFE6"/>
+</svg>

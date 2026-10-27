@@ -1,0 +1,2 @@
+**9b. Chip prompt.** The mark is a QFN package, its body the tile and its gold pads straddling the body edge half in and half out, with the `>_` prompt of candidate 7 inside: a copper trace chevron and a cyan pad cursor; two short pads a side kept inside the avatar crop, dark mask body, 72-unit corners.
+Colours: dark mask #0F2219, ENIG gold #E8B84F, copper #D07A3C, accent cyan #3FD8C8; transparent between the pads; Inter or the system sans for the wordmark.

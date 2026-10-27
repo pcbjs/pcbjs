@@ -1,0 +1,13 @@
+(version 1)
+
+(rule "slot end"
+	(constraint edge_clearance (min 0.5mm))
+	(condition "A.Type == 'Pad' && A.Parent == 'J1'"))
+
+(rule "sig to pads"
+	(constraint clearance (min 0.25mm))
+	(condition "A.Type == 'Track' && A.NetName == 'SIG' && B.Type == 'Pad'"))
+
+(rule "tooling"
+	(constraint courtyard_clearance (min -1mm))
+	(condition "A.Reference == 'J1' && B.Reference == 'J2'"))

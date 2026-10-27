@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 96">
+<style>.t{fill:#16201B}.j{fill:#B8652A}@media (prefers-color-scheme:dark){.t{fill:#F2EFE6}.j{fill:#E08A4C}}</style>
+<title>pcbjs</title>
+<svg width="96" height="96" viewBox="0 0 512 512"><clipPath id="t5"><rect width="512" height="512" rx="112"/></clipPath>
+<g clip-path="url(#t5)"><rect width="512" height="512" rx="112" fill="#0F2219"/>
+<path d="M96 512V192A96 96 0 0 1 192 96H512V512Z" fill="#1E6B46"/><path d="M96 512V192A96 96 0 0 1 192 96H512" fill="none" stroke="#D8C99B" stroke-width="20"/><path d="M152 224a72 72 0 1 0 144 0a72 72 0 1 0 -144 0ZM186 224a38 38 0 1 1 76 0a38 38 0 1 1 -76 0Z" fill="#E8B84F" fill-rule="evenodd"/><path d="M512 344H392L340 292" fill="none" stroke="#D07A3C" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><path d="M344 512V440L392 392" fill="none" stroke="#D07A3C" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+<text x="116" y="70" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="68" font-weight="650" letter-spacing="-1.5"><tspan class="t">pcb</tspan><tspan class="j">js</tspan></text>
+</svg>

@@ -1,0 +1,55 @@
+{
+  "name": "@pcbjs/compile",
+  "version": "0.0.0",
+  "description": "pcbjs compiler: flattening, routing, length tuning, zones, connectivity, DRC and ERC.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://pcbjs.dev",
+  "bugs": {
+    "url": "https://github.com/pcbjs/pcbjs/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pcbjs/pcbjs.git",
+    "directory": "packages/compile"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/*.tsbuildinfo"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "watch": "tsc -b --watch",
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "prepack": "node ../../scripts/pack-files.mjs pre",
+    "postpack": "node ../../scripts/pack-files.mjs post"
+  },
+  "dependencies": {
+    "clipper-lib": "^6.4.2",
+    "typescript": "~5.9.0"
+  },
+  "peerDependencies": {
+    "@pcbjs/core": "^0.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

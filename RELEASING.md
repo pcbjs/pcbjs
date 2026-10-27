@@ -1,0 +1,71 @@
+# Releasing
+
+How the `@pcbjs/*` packages are versioned and published from this repository with Changesets.
+
+## Version scheme
+
+- Every package is at `0.0.0` in the tree. That version is the placeholder published once by hand to reserve each name on npm and let its trusted publishers be configured; it holds a package.json and a README.md, no code.
+- The tree is in pre-release mode with the tag `beta`, `.changeset/pre.json`. Every changeset is a `patch` during the beta, so the trains are `0.0.1-beta.0`, `0.0.1-beta.1` and on, published under the `beta` dist-tag. Users install with `npm install @pcbjs/pcbjs@beta`.
+- `latest` stays on the `0.0.0` placeholder for the whole beta. `npx changeset pre exit` ends it: the next train is `0.0.1` under `latest`.
+- `pcbjs doctor` compares major.minor, so the whole `0.0.x` line, betas and placeholders included, counts as one version line. Its fix for a skew names the dist-tag of the running CLI, `npm install @pcbjs/pcbjs@beta` during the beta.
+
+## Model
+
+- A release is a train. Every package with a changeset, and every package whose range for one of them no longer covers the new version, gets the train's version; the others keep theirs and are not republished.
+- `.changeset/config.json` links every `@pcbjs/*` package: a train's version is the highest bump any changeset asks for, applied from the highest current version in the group.
+- `@pcbjs/pcbjs` pins every component exactly, so it is republished whenever any component is, and its version names the train.
+- `@pcbjs/core` is a peer dependency, `^0.0.1-beta.0` style, of every package that imports it, and a dependency only of `@pcbjs/pcbjs`.
+- After the beta, a minor train moves every package, because `pcbjs doctor` fails when two installed `@pcbjs` packages differ in major.minor; a patch train moves only the changed ones. A minor of core bumps every package with a core peer through the linked group, but not `@pcbjs/step`, `@pcbjs/skills` or `@pcbjs/vscode`, which have none: a minor train's changeset names every package, `npm run changeset` with all of them selected.
+- Before 1.0 a minor may break and a patch may not. `@pcbjs/vscode` is private: versioned with the train, shipped inside `@pcbjs/cli` and published to the Visual Studio Marketplace and Open VSX, never to npm.
+- The extension's major and minor track those of `@pcbjs/pcbjs`, so extension 0.0.x ships with pcbjs 0.0.x; a patch on either side changes no IDE protocol. A change that breaks an older extension bumps the protocol major in `packages/cli/src/host-client.ts` and `packages/lsp/src/protocol.ts` and adds a row to the table in docs/ide-bridge.md.
+
+## The VS Code extension
+
+- The Marketplace takes only `x.y.z`, so `npm run package -w @pcbjs/vscode` maps the train version of `packages/vscode/package.json` to the extension's version: a pre-release `x.y.z-beta.n` becomes `x.y.(1000z + n)` and a release `x.y.z` becomes `x.y.(1000z + 999)`, so `0.0.1-beta.0` is `0.0.1000`, `0.0.1-beta.4` is `0.0.1004` and `0.0.1` is `0.0.1999`. The mapping keeps major and minor, orders like the train versions, and allows 999 betas per patch. A pre-release VSIX is packaged and published as a pre-release.
+- `packages/cli/vscode/manifest.json` holds both, `version` and `train`. `pcbjs ide status` prints both, and `pcbjs ide` reads a pre-release version as the train scheme and a plain one as the Marketplace scheme when it compares the installed extension with the bundled one.
+- The `vscode` job of `release.yml` runs after a publish whose train changed the version of `packages/vscode`, builds the VSIX with `npm run package -w @pcbjs/vscode` and publishes that same file with `vsce publish --pre-release --packagePath` and `ovsx publish`. Each step needs its secret, `VSCE_PAT` or `OVSX_TOKEN`, and leaves a notice instead when the secret is not set, so the train still succeeds.
+
+## Changesets
+
+Every change to the behaviour of a published package adds one: `npm run changeset`, pick the packages, the bump and a one-line summary for the changelog. Commit the file in `.changeset/` with the change. During the beta every changeset is a `patch`; a `minor` would move the next train to `0.1.0-beta.0`. After the beta a fix is a patch, a new feature or a breaking change a minor. A change to `packages/vscode` names `@pcbjs/cli` too, since the cli ships the VSIX. Docs, tests, examples and CI need none.
+
+## A core-only patch
+
+A changeset for `@pcbjs/core` alone, `patch`, ships `@pcbjs/core` and `@pcbjs/pcbjs` at the next version. Every other package keeps its version, because its peer range still covers the new core: `^0.0.1-beta.0` covers `0.0.1-beta.1`.
+
+## Workflows
+
+- `ci.yml`, on pull requests and pushes to `main`: build and test on Node 22 and 24, `scripts/check-examples.mjs` over every example from a cold route cache, the demo build with every fab set orderable, and `scripts/pack-smoke.mjs` after bundling the VSIX.
+- `release.yml`, on pushes to `main`: while changesets are pending, opens or updates the pull request "Version packages", which runs `npm run version-packages`. Merging it publishes every package whose version is not on npm, in dependency order, through npm trusted publishing with provenance, then tags and makes GitHub releases. It uses the `select-mode`, `version` and `publish` actions of `changesets/action@v2`, so only the publish job holds `id-token: write`. When the train changed the extension, its `vscode` job publishes it, see The VS Code extension. When that publish released anything, its `site` job deploys the docs to https://pcbjs.dev; Run workflow on `release.yml` deploys them by hand from a ref.
+- `docs.yml`, on pushes to `main`: deploys the docs of `main` to https://next.pcbjs.dev.
+- `next.yml`, on pushes to `main`: versions the pending changesets as `<next version>-next.<commit sha>`, such as `0.0.1-next.1a2b3c4`, and publishes them under the `next` dist-tag through npm trusted publishing, without tags or commits. With nothing pending it publishes nothing.
+
+The publishing jobs get `id-token: write` for the OIDC exchange and install npm 11.21.1, since trusted publishing needs npm 11.5.1 or later and Node 22.14 or later. npm signs provenance on every trusted publish, and `NPM_CONFIG_PROVENANCE` asks for it explicitly as well. No npm token is stored anywhere.
+
+## Owner setup, by hand
+
+npm can bind a trusted publisher only to a package that exists, so every package is first published by hand as the `0.0.0` placeholder.
+
+1. npm: create the organisation `pcbjs` on npmjs.com and log in with `npm login` as a member allowed to publish, npm 11.5.1 or later.
+2. Placeholders, once, from a temporary folder outside the repository, never from the tree: for each package in dependency order, `core`, `step`, `ts-plugin`, `skills`, `lib`, `compile`, `lsp`, `fab`, `kicad`, `export`, `viewer`, `cli`, `pcbjs`, make a folder holding a package.json with the name, `version` `0.0.0`, the description, `license` MIT, `repository` github:pcbjs/pcbjs, `homepage` https://pcbjs.dev and `publishConfig.access` `public`, no dependencies and no code, plus a README.md pointing at https://pcbjs.dev and `npm install @pcbjs/pcbjs@beta`, and run `npm publish --access public --provenance=false` in it, since npm signs provenance only inside CI. npm asks for a one-time password or a browser confirmation per package. `@pcbjs/vscode` is private and is not published. The repository carries no placeholder script or data.
+3. Trusted publishers, two per package, from a terminal with npm 11.17 or later, which opens the browser for the second factor on each call: `npm trust github @pcbjs/<name> --file release.yml --repo pcbjs/pcbjs --allow-publish -y` and the same with `next.yml`, for `core`, `step`, `ts-plugin`, `skills`, `lib`, `compile`, `lsp`, `fab`, `kicad`, `export`, `viewer`, `cli` and `pcbjs`. Output must not be piped, or npm refuses the second factor. An entry lapses if nothing publishes through it within two days, so push `main` soon after. `npm trust list @pcbjs/<name>` or the package's Settings page shows what is set.
+4. GitHub, the repository `pcbjs/pcbjs`, Settings, Actions, General: Actions allowed, Workflow permissions "Read and write", and "Allow GitHub Actions to create and approve pull requests" on, which `release.yml` needs for the pull request "Version packages". No repository secret for npm.
+5. The docs sites: the repositories `pcbjs/pcbjs.github.io` for https://pcbjs.dev and `pcbjs/next.pcbjs.dev` for https://next.pcbjs.dev, a deploy key with write access on each, its private half saved in `pcbjs/pcbjs` as the repository secrets `PAGES_DEPLOY_KEY` and `NEXT_PAGES_DEPLOY_KEY`, and the DNS records for `pcbjs.dev`; site/README.md has the steps.
+6. The extension: the publisher `pcbjs` on the Visual Studio Marketplace, with an Azure DevOps personal access token scoped to Marketplace, Manage, saved in `pcbjs/pcbjs` as the repository secret `VSCE_PAT`; and the namespace `pcbjs` on Open VSX, `npx ovsx create-namespace pcbjs -p <token>`, with that token saved as `OVSX_TOKEN`. Without them the `vscode` job publishes nothing and says so.
+7. Recommended once the first workflow publish has worked: each package's Settings, Publishing access, "Require two-factor authentication and disallow tokens". Trusted publishing is not affected.
+8. Recommended: protect `main`, requiring the CI checks.
+
+## First train, 0.0.1-beta.0
+
+Changesets numbers pre-releases from 0, and every pending changeset is a patch, so the first train is `0.0.1-beta.0` for every package.
+
+1. Do the owner setup above, the placeholders and the trusted publishers included, and push `main` to `pcbjs/pcbjs`. `next.yml` publishes `0.0.1-next.<sha>` under `next`, which also proves the `next.yml` trusted publishers.
+2. `release.yml` opens the pull request "Version packages" with every package at `0.0.1-beta.0` and its changelog.
+3. Merge it when CI passes. `release.yml` finds no pending changesets and publishes every package under `beta`. `latest` stays on the `0.0.0` placeholder.
+4. Check:
+   - `npm view @pcbjs/pcbjs dist-tags` shows `latest: 0.0.0` and `beta: 0.0.1-beta.0`.
+   - In an empty folder: `npm install -D @pcbjs/pcbjs@beta`, `npx pcbjs create board`, then `npm install` and `npx pcbjs check` in `board`.
+   - The provenance badge on each package page on npmjs.com.
+   - https://pcbjs.dev shows the release's docs, and each package page on npmjs.com links to it.
+
+Later trains go through the same pull request, `0.0.1-beta.1` and on, until `npx changeset pre exit` makes the next train `0.0.1` under `latest`.

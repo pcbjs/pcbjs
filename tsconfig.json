@@ -1,0 +1,14 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/step" },
+    { "path": "packages/compile" },
+    { "path": "packages/export" },
+    { "path": "packages/lib" },
+    { "path": "packages/fab" },
+    { "path": "packages/kicad" },
+    { "path": "packages/lsp" },
+    { "path": "packages/cli" }
+  ]
+}

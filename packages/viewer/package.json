@@ -1,0 +1,55 @@
+{
+  "name": "@pcbjs/viewer",
+  "version": "0.0.0",
+  "description": "pcbjs viewer: the Vue site that shows boards in 2D and 3D, served and built from source by @pcbjs/cli through Vite.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://pcbjs.dev",
+  "bugs": {
+    "url": "https://github.com/pcbjs/pcbjs/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pcbjs/pcbjs.git",
+    "directory": "packages/viewer"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./src/*": {
+      "types": "./src/*",
+      "default": "./src/*"
+    }
+  },
+  "files": [
+    "index.html",
+    "dev3d.html",
+    "src",
+    "tsconfig.json"
+  ],
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "prepack": "node ../../scripts/pack-files.mjs pre",
+    "postpack": "node ../../scripts/pack-files.mjs post"
+  },
+  "dependencies": {
+    "@pcbjs/lib": "^0.0.0",
+    "@pcbjs/step": "^0.0.0",
+    "three": "^0.182.0",
+    "vue": "^3.5.0"
+  },
+  "peerDependencies": {
+    "@pcbjs/core": "^0.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@pcbjs/core": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

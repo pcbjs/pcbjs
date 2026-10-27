@@ -1,0 +1,52 @@
+name: Next
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: next
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  next:
+    name: Publish the next snapshot
+    if: github.repository == 'pcbjs/pcbjs'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      # no npm cache and no registry-url: npm authenticates through OIDC, never a token
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run build
+      - name: Snapshot versions from the pending changesets
+        run: |
+          rm -rf .changeset/pre.json .changeset/pre
+          npx changeset version --snapshot next
+          if git diff --quiet -- 'packages/*/package.json'; then
+            echo "No pending changesets, nothing to publish."
+            echo "publish=false" >> "$GITHUB_ENV"
+          else
+            echo "publish=true" >> "$GITHUB_ENV"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Bundle the VS Code extension into @pcbjs/cli
+        if: env.publish == 'true'
+        run: npm run package -w @pcbjs/vscode
+      - name: npm with trusted publishing
+        if: env.publish == 'true'
+        run: npm install -g npm@11.21.1
+      - name: Publish under the next dist-tag
+        if: env.publish == 'true'
+        run: npx changeset publish --tag next --no-git-tag
+        env:
+          NPM_CONFIG_PROVENANCE: true

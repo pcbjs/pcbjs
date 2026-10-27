@@ -1,0 +1,81 @@
+(footprint "MouseBite-Part_2.0x2.0mm_0h"
+	(version 20260206)
+	(generator "pcbnew")
+	(generator_version "10.0")
+	(layer "F.Cu")
+	(descr "Break slot 2mm part, small: L=2mm, no holes: outer tab")
+	(tags "mousebite stamp slot break tab 2mm edge")
+	(property "Reference" "REF**"
+		(at 0 -1 0)
+		(layer "F.SilkS")
+		(hide yes)
+		(uuid "3d14a6d0-5127-45c5-9ff2-6e1796204610")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "MouseBite-Part_2.0x2.0mm_0h"
+		(at 0 -1 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "c2771d17-e2fb-4374-86c3-82306d95595e")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "0e5458dd-0dbc-4b9f-a4c7-cc148ae77148")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "7c486775-8f5d-4672-9d44-b82f7e8c0b91")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr board_only exclude_from_pos_files exclude_from_bom dnp)
+	(duplicate_pad_numbers_are_jumpers no)
+	(fp_arc
+		(start -1 -1)
+		(mid -1.292893 -0.292893)
+		(end -2 0)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(layer "Edge.Cuts")
+		(uuid "b285dc8c-76be-4357-92a0-ccef33563b2a")
+	)
+	(fp_arc
+		(start 2 0)
+		(mid 1.292893 -0.292893)
+		(end 1 -1)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(layer "Edge.Cuts")
+		(uuid "856d027e-1d71-421e-b69a-c88eb68e93f3")
+	)
+	(embedded_fonts no)
+)
