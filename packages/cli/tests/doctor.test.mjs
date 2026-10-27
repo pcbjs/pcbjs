@@ -1,11 +1,13 @@
 // pcbjs doctor and the version skew check of check, build and dev.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { distTag, installRange, doctor, installedPackages, minorOf, versionSkew, warnVersionSkew, UPDATE_COMMAND } from '../dist/doctor.js'
 
+const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+const update = `npm install @pcbjs/pcbjs@${distTag(version)}`
 const pkgs = (...vs) => vs.map(([name, version]) => ({ name: `@pcbjs/${name}`, version }))
 
 function project(versions) {
@@ -44,7 +46,7 @@ test('distTag: the prerelease name of a version, else latest', () => {
   assert.equal(distTag('0.0.1-beta.0'), 'beta')
   assert.equal(distTag('0.0.2-next.1a2b3c4'), 'next')
   assert.equal(distTag('0.1.0'), 'latest')
-  assert.equal(UPDATE_COMMAND, 'npm install @pcbjs/pcbjs@latest')
+  assert.equal(UPDATE_COMMAND, update)
 })
 
 test('installRange: the dist-tag of a prerelease, else the minor', () => {
@@ -77,7 +79,8 @@ test('doctor: prints versions, formats and config, exits 1 on a skew', async () 
     assert.match(out, /^formats\s+router \S+, tune \S+, reference \d+/m)
     assert.match(out, /^config\s+pcb\.config\.ts/m)
     assert.match(out, /^entries\s+pcb\.tsx/m)
-    assert.match(out, /error: @pcbjs packages disagree.*npm install @pcbjs\/pcbjs@latest/)
+    assert.ok(out.includes(`; run ${update}`), out)
+    assert.match(out, /error: @pcbjs packages disagree/)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
