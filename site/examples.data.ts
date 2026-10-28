@@ -1,13 +1,14 @@
-// The gallery: one card per board of examples/, its numbers from `pcbjs check --json`, its text from examples/README.md and the entry's header comment.
+// The gallery: one card per board of examples/, its numbers and SVGs from scripts/boards.mjs, its text from examples/README.md and the entry's header comment.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { repo } from './.vitepress/topics'
 
+export type View = '2d' | 'sch'
 export interface Board {
   id: string; project: string; name: string; entry: string
-  stats: Record<string, number>; routing?: Record<string, number>; counts: Record<string, number>; models?: Record<string, number>; ms: number; hash?: string
+  stats: Record<string, number>; routing?: Record<string, number>; counts: Record<string, number>; models?: Record<string, number>; ms: number; hash?: string; packages?: string; aspect: Partial<Record<View, number>>
 }
-export interface Card extends Board { summary: string; source: string; shots: { '2d'?: string; '3d'?: string; sch?: string } }
+export interface Card extends Board { summary: string; source: string }
 export interface Project { project: string; about: string; known: string; source: string; boards: Card[] }
 
 const github = 'https://github.com/pcbjs/pcbjs/tree/main/examples'
@@ -32,21 +33,19 @@ function headline(project: string, entry: string): string {
   return /^.*?\.(?=\s|$)/.exec(comment)?.[0] ?? comment
 }
 
-const shot = (id: string, view: string) =>
-  [join(site, '.shots'), join(site, 'public/shots')].some(d => existsSync(join(d, `${id}-${view}.webp`))) ? `/shots/${id}-${view}.webp` : undefined
 
 export default {
-  watch: ['./data/boards.json', './.shots/boards.json', '../examples/README.md'],
+  watch: ['./.gallery/boards.json', '../examples/README.md'],
   load(): Project[] {
-    const generated = join(site, '.shots/boards.json')
-    const boards: Board[] = JSON.parse(read(existsSync(generated) ? generated : join(site, 'data/boards.json')) || '[]')
+    // scripts/boards.mjs writes it before every build and dev server
+    const boards: Board[] = JSON.parse(read(join(site, '.gallery/boards.json')) || '[]')
     const text = readme()
     const order = [...text.keys()]
     const projects = new Map<string, Project>()
     for (const b of boards) {
       const top = b.project.split('/')[0]
       const p = projects.get(b.project) ?? { project: b.project, about: text.get(top)?.about ?? '', known: text.get(top)?.known ?? '', source: `${github}/${b.project}`, boards: [] }
-      p.boards.push({ ...b, summary: headline(b.project, b.entry), source: `${github}/${b.project}/${b.entry}`, shots: { '2d': shot(b.id, '2d'), '3d': shot(b.id, '3d'), sch: shot(b.id, 'sch') } })
+      p.boards.push({ ...b, summary: headline(b.project, b.entry), source: `${github}/${b.project}/${b.entry}` })
       projects.set(b.project, p)
     }
     const rank = (p: string) => { const i = order.indexOf(p.split('/')[0]); return i < 0 ? order.length : i }

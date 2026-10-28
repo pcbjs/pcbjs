@@ -6,9 +6,6 @@ titleTemplate: PCB design as TypeScript and JSX
 hero:
   name: pcbjs
   text: PCB design as TypeScript and JSX
-  image:
-    src: /shots/usb3-hub-usb3-hub-3d.webp
-    alt: The usb3-hub example board in 3D
   tagline: A board is a TSX module. The compiler places, routes, pours and checks it, and writes the Gerbers, drills, BOM and a viewer that links every item back to its line of code.
   actions:
     - theme: brand
@@ -42,8 +39,8 @@ The layout of Blinky, one of the demo boards, as it is checked in: three LED cha
 
 <<< @/../examples/demo/blinky.pcb.tsx#example{tsx}
 
-`npx pcbjs check` compiles, routes, and runs DRC and ERC on it; `npm run dev` opens the viewer:
+`npx pcbjs check` compiles, routes, and runs DRC and ERC on it, and `npm run dev` opens the viewer with the board in 2D and 3D. The board and its schematic as that compile draws them:
 
-<div class="viewer-shot pair"><img src="/shots/viewer-3d.webp" alt="The pcbjs viewer showing the Blinky demo board in 3D, with the layer list on the left and the findings panel on the right" width="1200" height="750" /><img src="/shots/viewer-sch.webp" alt="The same viewer showing Blinky's schematic, its symbols, wires and power symbols, with the schematic rows on the left" width="1200" height="750" /></div>
+<div class="board-pair"><BoardSvg id="demo-blinky" view="2d" label="The Blinky demo board: its copper, silkscreen and outline" /><BoardSvg id="demo-blinky" view="sch" label="Blinky's schematic: its symbols, wires and power symbols" /></div>
 
 pcbjs is a proof of concept, on npm under the `beta` tag until 0.1. [Getting started](/getting-started) installs it and makes a first board; [Why pcbjs](/why) says what it is for and how it compares with scripted KiCad.

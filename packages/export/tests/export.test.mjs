@@ -38,3 +38,18 @@ test('export: Gerber copper, plated drills and the SVG of one board', () => {
   assert.deepEqual(drl.tools.map(t => t.count), [2])
   assert.match(boardSvg(b), /^<\?xml/)
 })
+
+test('export: boardSvg with vars colours every layer, the canvas and the substrate through CSS variables, and leaves the default as it was', () => {
+  const b = board()
+  const plain = boardSvg(b)
+  assert.match(plain, /style="background:#1b1f27"/)
+  assert.match(plain, /<g pcb:layer="F\.Cu" id="layer-F_Cu" color="#c83434"/)
+  assert.doesNotMatch(plain, /var\(--pcb-|class="pcb-/)
+  const themed = boardSvg(b, { vars: true })
+  assert.doesNotMatch(themed, /color="#|style="background|fill="#/)
+  assert.match(themed, /<svg [^>]*class="pcb-board"/)
+  assert.match(themed, /\.pcb-F_Cu\{color:var\(--pcb-F_Cu,#c83434\)\}/)
+  assert.match(themed, /\.pcb-board\{background:var\(--pcb-canvas,#1b1f27\)\}/)
+  assert.match(themed, /<path class="pcb-substrate" fill-rule="evenodd" d="M/)
+  assert.match(themed, /<g pcb:layer="holes" class="pcb-holes">/)
+})

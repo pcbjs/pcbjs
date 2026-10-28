@@ -58,3 +58,5 @@ tree(fab, join(assets, 'vsicons', 'vsicons-custom-icons', `folder_type_${vsicons
 // Material Icon Theme wants the closed and the open folder beside each other
 tree(fab, join(assets, 'material', 'folder-pcbjs-fab.svg'));
 tree(fab, join(assets, 'material', 'folder-pcbjs-fab-open.svg'));
+// the Marketplace and Open VSX listing icon must be a PNG: the 512 px mark on a transparent ground
+copy(resolve(brand, '..', 'icon.png'), join(assets, 'icon.png'));

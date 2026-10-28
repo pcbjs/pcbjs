@@ -5,7 +5,7 @@ export { checkFab, readGerber, modelCopper, FAB_TOLERANCE, type FabCheck, type R
 export { gerberLayer, maskOpenings, nestOrder, cutIn, gerberJob, gerberExtension, fileFunction, type GerberFile, type DrillFile } from './gerber.js'
 export { excellon, type DrillTable, type DrillHole } from './excellon.js'
 export { bomCsv, bomRows, cplCsv, cplPoint, netlistJson, sourcingErc, type BomRow } from './bom.js'
-export { boardSvg, layerMarkup, holesMarkup, viewBox } from './svg.js'
+export { boardSvg, layerMarkup, holesMarkup, viewBox, type BoardSvgOptions } from './svg.js'
 export { boardFindings, formatFindings, type Finding } from './findings.js'
 export { siteData, routeInfos, sourceIndex } from './site-data.js'
 export { schematicSvg, schematicMarkup, schematicStyle, SCH_THEMES, type SchTheme } from './sch-svg.js'

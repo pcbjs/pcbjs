@@ -16,6 +16,11 @@
     "directory": "packages/vscode"
   },
   "publisher": "pcbjs",
+  "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#0F2219",
+    "theme": "dark"
+  },
   "main": "./dist/extension.js",
   "exports": {
     ".": {

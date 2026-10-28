@@ -98,7 +98,22 @@ export function viewBox(board: Board, margin = 2): [number, number, number, numb
   return [b.x - margin, b.y - margin, b.w + 2 * margin, b.h + 2 * margin]
 }
 
-export function boardSvg(board: Board): string {
+const BACKGROUND = '#1b1f27'
+const layerKey = (id: string) => id.replace('.', '_')
+
+export interface BoardSvgOptions {
+  /** every colour a CSS variable that falls back to the default: `--pcb-<layer>` with `.` as `_`, `--pcb-canvas` behind the board and in its holes, `--pcb-substrate` under the layers inside the outline */
+  vars?: boolean
+}
+
+/** The colours of `vars`: a variable per layer, canvas and substrate, each defaulting to the fixed colours. */
+function varsStyle(layers: Board['layers']): string {
+  const v = (name: string, value: string) => `var(--pcb-${name},${value})`
+  return `.pcb-board{background:${v('canvas', BACKGROUND)}}.pcb-substrate{fill:${v('substrate', BACKGROUND)}}.pcb-holes{fill:${v('canvas', BACKGROUND)}}`
+    + layers.map(l => `.pcb-${layerKey(l.id)}{color:${v(layerKey(l.id), l.color)}}`).join('')
+}
+
+export function boardSvg(board: Board, o: BoardSvgOptions = {}): string {
   const vb = viewBox(board).map(f).join(' ')
   const layers = [...board.layers].sort((a, b) => a.order - b.order)
   const meta = [
@@ -108,14 +123,15 @@ export function boardSvg(board: Board): string {
     `<pcb:footprints>${board.footprints.map(fp => `<pcb:footprint ref="${esc(fp.ref)}" value="${esc(fp.value)}" id="${esc(fp.id)}" x="${f(fp.at[0])}" y="${f(fp.at[1])}" rot="${f(fp.rot)}" side="${fp.side}"${fp.bom ? '' : ' bom="false"'}/>`).join('')}</pcb:footprints>`,
     `<pcb:drc errors="${board.drc.filter(d => d.severity === 'error').length}" warnings="${board.drc.filter(d => d.severity === 'warning').length}" unconnected="${board.unconnected}"/>`,
   ].join('\n    ')
-  const groups = layers.map(l => `  <g pcb:layer="${l.id}" id="layer-${l.id.replace('.', '_')}" color="${l.color}" fill="currentColor"${l.kind === 'copper' || l.kind === 'edge' ? '' : ' opacity="0.9"'}>\n${layerMarkup(board, l.id, true)}\n  </g>`)
+  const groups = layers.map(l => `  <g pcb:layer="${l.id}" id="layer-${layerKey(l.id)}" ${o.vars ? `class="pcb-${layerKey(l.id)}"` : `color="${l.color}"`} fill="currentColor"${l.kind === 'copper' || l.kind === 'edge' ? '' : ' opacity="0.9"'}>\n${layerMarkup(board, l.id, true)}\n  </g>`)
+  const substrate = o.vars && board.outline.length ? `  <path class="pcb-substrate" fill-rule="evenodd" d="${ringPath(board.outline)}"/>\n` : ''
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:pcb="https://pcb.svg/ns/1" viewBox="${vb}" width="${f(board.bbox.w + 4)}mm" height="${f(board.bbox.h + 4)}mm" style="background:#1b1f27">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:pcb="https://pcb.svg/ns/1" viewBox="${vb}" width="${f(board.bbox.w + 4)}mm" height="${f(board.bbox.h + 4)}mm" ${o.vars ? 'class="pcb-board"' : `style="background:${BACKGROUND}"`}>
   <metadata>
     ${meta}
   </metadata>
-${groups.join('\n')}
-  <g pcb:layer="holes" fill="#1b1f27">
+${o.vars ? `  <style>${varsStyle(layers)}</style>\n${substrate}` : ''}${groups.join('\n')}
+  <g pcb:layer="holes" ${o.vars ? 'class="pcb-holes"' : `fill="${BACKGROUND}"`}>
 ${holesMarkup(board)}
   </g>
 </svg>

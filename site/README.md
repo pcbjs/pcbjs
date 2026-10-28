@@ -7,10 +7,9 @@ The VitePress project behind https://pcbjs.dev, with the docs of `main` at https
 From the repository root, after `npm install` and `npm run build`:
 
 ```sh
-npm run docs:dev        # the site with hot reload, on http://localhost:5173; add -- --port <n> for another port
-npm run docs:build      # the gallery data and shots when Chrome is found, then the site in site/.vitepress/dist
+npm run docs:dev        # the gallery data and SVGs, then the site with hot reload on http://localhost:5173; add -- --port <n> for another port
+npm run docs:build      # the gallery data and SVGs, then the site in site/.vitepress/dist
 npm run docs:preview    # serve the built site; add -- --port <n> for another port
-npm run boards -w pcbjs-site -- --commit   # refresh the committed gallery fallbacks
 ```
 
 ## What is where
@@ -23,23 +22,23 @@ npm run boards -w pcbjs-site -- --commit   # refresh the committed gallery fallb
 | `[page].md`, `[page].paths.ts` | `/agents` from the README's For agents section, `/changelog` from `CHANGELOG.md`, else `packages/pcbjs/CHANGELOG.md` |
 | `index.md`, `getting-started.md`, `why.md`, `examples.md` | the site's own pages; their `tsx` samples are type checked by `packages/pcbjs/tests/site-samples.test.mjs` |
 | `examples.data.ts`, `.vitepress/theme/Gallery.vue` | the gallery: one card per board under `examples/`, its text from `examples/README.md` and the entry's first comment line |
-| `scripts/boards.mjs` | runs `pcbjs check --json` and `pcbjs shot` in every example project and writes WebP shots and `boards.json` |
-| `data/boards.json`, `public/shots/` | the committed fallbacks, used when a build has no Chrome; keep `public/shots` under 3 MB |
-| `.shots/` | what `docs:build` generated, untracked; preferred over the fallbacks and copied over them into the build |
+| `scripts/boards.mjs`, `scripts/compile.mjs` | compile every example project once, as `pcbjs check` does, and write `boards.json` with its numbers and each board's 2D view and schematic as SVG; no Chrome and no raster |
+| `.vitepress/theme/BoardSvg.vue` | inlines one of those SVGs through `@zhangyx1998/svg-loader`, which makes each a style-scoped Vue component in its own chunk, in a box of the SVG's aspect ratio; with `lazy`, as in the gallery, the page holds only the box and the SVG loads when it nears the viewport; the home page hero, stm32-dev, and its Blinky pair are inlined in the HTML |
+| `.gallery/` | what `boards.mjs` wrote, untracked; `docs:build` and `docs:dev` run it first, and nothing is committed in its place |
 | `brand/` | `logo.svg` and `favicon.svg`, the nav logo and the favicon when the files exist, and `og.png`, the Open Graph image |
 
 A new topic file in `docs/` becomes a page on the next build. Put it in a sidebar group in `groups` in `.vitepress/topics.ts`; a topic in no group lands in Background. Topic files keep their plain style for the terminal: a mention such as `board.md` in prose becomes a link on the site, and the page is wrapped in `v-pre`, so `{{` in a sample is safe.
 
 ## Deployment
 
-`.github/workflows/pages.yml` builds both trees into one GitHub Pages artifact of `pcbjs/pcbjs`, since every deploy replaces the whole site, and deploys it with `actions/deploy-pages` under the workflow's own token; no secret and no other repository. It runs on every push to `main`, by hand with Run workflow, and from `release.yml` after a publish.
+`.github/workflows/pages.yml` builds both trees into one GitHub Pages artifact of `pcbjs/pcbjs`, since every deploy replaces the whole site, and deploys it with `actions/deploy-pages` under the workflow's own token; no secret and no other repository. It runs on a push to `main` that touches `docs/`, `site/`, `examples/`, `README.md` or the workflow, by hand with Run workflow, and from `release.yml` after a publish; a push of the packages alone builds nothing.
 
 | Path | Tree | Built from |
 | --- | --- | --- |
 | https://pcbjs.dev/ | the stable docs | the tag `@pcbjs/pcbjs@<version>` with the highest version, the last published train; `main` while no train is tagged |
 | https://pcbjs.dev/next/ | the docs of `main` | `main`, with `PCBJS_SITE_BASE=/next/` and a `noindex` robots meta |
 
-Each tree runs `npm ci`, `npm run build` and `npm run docs:build -- --outDir <dir>` on ubuntu-latest, which has Chrome; the workflow caches the examples' route files, and `site/.shots` until a package changes, so a docs-only push shoots only the examples that changed and every check routes warm. `scripts/boards.mjs` takes the three views of a project in one `pcbjs shot --view all`. `PCBJS_SITE_URL` sets the host in the sitemap, the canonical links and the Open Graph tags, `https://pcbjs.dev` by default; `PCBJS_SITE_BASE` sets the VitePress `base`, `/` by default, and any other base adds the `noindex` meta. The workflow writes `CNAME` and `.nojekyll` at the artifact root.
+Each tree runs `npm ci`, `npm run build` and `npm run docs:build -- --outDir <dir>` on ubuntu-latest, and the workflow keeps the built stable tree in the Actions cache by its tag and builds a train only once, and keeps `site/.gallery` and the examples' route files of `main` by content, which a new train reuses when nothing under `packages/`, `examples/` or `site/scripts/` differs from `main`. `scripts/boards.mjs` keeps a project's numbers and SVGs while its folder and the packages hash the same, versions left out, so a docs-only push compiles nothing and an example edit compiles only that project. The SVGs take their colours from CSS variables, `--pcb-*` from `boardSvg(board, { vars: true })` and `--sch-*` from the schematic style, which `.vitepress/theme/custom.css` and `config.mts` set for the light theme and for VitePress's `.dark`. `PCBJS_SITE_URL` sets the host in the sitemap, the canonical links and the Open Graph tags, `https://pcbjs.dev` by default; `PCBJS_SITE_BASE` sets the VitePress `base`, `/` by default, and any other base adds the `noindex` meta. The workflow writes `CNAME` and `.nojekyll` at the artifact root.
 
 The one-time setup is in RELEASING.md, Owner setup: Pages source "GitHub Actions" and the custom domain `pcbjs.dev` with HTTPS enforced.
 

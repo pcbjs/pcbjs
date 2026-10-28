@@ -29,6 +29,7 @@ Every raster is rendered from the chosen SVG and checked in, so the site build n
 - `favicon.ico` holds 16, 32 and 48 px renders of `logo.svg`, and `apple-touch-icon.png` is 180 px.
 - `avatar.png` is a 512 px render of `logo.svg` for the GitHub organisation and npm; GitHub crops it to a circle. A mark with a transparent ground, such as candidate 9, is flattened on silkscreen `#F2EFE6` for the avatar, since GitHub shows it on either theme.
 - `og.png` is 1200 by 630: `wordmark.svg` with its dark colours written in, scaled 2.5 times and centred on dark mask `#0F2219`, rendered with `rsvg-convert -w 1200 -h 630`. The site's `og:image` points at `/brand/og.png`.
+- `icon.png` is a 512 px render of `logo.svg` on a transparent ground, `rsvg-convert -w 512 -h 512`, the VS Code extension listing icon, copied to `assets/icon.png` by the extension build.
 - Renders use `rsvg-convert -w <px> -h <px>` and `magick` to pack the `.ico`; if the 16 px render of the chosen mark needs hinting, a hand-tuned `favicon-16.svg` beside it wins over `logo.svg` for that size.
 
 ## Safe area

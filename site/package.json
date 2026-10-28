@@ -6,12 +6,12 @@
   "type": "module",
   "scripts": {
     "boards": "node scripts/boards.mjs",
-    "dev": "vitepress dev .",
-    "build": "node scripts/boards.mjs --if-chrome && vitepress build .",
+    "dev": "node scripts/boards.mjs && vitepress dev .",
+    "build": "node scripts/boards.mjs && vitepress build .",
     "preview": "vitepress preview ."
   },
   "devDependencies": {
-    "sharp": "^0.35.5",
+    "@zhangyx1998/svg-loader": "^0.0.3",
     "vitepress": "^1.6.4"
   }
 }

@@ -1,6 +1,8 @@
-import { cpSync, existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { defineConfig, type Plugin } from 'vitepress'
+import svgLoader from '@zhangyx1998/svg-loader'
+import { SCH_THEMES } from '@pcbjs/export/sch-svg'
 import { dynamicPage, repo, searchSections, sidebar } from './topics'
 
 const site = join(repo, 'site')
@@ -11,6 +13,9 @@ const host = process.env.PCBJS_SITE_URL ?? 'https://pcbjs.dev'
 // '/next/' for the docs of main beside the stable tree; any base but the root is kept out of search engines
 const base = process.env.PCBJS_SITE_BASE ?? '/'
 const root = `${host}${base}`
+// the schematic SVGs colour themselves from --sch-*: the exporter's light and dark themes, switched with VitePress's .dark
+const schVars = (theme: keyof typeof SCH_THEMES) => Object.entries(SCH_THEMES[theme]).map(([k, v]) => `--sch-${k}:${v}`).join(';')
+const schThemes = `:root{${schVars('light')}}.dark{${schVars('dark')}}`
 
 /** Serves and emits site/brand/* at /brand/, so the logo worker's files need no copy in public/. */
 function brandFiles(): Plugin {
@@ -38,7 +43,7 @@ export default defineConfig({
   base,
   cleanUrls: true,
   lastUpdated: false,
-  srcExclude: ['README.md', 'brand/**', 'scripts/**', 'data/**'],
+  srcExclude: ['README.md', 'brand/**', 'scripts/**'],
   sitemap: { hostname: root },
   head: [
     ...(hasBrand('favicon.svg') ? [['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}brand/favicon.svg` }] as [string, Record<string, string>]] : []),
@@ -50,6 +55,7 @@ export default defineConfig({
     ['meta', { property: 'og:image:width', content: '1200' }],
     ['meta', { property: 'og:image:height', content: '630' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['style', {}, schThemes],
   ],
   transformPageData(page) {
     const p = page.params
@@ -64,12 +70,8 @@ export default defineConfig({
       ...(page.description ? [['meta', { property: 'og:description', content: page.description }]] : []),
     ]
   },
-  buildEnd({ outDir }) {
-    const generated = join(site, '.shots')
-    if (existsSync(generated)) for (const f of readdirSync(generated)) if (f.endsWith('.webp')) cpSync(join(generated, f), join(outDir, 'shots', f))
-  },
   markdown: { theme: { light: 'github-light', dark: 'github-dark' } },
-  vite: { plugins: [brandFiles()], server: { fs: { allow: [repo] } } },
+  vite: { plugins: [brandFiles(), svgLoader()], server: { fs: { allow: [repo] } } },
   themeConfig: {
     logo: hasBrand('logo.svg') ? { src: '/brand/logo.svg', alt: 'pcbjs' } : undefined,
     nav: [

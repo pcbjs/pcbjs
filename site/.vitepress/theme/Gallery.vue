@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { reactive } from 'vue'
-import { withBase } from 'vitepress'
-import { data as projects } from '../../examples.data'
+import { data as projects, type View } from '../../examples.data'
+import BoardSvg from './BoardSvg.vue'
 
-const view = reactive<Record<string, '2d' | '3d' | 'sch'>>({})
-const LABEL = { '3d': '3D', '2d': '2D', sch: 'Schematic' } as const
-const shown = (id: string) => view[id] ?? '3d'
+const view = reactive<Record<string, View>>({})
+const LABEL = { '2d': '2D', sch: 'Schematic' } as const
+const shown = (id: string) => view[id] ?? '2d'
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const seconds = (ms: number) => ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`
 const md = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -21,10 +21,10 @@ const md = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace
     <div class="cards">
       <article v-for="b in p.boards" :key="b.id" class="card">
         <div class="shot">
-          <img v-if="b.shots[shown(b.id)]" :src="withBase(b.shots[shown(b.id)]!)" :alt="`${b.name}, ${shown(b.id)} view`" loading="lazy" width="600" height="605" />
-          <div v-else class="none">no shot yet</div>
+          <BoardSvg v-if="b.aspect[shown(b.id)]" :key="`${b.id}-${shown(b.id)}`" :id="b.id" :view="shown(b.id)" :label="`${b.name}, ${LABEL[shown(b.id)]}`" lazy />
+          <div v-else class="none">no drawing yet</div>
           <div class="views" role="group" :aria-label="`${b.name} view`">
-            <button v-for="v in (['3d', '2d', 'sch'] as const)" :key="v" :class="{ on: shown(b.id) === v }" :disabled="!b.shots[v]" @click="view[b.id] = v">{{ LABEL[v] }}</button>
+            <button v-for="v in (['2d', 'sch'] as const)" :key="v" :class="{ on: shown(b.id) === v }" :disabled="!b.aspect[v]" @click="view[b.id] = v">{{ LABEL[v] }}</button>
           </div>
         </div>
         <div class="body">
@@ -55,11 +55,11 @@ const md = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace
 .known { font-size: 14px; color: var(--vp-c-text-2); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
 .card { border: 1px solid var(--vp-c-divider); border-radius: 10px; overflow: hidden; background: var(--vp-c-bg-soft); display: flex; flex-direction: column; }
-.shot { position: relative; background: #111214; aspect-ratio: 600 / 605; }
-.shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.none { display: grid; place-items: center; height: 100%; color: #888; font-size: 14px; }
-.views { position: absolute; top: 8px; right: 8px; display: flex; border-radius: 6px; overflow: hidden; border: 1px solid #3a3d44; }
-.views button { padding: 2px 10px; font-size: 12px; color: #c8ccd2; background: #1b1d21; }
+.shot { position: relative; background: var(--pcb-canvas); aspect-ratio: 1; padding: 36px 8px 8px; }
+.shot > .board-svg { height: 100%; }
+.none { display: grid; place-items: center; height: 100%; color: var(--vp-c-text-3); font-size: 14px; }
+.views { position: absolute; top: 8px; right: 8px; display: flex; border-radius: 6px; overflow: hidden; border: 1px solid var(--vp-c-divider); }
+.views button { padding: 2px 10px; font-size: 12px; color: var(--vp-c-text-2); background: var(--vp-c-bg); }
 .views button.on { background: var(--vp-c-brand-3); color: #fff; }
 .views button:disabled { opacity: 0.4; }
 .body { padding: 12px 16px 14px; }
