@@ -1,5 +1,13 @@
 # @pcbjs/pcbjs
 
+## 0.0.1-beta.1
+
+### Patch Changes
+
+- Updated dependencies [[`7245cea`](https://github.com/pcbjs/pcbjs/commit/7245cea44558b589b236c8f3cd3100977ad36aab), [`cd7317f`](https://github.com/pcbjs/pcbjs/commit/cd7317fd3ab9b74fec8026ada0c1b2d7c3ec2754)]:
+  - @pcbjs/export@0.0.1-beta.1
+  - @pcbjs/cli@0.0.1-beta.1
+
 ## 0.0.1-beta.0
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @pcbjs/cli
 
+## 0.0.1-beta.1
+
+### Patch Changes
+
+- [`cd7317f`](https://github.com/pcbjs/pcbjs/commit/cd7317fd3ab9b74fec8026ada0c1b2d7c3ec2754) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - `pcbjs create` takes `--layers`, `--fab`, `--size` and `--outline` to pick the fab preset and draw the outline, with the template's circuit in the middle, and `--example <name>` to copy one of six example boards: blinky, coin, quad, multi, led-matrix and qfn-breakout. `pcbjs create --list-examples` prints them with a line each. Without the new flags `pcbjs create` gives the same board as before.
+- Updated dependencies [[`7245cea`](https://github.com/pcbjs/pcbjs/commit/7245cea44558b589b236c8f3cd3100977ad36aab)]:
+  - @pcbjs/export@0.0.1-beta.1
+
 ## 0.0.1-beta.0
 
 ### Patch Changes
