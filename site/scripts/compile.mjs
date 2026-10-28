@@ -1,11 +1,15 @@
 // Compiles the project in the working directory as `pcbjs check` does and writes, for the gallery, report.json and each board's SVGs, named in its `svg`.
 // With --map <entry>, that board keeps its item ids in the SVGs and gets <n>.map.json, its source ranges with a chip label each, and its fab file list.
-// Usage: node compile.mjs <out> [--map <entry>]...; boards.mjs runs it once per project, since a project's defaults live on globalThis.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+// With --site <dir> --base <base>, it also builds the project's prerendered board pages into <dir> as pcbjs build does, served at <base>, for the docs site's frames.
+// Usage: node compile.mjs <out> [--map <entry>]... [--site <dir> --base <base>]; boards.mjs runs it once per project, since a project's defaults live on globalThis.
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
+import { build as viteBuild } from 'vite'
 import { resolveConfig } from '@pcbjs/cli/config'
 import { pluginState } from '@pcbjs/cli/plugin'
-import { compileServer, compileSlots, reportOf } from '@pcbjs/cli/check'
+import { compileServer, compileSlots, logLevelFor, reportOf } from '@pcbjs/cli/check'
+import { buildPayload, prerenderSite } from '@pcbjs/cli/build'
+import { CLIENT_DIR, viteConfig } from '@pcbjs/cli/vite'
 import { boardSvg } from '@pcbjs/export/svg'
 import { sourceIndex } from '@pcbjs/export/site-data'
 import { buildFab } from '@pcbjs/export/fab'
@@ -14,6 +18,10 @@ import { schematicMarkup, schematicStyle } from '@pcbjs/export/sch-svg'
 const [dir, ...rest] = process.argv.slice(2)
 const out = resolve(dir)
 const mapped = new Set(rest.filter((a, i) => rest[i - 1] === '--map'))
+const flag = name => rest[rest.indexOf(name) + 1]
+const siteDir = rest.includes('--site') ? resolve(flag('--site')) : null
+// as pcbjs build sets it: the compile server would set development, giving the site Vue's development build
+if (siteDir) process.env.NODE_ENV ??= 'production'
 // the layers of a top view; the rest of the board SVG is for tools, not for the gallery
 const SHOWN = new Set(['B.Cu', 'F.Cu', 'F.SilkS', 'Edge.Cuts', 'holes'])
 // 0.01 mm is below a pixel at any size the site draws a board
@@ -73,6 +81,40 @@ function fabList(board) {
   return { files: Object.keys(fab.files).sort(), zip: fab.zipName, status: /STATUS: .*/.exec(fab.readme)?.[0] ?? '' }
 }
 
+/** The board pages of the viewer site, prerendered at `base` as pcbjs build does, for the docs site's frames: each page carries only its own board, and nothing an embedded page never requests is kept, so no home page, 404 page, target pages, boards/*.json or fab files. */
+async function buildSite(cfg, state, dir, base) {
+  Object.assign(cfg, { outDir: dir, base })
+  const vc = viteConfig(cfg, state, 'build')
+  const logLevel = logLevelFor(cfg)
+  state.inline = false
+  await viteBuild({ ...vc, logLevel, mode: 'production' })
+  const ssrDir = join(cfg.root, '.pcbjs', 'cache', 'ssr')
+  await viteBuild({
+    ...vc,
+    mode: 'production',
+    logLevel,
+    ssr: { ...vc.ssr, noExternal: true },
+    build: {
+      ...vc.build,
+      ssr: join(CLIENT_DIR, 'src', 'entry-server.ts'),
+      outDir: ssrDir,
+      emptyOutDir: true,
+      copyPublicDir: false,
+      rollupOptions: { output: { entryFileNames: 'entry-server.mjs', format: 'es' } },
+    },
+  })
+  const template = join(dir, 'index.html')
+  const html = readFileSync(template, 'utf8')
+  const payload = buildPayload(state)
+  // prerenderSite reads its template from index.html and overwrites it with the home page, so each board starts from the template again
+  for (const name of new Set(payload.boards.map(b => b.name))) {
+    writeFileSync(template, html)
+    await prerenderSite(join(ssrDir, 'entry-server.mjs'), dir, base, { ...payload, boards: payload.boards.filter(b => b.name === name) })
+    for (const e of readdirSync(join(dir, 'board', name), { withFileTypes: true })) if (e.isDirectory()) rmSync(join(dir, 'board', name, e.name), { recursive: true })
+  }
+  for (const f of ['index.html', '404.html']) rmSync(join(dir, f), { force: true })
+}
+
 const cfg = await resolveConfig([], 'build', undefined, process.cwd(), () => {})
 const state = pluginState(cfg)
 const server = await compileServer(cfg, state)
@@ -98,3 +140,4 @@ try {
 } finally {
   await server.close()
 }
+if (siteDir) await buildSite(cfg, state, siteDir, flag('--base'))

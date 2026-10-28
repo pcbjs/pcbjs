@@ -1948,6 +1948,19 @@ tr.on {
   display: none !important;
 }
 
+/* embed mode, ?embed=1: the view alone, edge to edge */
+.app.embed {
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+}
+/* ?tools=0: the board alone, without the views' toolbars, scale and readout */
+.app.embed.no-tools .bv-tools,
+.app.embed.no-tools .bv-scale,
+.app.embed.no-tools .bv-readout,
+.app.embed.no-tools .view3d-buttons {
+  display: none !important;
+}
+
 /* narrow screens: the rails become drawers */
 .only-narrow {
   display: none !important;

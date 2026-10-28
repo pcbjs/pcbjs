@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { h, onBeforeUnmount, ref } from 'vue'
+import { h, onBeforeUnmount, reactive, ref } from 'vue'
 import { withBase } from 'vitepress'
 import { data } from '../../home.data'
+import type { View } from '../../examples.data'
+import BoardFrame from './BoardFrame.vue'
 import BoardSvg from './BoardSvg.vue'
 import MapDemo from './MapDemo.vue'
+import ViewTabs from './ViewTabs.vue'
 
 const INSTALL = 'npm install -D @pcbjs/pcbjs@beta'
 const github = 'https://github.com/pcbjs/pcbjs'
@@ -21,12 +24,20 @@ onBeforeUnmount(() => clearTimeout(reset))
 // the token colours of every highlighted block, light and dark
 const Palette = () => h('style', data.css)
 const at = (src: string) => src.replace(/:\d+$/, '')
+// the DRC row opens on 2D, where its marker rings are drawn
 const rows = [
-  { title: 'Route by hand, or leave a leg to the router', snip: data.route, view: '2d' as const },
-  { title: 'Pours join their pads through thermals', snip: data.pour, view: '2d' as const },
-  { title: 'DRC points at the line', snip: data.drc, view: '2d' as const },
-  { title: 'The schematic is code too', snip: data.schematic, view: 'sch' as const },
-]
+  { title: 'Route by hand, or leave a leg to the router', snip: data.route, view: '3d' as View },
+  { title: 'Pours join their pads through thermals', snip: data.pour, view: '3d' as View },
+  { title: 'DRC points at the line', snip: data.drc, view: '2d' as View },
+  { title: 'The schematic is code too', snip: data.schematic, view: 'sch' as View },
+].map(r => ({ ...r, view: r.snip.views.includes(r.view) ? r.view : '2d' }))
+const views = reactive(rows.map(r => r.view))
+// a row's 3D frame mounts on first use and then stays, hidden behind the SVGs
+const framed = reactive(rows.map(r => r.view === '3d'))
+function pick(i: number, v: View) {
+  views[i] = v
+  framed[i] ||= v === '3d'
+}
 </script>
 
 <template>
@@ -45,7 +56,7 @@ const rows = [
     <MapDemo :hero="data.hero" />
 
     <section class="rows">
-      <div v-for="r in rows" :key="r.title" class="row">
+      <div v-for="(r, i) in rows" :key="r.title" class="row">
         <div class="text">
           <h2>{{ r.title }}</h2>
           <pre class="hc" v-html="r.snip.html" />
@@ -53,8 +64,28 @@ const rows = [
             <span class="err">error</span> {{ r.snip.drc.rule }} <span class="where">{{ at(r.snip.drc.src) }}</span> {{ r.snip.drc.message }}
           </p>
         </div>
-        <div class="result">
-          <BoardSvg :id="r.snip.id" :view="r.view" :label="`${r.title}: the board this code compiles to`" lazy />
+        <div class="result board">
+          <BoardSvg
+            v-for="v in r.snip.views.filter(v => v !== '3d')"
+            v-show="views[i] === v"
+            :key="v"
+            :id="r.snip.id"
+            :view="v"
+            :label="`${r.title}: the board this code compiles to`"
+            lazy
+          />
+          <BoardFrame
+            v-if="framed[i] && r.snip.viewer"
+            class="frame"
+            :class="{ off: views[i] !== '3d' }"
+            :id="r.snip.id"
+            :tools="false"
+            :viewer="r.snip.viewer"
+            :name="r.snip.name"
+            view="3d"
+            :label="`${r.title}: the board in 3D`"
+          />
+          <ViewTabs class="tabs" :model-value="views[i]" :views="r.snip.views" :label="`${r.snip.name} view`" @update:model-value="v => pick(i, v)" />
         </div>
       </div>
       <div class="row">
@@ -201,6 +232,32 @@ pre {
   overflow: hidden;
   background: var(--pcb-canvas);
   padding: 12px;
+}
+.board {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  padding: 44px 12px 12px;
+}
+.board > .board-svg {
+  height: 100%;
+}
+.board > .frame {
+  position: absolute;
+  inset: 44px 0 0;
+  width: auto;
+  height: auto;
+}
+.board :deep(.poster) {
+  padding: 0 12px 12px;
+}
+.board > .frame.off {
+  visibility: hidden;
+}
+.board > .tabs {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
 }
 .fab {
   font-size: 12px;

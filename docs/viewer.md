@@ -13,7 +13,7 @@ Set once after the first render, so a prerendered page hydrates as served; each 
 
 | Parameter | Does |
 | --- | --- |
-| `view=2d`, `view=3d`, `view=sch` | open in that view; dev and IDE mode default to 3D, a built site to 2D |
+| `view=2d`, `view=3d`, `view=sch` | open in that view; dev, IDE and embed mode default to 3D, a built site to 2D |
 | `explode=<0..1>` | 3D exploded at that fraction of 15 mm; `0` closes it; opens 3D without `view` |
 | `layer=<name>` | one layer alone in 2D, outline kept: an id such as `In1.Cu`, an alias such as `top`, `back` or `silk`, or the rail name, any case |
 | `select=<ref>` | select and frame a part: courtyard with margin in 2D, its body with the rest faded in 3D, its symbol centred in the schematic |
@@ -93,6 +93,21 @@ All views share `--canvas` from style.css per theme. The board sits on `--substr
 ## Shared hover and focus
 
 Every viewer of one dev server shows the others' hover, without the bubble, and focus on the same board; a page opened later gets the last focus unless its URL has `select`. A hover is `{ ids, refs, net }` or null, at most once a frame and on change; a focus is `{ net, ref, refs, circuit }`. The cursor highlight has its own channel, see ide-bridge.md.
+
+## Embedding
+
+`/board/<name>?embed=1` shows the view alone, edge to edge, for an iframe: no top bar, rails, panel, view buttons or chips, 3D unless `view` says otherwise. `embed` takes `1`, `true`, `yes` or no value; the view query, the view's keys, hover and click still work. `tools=0`, `false` or `no` also hides the views' own toolbars, scale and readout, so only the board shows; it has no effect without `embed`. A rewritten URL, such as a target's, keeps the whole query.
+
+The parent page posts these into the frame, accepted only from `window.parent`, beside `pcbjs:net` and `pcbjs:finding` of ide-bridge.md:
+
+| Message | Does |
+| --- | --- |
+| `{ type: 'pcbjs:view', view: '2d' \| '3d' \| 'sch' }` | switch the view |
+| `{ type: 'pcbjs:theme', theme: 'light' \| 'dark' }` | switch the theme, not stored |
+| `{ type: 'pcbjs:hover', ids, refs, net }` | draw a hover as another viewer's is drawn; empty arrays and a null net clear it |
+| `{ type: 'pcbjs:select', ref, frame? }` | select a part as `select` does, null clears; frame it only with `frame: true` |
+
+The frame posts to `window.parent` with target origin `*`: `{ type: 'pcbjs:ready', board, views }` once, when the first view has painted the board, `views` without `sch` for a board with no schematic drawing; then `pcbjs:hover` with `{ ids, refs, net }` at most once a frame on change; `pcbjs:select` with `{ ref }` when a click changes the selection, not for a select the parent posted; `pcbjs:view` with `{ view }` each time a switch, posted or from inside the frame, has painted. Painted means 2D and schematic as for `data-ready`, 3D at the first frame with the board meshes, before part models and the camera settle, so the parent can swap a poster for the view on these.
 
 ## Ready signal
 

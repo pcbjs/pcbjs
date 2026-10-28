@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { reactive } from 'vue'
-import { data as projects, type View } from '../../examples.data'
+import { withBase } from 'vitepress'
+import { data as projects, type Card, type View } from '../../examples.data'
+import BoardFrame from './BoardFrame.vue'
 import BoardSvg from './BoardSvg.vue'
+import Pills from './Pills.vue'
+import ViewTabs from './ViewTabs.vue'
 
 const view = reactive<Record<string, View>>({})
-const LABEL = { '2d': '2D', sch: 'Schematic' } as const
-const shown = (id: string) => view[id] ?? '2d'
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
-const seconds = (ms: number) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`)
+const LABEL = { '2d': '2D', '3d': '3D', sch: 'Schematic' } as const
+const shown = (b: Card): View => view[b.id] ?? (b.viewer ? '3d' : '2d')
 const first = (s: string) => /^.*?\.(?=\s|$)/.exec(s)?.[0] ?? s
 const md = (s: string) =>
   s
@@ -18,39 +20,37 @@ const md = (s: string) =>
 
 <template>
   <section v-for="p in projects" :key="p.project" class="project">
-    <h2 :id="p.project.replace('/', '-')">
-      <a :href="p.source" target="_blank" rel="noreferrer">examples/{{ p.project }}</a>
-    </h2>
+    <h2 :id="p.project.replace('/', '-')">examples/{{ p.project }}</h2>
     <p v-if="p.about" class="about" v-html="md(first(p.about))" />
     <p v-if="p.known && p.known !== 'none'" class="known"><strong>Known findings:</strong> <span v-html="md(first(p.known))" /></p>
     <div class="cards">
       <article v-for="b in p.boards" :key="b.id" class="card">
         <div class="shot">
-          <BoardSvg v-if="b.aspect[shown(b.id)]" :key="`${b.id}-${shown(b.id)}`" :id="b.id" :view="shown(b.id)" :label="`${b.name}, ${LABEL[shown(b.id)]}`" lazy />
-          <div v-else class="none">no drawing yet</div>
-          <div class="views" role="group" :aria-label="`${b.name} view`">
-            <button v-for="v in ['2d', 'sch'] as const" :key="v" :class="{ on: shown(b.id) === v }" :disabled="!b.aspect[v]" @click="view[b.id] = v">{{ LABEL[v] }}</button>
-          </div>
+          <BoardFrame
+            v-if="b.viewer"
+            :id="b.id"
+            :tools="false"
+            :viewer="b.viewer"
+            :name="b.name"
+            :view="shown(b)"
+            :poster="shown(b) === 'sch' ? 'sch' : '2d'"
+            :label="`${b.name}, ${LABEL[shown(b)]}`"
+            @view="v => (view[b.id] = v)"
+          />
+          <BoardSvg v-else-if="b.aspect[shown(b)]" :key="`${b.id}-${shown(b)}`" :id="b.id" :view="shown(b)" :label="`${b.name}, ${LABEL[shown(b)]}`" lazy />
+          <div class="name">{{ b.name }}</div>
+          <ViewTabs
+            class="tabs"
+            :model-value="shown(b)"
+            @update:model-value="v => (view[b.id] = v)"
+            :views="b.views"
+            :label="`${b.name} view`"
+            :full="withBase(`/examples/${b.id}`)"
+          />
         </div>
-        <div class="body">
-          <h3>
-            <a :href="b.source" target="_blank" rel="noreferrer">{{ b.name }}</a> <code>{{ b.entry }}</code>
-          </h3>
-          <p v-if="b.summary" class="summary">{{ b.summary }}</p>
-          <ul class="numbers">
-            <li>{{ plural(b.stats.footprints, 'part') }}</li>
-            <li>{{ plural(b.stats.pads, 'pad') }}</li>
-            <li>{{ plural(b.stats.tracks, 'track') }}</li>
-            <li>{{ plural(b.stats.vias, 'via') }}</li>
-            <li>{{ plural(b.stats.nets, 'net') }}</li>
-            <li v-if="b.routing?.legs">{{ b.routing.routed }} of {{ plural(b.routing.legs, 'autorouted leg') }}</li>
-            <li v-if="b.models?.missing">{{ b.models.missing }} with no 3D model</li>
-          </ul>
-          <p class="status" :class="b.counts.drcErrors + b.counts.ercErrors + b.counts.unconnected ? 'bad' : b.counts.drcWarnings + b.counts.ercWarnings ? 'warn' : 'ok'">
-            DRC {{ plural(b.counts.drcErrors, 'error') }}, {{ plural(b.counts.drcWarnings, 'warning') }} · ERC {{ plural(b.counts.ercErrors, 'error') }},
-            {{ plural(b.counts.ercWarnings, 'warning') }} · compiled in {{ seconds(b.ms) }}
-          </p>
-        </div>
+        <p class="body">
+          <Pills :counts="b.counts" /> <span v-if="b.summary" class="summary">{{ b.summary }}</span>
+        </p>
       </article>
     </div>
   </section>
@@ -74,7 +74,7 @@ const md = (s: string) =>
 }
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
   margin-top: 16px;
 }
@@ -83,87 +83,55 @@ const md = (s: string) =>
   border-radius: 10px;
   overflow: hidden;
   background: var(--vp-c-bg-soft);
-  display: flex;
-  flex-direction: column;
+  container-type: inline-size;
 }
 .shot {
   position: relative;
   background: var(--pcb-canvas);
   aspect-ratio: 1;
-  padding: 36px 8px 8px;
 }
 .shot > .board-svg {
   height: 100%;
+  padding: 40px 8px 8px;
 }
-.none {
-  display: grid;
-  place-items: center;
-  height: 100%;
-  color: var(--vp-c-text-3);
-  font-size: 14px;
+/* the frame sits below the strip of the name and the tabs, clear of the viewer's own buttons */
+.shot > .board-frame {
+  position: absolute;
+  inset: 40px 0 0;
+  height: auto;
+  width: auto;
 }
-.views {
+.shot :deep(.poster) {
+  padding: 0 8px 8px;
+}
+.name,
+.tabs {
   position: absolute;
   top: 8px;
-  right: 8px;
-  display: flex;
-  border-radius: 6px;
+  z-index: 1;
+}
+.name {
+  left: 10px;
+  max-width: 40%;
   overflow: hidden;
-  border: 1px solid var(--vp-c-divider);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 26px;
+  color: var(--vp-c-text-1);
+  pointer-events: none;
 }
-.views button {
-  padding: 2px 10px;
-  font-size: 12px;
-  color: var(--vp-c-text-2);
-  background: var(--vp-c-bg);
-}
-.views button.on {
-  background: var(--vp-c-brand-3);
-  color: #fff;
-}
-.views button:disabled {
-  opacity: 0.4;
+.tabs {
+  right: 8px;
 }
 .body {
-  padding: 12px 16px 14px;
-}
-.body h3 {
   margin: 0;
-  font-size: 17px;
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  flex-wrap: wrap;
-}
-.summary {
-  margin: 8px 0 0;
+  padding: 10px 14px 12px;
   font-size: 14px;
   line-height: 1.5;
+}
+.summary {
   color: var(--vp-c-text-2);
-}
-.numbers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  list-style: none;
-  padding: 0;
-  margin: 10px 0 0;
-  font-size: 13px;
-}
-.numbers li {
-  margin: 0;
-}
-.status {
-  margin: 8px 0 0;
-  font-size: 13px;
-}
-.status.ok {
-  color: var(--vp-c-green-1, #2aa366);
-}
-.status.warn {
-  color: var(--vp-c-yellow-1);
-}
-.status.bad {
-  color: var(--vp-c-red-1);
 }
 </style>

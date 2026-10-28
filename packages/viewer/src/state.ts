@@ -22,7 +22,7 @@ import {
 } from './source'
 export { sourceTarget }
 export type { ClickAction, FollowMode, SourceKind, SourceTarget }
-import { focusSwitch, ideRoute, parseIdeQuery, parseIdeRequest, type FocusEvent, type IdeRequest, type IdeTheme } from './ide'
+import { focusSwitch, ideRoute, pageUrl, parseIdeQuery, parseIdeRequest, type FocusEvent, type IdeRequest, type IdeTheme } from './ide'
 import { EXPLODE_MAX, hasViewQuery, queryMode, soloHidden, type ViewQuery } from './query'
 import { schAtCursor } from './schview'
 import {
@@ -105,6 +105,10 @@ export interface StoreInit extends SiteState {
   ideTheme?: IdeTheme | null
   /** the query of the page in IDE mode, kept on every URL the viewer writes */
   ideSearch?: string
+  /** start in embed mode, as `?embed=1` does in the browser */
+  embed?: boolean
+  /** the query of the page in embed mode, kept on every URL the viewer writes */
+  embedSearch?: string
 }
 
 export type Route = { page: 'home' } | { page: 'board'; name: string | null; target: string | null }
@@ -295,6 +299,18 @@ function makeStore(init: StoreInit) {
     /** counts board switches by focus, for the flash of the board name */
     flash: 0,
   })
+  let requestN = 0
+
+  // embed mode: the bare view a page puts in an iframe, driven by postMessage, see docs/viewer.md "Embedding"
+  const embed = reactive({
+    on: !!init.embed,
+    /** the query the page was opened with, kept on every URL the viewer writes */
+    search: init.embedSearch ?? '',
+    /** false hides the view's own toolbars, from `?tools=0` */
+    tools: parseIdeQuery(init.embedSearch ?? '').tools,
+    /** the part the embedding page last asked for, so the selection it causes is not posted back; undefined for none */
+    asked: { ref: undefined as string | null | undefined },
+  })
 
   // a workspace dev server: its scopes and the one this page shows
   const workspace = reactive({ info: (init.workspace ?? null) as WorkspaceInfo | null, scope: (init.scope ?? null) as string | null })
@@ -332,9 +348,9 @@ function makeStore(init: StoreInit) {
     if (fixed) Object.defineProperty(v, 'mode', { enumerable: true, get: () => fixed, set: () => {} })
     return v
   }
-  /** The view a board starts in: 3D while editing, in the dev server and in IDE mode, 2D in a built site. */
+  /** The view a board starts in: 3D while editing, in the dev server, in IDE mode and embedded, 2D in a built site. */
   function defaultMode(): '2d' | '3d' {
-    return ide.on || (import.meta as any).env?.DEV === true || state.boards.some(b => b.dev) ? '3d' : '2d'
+    return ide.on || embed.on || (import.meta as any).env?.DEV === true || state.boards.some(b => b.dev) ? '3d' : '2d'
   }
 
   /** The handler of the `pcbjs:board` HMR event: one entry, a board or one target of it, replaces the entry with the same name and target. */
@@ -382,8 +398,8 @@ function makeStore(init: StoreInit) {
         )
       : pathRoute(),
   )
-  /** The URL of a path: IDE mode keeps its query, so a reload stays in IDE mode. */
-  const urlOf = (path: string) => (ide.on ? path + ide.search : path)
+  /** The URL of a path: IDE and embed mode keep their query, so a reload stays in that mode. */
+  const urlOf = (path: string) => pageUrl(path, { ide: ide.on, embed: embed.on }, ide.on ? ide.search : embed.search)
   /** Navigate to a path under the base with a new history entry. */
   function go(path: string) {
     if (path === state.path) return
@@ -560,16 +576,37 @@ function makeStore(init: StoreInit) {
       if (hidden) v.hidden = new Set(hidden)
       else console.warn(`pcbjs: ?layer=${q.layer} matches no layer of ${b.name}`)
     }
-    if (q.select) {
-      if (b.footprints.some(f => f.ref === q.select)) {
-        v.activeRef = q.select
-        v.activeCircuit = null
-        v.selectedRefs = []
-        v.tab = 'part'
-        ui.frame = { board: b.name, ref: q.select }
-      } else console.warn(`pcbjs: ?select=${q.select} matches no part of ${b.name}`)
-    }
+    if (q.select && !selectPart(b, q.select, true)) console.warn(`pcbjs: ?select=${q.select} matches no part of ${b.name}`)
   })
+
+  /** Select a part as ?select= does, null clears; `frame` also frames it in every view. False when the board has no such part. */
+  function selectPart(b: SiteData, ref: string | null, frame: boolean): boolean {
+    if (ref != null && !b.footprints.some(f => f.ref === ref)) return false
+    const v = boardView(b.name)
+    v.activeRef = ref
+    v.activeCircuit = null
+    v.selectedRefs = []
+    if (ref) v.tab = 'part'
+    if (ref && frame) ui.frame = { board: b.name, ref }
+    return true
+  }
+
+  /** Apply what the editor or the embedding page posted; a net or a finding goes to App.vue through `ide.request`. */
+  function applyRequest(r: IdeRequest) {
+    const b = current.value
+    if (r.kind === 'net' || r.kind === 'finding') ide.request = { ...r, n: ++requestN }
+    else if (r.kind === 'theme') ui.theme = r.theme
+    else if (!b) return
+    else if (r.kind === 'hover') ui.remote = r.hover ? { board: b.name, hover: r.hover } : null
+    else if (r.kind === 'view') boardView(b.name).mode = r.view
+    else {
+      if (boardView(b.name).activeRef !== r.ref) embed.asked.ref = r.ref
+      if (!selectPart(b, r.ref, r.frame)) {
+        embed.asked.ref = undefined
+        console.warn(`pcbjs: select ${r.ref} matches no part of ${b.name}`)
+      }
+    }
+  }
 
   /** How a click follows to the source, from the site data; every board of a site carries the same. */
   const followSetting = computed<FollowMode>(() => followOf(current.value ?? state.boards[0]))
@@ -704,6 +741,8 @@ function makeStore(init: StoreInit) {
     toggleTheme,
     toggleGrid,
     ide,
+    embed,
+    applyRequest,
     enterIde,
     onFocus,
     source,
@@ -746,12 +785,11 @@ export function startBrowser(store: Store): boolean {
     })
   }
 
-  // only the editor around the page may post requests
-  if (store.ide.on && window.parent !== window) {
-    let n = 0
+  // only the editor or the page around the page may post requests
+  if ((store.ide.on || store.embed.on) && window.parent !== window) {
     addEventListener('message', e => {
       const r = e.source === window.parent ? parseIdeRequest(e.data) : null
-      if (r) store.ide.request = { ...r, n: ++n }
+      if (r) store.applyRequest(r)
     })
   }
 
@@ -817,8 +855,8 @@ export function startBrowser(store: Store): boolean {
 export function afterMount(store: Store, query?: ViewQuery) {
   const { ui, system } = store
   const { ide } = store
-  // in IDE mode the editor's theme wins over the stored one, and is never stored
-  const stored = ide.on && ide.theme ? null : load('pcbjs:theme')
+  // in IDE mode the editor's theme wins over the stored one, and is never stored; an embedded page follows its query and its parent
+  const stored = (ide.on && ide.theme) || store.embed.on ? null : load('pcbjs:theme')
   if (stored === 'light' || stored === 'dark') ui.theme = stored
   if ((load('pcbjs:grid') ?? load('pcbjs.3d.grid')) === '0') ui.grid = false
   const media = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null

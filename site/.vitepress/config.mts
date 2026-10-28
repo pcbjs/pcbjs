@@ -1,5 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { cpSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { extname, join, relative } from 'node:path'
 import { defineConfig, type Plugin } from 'vitepress'
 import svgLoader from '@zhangyx1998/svg-loader'
 import { SCH_THEMES } from '@pcbjs/export/sch-svg'
@@ -39,6 +39,38 @@ function brandFiles(): Plugin {
   }
 }
 
+// the viewer site of each example project, built by scripts/boards.mjs at <base>viewers/<slug>/
+const viewers = join(site, '.gallery', 'sites')
+const TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.svg': 'image/svg+xml',
+  '.wasm': 'application/wasm',
+  '.bin': 'application/octet-stream',
+  '.png': 'image/png',
+  '.woff2': 'font/woff2',
+  '.zip': 'application/zip',
+}
+
+/** Serves the viewer sites in dev as a static host would, a folder by its index.html; the build copies them in buildEnd, since they are too many files to emit as assets. */
+function viewerFiles(): Plugin {
+  return {
+    name: 'pcbjs-viewers',
+    configureServer(server) {
+      server.middlewares.use(`${base}viewers/`, (req, res, next) => {
+        let file = join(viewers, decodeURIComponent((req.url ?? '').split('?')[0]))
+        if (!file.startsWith(viewers) || !existsSync(file)) return next()
+        if (statSync(file).isDirectory()) file = join(file, 'index.html')
+        if (!existsSync(file)) return next()
+        res.setHeader('Content-Type', TYPES[extname(file)] ?? 'application/octet-stream')
+        res.end(readFileSync(file))
+      })
+    },
+  }
+}
+
 export default defineConfig({
   title: 'pcbjs',
   description: 'PCB design as TypeScript and JSX: a board is a module, the compiler routes, checks and writes the fab set.',
@@ -74,7 +106,10 @@ export default defineConfig({
     ]
   },
   markdown: { theme: { light: 'github-light', dark: 'github-dark' } },
-  vite: { plugins: [brandFiles(), svgLoader()], server: { fs: { allow: [repo] } } },
+  buildEnd(cfg) {
+    if (existsSync(viewers)) cpSync(viewers, join(cfg.outDir, 'viewers'), { recursive: true })
+  },
+  vite: { plugins: [brandFiles(), viewerFiles(), svgLoader()], server: { fs: { allow: [repo] } } },
   themeConfig: {
     logo: hasBrand('logo.svg') ? { src: '/brand/logo.svg', alt: 'pcbjs' } : undefined,
     nav: [

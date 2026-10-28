@@ -54,6 +54,7 @@ const {
   currentGroup,
   go,
   ide,
+  embed,
   openSource,
   openTarget,
   siteGroups,
@@ -618,10 +619,21 @@ const timingRows = computed(() => Object.entries(board.value?.timings ?? {}).fil
 </script>
 
 <template>
-  <div class="app" :class="{ page: home || missing, 'drawer-layers': drawer === 'layers', 'drawer-panel': drawer === 'panel', ide: ide.on, bare: ide.on && !ide.panel }">
+  <div
+    class="app"
+    :class="{
+      page: home || missing,
+      'drawer-layers': drawer === 'layers',
+      'drawer-panel': drawer === 'panel',
+      ide: ide.on,
+      bare: ide.on && !ide.panel,
+      embed: embed.on,
+      'no-tools': embed.on && !embed.tools,
+    }"
+  >
     <div v-if="recompiling" class="load-line" :class="{ unknown: loadLine === null }" aria-hidden="true"><span :style="{ width: (loadLine ?? 1) * 100 + '%' }"></span></div>
     <ServerGone v-if="load?.phase === 'gone'" />
-    <header v-if="!ide.on" class="topbar">
+    <header v-if="!ide.on && !embed.on" class="topbar">
       <button v-if="!home && !missing" class="icon only-narrow" aria-label="Layers" title="Layers" @click="drawer = drawer === 'layers' ? null : 'layers'">
         <svg viewBox="0 0 16 16"><path d="M8 2l6 3-6 3-6-3zM2 8l6 3 6-3M2 11l6 3 6-3" /></svg>
       </button>
@@ -716,7 +728,7 @@ const timingRows = computed(() => Object.entries(board.value?.timings ?? {}).fil
       <p><a :href="homeHref">All boards</a></p>
     </main>
     <template v-else>
-      <aside class="rail left">
+      <aside v-if="!embed.on" class="rail left">
         <template v-if="board && view.mode === 'sch' && drawing">
           <section>
             <h2>Schematic</h2>
@@ -974,12 +986,12 @@ const timingRows = computed(() => Object.entries(board.value?.timings ?? {}).fil
               <svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10" /></svg>
             </button>
           </div>
-          <div v-else class="seg mode" role="group" aria-label="View">
+          <div v-else-if="!embed.on" class="seg mode" role="group" aria-label="View">
             <button :class="{ on: view.mode === '2d' }" :aria-pressed="view.mode === '2d'" @click="view.mode = '2d'">2D</button>
             <button :class="{ on: view.mode === '3d' }" :aria-pressed="view.mode === '3d'" @click="view.mode = '3d'">3D</button>
             <button v-if="drawing" :class="{ on: view.mode === 'sch' }" :aria-pressed="view.mode === 'sch'" @click="view.mode = 'sch'">Schematic</button>
           </div>
-          <div v-if="activeNet || view.activeRef || circuit || sourceHl" class="chips-bar">
+          <div v-if="!embed.on && (activeNet || view.activeRef || circuit || sourceHl)" class="chips-bar">
             <button
               v-if="sourceHl"
               class="chip src-chip"
@@ -1023,7 +1035,7 @@ const timingRows = computed(() => Object.entries(board.value?.timings ?? {}).fil
         </div>
       </main>
 
-      <aside class="rail right">
+      <aside v-if="!embed.on" class="rail right">
         <template v-if="board">
           <nav class="tabs" role="tablist">
             <button role="tab" :aria-selected="view.tab === 'drc'" :class="{ on: view.tab === 'drc' }" @click="view.tab = 'drc'">
@@ -1553,7 +1565,7 @@ const timingRows = computed(() => Object.entries(board.value?.timings ?? {}).fil
           </div>
         </template>
       </aside>
-      <div class="scrim" :class="{ 'only-narrow': !ide.on || drawer === 'panel' }" v-if="drawer" @click="drawer = null"></div>
+      <div class="scrim" :class="{ 'only-narrow': !ide.on || drawer === 'panel' }" v-if="drawer && !embed.on" @click="drawer = null"></div>
     </template>
   </div>
 </template>

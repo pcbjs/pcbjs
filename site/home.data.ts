@@ -2,21 +2,28 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { repo } from './.vitepress/topics'
+import type { View } from './examples.data'
 
 export interface Range {
   ids: number[]
   refs: string[]
   chip: string
 }
-export interface Snippet {
+/** A board of the home page: its viewer site's URL path, with the site's base, and its views. */
+export interface Shown {
   id: string
+  name: string
+  viewer?: string
+  views: View[]
+}
+export interface Snippet extends Shown {
   file: string
   html: string
   drc?: { rule: string; message: string; src: string }
   findings?: number
 }
 export interface Home {
-  hero: { id: string; file: string; html: string; ranges: Range[]; tour: number[] }
+  hero: Shown & { file: string; html: string; ranges: Range[]; tour: number[] }
   route: Snippet
   pour: Snippet
   drc: Snippet

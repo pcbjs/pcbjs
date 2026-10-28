@@ -68,6 +68,8 @@ jobs:
             site/.gallery
             examples/*/.pcbjs/routes
             examples/*/*/.pcbjs/routes
+            examples/*/.pcbjs/models
+            examples/*/*/.pcbjs/models
           key: gallery-${{ steps.hash.outputs.packages }}-${{ steps.hash.outputs.examples }}
           restore-keys: |
             gallery-${{ steps.hash.outputs.packages }}-
@@ -87,6 +89,8 @@ jobs:
             site/.gallery
             examples/*/.pcbjs/routes
             examples/*/*/.pcbjs/routes
+            examples/*/.pcbjs/models
+            examples/*/*/.pcbjs/models
           key: gallery-${{ steps.hash.outputs.packages }}-${{ steps.hash.outputs.examples }}
       - name: Stable tree from main
         if: steps.stable.outputs.tag == ''

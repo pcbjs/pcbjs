@@ -1,9 +1,9 @@
-// The gallery: one card per board of examples/, its numbers and SVGs from scripts/boards.mjs, its text from examples/README.md and the entry's header comment.
+// The gallery: one card per board of examples/, its numbers, SVGs and viewer site from scripts/boards.mjs, its text from examples/README.md and the entry's header comment.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { repo } from './.vitepress/topics'
 
-export type View = '2d' | 'sch'
+export type View = '2d' | '3d' | 'sch'
 export interface Board {
   id: string
   project: string
@@ -16,6 +16,9 @@ export interface Board {
   ms: number
   hash?: string
   packages?: string
+  /** the URL path of the project's viewer site, with the site's base */
+  viewer?: string
+  views: View[]
   aspect: Partial<Record<View, number>>
   /** a board of site/demos, drawn on the home page and not in the gallery */
   site?: boolean
@@ -28,11 +31,10 @@ export interface Project {
   project: string
   about: string
   known: string
-  source: string
   boards: Card[]
 }
 
-const github = 'https://github.com/pcbjs/pcbjs/tree/main/examples'
+const github = 'https://github.com/pcbjs/pcbjs/blob/main/examples'
 const site = join(repo, 'site')
 const read = (f: string) => (existsSync(f) ? readFileSync(f, 'utf8') : '')
 
@@ -80,7 +82,6 @@ export default {
         project: b.project,
         about: text.get(top)?.about ?? '',
         known: text.get(top)?.known ?? '',
-        source: `${github}/${b.project}`,
         boards: [],
       }
       p.boards.push({ ...b, summary: headline(b.project, b.entry), source: `${github}/${b.project}/${b.entry}` })

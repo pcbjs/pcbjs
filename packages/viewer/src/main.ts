@@ -4,6 +4,7 @@ import App from './App.vue'
 import Boot from './Boot.vue'
 import { LOAD, startLoad } from './load'
 import { startSync } from './sync-client'
+import { startEmbed } from './embed-client'
 import type { Boot as BootInfo } from './loading'
 import { afterMount, createStore, scopeOfPath, startBrowser, STORE, type SiteState, type StoreInit } from './state'
 import { parseIdeQuery } from './ide'
@@ -51,11 +52,18 @@ async function siteData(): Promise<{ data: SiteState; init: Partial<StoreInit> }
 
 async function start() {
   const { data, init } = await siteData()
-  const store = createStore({ ...data, ...init, path: location.pathname, ...(q.ide ? { ide: true, ideTheme: q.theme, ideSearch: location.search } : {}) })
-  // an old #/board/<name> hash moves the page, and the markup no longer matches it; nor does ?ide=1, which renders the compact layout
+  const store = createStore({
+    ...data,
+    ...init,
+    path: location.pathname,
+    embed: q.embed,
+    embedSearch: location.search,
+    ...(q.ide ? { ide: true, ideTheme: q.theme, ideSearch: location.search } : {}),
+  })
+  // an old #/board/<name> hash moves the page, and the markup no longer matches it; nor does ?ide=1 or ?embed=1, which render a compact layout
   const moved = startBrowser(store)
   if (import.meta.hot) startSync(store, import.meta.hot, !!parseViewQuery(location.search).select)
-  const ssr = !moved && !store.ide.on && (el.hasAttribute('data-ssr') || window.__PCBJS_SSR__ === true)
+  const ssr = !moved && !store.ide.on && !store.embed.on && (el.hasAttribute('data-ssr') || window.__PCBJS_SSR__ === true)
   const app = (ssr ? createSSRApp : createApp)(App)
   app.provide(STORE, store)
   if (load) app.provide(LOAD, load)
@@ -64,5 +72,6 @@ async function start() {
   bootEl?.remove()
   // applied after the first render, which the server rendered without them
   afterMount(store, parseViewQuery(location.search))
+  startEmbed(store)
 }
 void start()

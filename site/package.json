@@ -11,6 +11,7 @@
     "preview": "vitepress preview ."
   },
   "devDependencies": {
+    "@vscode/codicons": "^0.0.46-24",
     "@zhangyx1998/svg-loader": "^0.0.3",
     "shiki": "^2.5.0",
     "vitepress": "^1.6.4"

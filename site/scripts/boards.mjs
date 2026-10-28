@@ -1,5 +1,5 @@
-// Compiles every example project and the home page's site/demos for the gallery: its numbers from the check report, its 2D view and schematic as SVG.
-// Writes site/.gallery/{boards.json,home.json,*.svg}, untracked; docs:build and docs:dev run it first. home.json is the home page's highlighted code and Blinky's source map.
+// Compiles every example project and the home page's site/demos for the gallery: its numbers from the check report, its 2D view and schematic as SVG, and its prerendered viewer site.
+// Writes site/.gallery/{boards.json,home.json,*.svg} and sites/<slug>/, served at <base>viewers/<slug>/, untracked; docs:build and docs:dev run it first. home.json is the home page's highlighted code and Blinky's source map.
 // Usage: node scripts/boards.mjs [project...]
 import { spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
@@ -15,6 +15,9 @@ const repo = resolve(site, '..')
 const args = process.argv.slice(2)
 const only = args.filter(a => !a.startsWith('-'))
 const out = join(site, '.gallery')
+const sites = join(out, 'sites')
+// the docs site's base, so each viewer site is prerendered at the URL it is served from
+const siteBase = process.env.PCBJS_SITE_BASE ?? '/'
 
 /** The content hash of an example's top folder, generated files left out. */
 function hash(dir) {
@@ -108,20 +111,25 @@ for (const { dir, project, top: topDir, site: isSite } of projects()) {
   const started = Date.now()
   const top = hash(topDir)
   // a project keeps its numbers and SVGs while neither its folder nor the packages changed
-  const kept = known.filter(b => b.project === project && b.hash === top && b.packages === packages)
-  const whole = b => existsSync(join(out, `${b.id}-2d.svg`)) && (!b.map || existsSync(join(out, `${b.id}-map.json`)))
+  const viewer = `${siteBase}viewers/${slug(project)}/`
+  const siteDir = join(sites, slug(project))
+  const kept = known.filter(b => b.project === project && b.hash === top && b.packages === packages && b.viewer === viewer)
+  const whole = b => existsSync(join(out, `${b.id}-2d.svg`)) && (!b.map || existsSync(join(out, `${b.id}-map.json`))) && existsSync(join(siteDir, 'board'))
   if (kept.length && kept.every(whole)) {
     boards.push(...kept)
     console.log(`boards: ${project}  unchanged`)
     continue
   }
   const work = join(tmp, slug(project))
-  const r = compile(dir, work, project === HERO.project ? ['--map', HERO.entry] : [])
+  rmSync(siteDir, { recursive: true, force: true })
+  const r = compile(dir, work, [...(project === HERO.project ? ['--map', HERO.entry] : []), '--site', siteDir, '--base', viewer])
   const report = join(work, 'report.json')
   if (!existsSync(report)) {
     console.error(`boards: ${project}: no report\n${(r.stderr || r.stdout).trim().split('\n').slice(-3).join('\n')}`)
     continue
   }
+  const built = existsSync(join(siteDir, 'board'))
+  if (!built) console.error(`boards: ${project}: no viewer site\n${(r.stderr || r.stdout).trim().split('\n').slice(-3).join('\n')}`)
   const seen = new Set()
   for (const b of JSON.parse(readFileSync(report, 'utf8')).boards) {
     if (seen.has(b.name)) continue
@@ -141,6 +149,8 @@ for (const { dir, project, top: topDir, site: isSite } of projects()) {
       id,
       hash: top,
       packages,
+      ...(built ? { viewer } : {}),
+      views: ['2d', ...(built ? ['3d'] : []), ...(aspects.sch ? ['sch'] : [])],
       aspect: aspects,
       stats: b.stats,
       routing: b.routing,
@@ -159,6 +169,8 @@ writeFileSync(dataFile, JSON.stringify(boards, null, 1) + '\n')
 writeFileSync(join(out, 'home.json'), JSON.stringify(home()))
 const ids = new Set(boards.map(b => b.id))
 for (const f of readdirSync(out)) if (f.endsWith('.svg') && !ids.has(f.replace(/-(2d|sch)\.svg$/, ''))) rmSync(join(out, f))
+const slugs = new Set(boards.map(b => slug(b.project)))
+for (const d of existsSync(sites) ? readdirSync(sites) : []) if (!slugs.has(d)) rmSync(join(sites, d), { recursive: true, force: true })
 rmSync(tmp, { recursive: true, force: true })
 
 /** The home page: Blinky's region highlighted with a span per source range, the ranges' item ids, refs and chips, the tour, and each demo's `show` region. */
@@ -172,11 +184,22 @@ function home() {
   const demo = (entry, file = entry) => {
     const b = boards.find(x => x.site && x.entry === entry)
     const { code } = region(readFileSync(join(site, 'demos', file), 'utf8'), 'show', true)
-    return { id: b.id, file: `site/demos/${file}`, html: highlight(code, 'tsx', pal), ...(b.drc?.length ? { drc: b.drc[0], findings: b.findings } : {}) }
+    return {
+      id: b.id,
+      name: b.name,
+      viewer: b.viewer,
+      views: b.views,
+      file: `site/demos/${file}`,
+      html: highlight(code, 'tsx', pal),
+      ...(b.drc?.length ? { drc: b.drc[0], findings: b.findings } : {}),
+    }
   }
   const page = {
     hero: {
       id: hero.id,
+      name: hero.name,
+      viewer: hero.viewer,
+      views: hero.views,
       file: `examples/${HERO.project}/${HERO.entry}`,
       html: highlight(code, 'tsx', pal, ranges, first),
       ranges: ranges.map(({ ids, refs, chip }) => ({ ids, refs, chip })),

@@ -33,7 +33,7 @@ import { gridSegs, outlineSegs, type Ring } from './scene/wire'
 import { gridStep } from './grid'
 import { inScope, layerDimmed, slabState, translucent, type Hovered, type Scope } from './scene/focus'
 import { netRoles, routeHover } from './routes'
-import { setReady } from './ready'
+import { setPainted, setReady } from './ready'
 
 type Picked = { ref?: string; id: number | null; kind: string; net?: string }
 type OpenItem = Picked & { meta: boolean; shift: boolean; alt: boolean; ctrl: boolean }
@@ -173,6 +173,9 @@ let gen = 0,
 // complete once every geometry of this build is in; readySent once per build and per explode change
 let complete = false,
   readySent = false
+// meshed once the geometry jobs of this build have landed, before the STEP models; paintSent once per build
+let meshed = false,
+  paintSent = false
 const grid = new Grid()
 let gridBaseZ = 0
 let variants: Variants | null = null
@@ -513,6 +516,8 @@ function buildBoard() {
   const my = ++gen
   complete = false
   readySent = false
+  meshed = false
+  paintSent = false
   const queue: GeoJob[] = []
   slices = copperSlices(b)
   makeMaterials(b)
@@ -687,6 +692,10 @@ function buildRest(my: number, items: BuiltItems, slabs: GeoJob[]) {
   // complete once the STEP meshes are in too, so a screenshot shows them
   const steps = stepLoads
   const done = () => {
+    if (my === gen) {
+      meshed = true
+      dirty = true
+    }
     if (steps.length) Promise.all(steps).then(finish)
     else finish()
   }
@@ -1380,6 +1389,13 @@ function loop(now: number) {
     const t = performance.now()
     renderer.render(scene, camera)
     layoutCallouts()
+    if (meshed && !paintSent) {
+      paintSent = true
+      const my = gen
+      requestAnimationFrame(() => {
+        if (my === gen && alive) setPainted('3d')
+      })
+    }
     if (import.meta.env.DEV) {
       renders.push(performance.now() - t)
       if (renders.length > 600) renders.shift()

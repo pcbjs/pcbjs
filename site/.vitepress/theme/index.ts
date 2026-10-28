@@ -1,4 +1,5 @@
 import DefaultTheme from 'vitepress/theme'
+import BoardPage from './BoardPage.vue'
 import BoardSvg from './BoardSvg.vue'
 import Gallery from './Gallery.vue'
 import './custom.css'
@@ -8,5 +9,6 @@ export default {
   enhanceApp({ app }) {
     app.component('Gallery', Gallery)
     app.component('BoardSvg', BoardSvg)
+    app.component('BoardPage', BoardPage)
   },
 }
