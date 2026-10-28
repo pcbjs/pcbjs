@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/vscode",
-  "version": "0.0.1-beta.0",
+  "version": "0.0.1-beta.1",
   "private": true,
   "displayName": "pcbjs",
   "description": "Runs the pcbjs dev server for the workspace, previews boards beside the editor, links code and board both ways, and shows the language server of the dev server: hovers, lenses, findings and inline value editors.",

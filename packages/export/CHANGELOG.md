@@ -1,5 +1,11 @@
 # @pcbjs/export
 
+## 0.0.1-beta.1
+
+### Patch Changes
+
+- [`7245cea`](https://github.com/pcbjs/pcbjs/commit/7245cea44558b589b236c8f3cd3100977ad36aab) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - `boardSvg(board, { vars: true })` writes every colour as a CSS variable with the default as its fallback, `--pcb-<layer>`, `--pcb-canvas` and `--pcb-substrate`, and draws the outline as a substrate, so a page can theme the board; the default output is unchanged.
+
 ## 0.0.1-beta.0
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/pcbjs",
-  "version": "0.0.1-beta.0",
+  "version": "0.0.1-beta.1",
   "description": "PCB design as TypeScript and JSX: installs every @pcbjs component and the pcbjs command. Design code imports from the components, such as @pcbjs/core, @pcbjs/lib and @pcbjs/fab/JLCPCB/2-Layer.",
   "type": "module",
   "license": "MIT",
@@ -28,15 +28,15 @@
     "postpack": "node ../../scripts/pack-files.mjs post"
   },
   "dependencies": {
-    "@pcbjs/cli": "0.0.1-beta.0",
+    "@pcbjs/cli": "0.0.1-beta.1",
     "@pcbjs/compile": "0.0.1-beta.0",
     "@pcbjs/core": "0.0.1-beta.0",
-    "@pcbjs/export": "0.0.1-beta.0",
+    "@pcbjs/export": "0.0.1-beta.1",
     "@pcbjs/fab": "0.0.1-beta.0",
     "@pcbjs/kicad": "0.0.1-beta.0",
     "@pcbjs/lib": "0.0.1-beta.0",
     "@pcbjs/lsp": "0.0.1-beta.0",
-    "@pcbjs/skills": "0.0.1-beta.0",
+    "@pcbjs/skills": "0.0.1-beta.1",
     "@pcbjs/step": "0.0.1-beta.0",
     "@pcbjs/ts-plugin": "0.0.1-beta.0",
     "@pcbjs/viewer": "0.0.1-beta.0"

@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/cli",
-  "version": "0.0.1-beta.0",
+  "version": "0.0.1-beta.1",
   "description": "pcbjs command line: check, build, dev, preview, inspect, shot, docs, ide and create, with the Vite plugin, the editor bridge and the project templates. The pcbjs bin is in @pcbjs/pcbjs.",
   "type": "module",
   "license": "MIT",
@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@pcbjs/compile": "^0.0.1-beta.0",
-    "@pcbjs/export": "^0.0.1-beta.0",
+    "@pcbjs/export": "^0.0.1-beta.1",
     "@pcbjs/lib": "^0.0.1-beta.0",
     "@pcbjs/fab": "^0.0.1-beta.0",
     "@pcbjs/kicad": "^0.0.1-beta.0",

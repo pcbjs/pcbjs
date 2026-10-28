@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/export",
-  "version": "0.0.1-beta.0",
+  "version": "0.0.1-beta.1",
   "description": "pcbjs export: Gerber, Excellon, BOM, placement, SVG, the fab set and its findings, and the site data.",
   "type": "module",
   "license": "MIT",
