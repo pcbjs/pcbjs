@@ -150,6 +150,8 @@ const filesUnder = dir =>
     const p = join(dir, f)
     return f === 'node_modules' ? [] : statSync(p).isDirectory() ? filesUnder(p) : [p]
   })
+/** What a relative import may resolve to, as the TypeScript configs and Vite allow. */
+const SOURCE = ['.ts', '.tsx', '.mts', '.js', '.mjs', '.vue']
 const importRe = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*|\bnew\s+URL\s*\(\s*)(['"`])([^'"`\n]+)\1/g
 
 for (const name of [...tarballs.keys()].sort()) {
@@ -168,7 +170,7 @@ for (const name of [...tarballs.keys()].sort()) {
   for (const b of Object.values(typeof pkg.bin === 'string' ? { b: pkg.bin } : (pkg.bin ?? {}))) if (!existsSync(join(dir, b))) fail(`${name}: bin ${b} is missing`)
   if (pkg.main && !existsSync(join(dir, pkg.main))) fail(`${name}: main ${pkg.main} is missing`)
   const undeclared = new Map()
-  for (const file of filesUnder(dir).filter(f => /\.(m?js|ts|vue)$/.test(f))) {
+  for (const file of filesUnder(dir).filter(f => /\.(m?js|m?tsx?|vue)$/.test(f))) {
     const text = readFileSync(file, 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/.*$/gm, '')
@@ -176,7 +178,7 @@ for (const name of [...tarballs.keys()].sort()) {
       if (spec.includes('${')) continue
       if (spec.startsWith('.')) {
         const base = resolve(dirname(file), spec.split('?')[0])
-        const candidates = [base, `${base}.ts`, `${base}.js`, `${base}.vue`, join(base, 'index.ts'), join(base, 'index.js'), base.replace(/\.js$/, '.ts')]
+        const candidates = [base, ...SOURCE.flatMap(ext => [`${base}${ext}`, join(base, `index${ext}`), base.replace(/\.m?js$/, ext)])]
         if (!candidates.some(c => existsSync(c))) fail(`${name}: ${relative(dir, file)} imports ${spec}, not in the package`)
       } else if (/^[@a-z]/i.test(spec) && !spec.includes(':') && !builtins.has(spec) && !builtins.has(packageOf(spec)) && !/^(virtual|vscode$)/.test(spec)) {
         if (!declared.has(packageOf(spec))) undeclared.set(packageOf(spec), relative(dir, file))

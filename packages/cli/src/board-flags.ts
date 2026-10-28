@@ -95,6 +95,6 @@ export function shapeBoard(text: string, b: Board): string {
     .replace(`'@pcbjs/fab/${TEMPLATE.fab}'`, `'@pcbjs/fab/${b.fab}'`)
     .replace(/\{\/\* outline: [^*]*\*\/\}/, `{/* outline: ${o.comment} */}`)
     .replace(/d=\{roundedRect\(20, 15, 1\)\}/, `d={${o.d}}`)
-    .replace(/(import \{[^}]*)\broundedRect\b([^}]*\} from '@pcbjs\/lib')/, `$1${o.helper}$2`)
+    .replace(/^(import \{[^}\n]*)\broundedRect\b/m, `$1${o.helper}`)
     .replace(/at="(-?[\d.]+) (-?[\d.]+)/g, (_, x, y) => `at="${num(Number(x) + dx)} ${num(Number(y) + dy)}`)
 }
