@@ -132,6 +132,52 @@ function createWebviewPanel(viewType, title, show, options) {
   return panel;
 }
 
+/** The dialogs of the setup commands: a test queues one answer per call by kind, a value or a function of the call; none answers undefined. */
+export const ui = { answers: [], calls: [], folders: [], files: [], clipboard: [], opened: [] };
+
+function answer(kind, call) {
+  ui.calls.push({ kind, ...call });
+  const i = ui.answers.findIndex((a) => a[0] === kind);
+  if (i < 0) return undefined;
+  const [[, a]] = ui.answers.splice(i, 1);
+  return typeof a === 'function' ? a(call) : a;
+}
+
+function createQuickPick() {
+  const accepted = new EventEmitter();
+  const hidden = new EventEmitter();
+  const qp = {
+    items: [],
+    activeItems: [],
+    selectedItems: [],
+    placeholder: '',
+    onDidAccept: accepted.event,
+    onDidHide: hidden.event,
+    show() {
+      queueMicrotask(() => {
+        const pick = answer('quickPick', { items: qp.items, active: qp.activeItems, placeholder: qp.placeholder });
+        if (pick === undefined) return qp.hide();
+        if (pick !== 'active') qp.selectedItems = [pick];
+        accepted.fire();
+      });
+    },
+    hide: () => hidden.fire(),
+    dispose() {},
+  };
+  return qp;
+}
+
+const workspace = {
+  get workspaceFolders() {
+    return ui.folders.map((f, index) => ({ uri: vscode.Uri.file(f), name: f.split('/').pop(), index }));
+  },
+  findFiles: async (glob, exclude) => (ui.calls.push({ kind: 'findFiles', glob, exclude }), ui.files.map((f) => vscode.Uri.file(f))),
+  asRelativePath: (p) => {
+    const root = ui.folders.find((f) => p.startsWith(`${f}/`));
+    return root ? p.slice(root.length + 1) : p;
+  },
+};
+
 export const vscode = {
   EventEmitter,
   Uri: { parse: uri, file: (p) => uri(pathToFileURL(p).toString()), joinPath: (u, ...p) => uri(`${u}/${p.join('/')}`) },
@@ -171,8 +217,22 @@ export const vscode = {
     tabGroups,
     showTextDocument,
     createTreeView: (id, opts) => ({ id, ...opts, description: undefined, dispose() {} }),
+    createQuickPick,
+    showQuickPick: async (items, opts) => answer('pick', { items, ...opts }),
+    showInputBox: async (opts) => answer('input', opts),
+    showOpenDialog: async (opts) => answer('open', opts),
+    showInformationMessage: async (text, ...actions) => answer('info', { text, actions }),
+    showWarningMessage: async (text, ...actions) => answer('warning', { text, actions }),
+    showErrorMessage: async (text, ...actions) => answer('error', { text, actions }),
+    withProgress: async (opts, task) => {
+      const reported = [];
+      ui.calls.push({ kind: 'progress', title: opts.title, reported });
+      return task({ report: (r) => reported.push(r.message) }, { onCancellationRequested() {} });
+    },
   },
-  env: { asExternalUri: async (u) => u },
+  workspace,
+  ProgressLocation: { Notification: 15 },
+  env: { asExternalUri: async (u) => u, clipboard: { writeText: async (t) => ui.clipboard.push(t) } },
   commands: { executeCommand },
 };
 

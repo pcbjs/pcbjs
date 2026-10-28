@@ -22,7 +22,7 @@ const common = {
 };
 
 await build({ ...common, entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js' });
-for (const name of ['bridge', 'host', 'server', 'sync', 'protocol', 'lsp-client', 'hover', 'icon-map', 'drafts', 'views', 'tree-data', 'preview', 'reveal', 'sidebar', 'auto-icons']) {
+for (const name of ['setup', 'bridge', 'host', 'server', 'sync', 'protocol', 'lsp-client', 'hover', 'icon-map', 'drafts', 'views', 'tree-data', 'preview', 'reveal', 'sidebar', 'auto-icons']) {
   await build({ ...common, minify: false, entryPoints: [`src/${name}.ts`], outfile: `dist/${name}.cjs` });
 }
 

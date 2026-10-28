@@ -248,6 +248,24 @@
         "command": "pcbjs.icons.revoke",
         "title": "Remove pcbjs file icons",
         "category": "pcbjs"
+      },
+      {
+        "command": "pcbjs.createProject",
+        "title": "Create project in workspace",
+        "category": "pcbjs",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "pcbjs.convertKicad",
+        "title": "Convert from KiCad",
+        "category": "pcbjs",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "pcbjs.installSkills",
+        "title": "Install skills",
+        "category": "pcbjs",
+        "icon": "$(sparkle)"
       }
     ],
     "viewsContainers": {
@@ -263,8 +281,7 @@
       "pcbjs": [
         {
           "id": "pcbjs.boards",
-          "name": "Boards",
-          "when": "pcbjs.active"
+          "name": "Boards"
         },
         {
           "id": "pcbjs.findings",
@@ -288,7 +305,13 @@
     "viewsWelcome": [
       {
         "view": "pcbjs.boards",
-        "contents": "The boards of the project appear once its dev server has compiled them.\n[Open 2D view](command:pcbjs.open2D)\n[Open 3D view](command:pcbjs.open3D)\n[Open schematic view](command:pcbjs.openSchematic)"
+        "contents": "The boards of the project appear once its dev server has compiled them.\n[Open 2D view](command:pcbjs.open2D)\n[Open 3D view](command:pcbjs.open3D)\n[Open schematic view](command:pcbjs.openSchematic)",
+        "when": "pcbjs.active"
+      },
+      {
+        "view": "pcbjs.boards",
+        "contents": "No pcbjs project in this workspace yet. Start a board from the template, convert a KiCad project, or give your coding agent the pcbjs skills.\n[Create project](command:pcbjs.createProject)\n[Convert from KiCad](command:pcbjs.convertKicad)\n[Install skills](command:pcbjs.installSkills)",
+        "when": "!pcbjs.active"
       },
       {
         "view": "pcbjs.findings",
@@ -493,6 +516,23 @@
           "when": "view == pcbjs.boards && viewItem == board",
           "group": "inline@3",
           "alt": "pcbjs.board.openSchematicNew"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "pcbjs.createProject",
+          "when": "view == pcbjs.boards",
+          "group": "1_setup@1"
+        },
+        {
+          "command": "pcbjs.convertKicad",
+          "when": "view == pcbjs.boards",
+          "group": "1_setup@2"
+        },
+        {
+          "command": "pcbjs.installSkills",
+          "when": "view == pcbjs.boards",
+          "group": "1_setup@3"
         }
       ]
     },

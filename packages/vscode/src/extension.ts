@@ -16,6 +16,7 @@ import { IconThemeFile, associateIcons, findEntries, iconEnv, workspaceEnv } fro
 import { autoIcons, revokeIcons } from './auto-icons';
 import type { EditorPort, Range } from './lsp-client';
 import { ReadyInfo, SelectRequest, isUnder, offers, samePath } from './protocol';
+import { convertKicad, createProject, installSkills, type SetupHost } from './setup';
 
 const CONFIG_GLOB = '**/{pcb,pcbjs}.config.{ts,mts,js,mjs}';
 
@@ -487,6 +488,9 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!n) void vscode.window.showInformationMessage('pcbjs: no externally started dev server found.');
     }),
     command('pcbjs.disconnect', () => fallback.disconnect()),
+    command('pcbjs.createProject', () => createProject(setup)),
+    command('pcbjs.convertKicad', () => convertKicad(setup)),
+    command('pcbjs.installSkills', () => installSkills(setup)),
     command('pcbjs.icons.associate', async () => void vscode.window.showInformationMessage(`pcbjs: ${await associateIcons(context.extensionPath, projectDirs)}`)),
     command('pcbjs.icons.revoke', async () => {
       const scopes = vscode.workspace.workspaceFolders?.length ? [icons, workspaceEnv(icons)] : [icons];
@@ -495,6 +499,28 @@ export function activate(context: vscode.ExtensionContext): void {
     ...iconWatchers,
     { dispose: () => clearTimeout(iconTimer) },
   );
+
+  const setup: SetupHost = {
+    output: (line) => output.appendLine(line),
+    showOutput: () => output.show(true),
+    nodePath: () => findNode(config().get<string>('nodePath', '')),
+    projectDirs: () => projectDirs,
+    opened: openProject,
+  };
+
+  /** Show the board file, add the folder when outside the workspace, and preview it; a running server restarts to find the project. */
+  async function openProject(dir: string, file: string): Promise<void> {
+    await vscode.window.showTextDocument(vscode.Uri.file(file));
+    if (!vscode.workspace.getWorkspaceFolder(vscode.Uri.file(dir))) {
+      vscode.workspace.updateWorkspaceFolders(vscode.workspace.workspaceFolders?.length ?? 0, 0, { uri: vscode.Uri.file(dir) });
+      return;
+    }
+    await discover();
+    const s = ownerOf(file) ?? current();
+    if (!s) return;
+    if (s.active && s.scopes && !s.scopes.scopes.some((sc) => samePath(sc.root, dir))) await s.stop();
+    await preview.open(s, '2d', 'beside');
+  }
 
   async function openView(view: ViewKind, mode: OpenMode): Promise<void> {
     const s = await pick('Preview which pcbjs project?');

@@ -47,6 +47,7 @@ The @pcbjs/cli package, which @pcbjs/pcbjs installs, ships the extension as `vsc
 - `pcbjs ide install` runs `code --install-extension` with the bundled VSIX. Without `code` on PATH it prints the command and the Install from VSIX route.
 - `pcbjs ide status` prints the bundled id and version and the installed version.
 - `pcbjs dev` run in the VS Code terminal prints one hint line when the extension is missing or outdated. It never installs anything.
+- `pcbjs: Create project in workspace`, `Convert from KiCad` and `Install skills` run `pcbjs create`, `import board` and `skills install`; the Boards view offers them in a workspace without a project.
 - The pcbjs sidebar holds what the viewer's side panel shows in a browser, so the panes show only the board: Boards, under their projects for a workspace server, a click shows one in every pane; Findings by severity, a click pans the panes and opens the code; Nets, a click pins one in every pane; BOM, a click opens the placement.
 
 The extension is a thin client: it starts the project's own `node_modules/.bin/pcbjs`, relays focus, shows what the server sends and applies the edits it computes. A project of a newer protocol major shows one notice to run `pcbjs ide install` there. In a `.ts` or `.tsx` file of a project:
