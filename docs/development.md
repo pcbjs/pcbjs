@@ -47,7 +47,7 @@ Every component lives in `packages/<dir>` with its own `package.json`, `tsconfig
 | `@pcbjs/cli` | cli | the `pcbjs` command, the Vite plugin, the editor bridge, the templates, the bundled VSIX and, at pack time, these docs | every package above but lsp, which is an optional peer loaded with a dynamic import; vite, @vitejs/plugin-vue, cac, ws, launch-editor, magic-string, typescript |
 | `@pcbjs/ts-plugin` | ts-plugin | the TypeScript language service plugin that puts the exports of a `<PCB schematic>` module in scope in an editor, mapping every position through the insertion; one CommonJS bundle with the injector of compile, built by esbuild | nothing at run time; uses the typescript of the tsserver that loads it |
 | `@pcbjs/vscode` | vscode | the VS Code extension, identifier `pcbjs.vscode-pcbjs`: the spawn, the language client, the focus relay, the preview and one widget per segment kind, nothing that knows boards; its package script writes the VSIX into packages/cli/vscode | nothing at run time; bundles ws and vscode-languageclient, ships ts-plugin as a TypeScript server plugin |
-| `@pcbjs/skills` | skills | the agent skills in the Agent Skills format, the `pcbjs-skills` bin that installs them and the script that copies the changelog's Migration sections into `pcbjs-upgrade`, see skills.md; plain files, no build | nothing |
+| `@pcbjs/skills` | skills | the agent skills in the Agent Skills format, one folder per skill at the package root, the `pcbjs-skills` bin that installs them and the script that copies the changelog's Migration sections into `pcbjs-upgrade`, see skills.md; plain files, no build | nothing |
 | `@pcbjs/pcbjs` | pcbjs | what projects install: no code of its own, it depends on every component, lsp included, and provides the `pcbjs` bin, `bin/pcbjs.js`, which runs the cli. Design code imports the components: `@pcbjs/core`, `@pcbjs/lib`, `@pcbjs/fab/JLCPCB/2-Layer`, `compileBoards` from `@pcbjs/compile`, and `"jsxImportSource": "@pcbjs/core"` | every package but vscode |
 
 Code that more than one copy of pcbjs may meet in one process, the CLI's and the one Vite loads for the design, keeps its state on `globalThis` and recognises parts, nets, nodes, presets and errors by a brand or a name, never by `instanceof`. With several packages a second copy is more likely, so keep it that way.
@@ -73,7 +73,7 @@ packages/lsp/              the language server: server, segments, detect, path-m
 packages/cli/              src/ with cli, check, inspect, build, server, workspace, scopes, plugin, bridge, host-client, lsp, ide, create; templates/, vscode/
 packages/vscode/           the VS Code extension source: host, server, language, lsp-client, sync, preview, segments-ui, fallback
 packages/ts-plugin/        the TypeScript plugin: src/index.ts wraps the host and the language service, src/map.ts maps positions
-packages/skills/           @pcbjs/skills: skills/<name>/SKILL.md and references/, bin/pcbjs-skills.mjs, scripts/sync-changelog.mjs
+packages/skills/           @pcbjs/skills: <name>/SKILL.md and references/ per skill at the package root, bin/pcbjs-skills.mjs, scripts/sync-changelog.mjs
 packages/pcbjs/            @pcbjs/pcbjs: package.json, bin/pcbjs.js and the cross-package tests
 examples/demo/             Blinky, Coin, Quad and Multi
 examples/<name>/           boards built by reviewers; examples/README.md lists each with its known findings
@@ -82,7 +82,7 @@ examples/highspeed/        a USB-C to header adapter: 90 ohm differential pairs,
 
 ## Releases
 
-The packages are published from this repository with Changesets as linked trains, `@pcbjs/core` a peer of every package that imports it and `@pcbjs/pcbjs` pinning them all. Every package is at 0.0.0 in the tree, the version of the placeholders published once by hand from outside the repository, and every changeset is a patch during the beta, so the trains are 0.0.1-beta.0 and on; RELEASING.md has the model, the workflows and the owner's setup. A behaviour change to a published package adds a changeset with `npm run changeset`. CI runs `scripts/check-examples.mjs`, which checks every example and fails unless its findings are exactly those the examples README lists.
+The packages are published from this repository with Changesets as linked trains, `@pcbjs/core` a peer of every package that imports it and `@pcbjs/pcbjs` pinning them all. Every package carries the last train's version in the tree, bumped only by a release run, and every changeset is a patch during the beta, so the trains are 0.0.1-beta.0 and on; RELEASING.md has the model, the workflows and the owner's setup. A behaviour change to a published package adds a changeset with `npm run changeset`. CI runs `scripts/check-examples.mjs`, which checks every example and fails unless its findings are exactly those the examples README lists.
 
 ## Not there yet
 

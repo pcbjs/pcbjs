@@ -29,6 +29,13 @@ These are the habits that held up when generated KiCad boards were moved to pcbj
 - Write down techniques you considered and did not take, one line each with the reason, so the next pass does not redo the analysis.
 - When pcbjs cannot express something, keep the workaround small and named, with a comment that says which feature would replace it.
 
+## Save tokens
+
+- Never lint or format by hand; the commit hook does it.
+- Never read `dist` or `board.json`; `pcbjs check` gives the findings and `pcbjs inspect` the positions, nets and lengths.
+- Run only the test suite of the package you changed, unless the change crosses packages.
+- Run `pcbjs shot` to look at a board instead of opening a browser.
+
 ## Checklist before calling a board done
 
 - `pcbjs check --fab` cold and warm, identical; `STATUS: ORDERABLE` in README-fab.

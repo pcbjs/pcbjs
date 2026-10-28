@@ -1,13 +1,22 @@
 // skills from the @pcbjs/skills the project resolves, so this command and its pcbjs-skills bin never disagree
 import { createRequire } from 'node:module'
-import { join, relative, resolve } from 'node:path'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 interface SkillsPackage {
   skillsDir: string
   skillNames(): string[]
   describe(name: string): string
-  install(to: string): { name: string; dest: string; updated: boolean }[]
+  install(cwd: string, opts?: { to?: string; claude?: boolean }): Installed[]
+  installLine(s: Installed, cwd: string): string
+}
+
+interface Installed {
+  name: string
+  dest: string
+  updated: boolean
+  kind: 'link' | 'copy'
+  companion: { path: string; kind: 'link' | 'copy' | 'shared' } | null
 }
 
 async function load(cwd: string): Promise<SkillsPackage | null> {
@@ -22,7 +31,7 @@ async function load(cwd: string): Promise<SkillsPackage | null> {
 }
 
 /** The command. Returns the exit code. */
-export async function skills(action: string, opts: { to?: string; cwd?: string } = {}): Promise<number> {
+export async function skills(action: string, opts: { to?: string; claude?: boolean; cwd?: string } = {}): Promise<number> {
   const cwd = opts.cwd ?? process.cwd()
   const pkg = await load(cwd)
   if (!pkg) {
@@ -30,7 +39,7 @@ export async function skills(action: string, opts: { to?: string; cwd?: string }
     return 1
   }
   if (action === 'install') {
-    for (const s of pkg.install(resolve(cwd, opts.to ?? join('.claude', 'skills')))) console.log(`${s.updated ? 'updated  ' : 'installed'}  ${s.name}  ${relative(cwd, s.dest)}`)
+    for (const s of pkg.install(cwd, { to: opts.to, claude: opts.claude })) console.log(pkg.installLine(s, cwd))
   } else if (action === 'list') {
     for (const n of pkg.skillNames()) console.log(`${n.padEnd(32)}  ${pkg.describe(n)}`)
   } else if (action === 'path') {

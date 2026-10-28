@@ -103,6 +103,7 @@ pcbjs dev --workspace .                 # one server for every project below, ea
 pcbjs shot --select U1 --select J1      # PNGs framed on each part, in .pcbjs/shots; --layer repeats too
 pcbjs docs routing                      # one topic; pcbjs docs lists them
 pcbjs docs --grep 'neck|escape'         # every doc line that matches, a word or a regex
+pcbjs skills install                    # agent skills: links in .agents/skills and .claude/skills to node_modules
 ```
 
 ### Reading `pcbjs check`
@@ -180,7 +181,7 @@ The first line is one board: name, entry, counts, DRC and ERC totals, `FAIL` whe
 | `editor`, `highlight` | source links, repository links, VS Code extension, IDE mode, drafts; source ranges and the token under the cursor |
 | `3d`, `models` | the 3D view and part models; `pcbjs model add`, align and check, where to find model files and their licences |
 | `references` | another entry's board as a mechanical reference: mate, stack, its two DRC rules, caching, cycles |
-| `skills` | the agent skills of `@pcbjs/skills`: `pcbjs skills install`, what each skill covers, writing one |
+| `skills` | the agent skills of `@pcbjs/skills`: `pcbjs skills install` into `.agents/skills` and `.claude/skills`, which agent reads which, what each skill covers, writing one |
 | `stdlib` | every footprint family with pins and frame, footprint helpers |
 | `kicad`, `import` | coming from KiCad: frame, back side, refs, text, Gerber differences; `pcbjs import footprint` and `board`, `kicadFootprint()`, the refine steps |
 | `workspace`, `stackup-and-rules`, `fonts`, `ide-bridge`, `design`, `development` | the workspace dev server, background, the editor protocol, rationale, repository layout and limits |

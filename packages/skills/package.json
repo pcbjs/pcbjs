@@ -1,7 +1,7 @@
 {
   "name": "@pcbjs/skills",
   "version": "0.0.1-beta.0",
-  "description": "Agent skills for pcbjs in the Agent Skills format: basics, best practices, porting from KiCad and from Python generators, and upgrading. The pcbjs-skills bin installs them into .claude/skills.",
+  "description": "Agent skills for pcbjs in the Agent Skills format: basics, best practices, porting from KiCad and from Python generators, and upgrading. The pcbjs-skills bin links them from .agents/skills and .claude/skills.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -18,15 +18,18 @@
       "types": "./index.d.ts",
       "default": "./index.mjs"
     },
-    "./package.json": "./package.json",
-    "./skills/*": "./skills/*"
+    "./*": "./*"
   },
   "files": [
     "bin",
     "index.mjs",
     "index.d.ts",
     "scripts",
-    "skills"
+    "pcbjs-basics",
+    "pcbjs-best-practices",
+    "pcbjs-port-from-kicad",
+    "pcbjs-port-from-python-scripted",
+    "pcbjs-upgrade"
   ],
   "scripts": {
     "test": "node --test \"tests/**/*.test.mjs\"",

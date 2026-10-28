@@ -75,7 +75,7 @@ function nameOf(file) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: { out: { type: 'string' } } })
-  const out = resolve(values.out ?? join(pkg, 'skills', 'pcbjs-upgrade', 'references', 'changelog.md'))
+  const out = resolve(values.out ?? join(pkg, 'pcbjs-upgrade', 'references', 'changelog.md'))
   const files = positionals.length ? positionals.map(f => resolve(f)) : changelogs()
   const text = render(files.map(f => ({ name: nameOf(f), text: readFileSync(f, 'utf8') })))
   if (!existsSync(out) || readFileSync(out, 'utf8') !== text) writeFileSync(out, text)

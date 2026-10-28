@@ -6,15 +6,27 @@ Read it to give a coding agent pcbjs know-how, or to change the skills themselve
 ## Install
 
 ```sh
-npx pcbjs skills install              # into .claude/skills of this folder
-npx pcbjs skills install --to <dir>   # into any skills folder an agent reads
-npx pcbjs skills list                 # each skill and when it applies
-npx pcbjs skills path                 # where the package keeps them
+npx pcbjs skills install                        # link each skill from .agents/skills and .claude/skills
+npx pcbjs skills install --no-claude            # .agents/skills only
+npx pcbjs skills install --to <dir>             # into that skills folder alone
+npx pcbjs skills list                           # each skill and when it applies
+npx pcbjs skills path                           # where the package keeps them
 ```
 
 `@pcbjs/pcbjs` depends on `@pcbjs/skills` at its own train's version, so a project that installs pcbjs has the matching skills. `pcbjs skills` loads the `@pcbjs/skills` the project resolves, and the package's own bin, `npx pcbjs-skills`, takes the same commands, for a folder without pcbjs.
 
-`install` copies each skill folder, replacing one of the same name, so running it again after an upgrade brings the skills to the installed version. Other folders in the target are left alone. Commit the installed skills with the project, or add the command to a `postinstall` script.
+The one copy of each skill is the installed package's, `node_modules/@pcbjs/skills/<name>`. `install` makes `.agents/skills/<name>` and `.claude/skills/<name>` relative symlinks to it, such as `../../node_modules/@pcbjs/skills/pcbjs-basics`, so an upgrade of pcbjs upgrades the skills with no second step. `.agents/skills` is the folder of the Agent Skills standard; `.claude/skills` is the companion for Claude Code, which reads only that folder.
+
+`install` links only when the package lies in the `node_modules` of a project above the target folder, as for `pcbjs skills install` and for `npx pcbjs-skills install` in a project that installs pcbjs. Otherwise, as with `npx @pcbjs/skills install --to ~/.agents/skills` from npm's cache, it copies, since a link into a cache would dangle, and the output line says `copy`; in `.claude/skills` it then links to that copy. Where the system refuses a symlink, such as Windows without developer mode, it copies too. Each output line names the skill, then `link` or `copy` with the destination and with the companion.
+
+Running it again replaces a folder, a copy or a stale link of the same name in both folders and leaves other folders alone. Commit the links with the project. They resolve after `npm install`, since `node_modules` is not committed; for a team, add `"prepare": "pcbjs skills install"` to the project's scripts so a fresh clone restores them.
+
+| Agent | Reads | Install with |
+| --- | --- | --- |
+| Claude Code | `.claude/skills`, `~/.claude/skills` | `pcbjs skills install`, the companion links |
+| Codex | `.agents/skills` up to the repository root, `~/.agents/skills` | `pcbjs skills install` |
+| Grok Build | `.agents/skills` or `.claude/skills`, `~/.agents/skills` | `pcbjs skills install` |
+| any, user-wide | `~/.agents/skills` or `~/.claude/skills` | `--to ~/.agents/skills`, `--to ~/.claude/skills` |
 
 ## The skills
 
@@ -28,7 +40,7 @@ npx pcbjs skills path                 # where the package keeps them
 
 ## Format
 
-Each skill is a folder with a `SKILL.md` and a `references/` folder. `SKILL.md` starts with YAML frontmatter, `name`, the folder's name, and `description`, what the skill does and when to use it, which an agent reads to decide whether to load the skill. Its body stays short, the steps and the rules, and names a reference file for each longer topic, so an agent loads a reference only when the task needs it. Skills point to `pcbjs docs <topic>` for detail rather than copying the docs.
+Each skill is a folder at the package root, `@pcbjs/skills/<name>`, with a `SKILL.md` and a `references/` folder. `SKILL.md` starts with YAML frontmatter, `name`, the folder's name, and `description`, what the skill does and when to use it, which an agent reads to decide whether to load the skill. Its body stays short, the steps and the rules, and names a reference file for each longer topic, so an agent loads a reference only when the task needs it. Skills point to `pcbjs docs <topic>` for detail rather than copying the docs.
 
 ## Writing a skill
 

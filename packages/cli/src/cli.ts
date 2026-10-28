@@ -20,7 +20,7 @@ import { fabDate } from '@pcbjs/export/fab'
 
 const cli = cac('pcbjs')
 cli.usage(
-  '<build|check|dev|preview> [entry...] [options]\n       pcbjs dev --workspace <folder>... [options]\n       pcbjs inspect [entry] [ref|net|REF.PAD|references|sch...] [--lengths [net|pair|group]] [--layer <name>] [--json]\n       pcbjs model add <file-or-url|lcsc:C123> [--ref [<board>/]<REF> | --footprint <name>] [--entry <board>] [--as <name>] [--write]\n       pcbjs model add --ref <REF> [--write], the model of its MPN:LCSC number\n       pcbjs model align [entry] [<board>/]<ref> [--file <model>]\n       pcbjs model check [entry...]\n       pcbjs model fetch [entry...]\n       pcbjs shot [entry...] [-o <dir>] [-p <port>] [--view 2d|3d|sch|both|all] [--select <ref>...] [--layer <name>...] [--side top|bottom] [--size WxH]\n       pcbjs import footprint <Lib:Name|file.kicad_mod> [-o lib/<name>.tsx] [--force]\n       pcbjs import board <file.kicad_pcb> [-o pcb.tsx] [--force]\n       pcbjs docs [topic] [--grep <word|regex>]\n       pcbjs ide <install|status>\n       pcbjs skills <install [--to <dir>]|list|path>\n       pcbjs doctor\n       pcbjs create <dir> [--template board]\n\n  The entries are `entries` in pcb.config.ts, paths relative to it, globs allowed; entries on the command line win for that run.\n  Each entry is a .tsx or .ts module that default-exports <PCB>. Several entries make a multi-board site.\n  The current directory is the project root. The config is pcb.config.ts, .mts, .js or .mjs in it; pcbjs.config.* still loads with a warning.',
+  '<build|check|dev|preview> [entry...] [options]\n       pcbjs dev --workspace <folder>... [options]\n       pcbjs inspect [entry] [ref|net|REF.PAD|references|sch...] [--lengths [net|pair|group]] [--layer <name>] [--json]\n       pcbjs model add <file-or-url|lcsc:C123> [--ref [<board>/]<REF> | --footprint <name>] [--entry <board>] [--as <name>] [--write]\n       pcbjs model add --ref <REF> [--write], the model of its MPN:LCSC number\n       pcbjs model align [entry] [<board>/]<ref> [--file <model>]\n       pcbjs model check [entry...]\n       pcbjs model fetch [entry...]\n       pcbjs shot [entry...] [-o <dir>] [-p <port>] [--view 2d|3d|sch|both|all] [--select <ref>...] [--layer <name>...] [--side top|bottom] [--size WxH]\n       pcbjs import footprint <Lib:Name|file.kicad_mod> [-o lib/<name>.tsx] [--force]\n       pcbjs import board <file.kicad_pcb> [-o pcb.tsx] [--force]\n       pcbjs docs [topic] [--grep <word|regex>]\n       pcbjs ide <install|status>\n       pcbjs skills <install [--to <dir>] [--no-claude]|list|path>\n       pcbjs doctor\n       pcbjs create <dir> [--template board]\n\n  The entries are `entries` in pcb.config.ts, paths relative to it, globs allowed; entries on the command line win for that run.\n  Each entry is a .tsx or .ts module that default-exports <PCB>. Several entries make a multi-board site.\n  The current directory is the project root. The config is pcb.config.ts, .mts, .js or .mjs in it; pcbjs.config.* still loads with a warning.',
 )
 
 cli
@@ -238,12 +238,13 @@ cli
 cli
   .command(
     'skills <action>',
-    'the agent skills of @pcbjs/skills: `skills install` copies them into .claude/skills or --to <dir>, `skills list` names each, `skills path` prints where they ship',
+    'the agent skills of @pcbjs/skills: `skills install` links them from .agents/skills and .claude/skills, or from --to <dir> alone, into node_modules/@pcbjs/skills, `skills list` names each, `skills path` prints where they ship',
   )
-  .option('--to <dir>', 'install: the skills folder to copy into (default .claude/skills)')
+  .option('--to <dir>', 'install: the one skills folder to link from, no .claude/skills links (default .agents/skills)')
+  .option('--no-claude', 'install: skip the .claude/skills links beside .agents/skills')
   .action(async (action: string, o) => {
-    if (o.to !== undefined && action !== 'install') usageError('--to goes with skills install')
-    process.exitCode = await skills(action, { to: o.to === undefined ? undefined : String(o.to) })
+    if ((o.to !== undefined || o.claude === false) && action !== 'install') usageError('--to and --no-claude go with skills install')
+    process.exitCode = await skills(action, { to: o.to === undefined ? undefined : String(o.to), claude: o.claude !== false })
   })
 
 cli

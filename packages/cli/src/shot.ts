@@ -233,13 +233,20 @@ async function launch(bin: string, size: [number, number], profile: string): Pro
     proc.once('exit', code => fail(new Error(`Chrome exited with code ${code} before it was ready${stderr ? `:\n${stderr.trim().split('\n').slice(-5).join('\n')}` : ''}`))),
   )
   exited.catch(() => {})
+  try {
+    return { proc, page: await pageSocket(profile, exited) }
+  } catch (e) {
+    proc.kill()
+    proc.stderr!.destroy()
+    throw e
+  }
+}
+
+async function pageSocket(profile: string, exited: Promise<never>): Promise<string> {
   const file = join(profile, 'DevToolsActivePort')
   const start = Date.now()
   while (!existsSync(file) || readFileSync(file, 'utf8').split('\n').length < 2) {
-    if (Date.now() - start > 30000) {
-      proc.kill()
-      throw new Error('Chrome did not open its debugging port within 30 s')
-    }
+    if (Date.now() - start > 30000) throw new Error('Chrome did not open its debugging port within 30 s')
     await Promise.race([sleep(50), exited])
   }
   const port = readFileSync(file, 'utf8').split('\n')[0].trim()
@@ -248,10 +255,9 @@ async function launch(bin: string, size: [number, number], profile: string): Pro
       .then(r => r.json() as Promise<{ type: string; webSocketDebuggerUrl: string }[]>)
       .catch(() => [])
     const page = list.find(t => t.type === 'page')
-    if (page) return { proc, page: page.webSocketDebuggerUrl }
+    if (page) return page.webSocketDebuggerUrl
     await Promise.race([sleep(50), exited])
   }
-  proc.kill()
   throw new Error('Chrome opened no page')
 }
 
@@ -300,12 +306,16 @@ export async function shot(opts: ShotOptions): Promise<number> {
     cdp = null
     if (chrome && chrome.exitCode === null) {
       const p = chrome
+      let timer: NodeJS.Timeout | undefined
       await new Promise<void>(done => {
         p.once('exit', () => done())
         p.kill()
-        setTimeout(done, 3000)
+        timer = setTimeout(done, 3000)
       })
+      clearTimeout(timer)
     }
+    // Chrome's crash handler and updater inherit its stderr and outlive it by minutes, holding the pipe and so this process open
+    chrome?.stderr?.destroy()
     chrome = null
     try {
       rmSync(profile, { recursive: true, force: true })
