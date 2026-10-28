@@ -53,7 +53,7 @@ const until = async (pred, ms = 30000) => {
 }
 
 function start(args, token) {
-  const child = spawn(process.execPath, args, { cwd: root, env: { ...process.env, NO_COLOR: '1' }, stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(process.execPath, args, { cwd: root, env: { ...process.env, NO_COLOR: '1' }, stdio: ['pipe', 'pipe', 'pipe'] })
   let out = ''
   child.stdout.on('data', d => {
     out += d
@@ -86,15 +86,20 @@ test('pcbjs dev --ide closed by a signal during its first compile exits and remo
 })
 
 test('the dev server of --ide closed during its first compile lets its process exit, esbuild stopped', async () => {
+  // ready is sent once the host socket opens, which may be after dev() returns, so the close waits for the test to see it
   const script = `
     import { dev } from ${JSON.stringify(SERVER)}
     const server = await dev({ root: ${JSON.stringify(root)}, port: 0, host: '127.0.0.1', ide: 'ws://127.0.0.1:${PORT}/close' })
+    await new Promise(r => process.stdin.once('data', r))
+    process.stdin.destroy()
     await server.close()
     console.log('closed')
   `
   const run = start(['--input-type=module', '-e', script], 'close')
-  await until(() => /closed/.test(run.out()) || run.child.exitCode !== null).catch(() => run.child.kill('SIGKILL'))
+  await until(() => run.ready() || run.child.exitCode !== null)
   assert.ok(run.ready(), run.out())
+  run.child.stdin.end('close\n')
   const res = await exitsWithin(run, EXIT_MS)
   assert.equal(res.code, 0, run.out())
+  assert.match(run.out(), /closed/)
 })
