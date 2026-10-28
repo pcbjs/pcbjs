@@ -59,6 +59,8 @@ jobs:
         if: steps.pending.outputs.resume == 'false'
         run: |
           npx changeset version
+          # the example templates of pcbjs create pin the versions the bump just wrote
+          node packages/cli/scripts/sync-examples.mjs
           npm install --package-lock-only
           git add -A
           git commit -q -m "pcbjs $(node -p "require('./packages/pcbjs/package.json').version")"
