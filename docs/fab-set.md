@@ -3,86 +3,86 @@
 Every file `pcbjs build` writes for the fab: Gerbers, drills, the order package, README-fab, BOM and placement, the `.pcb.svg` and `.sch.svg` documents, reproducible dates and the Gerber self check.
 Presets, `bindPCB` and variants, which decide what goes into the set, are in fab.md.
 
-## The fab set
-
-`pcbjs build` writes one set per board to `<fabDir>/<name>/`, by default `.pcbjs/fab/<name>/`:
+One set per board in `<fabDir>/<name>/`, by default `.pcbjs/fab/<name>/`:
 
 ```
-Blinky-F_Cu.gtl         front copper
-Blinky-In1_Cu.g1        inner copper, one file per inner layer up to In6_Cu.g6
-Blinky-B_Cu.gbl         back copper
-Blinky-F_Mask.gts       front mask         Blinky-B_Mask.gbs   back mask
-Blinky-F_Paste.gtp      front paste        Blinky-B_Paste.gbp  back paste
-Blinky-F_SilkS.gto      front silkscreen   Blinky-B_SilkS.gbo  back silkscreen
-Blinky-Edge_Cuts.gm1    board outline
-Blinky-job.gbrjob       Gerber X2 job file with the stackup
-Blinky-PTH.drl          plated holes, when there are any
-Blinky-NPTH.drl         non-plated holes, when there are any
-Blinky-PTH-drl_map.svg  drill map, one per drill file
-Blinky-drill-report.txt every tool of every drill file
-Blinky.ipc              IPC-D-356A netlist for electrical test
-bom.csv                 bill of materials
-cpl.csv                 placement, JLCPCB column layout
-Blinky.pcb.svg          the whole board as one SVG document
-Blinky.sch.svg          the schematic drawing, see schematic-graphic.md
-README-fab.txt          status and summary
-manifest.json           every other file with its size and sha256
-Blinky-fab-0.1.0.zip    all of the above
+Blinky-F_Cu.gtl  -In1_Cu.g1 to -In6_Cu.g6  -B_Cu.gbl    copper, one file per layer
+Blinky-F_Mask.gts  -B_Mask.gbs  -F_Paste.gtp  -B_Paste.gbp  -F_SilkS.gto  -B_SilkS.gbo
+Blinky-Edge_Cuts.gm1     outline
+Blinky-job.gbrjob        Gerber X2 job file with the stackup
+Blinky-PTH.drl  -NPTH.drl             holes, each when there are any
+Blinky-PTH-drl_map.svg   drill map per drill file
+Blinky-drill-report.txt  every tool of every drill file
+Blinky.ipc               IPC-D-356A netlist for electrical test
+bom.csv  cpl.csv         bill of materials, placement in JLCPCB columns
+Blinky.pcb.svg           the board as one SVG document
+Blinky.sch.svg           the schematic, schematic-graphic.md
+README-fab.txt           status and summary
+manifest.json            every other file with size and sha256
+Blinky-fab-0.1.0.zip     all of the above
 ```
 
-- The zip is `<name>-fab-<revision>.zip`, or `<name>-fab-dev.zip` without a revision.
-- Gerbers are X2, in mm, y up. Pads other than circles are regions. Stroke text is drawn with a round aperture as wide as its thickness.
-- Circular arcs stay arcs: an `A` command with equal radii, a `<circle>`, the corners of a `<rect rx>`, `roundedRect`, `circle` and `slot`. A layer with one sets `G75*` once and draws each with `G02*`, clockwise from the top, or `G03*`, `I` and `J` from start to centre. Bezier curves, elliptical arcs and zone fills are segments.
-- Silkscreen is cleared from the mask openings of its side it overlaps, as KiCad's `--subtract-soldermask` does: each such opening is a clear region after the legend.
-- A zone fill with holes is an outer region and clear holes, the outer before any pour inside its holes, at any depth.
-- A filled path with holes, such as the ring of a © sign, is one dark region whose contour runs into each hole and back along one cut line, so nothing earlier on the layer is erased.
-- A paste layer with nothing on it, a side without SMD pads, is not written, and README-fab says so. A pad with paste windows of its own, `pasteRatio`, `pasteShrink` or `paste` windows, prints those.
-- Fab, courtyard and user layers are not exported.
-- The job file carries the layer count, thickness, finish and a `MaterialStackup` entry per layer.
-- A failed entry leaves its last set in place with a `STALE` file in it, see cli.md.
+## Gerbers
 
-## The order package
+- Zip `<name>-fab-<revision>.zip`, or `<name>-fab-dev.zip` without a revision. A failed entry leaves its last set with a `STALE` file.
+- X2, mm, y up. Non-circular pads are regions; stroke text a round aperture as wide as its thickness.
+- Circular arcs stay arcs: `A` commands with equal radii, `<circle>`, `<rect rx>` corners, `roundedRect`, `circle`, `slot`; `G75*` once per layer, then `G02*` clockwise from the top or `G03*`, `I` and `J` from start to centre. Beziers, elliptical arcs and zone fills are segments.
+- Silk is cleared from the same side's mask openings as KiCad's `--subtract-soldermask`: each opening a clear region after the legend.
+- A fill with holes is an outer region then clear holes, outer before any pour inside, at any depth; a filled path with holes, the ring of a ©, is one dark region with a cut line into each hole.
+- An empty paste layer is not written and README-fab says so. A pad's own `pasteRatio`, `pasteShrink` or `paste` windows print as given.
+- Fab, courtyard and user layers are not exported. The job file has layer count, thickness, finish and a `MaterialStackup` per layer.
 
-- `<name>.ipc` is the IPC-D-356A netlist for the electrical test, `UNITS CUST 1`, 0.001 mm, y up. One fixed column record per pad and via: `317` plated hole, `327` surface pad, `367` non-plated hole; the net, `N/C` for none, an `NNAME<n>` alias past 14 characters; ref, `VIA` for vias, and pad; drill with `P` or `U`; access `A00` through, `A01` top, the copper count bottom; centre, size, rotation; mask `S0` covered to `S3` open both sides.
-- `<name>-drill-report.txt` lists each drill file with its layer span and every tool: diameter, holes, vias and slots.
-- `<name>-PTH-drl_map.svg` and `-NPTH-` draw the outline and each hole at size with one symbol per tool, and a legend of symbol, diameter and count.
-- `manifest.json` names the board, revision, target, generator and date, and every other file of the set with its size and sha256. It is in the zip too; the zip itself is not in it. The generator is `pcbjs <version>`, the version of @pcbjs/export that wrote the set, which the Gerber `TF.GenerationSoftware` header, the job file and the `Generated` line of README-fab name too.
+## Order package
 
-## Reproducible builds
+| File | Holds |
+| --- | --- |
+| `<name>.ipc` | IPC-D-356A, `UNITS CUST 1`, 0.001 mm, y up; per pad and via: `317` plated hole, `327` surface pad, `367` non-plated hole; net, `N/C` for none, `NNAME<n>` past 14 characters; ref, `VIA`, pad; drill with `P` or `U`; access `A00` through, `A01` top, the copper count bottom; centre, size, rotation; mask `S0` covered to `S3` open both sides |
+| `<name>-drill-report.txt` | each drill file, its layer span and every tool: diameter, holes, vias, slots |
+| `<name>-PTH-drl_map.svg`, `-NPTH-` | outline and holes at size, one symbol per tool, legend of symbol, diameter, count |
+| `manifest.json` | board, revision, target, generator, date, every other file with size and sha256; in the zip |
 
-Every file that carries a date, the Gerbers, drill files, job file, netlist, report, README-fab, manifest and the zip entries, carries the same one: `pcbjs build --date <iso>`, else `SOURCE_DATE_EPOCH` in seconds, else now. Two builds of one tree at one date are byte identical, zip included, in any time zone. `SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pcbjs build` stamps the commit time.
+The generator, `pcbjs <version>` of @pcbjs/export, is also in the Gerber `TF.GenerationSoftware`, the job file and README-fab's `Generated` line.
+
+## Reproducible dates
+
+```sh
+SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pcbjs build    # or pcbjs build --date <iso>; else now
+```
+
+Every dated file and zip entry gets that date, so two builds of one tree are byte identical in any time zone.
 
 ## Gerber self check
 
-`pcbjs build` and `pcbjs check --fab` read every copper Gerber and the outline back and compare them with the board:
+`pcbjs build` and `pcbjs check --fab` read the copper Gerbers and outline back; each difference is a DRC error `fab-mismatch`, else README-fab says `Gerber self check: passed`. `pcbjs check` without `--fab` and `pcbjs dev` skip it.
 
-- each copper layer against the board's copper of that layer, pads, tracks, vias, fills, graphics and text: a symmetric difference above 0.01 mm², once slivers thinner than 12 µm from arc chords are dropped;
-- copper against the outline the `Edge.Cuts` file draws: copper outside it or inside a cutout;
-- the outline read back against the board's outline;
-- the pads of each net: pads the board joins through copper and plated holes must stay joined, and pads of two nets must stay apart.
-
-Each difference is a DRC error `fab-mismatch`, so the set is not orderable. README-fab carries a `Gerber self check: passed` line. `pcbjs check` without `--fab` and `pcbjs dev` skip it.
+- each copper layer against the board's pads, tracks, vias, fills, graphics and text: symmetric difference above 0.01 mm², after dropping slivers under 12 µm from arc chords;
+- copper outside the `Edge.Cuts` outline or inside a cutout;
+- the outline against the board's;
+- pads joined through copper and plated holes stay joined, pads of two nets apart.
 
 ## README-fab.txt
 
-It starts with `STATUS: ORDERABLE`, or `STATUS: NOT ORDERABLE` with the error counts. Then: the board size and counts, a `3D models` line with the parts from model files, generated and with no model, as 3d.md defines them, the sourcing line, the stackup layer by layer, every rule value, the hole sizes, the DRC and ERC counts with every finding in the same lines as `pcbjs check`, the self check line, the file list and notes. A target's second line names the target, its fab and its place in the list.
+`STATUS: ORDERABLE`, or `STATUS: NOT ORDERABLE` with error counts; then size and counts, a `3D models` line per 3d.md, sourcing, stackup, every rule value, hole sizes, DRC and ERC findings as `pcbjs check` prints them, the self check, the files and notes. A target's second line names it, its fab and place.
 
-- `fabNotes={['Single board, no panel.', 'Remove the order number.']}`, order form choices and the like, opens the Notes. `<PCB>`, a preset, a variant target and `defineDefaultBoard` take it; the lines join defaults first, then the preset or target, then `<PCB>`, each once.
-- The Notes name each font the text uses: Hershey Simplex and NewStroke with their provenance from fonts.md, an outline font with its copyright and licence.
+- `fabNotes={['Single board, no panel.', 'Remove the order number.']}` opens the Notes; `<PCB>`, a preset, a target and `defineDefaultBoard` take it, joined defaults, preset or target, `<PCB>`, each line once.
+- The Notes name each font: Hershey Simplex and NewStroke with provenance from fonts.md, an outline font with its copyright and licence.
 
 ## BOM and placement
 
-- `bom.csv` groups footprints with the same value, footprint id and fields. Its columns are `Refs`, `Value`, `Footprint`, `Qty`, `MPN`, the number resolved for the board's tags, `Source`, the tag matched or `MPN`, `Manufacturer` and `Datasheet`. Then one column per other field, one per `MPN:<tag>` key, and `MPN:*` with the catch-all when a tagged number replaced it in some row.
-- Footprints with `bom={false}` are left out.
-- `cpl.csv` has `Designator`, `Val`, `Package`, `Mid X`, `Mid Y`, `Rotation` and `Layer`, y up. It lists footprints with both `pos` and `bom` set.
-- DNP parts, `dnp` on a placement, stay on the board and in the DRC but are left out of both files; README-fab names them.
-- `Mid X` and `Mid Y` follow `cpl={{ origin }}` on the board or preset: `'center'`, the courtyard centre taken in the part's own frame, else its pads' extent, as JLCPCB and most assemblers expect; or `'footprint'`, the footprint origin, pin 1 for a pin header. JLCPCB presets default to `'center'`, every other board to `'footprint'`. README-fab says which.
+| File | Columns |
+| --- | --- |
+| `bom.csv` | `Refs`, `Value`, `Footprint`, `Qty`, `MPN` for the board's tags, `Source` the tag matched or `MPN`, `Manufacturer`, `Datasheet`; then other fields, each `MPN:<tag>`, and `MPN:*` when a tag replaced the catch-all |
+| `cpl.csv` | `Designator`, `Val`, `Package`, `Mid X`, `Mid Y`, `Rotation`, `Layer`, y up; footprints with both `pos` and `bom` |
+
+- The BOM groups equal value, footprint id and fields, and skips `bom={false}`.
+- `dnp` parts stay on the board and in DRC, out of both files; README-fab names them.
+- `cpl={{ origin }}` on board or preset: `'center'`, the courtyard centre else the pads' extent, JLCPCB's default; or `'footprint'`, the footprint origin, pin 1 for a header, every other default. README-fab says which.
 
 ## The .pcb.svg document
 
-`<name>.pcb.svg` is a valid SVG any browser draws, with the board data in the `pcb:` namespace `https://pcb.svg/ns/1`. Geometry is in mm, y down.
+Valid SVG with the board data in the `pcb:` namespace `https://pcb.svg/ns/1`, mm, y down.
 
-- `<metadata>` holds `pcb:board`, `pcb:rules` after defaults, `pcb:nets`, `pcb:footprints` with absolute positions, and `pcb:drc` with the counts.
-- One `<g pcb:layer="…">` per layer, back to front. Each element has `data-id`, `data-kind` of `pad`, `track`, `via`, `zone`, `graphic` or `text`, and `data-net`, `data-ref` and `data-pad` where they apply.
-- Holes are drawn last in the background colour. Text is a stroked path with its string in `pcb:text`. Arcs are `A` commands, as in the Gerbers.
-- `boardSvg(board, { vars: true })` from `@pcbjs/export/svg` writes the same document with every colour as a CSS variable that falls back to the default: `--pcb-<layer>` with `.` as `_`, such as `--pcb-F_Cu`, on a class per layer group, `--pcb-canvas` behind the board and in its holes, and `--pcb-substrate` under the layers inside the outline. A page that inlines it sets them per theme; the docs site does.
+- `<metadata>`: `pcb:board`, `pcb:rules` after defaults, `pcb:nets`, `pcb:footprints` with absolute positions, `pcb:drc` with counts.
+- One `<g pcb:layer="…">` per layer, back to front; elements carry `data-id`, `data-kind` of `pad`, `track`, `via`, `zone`, `graphic` or `text`, and `data-net`, `data-ref`, `data-pad`.
+- Holes last in the background colour; text a stroked path with its string in `pcb:text`; arcs as `A`.
+- `boardSvg(board, { vars: true })` of `@pcbjs/export/svg` makes each colour a CSS variable with the default as fallback: `--pcb-<layer>` with `.` as `_`, `--pcb-F_Cu`, on a class per layer group, `--pcb-canvas` behind the board and in holes, `--pcb-substrate` inside the outline.

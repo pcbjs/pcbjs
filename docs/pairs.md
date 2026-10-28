@@ -3,8 +3,6 @@
 `route([aP, aN])` and its chain to `.X([bP, bN])` or `.Z([bP, bN])`: a pair routed as one centre line and laid out as two coupled tracks, its width, gap and impedance, ends, necks, via pairs, rounded corners, fans, length tuning, the pair DRC rules and the limits.
 examples/highspeed is a whole board with one pair drawn by hand and one autorouted through a via pair.
 
-## The route call
-
 ```tsx
 import PCB from '@pcbjs/fab/JLCPCB/4-Layer'
 import { nets, route, NC } from '@pcbjs/core'
@@ -24,23 +22,25 @@ export default () => (
 )
 ```
 
-- Both ends are arrays `[P, N]`, each element any route end: a pin or pad handle, a `"REF.PIN"` string or a coordinate. One array end and one single end is a TypeError at the call.
-- A coordinate tuple `[x, y, layer?]` is still one end: an array is a pair only when both of its elements are positions.
-- The nets come from the pads, P ends on one net and N ends on another, else a compile error names the pads. `.net(P, N)` gives both, which a pair between coordinates needs.
-- A pin with several pads, such as `J1.DP` on A6 and B6, takes the pad nearest the far end for P and the N pad nearest it; `J1['B6']` names one.
-- Every builder method of routing.md works. `.width()` is the width of each track.
+## Ends
+
+- Both ends are arrays `[P, N]` of any route end: pin or pad handle, `"REF.PIN"` or coordinate. One array end and one single end is a TypeError.
+- `[x, y, layer?]` is one end: an array is a pair only when both elements are positions.
+- Nets come from the pads, else a compile error names them; `.net(P, N)` sets both, as a pair between coordinates needs.
+- A pin with several pads, `J1.DP` on A6 and B6, takes the pad nearest the far end, N the pad nearest P's; `J1['B6']` names one.
+- Every builder method of routing.md works; `.width()` is per track.
+- An automatic leg leaves an end with a straight stub: square to the pads away from the footprint centre, then the other way, along them, then the compass directions nearest the far end. It runs a pitch past the pads and fans, then up to the neck length until free. A manual command sets the direction instead.
 
 ## The centre line
 
-The path is the centre line of the pair, in the grammar of routing.md. Its hidden `M` is the midpoint of the two start pads, `Z` draws straight to the midpoint of the two end pads, and `XZ` autoroutes the centre line there.
+The path, in the grammar of routing.md, is the centre line: its hidden `M` is the midpoint of the start pads, `Z` goes straight to the midpoint of the end pads, `XZ` autoroutes there.
 
-- An automatic leg runs the maze with a track `2w + g` wide, with the copper of both nets as its own, so neither pad row blocks it.
-- Once every leg is routed, the whole centre line is offset by `(w + g) / 2` to each side, section by section between layer changes: a bend too tight for the pitch is cut, and a U turn narrower than the pitch fails.
-- Before it is offset, an automatic leg's knees shorter than half the pitch and turns over 135 degrees are cut where the straight line is free; a vertex you drew is never moved.
-- When P and N would come closer than the gap, a via pair of an automatic leg moves along the line, and an end reached at a slant gets a square approach; when nothing works the pair is a `route-failed` that names the point and the copper of another net nearest it.
-- P runs on the side its start pad is on. When the end pads sit the other way round, the tracks would have to cross: that is a `route-failed` at the end. Where the directions at both ends are known before routing, from a stub or a manual command square to the pads, it is reported at once and the pair is not routed; swap at a via pair with `.cross()`, see Vias.
-- Once its centre line is complete, the pair is laid out and its two tracks, fans, flares and via pairs stand as copper for the legs routed after it, so a via of another route cannot land on a fan wider than the centre line. When the final layout differs, the legs of its priority or lower that now collide with it route again.
-- The two tracks carry `Track.pair`, `pair:<n>` in document order, `Track.role`, `P` or `N`, and `Track.route`. `board.pairs` lists every pair with its nets, width, gap and limits.
+- An automatic leg runs the maze `2w + g` wide, both nets' copper its own. Knees shorter than half the pitch and turns over 135 degrees are cut where free; drawn vertices never move.
+- Once routed, the line is offset `(w + g) / 2` each side, per section between layer changes. A bend too tight is cut, a U turn narrower than the pitch fails.
+- Where P and N would come closer than the gap, an automatic via pair slides along the line and a slanted end gets a square approach; else `route-failed` names the point and the nearest copper.
+- P runs on its start pad's side. End pads the other way round would cross: `route-failed` at the end, reported before routing when both directions are known; swap with `.cross()`.
+- The laid out copper is an obstacle for later legs; when the final layout differs, colliding legs of its priority or lower reroute.
+- Tracks carry `Track.pair`, `pair:<n>` in document order, `Track.role`, `P` or `N`, and `Track.route`. `board.pairs` lists each pair's nets, width, gap and limits.
 
 ## Width, gap and impedance
 
@@ -51,76 +51,58 @@ The path is the centre line of the pair, in the grammar of routing.md. Its hidde
 | skew tolerance | `.skew()`, the class `skew`, 0.1 mm |
 | uncoupled limit | the class `uncoupled`, 5 mm |
 
-- `.impedance(ohms)` is the differential impedance of the pair on its start layer, from the board's stackup; a thick board solves wide and the pair necks down at its pads. It holds the gap of `.gap()` or the class and solves the width; with `.width()` it solves the gap; with neither both, the gap equal to the width, to 0.01 mm. stackup-and-rules.md has the model.
-- A class `impedance` does the same for a pair that sets neither width nor impedance itself.
-- On a single route `.impedance(ohms)` is the single ended impedance: it sets the width for the start layer unless `.width()` is given.
-- Between the tracks and vias of one pair the gap governs, not a larger class clearance, so a class with `clearance: 0.2` and `gap: 0.15` lays out; `pair-gap` checks the gap. The rules' clearance still applies, and pads keep the class clearance.
+- `.impedance(ohms)` is differential on the start layer from the stackup, see stackup-and-rules.md. It keeps a set gap and solves the width, with `.width()` solves the gap, with neither solves both with gap equal to width, to 0.01 mm. A class `impedance` does the same.
+- On a single route `.impedance(ohms)` is single ended and sets the width unless `.width()` is given.
+- Between a pair's own tracks and vias the gap governs, not a larger class clearance, so `clearance: 0.2` with `gap: 0.15` lays out. The rules' clearance still applies; pads keep the class clearance.
 
 ## Vias
 
-`@<layer>` in the path, or a layer change of an automatic leg, places a via pair: two vias, one per net, on the line across the run, or across the bisector at a bend.
+`@<layer>` in the path, or an automatic layer change, places a via pair, one per net, across the run or the bend bisector.
 
-- They are `max(w + g, size + c)` apart centre to centre, where `c` is the largest of the pair's clearance between its two nets, `minHoleToHole` from drill to drill and `holeClearance` from each hole to the other via.
-- When that is wider than the pitch, the tracks flare out before the vias and back after them, each flare meeting its straight run at one vertex and ending on the via centre.
-- The via is the route's via: `.vias({ drill, size })`, the class `via`, else the default via.
-- `.cross(layer)` places a crossover: a via pair after which P and N run on swapped sides on `layer`. Both vias sit on the side the incoming P runs on, flared out to keep the clearance, N's a little further along; N crosses over on the first layer past P's via, P on the second ahead of N's. It needs a manual command before it. A USB 2.0 pair mirrored at its receptacle swaps right there: `route([J1.DP, J1.DN]).v(1.5).cross('B.Cu').X([U1.DP, U1.DN])`.
+- Spacing centre to centre is `max(w + g, size + c)`, `c` the largest of the pair's clearance, `minHoleToHole` and `holeClearance`. Wider than the pitch, the tracks flare out to the via centres and back.
+- The via is `.vias({ drill, size })`, the class `via`, else the default via.
+- `.cross(layer)` is a crossover: P and N swap sides on `layer`, both vias on incoming P's side, N's a little further on. It needs a manual command before it: `route([J1.DP, J1.DN]).v(1.5).cross('B.Cu').X([U1.DP, U1.DN])`.
 
 ## Corners
 
-Every corner you draw in the path is rounded on the centre line with an arc of radius `w + g`, the pitch, so the two tracks turn as concentric arcs a pitch apart.
+Drawn corners round on the centre line with radius `w + g`, so the tracks turn as concentric arcs.
 
-- A rounded bend leaves the outer track longer by `2h` times the turn, `h` the half pitch; turns that add up to nothing leave no skew.
-- Where the segments are too short for the radius, or the inner track's arc would meet other copper, the radius shrinks to the track width, never below the half pitch, then the corner is a 45 degree chamfer, else square.
-- The corners of automatic legs stay as the router left them. `.corner(r)` sets the radius, `.corner('none')` keeps corners square, the class `corner: { radius }` sets it for a class.
-- `Track.prims` keeps the arcs for the Gerbers, `Track.pts` has them flattened; lengths run along the arcs.
+- A bend leaves the outer track `2h` times the turn longer, `h` the half pitch; turns that cancel leave no skew.
+- Short segments or nearby copper shrink the radius to the track width, never below the half pitch, then a 45 degree chamfer, else square.
+- Automatic legs keep router corners. `.corner(r)`, `.corner('none')` and the class `corner: { radius }` set it.
+- `Track.prims` keeps the arcs for the Gerbers, `Track.pts` has them flattened; lengths follow the arcs.
 
-## Ends
+## Fans and neck-down
 
-An automatic leg at an end of the pair starts or ends with a straight stub out of the two end positions, a manual first or last command sets that direction itself. The stub tries square to the line through the positions, away from their footprint's centre, then the other way, then along that line, then the eight compass directions nearest the other end first, for staggered pads. A direction is taken when both tracks are free along the stub at their neck width and the centre line at its end; the stub runs a pitch past the pads and their fans, then on by up to the neck length until the centre line is free.
+Each track runs straight from its pad centre to the far edge of both pads, then fans to the pitch and joins the coupled track at the first point a fan of 45 degrees or shallower reaches with a turn of at most 45 degrees. Tracks that fan out run straight on until they clear the neighbouring pads.
 
-## Fans and uncoupled length
-
-At each end both tracks run straight from the pad centres along the centre line to the far edge of both pads, so in staggered rows the nearer pad's track runs past the other pad, then fan to the pitch and join the coupled track at one vertex: the first point that a fan of 45 degrees or shallower reaches and that turns the track by 45 degrees at most. Pads further apart than the pitch fan in, pads closer fan out; tracks that fan out run straight on first until their fans clear the pads beside them.
-
-- A fan shorter than a track width runs shallower and longer instead, so no fan is a step in the copper.
-- At a bend right past the pads, the outer track may leave at up to 67.5 degrees.
-- The uncoupled length is that of the fans and flares, both tracks, and of the stretch one track runs before the other joins. A 2.54 mm header fans a long way: raise the class `uncoupled` for it.
-
-## Neck-down
-
-A pair whose width does not fit its pads necks down like a single route, see routing.md, until its full width clears the pads beside it and its partner by one clearance. The neck is its own track, in line with the rest, and not coupled: `pair-gap` skips it.
+- A fan shorter than a track width runs shallower instead; right past the pads the outer track may leave at up to 67.5 degrees.
+- Uncoupled length is the fans and flares of both tracks and any stretch one runs alone. A 2.54 mm header needs a higher class `uncoupled`.
+- A pair too wide for its pads necks down like a single route, see routing.md, until it clears the pads and its partner. The neck is its own uncoupled track.
 
 ## DRC
 
 | Rule | Severity | Fires when |
 | --- | --- | --- |
-| `pair-gap` | error | a coupled section of a pair is more than 0.01 mm off the pair gap, edge to edge |
-| `pair-skew` | error | the two tracks differ in length, via barrels included, by more than the skew tolerance, after skew tuning |
-| `pair-uncoupled` | warning | the uncoupled length at the ends and the vias exceeds the class `uncoupled` |
+| `pair-gap` | error | a coupled section is more than 0.01 mm off the gap, edge to edge |
+| `pair-skew` | error | the tracks differ in length, via barrels included, by more than the skew tolerance after tuning |
+| `pair-uncoupled` | warning | the uncoupled length exceeds the class `uncoupled` |
 
-- `pair-gap` skips what is not coupled: a segment to a pad or via centre, the fan after a pad's straight run, a neck and the chords of an arc.
-- Lengths are `routeLength`: the tracks of each side along their arcs plus each via's distance through the board.
-- `pcbjs inspect <entry> <net>` prints the pair of a net: its partner, width, gap, lengths, skew and uncoupled length.
+- `pair-gap` skips segments to a pad or via centre, fans after a pad's straight run, necks and arc chords.
+- Lengths are `routeLength`: each side's tracks along their arcs plus each via's depth.
+- `pcbjs inspect <entry> <net>` prints the pair: partner, width, gap, lengths, skew and uncoupled length.
 
-## Skew tuning
+## Skew and length tuning
 
-Once the pair is laid out, a skew over the tolerance, from a bend or a fan, is tuned: the shorter track gets a bump on its side away from its partner, in its longest coupled run with room, by the difference.
+After layout, skew over the tolerance gets a U bump on the shorter track, away from its partner, in its longest coupled run with room, clear of courtyards and silk labels, after length tuning.
 
-- The bump is a U with corners of radius `w + g` down to the track width, at least `w + g + 0.02` mm high so its top never reads as coupled; in tight room its corners are chamfers.
-- A U bump adds at least `2 pi - 4` times the track width, about 2.3 widths, 0.39 mm at 0.17 mm. A smaller skew is left, unless that smallest bump overshoots it by no more than the skew tolerance, and `pair-skew` names that floor instead of the room.
-- The bump and the stretch of the partner beside it count as uncoupled length.
-- Skew is tuned after lengths, clear of courtyards and silk labels. A pair with no room keeps its `pair-skew` finding, which says why. `.length()` and `.match()` on a pair measure its longer track.
+- Corners of radius `w + g` down to the track width, at least `w + g + 0.02` mm high, chamfers in tight room. The bump and the partner beside it count as uncoupled.
+- A bump adds at least `2 pi - 4` times its radius, 0.39 mm for 0.17 mm tracks at a 0.15 mm gap. A smaller skew is left unless that bump overshoots by no more than the tolerance; `pair-skew` names the floor or why there was no room.
 
-## Length
-
-A pair with `.length()` short of its target, or in a `.match()` group, also one mixed with single routes, is lengthened by meanders in its centre line, so both tracks grow alike and stay coupled. Each step takes the longest stretch of the centre line with room for a meander of the pair's full width on one side, then lays the pair out again and measures it.
-
-- The bumps are U bumps in the centre line, rounded by the pitch down to the track width, never below the half pitch, so both tracks bump as concentric arcs. A bump adds at least `2 pi - 4` times its radius, 0.39 mm for 0.17 mm tracks at a 0.15 mm gap; a smaller leftover grows the last meander, or is left when the smallest bump would overshoot.
-- So a pair cannot be tuned by less than that floor: a match tolerance tighter than the floor needs the paths evened out by hand. The `length` and `length-match` findings name the floor when what is missing is below it.
-- The amplitude, targets, groups and the room, clear of courtyards and silk labels, are as for single routes, see length.md. `--lengths` and `board.routes` show what tuning added and, for a pair that stayed short, how much is missing and why.
+`.length()` and `.match()` on a pair measure its longer track. A short pair, also in a group with single routes, gets U meanders in its centre line, full pair width, so both tracks grow alike; a leftover below the floor grows the last meander or is left, and `length` and `length-match` name the floor. A match tolerance under the floor needs hand evened paths. Amplitude, targets and room are as in length.md; `--lengths` and `board.routes` show what tuning added and what is missing.
 
 ## Limits
 
-- A pair with a leg that failed, or whose centre line cannot carry it, places no copper at all; its nets stay unconnected.
-- The router does not keep two via pairs of one route apart beyond the hole rules, so two layer changes close together can crowd the tracks between them. Place such vias with `@` in the path.
-- A custom `RouteFn` gets the centre line request, with `pair: { partner, width, gap }` set and `width` the width of the centre line.
+- A pair with a failed leg places no copper; its nets stay unconnected.
+- Two via pairs of one route are kept apart only by the hole rules; place close layer changes with `@` in the path.
+- A custom `RouteFn` gets the centre line request with `pair: { partner, width, gap }`, `width` the centre line's.

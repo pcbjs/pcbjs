@@ -3,56 +3,65 @@
 The `<PCB>` root and its props, units and coordinates, layer names, the stackup and project-wide defaults.
 Fab presets that set all of this in one import are in fab.md; rule values are in rules.md.
 
+```tsx
+import PCB from '@pcbjs/core'
+
+export default (
+  <PCB name="Blinky" revision="A" copper={2} thickness={1.6}>
+    <rect layer="edge" x={0} y={0} w="30mm" h="20mm" />
+  </PCB>
+)
+```
+
 ## `<PCB>`
 
-`<PCB>` from `@pcbjs/core`, or `<board>`, must be the root and appear once. A fab preset such as `@pcbjs/fab/JLCPCB/2-Layer` is a `<PCB>` with the stackup, rules and sourcing set, see fab.md.
-
-The module that default-exports `<PCB>` is an entry, listed in `entries` in pcb.config.ts. The recommended name is `pcb.tsx` for a single board and `<board>.pcb.tsx` beside `<board>.sch.tsx` when a project has several; any name works and nothing checks it, but editors, the file icons and readers recognise these.
+The root, once per entry; `<board>` is the same. The module that default-exports it is an entry, listed in `entries` in pcb.config.ts. Names are free; editors and readers recognise `pcb.tsx` for one board and `<board>.pcb.tsx` beside `<board>.sch.tsx` for several.
 
 | Prop | Default | Meaning |
 | --- | --- | --- |
-| `name` | required | the board name: file names, URLs and the viewer key |
-| `title` | `name` | the title the viewer shows |
-| `revision` | `""` | goes into the fab zip name and README-fab |
-| `copper` | 2 | copper layers, 2, 4, 6 or 8; the short form of `stackup` |
-| `thickness` | 1.6 | board thickness in mm |
-| `stackup` | generated | every physical layer, see Stackup below |
-| `rules` | `BASE` | a partial rule set merged key by key over the defaults, see rules.md |
-| `autoroute` | `BASE_BOARD.autoroute` | partial autoroute parameters merged key by key, see routing.md |
-| `classes` | `{}` | net classes by name, `{ power: { width: 0.5 } }`, merged class by class and field by field, see routing.md |
-| `strict` | false | a leg the router cannot route throws instead of becoming a `route-failed` finding |
+| `name` | required | file names, URLs and the viewer key |
+| `title` | `name` | what the viewer shows |
+| `revision` | `""` | in the fab zip name and README-fab |
+| `copper` | 2 | 2, 4, 6 or 8 copper layers; short form of `stackup` |
+| `thickness` | 1.6 | mm |
+| `stackup` | generated | every physical layer, see Stackup |
+| `rules` | `BASE` | partial rule set merged key by key, see rules.md |
+| `autoroute` | `BASE_BOARD.autoroute` | partial parameters merged key by key, see routing.md |
+| `classes` | `{}` | net classes, `{ power: { width: 0.5 } }`, merged by class then field, see routing.md |
+| `strict` | false | a leg the router cannot route throws instead of a `route-failed` finding |
 | `sourcing` | `[]` | ordered sourcing tags, see sourcing.md |
-| `cpl` | `{ origin: 'footprint' }`, `'center'` for JLCPCB presets | where `cpl.csv` places each part, see fab-set.md |
+| `cpl` | `{ origin: 'footprint' }`, `'center'` for JLCPCB presets | where `cpl.csv` places a part, see fab-set.md |
 | `refStyle` | `"flat"` | `"hierarchical"` names circuit parts `BUCK1_R1`, see circuits.md |
-| `schematic` | drawn by the compiler | the schematic module as a namespace, `import * as sch`, whose exports are in scope by name in the file, or a drawing, `<Schematic>` or `schematic({ … })`; see schematic.md and schematic-graphic.md |
+| `schematic` | drawn by the compiler | the schematic module as a namespace, `import * as sch`, whose exports are then in scope by name, or a drawing, `<Schematic>` or `schematic({ … })`; see schematic-graphic.md |
 
-A preset or `variants()` component also takes `color`, `silk` and `finish`, see fab.md.
+A preset such as `@pcbjs/fab/JLCPCB/2-Layer` is a `<PCB>` with stackup, rules and sourcing set; it and `variants()` also take `color`, `silk` and `finish`, see fab.md.
 
 ## Units and coordinates
 
-- The millimetre is the only unit inside pcbjs. Numbers are mm.
-- Strings may carry a unit: `mm`, `cm`, `m`, `mil`, `th`, `in`, `um`, `nm`. Examples: `"5mm"`, `"100mil"`, `"0.1in"`.
-- Rotations are degrees. Strings may use `deg`, `rad`, `turn` or `°`.
-- `at` is `"x y"` or `"x y rot"`, separated by spaces or commas, or a tuple `[x, y]` or `[x, y, rot]`.
-- The frame is SVG's, seen from the top: x right, y down. The origin is wherever you put it. The demo puts it at the top-left corner of the outline.
-- Rotation is counter-clockwise on screen, as in KiCad. `at="15 7.5 90deg"` turns a part so its +x side points up and its +y side to +x: a `PinHeader(2)` at `at="10 10 90deg"` has pin 1 at (10, 10) and pin 2 at (12.54, 10).
-- On `side="B"` the part is mirrored about its local y axis first and rotated after, still counter-clockwise on screen: a pad at local +x lands at -x, then turns with the rotation.
-- KiCad flips a back part the other way, about its local x axis, top to bottom. The pads land at the same place when the pcbjs angle is the KiCad angle plus 180: a KiCad `B 0` is `side="B"` at 180deg here and a KiCad `B -90` is 90deg. kicad.md has more for ports.
-- A 2-row header or socket on the back is mirrored too, so pin 2 lands on the other side of pin 1. One that mates through the board with a front header, such as a Pi HAT socket, needs its rows checked with `pcbjs inspect`.
-- Gerber, drill and placement outputs flip y so it points up, as fabs expect.
+| What | Form |
+| --- | --- |
+| length | number in mm, or a string with `mm`, `cm`, `m`, `mil`, `th`, `in`, `um`, `nm`: `"100mil"`, `"0.1in"` |
+| angle | degrees, or a string with `deg`, `rad`, `turn` or `°` |
+| `at` | `"x y"` or `"x y rot"`, spaces or commas, or `[x, y]`, `[x, y, rot]` |
+| frame | SVG's, seen from the top: x right, y down, origin where you put it |
+| rotation | counter-clockwise on screen, as in KiCad |
+| side | `F`, `top`, `front`, `B`, `bottom`, `back` |
 
-Transforms compose. `<g>`, `<footprint>`, `<pad>` and `<text>` translate and rotate their content by `at`. `side="B"` on a group or footprint mirrors its content about its local y axis and swaps every `F.*` layer with its `B.*` twin, so a footprint written for the front lands correctly on the back. Two nested flips cancel. Sides are `F`, `top`, `front`, `B`, `bottom` and `back`.
-
-`pcbjs inspect <entry> <ref>` prints where a part and its pads ended up, so you never compute a rotated pad by hand. See inspect.md.
+- A `PinHeader(2)` at `at="10 10 90deg"` has pin 1 at (10, 10) and pin 2 at (12.54, 10): its +x side points up.
+- `side="B"` mirrors about the local y axis first, then rotates. KiCad mirrors about local x, so a KiCad `B 0` is `side="B"` at 180deg here and `B -90` is 90deg; see kicad.md.
+- A 2-row header on the back is mirrored too; check one that mates through the board with `pcbjs inspect`.
+- `<g>`, `<footprint>`, `<pad>` and `<text>` translate and rotate their content by `at`. `side="B"` on a group or footprint mirrors it and swaps every `F.*` layer with its `B.*` twin; two nested flips cancel.
+- Gerber, drill and placement outputs flip y to point up.
+- `pcbjs inspect <entry> <ref>` prints where pads ended up, see inspect.md.
 
 ## Layers
 
-Names are KiCad's and case-insensitive.
+KiCad's names, case-insensitive.
 
 | Layer | Aliases |
 | --- | --- |
 | `F.Cu` | `top`, `front` |
-| `In1.Cu` to `In6.Cu` | inner copper: In1 and In2 on 4 layers, up to In6 on 8 |
+| `In1.Cu` to `In6.Cu` | In1, In2 on 4 layers, up to In6 on 8 |
 | `B.Cu` | `bottom`, `back` |
 | `F.SilkS`, `B.SilkS` | `silk` for the front, `F.Silk`, `F.Silkscreen`, `B.Silk`, `B.Silkscreen` |
 | `F.Mask`, `B.Mask` | |
@@ -63,13 +72,18 @@ Names are KiCad's and case-insensitive.
 | `Dwgs.User` | `User.Drawings` |
 | `Cmts.User` | `User.Comments` |
 
-- Side-relative names flip inside a back-side parent: `F.Cu` in a footprint with `side="B"` becomes `B.Cu`, and so do `top` and `front`.
-- Mask and paste come from pads. A pad on `F.Cu` gets an `F.Mask` opening grown by `maskExpansion`. An SMD pad with `paste` gets an `F.Paste` shape shrunk by `pasteShrink`.
-- The outline is every item on `Edge.Cuts`, chained into closed rings with a 0.01 mm tolerance. A cutout is a closed shape inside it.
+- `F.Cu`, `top` and `front` become `B.Cu` inside a `side="B"` parent.
+- Mask and paste come from pads: an `F.Mask` opening grown by `maskExpansion`, and for an SMD pad with `paste` an `F.Paste` shape shrunk by `pasteShrink`.
+- The outline is every `Edge.Cuts` item chained into closed rings, 0.01 mm tolerance; a closed shape inside is a cutout.
 
 ## Stackup
 
-A board has a stackup: its physical layers top to bottom, the finish, and the mask and silk colours. `copper={4}` generates one sized to `thickness`. `stackup={…}` gives every layer. The compiled board always holds one in `board.stackup`.
+```tsx
+import PCB from '@pcbjs/core'
+import { JLCPCB_4L_7628 } from '@pcbjs/lib/stackups'
+
+export default <PCB name="Quad" stackup={JLCPCB_4L_7628}>{/* … */}</PCB>
+```
 
 ```ts
 interface Stackup {
@@ -86,41 +100,25 @@ type StackupLayer =
   | { type: 'mask' | 'silk' | 'paste'; side: 'F' | 'B'; thickness?: number; color?: string }
 ```
 
-Thicknesses are mm, `weight` is copper in oz with 1 oz = 0.035 mm, `er` is the dielectric constant.
+Thicknesses in mm, `weight` in oz copper with 1 oz = 0.035 mm, `er` the dielectric constant. The compiled board always holds one in `board.stackup`; it goes into the Gerber job file and README-fab and colours the 3D view.
 
-```tsx
-import PCB from '@pcbjs/core'
-import { JLCPCB_4L_7628 } from '@pcbjs/lib/stackups'
+| From `@pcbjs/lib/stackups` | What |
+| --- | --- |
+| `twoLayer`, `fourLayer`, `sixLayer`, `eightLayer` | take `thickness`, `outerCopper`, `innerCopper` in oz, `prepreg` in mm, `finish`, `maskColor`, `silkColor`, `material`, `er`, `lossTangent`; defaults 1.6 mm, 1 oz outer, 0.5 oz inner, FR4 at er 4.5, green mask, white legend |
+| `JLCPCB_2L`, `JLCPCB_4L_7628`, `OSHPARK_2L`, `OSHPARK_4L` | frozen fab stackups; spread into a new object to change |
+| `defaultStackup(copper, thickness)` | what `copper={n}` generates |
 
-export default <PCB name="Quad" stackup={JLCPCB_4L_7628}>{/* … */}</PCB>
-```
+A compile error names the layer unless:
 
-`@pcbjs/lib/stackups` has:
-
-- `twoLayer`, `fourLayer`, `sixLayer` and `eightLayer`, which take `thickness`, `outerCopper` and `innerCopper` in oz, `prepreg` in mm, `finish`, `maskColor`, `silkColor`, `material`, `er` and `lossTangent`. Defaults: 1.6 mm, 1 oz outer, 0.5 oz inner, FR4 at er 4.5, green mask, white legend.
-- `JLCPCB_2L`, `JLCPCB_4L_7628`, `OSHPARK_2L` and `OSHPARK_4L`, frozen fab stackups. Spread one into a new object to change it.
-- `defaultStackup(copper, thickness)`, what `copper={n}` generates.
-
-The compiler checks a stackup before using it. Each failure is a compile error naming the layer:
-
-- copper runs F.Cu, In1.Cu and so on, B.Cu, with 2, 4, 6 or 8 layers;
+- copper runs F.Cu, In1.Cu and on, B.Cu, with 2, 4, 6 or 8 layers;
 - a core or prepreg sits between every two copper layers;
 - front mask, silk and paste sit above F.Cu, back ones below B.Cu;
 - a nominal `thickness` is within 10% of the sum of the layers;
-- with both `copper` and `stackup` they agree on the count, and a `thickness` next to a stackup matches it.
+- `copper` and `stackup` agree on the count, and a `thickness` beside a stackup matches it.
 
-The stackup goes into the Gerber job file and README-fab, and colours the 3D view. stackup-and-rules.md has the layer tables of the builders and the sources of every preset.
+stackup-and-rules.md has the builders' layer tables and every preset's source.
 
 ## Defaults
-
-A board resolves in levels, lowest first:
-
-1. `BASE_BOARD`: 2 copper layers, the generated stackup, 1.6 mm, revision `""`, `BASE_RULES`, the base autoroute parameters, no net classes.
-2. The project defaults, from `defineDefaultBoard` and `defineDefaultRules`.
-3. A fab preset or variant target, when the board uses one.
-4. The props of `<PCB>`.
-
-A key at a higher level wins. `rules` and `autoroute` merge key by key through every level, and `classes` by class name, then field by field. `copper`, `stackup` and `thickness` resolve after the merge: the highest level that gives `copper` or `stackup` decides the layers.
 
 ```ts
 // pcb.config.ts
@@ -134,9 +132,20 @@ defineDefaultRules(JLCPCB)
 export default defineConfig({})
 ```
 
-- `defineDefaultBoard(spec)` takes every `<PCB>` prop but `name` and `children`, replaces any earlier default board and returns the resolved default, frozen. It throws when the stackup disagrees with `copper` or `thickness`.
-- `defineDefaultRules(rules)` takes a partial rule set, replaces any earlier default rules and returns the full set, frozen. It sits above the `rules` of `defineDefaultBoard`.
-- A second call replaces the first. To build on an earlier default, spread the returned value into the next call.
-- `resetDefaults()` clears both. `BASE_BOARD` and `BASE_RULES` are the frozen base level.
+Levels, lowest first; a higher level wins:
 
-The defaults are one registry per Node process, not per board. Call them in `pcb.config.ts` or in a module every entry imports. A module only one entry imports also changes every board compiled after it in the same build or dev server.
+1. `BASE_BOARD`: 2 copper layers, generated stackup, 1.6 mm, revision `""`, `BASE_RULES`, base autoroute parameters, no net classes.
+2. `defineDefaultBoard` and `defineDefaultRules`.
+3. A fab preset or variant target.
+4. The props of `<PCB>`.
+
+`rules` and `autoroute` merge key by key, `classes` by class then field. `copper`, `stackup` and `thickness` resolve after the merge: the highest level giving `copper` or `stackup` decides the layers.
+
+| Call | Does |
+| --- | --- |
+| `defineDefaultBoard(spec)` | every `<PCB>` prop but `name` and `children`; replaces the earlier default, returns it resolved and frozen; throws when the stackup disagrees with `copper` or `thickness` |
+| `defineDefaultRules(rules)` | partial rule set above the `rules` of `defineDefaultBoard`; replaces the earlier one, returns the full set frozen |
+| `resetDefaults()` | clears both |
+| `BASE_BOARD`, `BASE_RULES` | the frozen base level |
+
+A second call replaces the first; spread the returned value to build on it. The registry is one per Node process, so call them in `pcb.config.ts` or a module every entry imports.

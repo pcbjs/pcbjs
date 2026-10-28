@@ -16,10 +16,32 @@ pcbjs inspect sch          the schematic drawing: symbols, wires, labels, see sc
 pcbjs inspect U1 GND J1.3 --lengths DATA   several answers from one compile
 ```
 
-Every answer starts with the board, its frame, outline and copper layers; several share those lines, each under `== <query>`, `--json` then `{ frame, results }`, and one for both a part and a net is `{ frame, query, part, net }`. A bare `--lengths`, or `--layer`, makes each query a filter. Coordinates are absolute board mm after every rotation and flip, pad sizes too, `footprintSize` in `--json` the footprint's. A round drill prints its diameter, a slot its extent in board x and y, `drill 1.70 x 0.60 slot`. The part list has a `model` column and a closing `models` line, a part line `model <source>`, and `--json` `model` per footprint, the source being `file`, `generated`, `no model` or `no body` as 3d.md defines them. An unknown query or layer prints what exists and exits with code 1.
+## Output
 
-A net's first line ends with its copper per layer, `copper F.Cu 42.0 mm², B.Cu 45.0 mm²`: the union of its pads, tracks, vias, drawings and fill with every drill cut out, `copper: [{ layer, area }]` in `--json`. Then a `zone` row per layer with fill area, pieces, islands removed and zone ids, `zones: [{ layer, area, pieces, fill: [{ zone, area }], islandsRemoved: { count, area }, ids }]`; the vias of `stitch()` with route `stitch` and a line `stitch  24 vias, nearest neighbour 95th percentile 4.00 mm`, `stitch: { count, p95 }` in `--json`, see pours.md; tracks with width, length, ends and route; a pair's line, see pairs.md; `route route:4  length 28.67 with vias  target 28.57 to 28.67 ok  group DATA  pcb.tsx:66:28`; `unconnected  2 gaps: …` and a `route failed` line per failed leg. `--json` adds track points and drawings as `graphics`, each with `prims` when it holds an arc: `{ kind: 'line', from, to }` and `{ kind: 'arc', from, to, center, cw }`, `cw` clockwise on screen.
+- Every answer starts with the board, frame, outline and copper layers; several queries share them, each under `== <query>`. `--json` is `{ frame, results }`, or `{ frame, query, part, net }` for a name that is both.
+- A bare `--lengths` or `--layer` makes each query a filter. An unknown query or layer prints what exists and exits 1.
+- Coordinates and pad sizes are absolute board mm after rotation and flip; `footprintSize` in `--json` is the footprint's.
+- A round drill prints its diameter, a slot its board extent: `drill 1.70 x 0.60 slot`.
+- The part list has a `model` column and a closing `models` line; a part line `model <source>`, `--json` `model`: `file`, `generated`, `no model` or `no body`, 3d.md.
 
-`--lengths` prints id, net, pair, length with via barrels, target, group, skew, tuned, status `ok`, `short`, `long`, `failed` or `-`, and source; targets are in length.md.
+## A net
 
-`--layer` takes any layer and prints a row per item: id, kind, ref, text, ink bounds with the stroke's half width, shape and source; a pad on mask or paste is its opening as the Gerbers draw it. `--json` gives each `bounds: { x: [min, max], y: [min, max] }`, a text its `strokes` with bounds and points or its outline font `glyphs`, a drawing its `paths` and `prims`.
+| Line | Text | `--json` |
+| --- | --- | --- |
+| first | ends `copper F.Cu 42.0 mm², B.Cu 45.0 mm²`, pads, tracks, vias, drawings and fill less drills | `copper: [{ layer, area }]` |
+| `zone` | per layer: fill area, pieces, islands removed, zone ids | `zones: [{ layer, area, pieces, fill: [{ zone, area }], islandsRemoved: { count, area }, ids }]` |
+| `stitch` | `stitch  24 vias, nearest neighbour 95th percentile 4.00 mm`, the vias with route `stitch`, pours.md | `stitch: { count, p95 }` |
+| tracks | width, length, ends, route | track points |
+| pair | pairs.md | |
+| `route` | `route route:4  length 28.67 with vias  target 28.57 to 28.67 ok  group DATA  pcb.tsx:66:28` | |
+| gaps | `unconnected  2 gaps: …`, a `route failed` line per failed leg | |
+
+`--json` adds drawings as `graphics`, with `prims` when one holds an arc: `{ kind: 'line', from, to }`, `{ kind: 'arc', from, to, center, cw }`, `cw` clockwise on screen.
+
+## `--lengths`
+
+Columns: id, net, pair, length with via barrels, target, group, skew, tuned, status `ok`, `short`, `long`, `failed` or `-`, source. Targets are in length.md.
+
+## `--layer`
+
+A row per item: id, kind, ref, text, ink bounds with the stroke's half width, shape, source. A pad on mask or paste is its opening as the Gerbers draw it. `--json` gives `bounds: { x: [min, max], y: [min, max] }`, a text's `strokes` with bounds and points or its outline font `glyphs`, a drawing's `paths` and `prims`.
