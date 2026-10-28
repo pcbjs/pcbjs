@@ -12,7 +12,7 @@ Every item in the viewer knows the code that drew it. A Vite transform gives eac
 - Shift+click opens the definition: the innermost range, such as the `<pad>` line in lib/MyPart.tsx for a pad of Q1.
 - A track, via, pour or graphic outside a footprint opens its own call either way, a stitched via its `stitch()`.
 - A path is linked command by command: each of `L`, `H`, `V`, `Z`, `@<layer>`, `X` and `XZ` links to the tracks and vias it made. A click opens and selects that command, shift+click the whole call. A path string must be a plain literal.
-- In dev, moving the editor cursor highlights what the code under it drew, on the board, in 3D and in the schematic view: a part element or `<Sym>` inside `<Schematic>`, a `<Label>`, `<Power>`, `<Sheet>` or `wire()` chain outlines what it drew there and its parts on the board. A chip names the file, line and item count, and for one command of a path also the column and the command, as in `pcb.tsx:<line>:<col> H 9`. A cursor counts as inside a range strictly between its first and last character, so right before `<R1/>` or right after its `>` or a call's `)` is outside. The highlight follows the cursor one update per frame, clears when it leaves every range or a non-design file takes focus, and stays while the preview has focus. With the language server the innermost token wins over the range, see Symbols under the cursor, and the chip names it, as in `pad Q1.2`.
+- In dev, the editor cursor highlights what the code under it drew, on the board, in 3D and in the schematic: a part element or `<Sym>` inside `<Schematic>`, a `<Label>`, `<Power>`, `<Sheet>` or `wire()` chain outlines what it drew there and its parts on the board. A chip names the file, line and item count, for one path command also the column and the command, as in `pcb.tsx:<line>:<col> H 9`. A cursor counts as inside a range strictly between its first and last character, so just before `<R1/>`, after its `>` or after a call's `)` is outside. The highlight follows the cursor once per frame, clears when it leaves every range or a non-design file takes focus, and stays while the preview is focused. With the language server the innermost token wins, see Symbols under the cursor, and the chip names it, as in `pad Q1.2`.
 - The readout names the click target with the hint `Click: placement · ⇧-click: definition`; the Part tab links the placement, the definition when elsewhere, and Show in source.
 
 `editor.follow` in the config sets the gesture. `'click'`, the default, opens on a plain click. `'meta-click'` makes a plain click only select, and cmd+click, ctrl+click off macOS, open the source.
@@ -48,7 +48,7 @@ The @pcbjs/cli package, which @pcbjs/pcbjs installs, ships the extension as `vsc
 - `pcbjs ide status` prints the bundled id and version and the installed version.
 - `pcbjs dev` run in the VS Code terminal prints one hint line when the extension is missing or outdated. It never installs anything.
 - `pcbjs: Create project in workspace`, `Convert from KiCad` and `Install skills` run `pcbjs create`, `import board` and `skills install`; the Boards view offers them in a workspace without a project.
-- The pcbjs sidebar holds what the viewer's side panel shows in a browser, so the panes show only the board: Boards, under their projects for a workspace server, a click shows one in every pane; Findings by severity, a click pans the panes and opens the code; Nets, a click pins one in every pane; BOM, a click opens the placement.
+- The pcbjs sidebar holds what the viewer's side panel shows, so the panes show only the board: Boards, under their projects on a workspace server, a click shows one in every pane; Findings by severity, a click pans the panes and opens the code; Nets, a click pins one everywhere; BOM, a click opens the placement.
 
 The extension is a thin client: it starts the project's own `node_modules/.bin/pcbjs`, relays focus, shows what the server sends and applies the edits it computes. A project of a newer protocol major shows one notice to run `pcbjs ide install` there. In a `.ts` or `.tsx` file of a project:
 
@@ -58,11 +58,11 @@ The extension is a thin client: it starts the project's own `node_modules/.bin/p
 - Problems: every DRC and ERC finding with a source, at the code that made it, and the spans a draft skipped.
 - Go to definition on a placement opens the footprint's definition, inside a footprint its placement, on a pad reference such as `'U1.3'` the part's placement.
 - Highlights: the call under the cursor and other code of the file that drew the same items.
-- Inline value editors: every value the server can edit has a dotted underline. The light bulb or `pcbjs: Edit value` opens a quick pick of the server's choices plus `Type a value...` checked as you type. Each choice is one ordinary edit, so undo works; `pcbjs.editorAutoSave` saves the file so the board recompiles.
+- Inline value editors: every value the server can edit has a dotted underline. The light bulb or `pcbjs: Edit value` opens a quick pick of the server's choices plus `Type a value...`, checked as you type; each choice is one ordinary edit, so undo works; `pcbjs.editorAutoSave` saves the file so the board recompiles.
 
 A route path is edited command by command, in a string or a chain: `.V(14)` offers `.H(14)`, a via after it and delete, and typing `V 16` writes `.V(16)`.
 
-File icons: on activation the extension adds the board, schematic and config icons to Material Icon Theme or vscode-icons in the user settings when missing or stale, with an Undo in the status bar; for another theme it offers the pcbjs icon theme once. `pcbjs: Use the pcbjs file icons in Material Icon Theme or vscode-icons` does it by hand, `pcbjs: Remove pcbjs file icons` undoes all of it.
+File icons: on activation the extension adds the board, schematic and config icons to Material Icon Theme or vscode-icons in the user settings when missing or stale, with an Undo in the status bar, and offers the pcbjs icon theme once under any other theme. `pcbjs: Use the pcbjs file icons in Material Icon Theme or vscode-icons` does it by hand, `pcbjs: Remove pcbjs file icons` undoes it.
 
 packages/vscode/README.md lists the extension's commands and settings.
 
@@ -88,17 +88,17 @@ A pane is an editor tab with one board view, 2D, 3D or Schematic, and never chan
 
 ## IDE mode
 
-The extension is the host. It runs a WebSocket server on 127.0.0.1 and starts one `pcbjs dev --workspace <folder>... --port 0 --ide=ws://127.0.0.1:<port>/<token>` for all workspace folders; a project loads when the preview shows it or a file of it is focused, see workspace.md. The dev server dials in and reports its port, projects, boards and log; the extension then starts a language client on the same connection.
+The extension is the host. It runs a WebSocket server on 127.0.0.1 and starts one `pcbjs dev --workspace <folder>... --port 0 --ide=ws://127.0.0.1:<port>/<token>` for all workspace folders; a project loads when the preview shows it or one of its files has focus, see workspace.md. The dev server dials in with its port, projects, boards and log, and the extension starts a language client on the same connection.
 
 The viewer runs in an editor panel at `/?ide=1&theme=dark`, `light` or `hc`, with `view` and `panel=0` in VS Code: `view` fixes the view, no header, one floating row of buttons, the layers rail as a drawer and no home page. It shows one board at a time and follows the editor:
 
 - A file in the module graph of exactly one board shows that board.
 - A file shared by several boards keeps the board shown when it is one of them, else shows the first in entry order.
-- A file no board imports shows an isolated preview of its default export: a `<PCB>` as it is, a part at the origin, a circuit instance through a layout the file exports or its parts in a row, or a layout with every port on a net of its own. The preview is a transient board `preview:<file>`, served under `/__pcbjs/preview/<file>/`, never built and never on the home page.
+- A file no board imports shows an isolated preview of its default export: a `<PCB>` as it is, a part at the origin, a circuit instance through a layout the file exports or its parts in a row, or a layout with every port on a net of its own. It is a transient board `preview:<file>` under `/__pcbjs/preview/<file>/`, never built and never on the home page.
 - A file with nothing to preview changes nothing.
 - A file of another project first switches the server to that project, and the panel loads its page; then the rules above apply. A file in no project changes nothing.
 
-A dev server started by hand works through the fallback bridge: the extension finds it through `.pcbjs/dev.json` and talks over its Vite WebSocket, with cursor sync, focus and viewer clicks but no language server, drafts or sidebar. While the extension's own server runs, servers started by hand in the workspace are left alone. `pcbjs.followDevJson`, on by default, turns the search for them off, for tests and scripts that start their own; the command Connect to an externally started dev server works either way.
+A dev server started by hand works through the fallback bridge, found through `.pcbjs/dev.json` and spoken to over its Vite WebSocket, with cursor sync, focus and viewer clicks, no language server, drafts or sidebar. It is left alone while the extension's own server runs. `pcbjs.followDevJson`, on by default, turns that search off for tests and scripts with their own; Connect to an externally started dev server works either way.
 
 ## Drafts
 
