@@ -24,6 +24,8 @@ const common = {
 await build({ ...common, entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js' })
 for (const name of [
   'setup',
+  'examples',
+  'wizard',
   'bridge',
   'host',
   'server',

@@ -12,7 +12,7 @@ Every item in the viewer knows the code that drew it. A Vite transform gives eac
 - Shift+click opens the definition: the innermost range, such as the `<pad>` line in lib/MyPart.tsx for a pad of Q1.
 - A track, via, pour or graphic outside a footprint opens its own call either way, a stitched via its `stitch()`.
 - A path is linked command by command: each of `L`, `H`, `V`, `Z`, `@<layer>`, `X` and `XZ` links to the tracks and vias it made. A click opens and selects that command, shift+click the whole call. A path string must be a plain literal.
-- In dev, the editor cursor highlights what the code under it drew, on the board, in 3D and in the schematic: a part element or `<Sym>` inside `<Schematic>`, a `<Label>`, `<Power>`, `<Sheet>` or `wire()` chain outlines what it drew there and its parts on the board. A chip names the file, line and item count, for one path command also the column and the command, as in `pcb.tsx:<line>:<col> H 9`. A cursor counts as inside a range strictly between its first and last character, so just before `<R1/>`, after its `>` or after a call's `)` is outside. The highlight follows the cursor once per frame, clears when it leaves every range or a non-design file takes focus, and stays while the preview is focused. With the language server the innermost token wins, see Symbols under the cursor, and the chip names it, as in `pad Q1.2`.
+- In dev, the editor cursor highlights what the code under it drew, on the board, in 3D and in the schematic: a part element or `<Sym>` inside `<Schematic>`, a `<Label>`, `<Power>`, `<Sheet>` or `wire()` chain outlines what it drew there and its parts on the board. A chip names the file, line and item count, for one path command also the column and the command, as in `pcb.tsx:<line>:<col> H 9`. A cursor is inside a range strictly between its first and last character, so before `<R1/>`, after its `>` or a call's `)` is outside. The highlight follows the cursor once per frame, clears when it leaves every range or a non-design file takes focus, and stays while the preview is focused. With the language server the innermost token wins, see Symbols under the cursor, and the chip names it, as in `pad Q1.2`.
 - The readout names the click target with the hint `Click: placement · ⇧-click: definition`; the Part tab links the placement, the definition when elsewhere, and Show in source.
 
 `editor.follow` in the config sets the gesture. `'click'`, the default, opens on a plain click. `'meta-click'` makes a plain click only select, and cmd+click, ctrl+click off macOS, open the source.
@@ -46,8 +46,8 @@ The @pcbjs/cli package, which @pcbjs/pcbjs installs, ships the extension as `vsc
 
 - `pcbjs ide install` runs `code --install-extension` with the bundled VSIX. Without `code` on PATH it prints the command and the Install from VSIX route.
 - `pcbjs ide status` prints the bundled id and version and the installed version.
-- `pcbjs dev` run in the VS Code terminal prints one hint line when the extension is missing or outdated. It never installs anything.
-- `pcbjs: Create project in workspace`, `Convert from KiCad` and `Install skills` run `pcbjs create`, `import board` and `skills install`; the Boards view offers them in a workspace without a project.
+- `pcbjs dev` in the VS Code terminal prints a hint when the extension is missing or outdated, and never installs it.
+- `pcbjs: Create project in workspace`, `New board wizard`, `New project from an example`, `Convert from KiCad` and `Install skills` run `pcbjs create`, `import board` and `skills install`, offered by the Boards view and the Get started walkthrough.
 - The pcbjs sidebar holds what the viewer's side panel shows, so the panes show only the board: Boards, under their projects on a workspace server, a click shows one in every pane; Findings by severity, a click pans the panes and opens the code; Nets, a click pins one everywhere; BOM, a click opens the placement.
 
 The extension is a thin client: it starts the project's own `node_modules/.bin/pcbjs`, relays focus, shows what the server sends and applies the edits it computes. A project of a newer protocol major shows one notice to run `pcbjs ide install` there. In a `.ts` or `.tsx` file of a project:
@@ -98,7 +98,7 @@ The viewer runs in an editor panel at `/?ide=1&theme=dark`, `light` or `hc`, wit
 - A file with nothing to preview changes nothing.
 - A file of another project first switches the server to that project, and the panel loads its page; then the rules above apply. A file in no project changes nothing.
 
-A dev server started by hand works through the fallback bridge, found through `.pcbjs/dev.json` and spoken to over its Vite WebSocket, with cursor sync, focus and viewer clicks, no language server, drafts or sidebar. It is left alone while the extension's own server runs. `pcbjs.followDevJson`, on by default, turns that search off for tests and scripts with their own; Connect to an externally started dev server works either way.
+A dev server started by hand works through the fallback bridge, found through `.pcbjs/dev.json` and spoken to over its Vite WebSocket, with cursor sync, focus and viewer clicks, no language server, drafts or sidebar. It is left alone while the extension's own server runs. `pcbjs.followDevJson` off stops that search for tests and scripts with their own; Connect to an externally started dev server works either way.
 
 ## Drafts
 

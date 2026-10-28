@@ -256,6 +256,18 @@
         "icon": "$(new-folder)"
       },
       {
+        "command": "pcbjs.newFromExample",
+        "title": "New project from an example",
+        "category": "pcbjs",
+        "icon": "$(library)"
+      },
+      {
+        "command": "pcbjs.newBoardWizard",
+        "title": "New board wizard",
+        "category": "pcbjs",
+        "icon": "$(wand)"
+      },
+      {
         "command": "pcbjs.convertKicad",
         "title": "Convert from KiCad",
         "category": "pcbjs",
@@ -266,6 +278,18 @@
         "title": "Install skills",
         "category": "pcbjs",
         "icon": "$(sparkle)"
+      },
+      {
+        "command": "pcbjs.check",
+        "title": "Run check",
+        "category": "pcbjs",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "pcbjs.walkthrough",
+        "title": "Get started",
+        "category": "pcbjs",
+        "icon": "$(rocket)"
       }
     ],
     "viewsContainers": {
@@ -310,12 +334,116 @@
       },
       {
         "view": "pcbjs.boards",
-        "contents": "No pcbjs project in this workspace yet. Start a board from the template, convert a KiCad project, or give your coding agent the pcbjs skills.\n[Create project](command:pcbjs.createProject)\n[Convert from KiCad](command:pcbjs.convertKicad)\n[Install skills](command:pcbjs.installSkills)",
+        "contents": "No pcbjs project in this workspace yet. Start a board from the template or the wizard, copy an example, convert a KiCad project, or give your coding agent the pcbjs skills.\n[Create project](command:pcbjs.createProject)\n[New board wizard](command:pcbjs.newBoardWizard)\n[New project from an example](command:pcbjs.newFromExample)\n[Convert from KiCad](command:pcbjs.convertKicad)\n[Install skills](command:pcbjs.installSkills)\nNew to pcbjs? [Open the walkthrough](command:pcbjs.walkthrough).",
         "when": "!pcbjs.active"
       },
       {
         "view": "pcbjs.findings",
         "contents": "No DRC or ERC findings on the boards the dev server shows."
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "getStarted",
+        "title": "Get started with pcbjs",
+        "description": "Design a PCB as TypeScript and JSX: start a board, see it beside the code, check it and edit it.",
+        "featuredFor": [
+          "**/pcb.config.{ts,mts,js,mjs}",
+          "**/pcb.tsx",
+          "**/*.pcb.tsx"
+        ],
+        "steps": [
+          {
+            "id": "create",
+            "title": "Create or open a project",
+            "description": "A pcbjs project is a folder with `pcb.tsx` for the board and `pcb.config.ts` listing it. Start one from the template, or let the wizard ask for layers, fab, size and outline, where Enter takes every default. Have one already? [Open its folder](command:workbench.action.files.openFolder).\n[Create project](command:pcbjs.createProject)\n[New board wizard](command:pcbjs.newBoardWizard)",
+            "media": {
+              "svg": "assets/walkthrough/create.svg",
+              "altText": "A new project folder with pcb.tsx, pcb.config.ts, package.json and tsconfig.json."
+            },
+            "completionEvents": [
+              "onCommand:pcbjs.createProject",
+              "onCommand:pcbjs.newBoardWizard",
+              "onContext:pcbjs.active"
+            ]
+          },
+          {
+            "id": "example",
+            "title": "Start from an example board",
+            "description": "Six boards ship with pcbjs, from a 20 mm coin to a QFN64 breakout. Pick one and it becomes a project of your own with its preview open.\n[New project from an example](command:pcbjs.newFromExample)",
+            "media": {
+              "svg": "assets/walkthrough/example.svg",
+              "altText": "A list of the example boards: blinky, coin, quad, multi, led-matrix and qfn-breakout."
+            },
+            "completionEvents": [
+              "onCommand:pcbjs.newFromExample"
+            ]
+          },
+          {
+            "id": "preview",
+            "title": "Open the preview beside the code",
+            "description": "The 2D, 3D and schematic views follow your edits on every save, and the part under the cursor lights up on the board.\n[Open 2D beside](command:pcbjs.open2DBeside)",
+            "media": {
+              "svg": "assets/walkthrough/preview.svg",
+              "altText": "Code on the left, the board on the right with the part under the cursor outlined."
+            },
+            "completionEvents": [
+              "onCommand:pcbjs.open2DBeside",
+              "onCommand:pcbjs.preview",
+              "onCommand:pcbjs.openAllViews",
+              "onCommand:pcbjs.pickView"
+            ]
+          },
+          {
+            "id": "check",
+            "title": "Run pcbjs check and read a finding",
+            "description": "`pcbjs check` compiles, routes and runs DRC and ERC. Each finding names its rule, the parts and the line of code; the Findings view lists them while the preview runs.\n[Run check](command:pcbjs.check)",
+            "media": {
+              "svg": "assets/walkthrough/check.svg",
+              "altText": "The output of pcbjs check with one silk-over-pad warning and its file and line."
+            },
+            "completionEvents": [
+              "onCommand:pcbjs.check",
+              "onView:pcbjs.findings"
+            ]
+          },
+          {
+            "id": "edit",
+            "title": "Edit a value inline",
+            "description": "Values in the code such as a resistance, a position or a track width open an editor in place; the board recompiles as you change them.\nPut the cursor on a value, then [Edit value](command:pcbjs.editValue)",
+            "media": {
+              "svg": "assets/walkthrough/edit.svg",
+              "altText": "A resistor value in the code with an inline editor showing 470 ohm and a slider."
+            },
+            "completionEvents": [
+              "onCommand:pcbjs.editValue"
+            ]
+          },
+          {
+            "id": "kicad",
+            "title": "Convert from KiCad",
+            "description": "`pcbjs import board` turns a KiCad board into `pcb.tsx` with its schematic, copper, footprints and rules, in a new project beside the KiCad one.\n[Convert from KiCad](command:pcbjs.convertKicad)",
+            "media": {
+              "svg": "assets/walkthrough/kicad.svg",
+              "altText": "A KiCad project converted by import board into pcb.tsx."
+            },
+            "completionEvents": [
+              "onCommand:pcbjs.convertKicad"
+            ]
+          },
+          {
+            "id": "skills",
+            "title": "Install the agent skills",
+            "description": "The pcbjs skills teach a coding agent the language, the house rules and the fixes for common findings. `pcbjs skills install` puts them in the project, where the agent finds them.\n[Install skills](command:pcbjs.installSkills)",
+            "media": {
+              "svg": "assets/walkthrough/skills.svg",
+              "altText": "pcbjs skills install with the skills pcbjs-basics, pcbjs-best-practices, pcbjs-port-from-kicad and pcbjs-upgrade."
+            },
+            "completionEvents": [
+              "onCommand:pcbjs.installSkills"
+            ]
+          }
+        ]
       }
     ],
     "iconThemes": [
@@ -525,14 +653,24 @@
           "group": "1_setup@1"
         },
         {
-          "command": "pcbjs.convertKicad",
+          "command": "pcbjs.newBoardWizard",
           "when": "view == pcbjs.boards",
           "group": "1_setup@2"
         },
         {
-          "command": "pcbjs.installSkills",
+          "command": "pcbjs.newFromExample",
           "when": "view == pcbjs.boards",
           "group": "1_setup@3"
+        },
+        {
+          "command": "pcbjs.convertKicad",
+          "when": "view == pcbjs.boards",
+          "group": "1_setup@4"
+        },
+        {
+          "command": "pcbjs.installSkills",
+          "when": "view == pcbjs.boards",
+          "group": "1_setup@5"
         }
       ]
     },

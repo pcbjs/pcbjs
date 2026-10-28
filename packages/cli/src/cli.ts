@@ -3,7 +3,7 @@ import { dev } from './server.js'
 import { devWorkspace } from './workspace.js'
 import { build, preview } from './build.js'
 import { ideInstall, ideStatus } from './ide.js'
-import { create } from './create.js'
+import { createCommand } from './create.js'
 import { check } from './check.js'
 import { inspect } from './inspect.js'
 import { modelAdd, modelAlign, modelCheck, modelFetch } from './model.js'
@@ -268,10 +268,17 @@ cli
   })
 
 cli
-  .command('create <dir>', 'start a new project in <dir> from a template: a board in pcb.tsx, pcb.config.ts listing it, package.json and tsconfig.json')
+  .command('create [dir]', 'start a new project in <dir> from a template or an example: a board in pcb.tsx, pcb.config.ts listing it, package.json and tsconfig.json')
   .option('-t, --template <name>', 'template (default board)')
-  .action((dir: string, o) => {
-    create({ dir, template: o.template })
+  .option('--example <name>', 'copy an example board instead of the template; --list-examples names them')
+  .option('--list-examples', 'print the example boards with a line on each')
+  .option('--layers <n>', 'copper layers, 2, 4, 6 or 8 (default 2)')
+  .option('--fab <preset>', 'fab preset such as JLCPCB/4-Layer (default JLCPCB/<layers>-Layer)')
+  .option('--size <WxH>', 'board size in mm, or the diameter of a circle (default 20x15, a circle 40)')
+  .option('--outline <shape>', 'rect, rounded, rounded:<radius mm> or circle (default rounded, 1 mm corners)')
+  .action((dir: string | undefined, o) => {
+    const { template, example, listExamples, layers, fab, size, outline } = o
+    createCommand(dir, { template, example, listExamples, layers, fab, size, outline })
   })
 
 cli.help(sections => [{ body: versionLine() }, ...sections.slice(1)])

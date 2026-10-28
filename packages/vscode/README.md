@@ -45,11 +45,25 @@ The pcbjs icon in the activity bar opens four views, which hold what the viewer'
 - Nets: the nets of the board shown with their pad counts. A click pins the net in every tab; a second click unpins it.
 - BOM: one row per BOM line. A click opens the placement of its first part.
 
-In a workspace without a pcbjs project the Boards view shows Create project, Convert from KiCad and Install skills; its `...` menu keeps them later.
+In a workspace without a pcbjs project the Boards view shows Create project, New board wizard, New project from an example, Convert from KiCad and Install skills; its `...` menu keeps them later.
 
-The create and convert commands run the pcbjs installed nearest the target folder or in a workspace folder, else a global `pcbjs`, else `npx --package @pcbjs/pcbjs pcbjs`, under a progress notification that shows each line, with the full output in the pcbjs output channel. When no pcbjs resolves from the new project they run `npm install` there, so its dev server can start, then restart a running dev server that does not know the project yet. A project outside the workspace is added as a folder.
+The create, example, wizard, convert and check commands run the pcbjs installed nearest the target folder or in a workspace folder, else a global `pcbjs`, else `npx --package @pcbjs/pcbjs pcbjs`, under a progress notification that shows each line, with the full output in the pcbjs output channel. When no pcbjs resolves from the new project they run `npm install` there, so its dev server can start, then restart a running dev server that does not know the project yet. A project outside the workspace is added as a folder.
 
 The views read the `pcbjs:ide:boards` event and each board's `board.json` from the dev server after every compile.
+
+## Get started
+
+The Welcome page lists the walkthrough "Get started with pcbjs", featured in a workspace with a pcbjs project and opened once by itself the first time the extension starts in a workspace without one; `pcbjs: Get started` opens it any time. Its steps tick off as you do them: create or open a project, start from an example board, open the preview beside the code, run `pcbjs check` and read a finding, edit a value inline, convert from KiCad and install the agent skills.
+
+The board wizard prefills every step, so Enter through it gives a working board, and Back and Escape work on every step:
+
+| Step | Default |
+| --- | --- |
+| Project folder | `board`, the first free `board-2`, or `.` in an empty folder |
+| Copper layers | 2, of 2, 4 and 6 |
+| Fab preset | `JLCPCB/<layers>-Layer`, of the presets of @pcbjs/fab with that many layers |
+| Outline | rounded rectangle with 2 mm corners, rectangle or circle |
+| Size in mm | 50 x 40, or a 40 mm diameter for a circle |
 
 ## Language server
 
@@ -81,6 +95,10 @@ Every edit is one ordinary text edit, so undo and redo work as for typing. With 
 - `pcbjs: Use the pcbjs file icons in Material Icon Theme or vscode-icons` writes that theme's custom associations, see File icons.
 - `pcbjs: Remove pcbjs file icons` undoes every file icon change, whatever theme is active: it removes the Material Icon Theme and vscode-icons associations it wrote, keeping yours, clears `vsicons.customIconFolderPath` when it points into the extension, switches the "pcbjs" theme back to the one before or to `vs-seti`, and lets the offer show again.
 - `pcbjs: Create project in workspace` runs `pcbjs create` in the only workspace folder, a folder you pick among several, or one an open dialog picks when the window has none. It asks for the project folder, `board` or the first free `board-2`, or `.` when the folder is empty, then opens `pcb.tsx` and its 2D preview.
+- `pcbjs: New board wizard` asks for the project folder, copper layers, fab preset, outline and size, see Get started, then runs `pcbjs create` with `--layers`, `--fab`, `--outline` and `--size` and opens the result.
+- `pcbjs: New project from an example` lists the example boards that `pcbjs create --list-examples` prints, each with its line, then asks for the folder, named after the example, and runs `pcbjs create --example <name>`, then opens `pcb.tsx` and its preview.
+- `pcbjs: Run check` runs `pcbjs check` in the only project, or one you pick, shows its output and its DRC and ERC summary as a notice.
+- `pcbjs: Get started` opens the walkthrough.
 - `pcbjs: Convert from KiCad` lists every `.kicad_pro` of the workspace outside `node_modules` and `.pcbjs`, by relative path with its board file below; a single one is preselected so you confirm it, and with none an open dialog asks for one. Only a project with the `.kicad_pcb` of its name beside it converts; the others are listed with that reason and refused when picked. It runs `pcbjs import board <board> -o pcb.tsx` in a folder you confirm, by default `<name>-pcbjs` beside the KiCad project's folder, or inside that folder when it is a workspace root, then opens the result.
 - `pcbjs: Install skills` runs `pcbjs skills install` with the project's own pcbjs in the only project, or one you pick, and shows the lines it printed. When the project has no pcbjs or no `@pcbjs/skills` resolves from it, it says so and offers `npx @pcbjs/skills install`, run or copied.
 - `pcbjs: Connect to an externally started dev server` and `pcbjs: Disconnect from externally started dev servers` control the fallback below.
@@ -136,7 +154,7 @@ To build the VSIX yourself, run `npm run package -w @pcbjs/vscode` from the repo
 
 To develop, open `packages/vscode` in VS Code, run `npm run build -w @pcbjs/vscode`, and press F5 to start an Extension Development Host with the extension loaded. `npm test -w @pcbjs/vscode` runs the host, server, sync, fallback bridge and language client tests under plain Node, against mock dev servers, a mock language server and a fake spawn and editor, without VS Code.
 
-The source is split by job: `host.ts` is the WebSocket server, `server.ts` spawns and supervises one dev server, `language.ts` starts the language client on a hosted connection, `lsp-client.ts` holds its transport, handshake options and the custom messages without vscode, `sync.ts` relays cursor and focus, `preview.ts` is the panel, `icons.ts` and `icon-map.ts` the file icons, `segments-ui.ts` the underlines and the editor, `setup.ts` the create, convert and skills commands, `fallback.ts` and `bridge.ts` the `dev.json` fallback, `protocol.ts` the event types, and `extension.ts` wires them to VS Code.
+The source is split by job: `host.ts` is the WebSocket server, `server.ts` spawns and supervises one dev server, `language.ts` starts the language client on a hosted connection, `lsp-client.ts` holds its transport, handshake options and the custom messages without vscode, `sync.ts` relays cursor and focus, `preview.ts` is the panel, `icons.ts` and `icon-map.ts` the file icons, `segments-ui.ts` the underlines and the editor, `setup.ts` the create, convert, skills and check commands, `examples.ts` the example picker, `wizard.ts` the board wizard, `fallback.ts` and `bridge.ts` the `dev.json` fallback, `protocol.ts` the event types, and `extension.ts` wires them to VS Code.
 
 ## Without the extension
 

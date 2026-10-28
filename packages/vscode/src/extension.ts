@@ -16,9 +16,14 @@ import { IconThemeFile, associateIcons, findEntries, iconEnv, workspaceEnv } fro
 import { autoIcons, revokeIcons } from './auto-icons'
 import type { EditorPort, Range } from './lsp-client'
 import { ReadyInfo, SelectRequest, isUnder, offers, samePath } from './protocol'
-import { convertKicad, createProject, installSkills, type SetupHost } from './setup'
+import { checkProject, convertKicad, createProject, installSkills, type SetupHost } from './setup'
+import { newFromExample } from './examples'
+import { newBoardWizard } from './wizard'
 
 const CONFIG_GLOB = '**/{pcb,pcbjs}.config.{ts,mts,js,mjs}'
+/** The walkthrough of package.json `walkthroughs`, opened once where the workspace has no project. */
+const WALKTHROUGH = 'getStarted'
+const WALKTHROUGH_SHOWN = 'pcbjs.walkthroughShown'
 
 let shutdown: (() => Promise<void>) | undefined
 
@@ -391,7 +396,13 @@ export function activate(context: vscode.ExtensionContext): void {
     status.show()
   }
 
-  const command = (id: string, fn: () => unknown) => vscode.commands.registerCommand(id, fn)
+  // a command before discovery ends keeps the walkthrough from taking focus from its dialogs
+  let commanded = false
+  const command = (id: string, fn: (...args: never[]) => unknown) =>
+    vscode.commands.registerCommand(id, (...args: never[]) => {
+      commanded = true
+      return fn(...args)
+    })
   context.subscriptions.push(
     output,
     status,
@@ -507,6 +518,10 @@ export function activate(context: vscode.ExtensionContext): void {
     command('pcbjs.createProject', () => createProject(setup)),
     command('pcbjs.convertKicad', () => convertKicad(setup)),
     command('pcbjs.installSkills', () => installSkills(setup)),
+    command('pcbjs.newFromExample', () => newFromExample(setup)),
+    command('pcbjs.newBoardWizard', () => newBoardWizard(setup)),
+    command('pcbjs.check', () => checkProject(setup)),
+    command('pcbjs.walkthrough', () => openWalkthrough()),
     command('pcbjs.icons.associate', async () => void vscode.window.showInformationMessage(`pcbjs: ${await associateIcons(context.extensionPath, projectDirs)}`)),
     command('pcbjs.icons.revoke', async () => {
       const scopes = vscode.workspace.workspaceFolders?.length ? [icons, workspaceEnv(icons)] : [icons]
@@ -578,8 +593,18 @@ export function activate(context: vscode.ExtensionContext): void {
     await host.close()
   }
 
+  async function offerWalkthrough(): Promise<void> {
+    if (commanded || projectDirs.length || !vscode.workspace.workspaceFolders?.length || context.globalState.get(WALKTHROUGH_SHOWN)) return
+    await context.globalState.update(WALKTHROUGH_SHOWN, true)
+    await openWalkthrough()
+  }
+
+  function openWalkthrough(): Thenable<unknown> {
+    return vscode.commands.executeCommand('workbench.action.openWalkthrough', `${context.extension.id}#${WALKTHROUGH}`, false)
+  }
+
   updateStatus()
-  void discover()
+  void discover().then(offerWalkthrough)
 }
 
 export function deactivate(): Promise<void> | undefined {

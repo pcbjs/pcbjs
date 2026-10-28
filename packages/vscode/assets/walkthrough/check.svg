@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" fill="none">
+<rect x="8" y="8" width="464" height="284" rx="10" fill="var(--vscode-editorWidget-background)" stroke="var(--vscode-widget-border, var(--vscode-panel-border))" stroke-width="1.5"/>
+<rect x="24" y="24" width="432" height="252" rx="6" fill="var(--vscode-editor-background)"/>
+<g font-family="var(--vscode-editor-font-family, monospace)" font-size="14"><text x="40" y="56" fill="var(--vscode-textLink-foreground)">$ pcbjs check</text><text x="40" y="88" fill="var(--vscode-foreground)">Hello 0.1.0  pcb.tsx  DRC 1 warning  ERC ok</text><text x="40" y="120" fill="#E5A03A">warning  silk-over-pad  R1</text><text x="57" y="144" fill="var(--vscode-descriptionForeground)">pcb.tsx:25:5  silk 0.1 mm onto R1.1</text><text x="40" y="184" fill="var(--vscode-foreground)">DRC 0 errors, 1 warning, 0 unconnected</text><text x="40" y="208" fill="var(--vscode-foreground)">ERC 0 errors, 0 warnings</text><text x="40" y="240" fill="var(--vscode-descriptionForeground)">typecheck  ok</text></g>
+<path d="M24 104 H456 V156 H24 Z" fill="#E5A03A" opacity="0.12"/></svg>

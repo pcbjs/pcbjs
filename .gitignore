@@ -17,4 +17,5 @@ node_modules/
 packages/*/LICENSE
 packages/cli/docs/
 packages/cli/vscode/
-packages/vscode/assets/
+packages/vscode/assets/*
+!packages/vscode/assets/walkthrough/

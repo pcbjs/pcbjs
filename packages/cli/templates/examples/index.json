@@ -1,0 +1,8 @@
+{
+  "blinky": "three LED channels on 30 x 20 mm, two layers, with the schematic, sourcing and layout in three files",
+  "coin": "the smallest board: two test pads on a 20 mm round board, all in one file",
+  "quad": "a divider on four layers, a signal on In1.Cu between a via pair and a ground plane",
+  "multi": "one design built for JLCPCB, OSH Park and a house target with variants",
+  "led-matrix": "an 8 x 8 WS2812B-2020 matrix from one circuit placed per pixel, chained in a serpentine",
+  "qfn-breakout": "a QFN64 at 0.5 mm pitch broken out to four headers by the autorouter"
+}

@@ -17,7 +17,7 @@ Run commands in the project directory; the entries come from `entries` in its pc
 | `pcbjs model <add\|align\|check\|fetch>` | 3D models, see models.md; `fetch` downloads the models parts name, see 3d.md |
 | `pcbjs import <footprint\|board> <source>` | a KiCad footprint or `.kicad_pcb` as code, see import.md |
 | `pcbjs docs [topic]` | print a topic of these docs |
-| `pcbjs create <dir>` | a new project from a template |
+| `pcbjs create <dir>` | a new project from the template, shaped by `--layers`, `--fab`, `--size` and `--outline`, or from an example board with `--example <name>`; `create --list-examples` names the examples |
 | `pcbjs ide <install\|status>` | the bundled VS Code extension, see editor.md |
 | `pcbjs skills <install\|list\|path>` | the agent skills of the `@pcbjs/skills` the project resolves: copies them into `.claude/skills` or `--to <dir>`, see skills.md |
 | `pcbjs doctor` | the `@pcbjs` versions installed, Node, Chrome, the step converter, the cache format versions, the config and its entries; exit 1 when two packages differ in major.minor, which check, build and dev print as one warning |
@@ -49,6 +49,9 @@ Any entry name works and nothing checks it; the recommended names are `pcb.tsx` 
 | `-o, --out <file>`, `--force` | `import` | see import.md |
 | `--grep <word>` | `docs` | matching lines of every topic, a regex unless plain words |
 | `-t, --template <name>` | `create` | the template, `board` |
+| `--layers <n>`, `--fab <preset>` | `create` | copper layers, 2, 4, 6 or 8, default 2; the preset after `@pcbjs/fab/`, default `JLCPCB/<layers>-Layer`, with that many layers |
+| `--size <WxH>`, `--outline <shape>` | `create` | in mm, default `20x15`, one diameter for a circle, default 40; `rect`, `rounded`, `rounded:<r>` or `circle`, default `rounded` with 1 mm corners. The parts sit in the middle and need 20 x 15 mm, a circle 26 mm |
+| `--example <name>`, `--list-examples` | `create` | copy an example board, a project with one board in `pcb.tsx`, instead of the template; print the examples with a line each |
 
 ## Output of check and build
 

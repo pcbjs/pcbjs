@@ -1,0 +1,16 @@
+{
+  "name": "qfn-breakout",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pcbjs dev",
+    "build": "pcbjs build",
+    "preview": "pcbjs preview"
+  },
+  "devDependencies": {
+    "@pcbjs/pcbjs": "0.0.1-beta.0",
+    "@pcbjs/core": "0.0.1-beta.0",
+    "@pcbjs/fab": "0.0.1-beta.0",
+    "@pcbjs/lib": "0.0.1-beta.0"
+  }
+}

@@ -149,20 +149,28 @@ function answer(kind, call) {
   return typeof a === 'function' ? a(call) : a
 }
 
+const QuickInputButtons = { Back: { id: 'back' } }
+
+/** A quick pick answered by kind quickPick: an item, 'active' for Enter on the active one, 'back' for the Back button, undefined for Escape. */
 function createQuickPick() {
   const accepted = new EventEmitter()
   const hidden = new EventEmitter()
+  const button = new EventEmitter()
   const qp = {
     items: [],
     activeItems: [],
     selectedItems: [],
+    buttons: [],
     placeholder: '',
     onDidAccept: accepted.event,
     onDidHide: hidden.event,
+    onDidTriggerButton: button.event,
     show() {
       queueMicrotask(() => {
-        const pick = answer('quickPick', { items: qp.items, active: qp.activeItems, placeholder: qp.placeholder })
+        const { items, activeItems: active, placeholder, title, step, totalSteps, buttons } = qp
+        const pick = answer('quickPick', { items, active, placeholder, title, step, totalSteps, buttons })
         if (pick === undefined) return qp.hide()
+        if (pick === 'back') return button.fire(QuickInputButtons.Back)
         if (pick !== 'active') qp.selectedItems = [pick]
         accepted.fire()
       })
@@ -171,6 +179,40 @@ function createQuickPick() {
     dispose() {},
   }
   return qp
+}
+
+/** An input box answered by kind inputBox: 'accept' for Enter on the prefilled value, a string typed then Enter, 'back', or undefined for Escape. */
+function createInputBox() {
+  const accepted = new EventEmitter()
+  const hidden = new EventEmitter()
+  const button = new EventEmitter()
+  const changed = new EventEmitter()
+  const box = {
+    value: '',
+    prompt: '',
+    buttons: [],
+    validationMessage: undefined,
+    onDidAccept: accepted.event,
+    onDidHide: hidden.event,
+    onDidTriggerButton: button.event,
+    onDidChangeValue: changed.event,
+    show() {
+      queueMicrotask(() => {
+        const { value, prompt, title, step, totalSteps, buttons, validationMessage } = box
+        const a = answer('inputBox', { value, prompt, title, step, totalSteps, buttons, validationMessage })
+        if (a === undefined) return box.hide()
+        if (a === 'back') return button.fire(QuickInputButtons.Back)
+        if (a !== 'accept') {
+          box.value = a
+          changed.fire(a)
+        }
+        accepted.fire()
+      })
+    },
+    hide: () => hidden.fire(),
+    dispose() {},
+  }
+  return box
 }
 
 const workspace = {
@@ -191,6 +233,7 @@ export const vscode = {
   TabInputText,
   TabInputWebview,
   TextEditorRevealType: { InCenter: 2 },
+  QuickInputButtons,
   Selection: class {
     constructor(start, end) {
       this.start = start
@@ -224,6 +267,7 @@ export const vscode = {
     showTextDocument,
     createTreeView: (id, opts) => ({ id, ...opts, description: undefined, dispose() {} }),
     createQuickPick,
+    createInputBox,
     showQuickPick: async (items, opts) => answer('pick', { items, ...opts }),
     showInputBox: async opts => answer('input', opts),
     showOpenDialog: async opts => answer('open', opts),

@@ -1,4 +1,4 @@
-// The commands that start a project: create one, convert a KiCad project and install the agent skills, each through a pcbjs CLI.
+// The commands that start a project: create one, convert a KiCad project, install the agent skills and run check, each through a pcbjs CLI.
 
 import * as vscode from 'vscode'
 import * as fs from 'node:fs'
@@ -81,11 +81,11 @@ export function importDest(p: KicadProject, roots: string[]): string {
   return path.join(inside ? dir : up, `${p.name}-pcbjs`)
 }
 
-/** `.` for an empty folder, else the first free of board, board-2, board-3. */
-export function defaultProjectDir(parent: string): string {
+/** `.` for an empty folder, else the first free of base, base-2, base-3. */
+export function defaultProjectDir(parent: string, base = 'board'): string {
   if (!fs.existsSync(parent) || !fs.readdirSync(parent).length) return '.'
   for (let n = 1; ; n++) {
-    const name = n === 1 ? 'board' : `board-${n}`
+    const name = n === 1 ? base : `${base}-${n}`
     if (!fs.existsSync(path.join(parent, name))) return name
   }
 }
@@ -189,7 +189,7 @@ export function run(r: Runner, args: string[], cwd: string, h: SetupHost, onLine
 }
 
 /** One run under a progress notification; on failure an error with its last line. */
-async function step(title: string, r: Runner, args: string[], cwd: string, h: SetupHost): Promise<RunResult | undefined> {
+export async function step(title: string, r: Runner, args: string[], cwd: string, h: SetupHost): Promise<RunResult | undefined> {
   const res = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `pcbjs: ${title}` }, p =>
     run(r, args, cwd, h, line => line.trim() && p.report({ message: line.trim() })),
   )
@@ -200,16 +200,16 @@ async function step(title: string, r: Runner, args: string[], cwd: string, h: Se
 }
 
 /** npm install when no pcbjs resolves from the new project, so its dev server can start. */
-async function ensureInstalled(dir: string, h: SetupHost): Promise<boolean> {
+export async function ensureInstalled(dir: string, h: SetupHost): Promise<boolean> {
   if (findBinary(dir)) return true
   return !!(await step(`installing the packages of ${path.basename(dir)}`, nodeTool(h.nodePath(), 'npm', ['install']), [], dir, h))
 }
 
-const roots = () => (vscode.workspace.workspaceFolders ?? []).filter(f => f.uri.scheme === 'file').map(f => f.uri.fsPath)
+export const roots = () => (vscode.workspace.workspaceFolders ?? []).filter(f => f.uri.scheme === 'file').map(f => f.uri.fsPath)
 const rel = (p: string) => vscode.workspace.asRelativePath(p, roots().length > 1)
 
 /** The only workspace folder, a pick of several, or an open dialog without one. */
-async function pickFolder(placeHolder: string, openLabel: string): Promise<string | undefined> {
+export async function pickFolder(placeHolder: string, openLabel: string): Promise<string | undefined> {
   const all = roots()
   if (all.length === 1) return all[0]
   if (all.length) {
@@ -242,19 +242,26 @@ function pickOne<T extends vscode.QuickPickItem>(items: T[], placeholder: string
   })
 }
 
+export const projectPrompt = (parent: string) => `The project folder, relative to ${parent}; . for that folder itself when it is empty. Its name is the board's name.`
+
 export async function createProject(h: SetupHost): Promise<string | undefined> {
   const parent = await pickFolder('Create the pcbjs project in which folder?', 'Create here')
   if (!parent) return undefined
   const name = await vscode.window.showInputBox({
     title: 'pcbjs: Create project in workspace',
-    prompt: `The project folder, relative to ${parent}; . for that folder itself when it is empty. Its name is the board's name.`,
+    prompt: projectPrompt(parent),
     value: defaultProjectDir(parent),
     validateInput: v => projectDirError(parent, v),
   })
   if (name === undefined) return undefined
-  const dir = path.resolve(parent, name.trim())
+  return scaffold(h, parent, name.trim(), [])
+}
+
+/** pcbjs create with the flags, its packages installed, then the board file and the preview. */
+export async function scaffold(h: SetupHost, parent: string, name: string, flags: string[]): Promise<string | undefined> {
+  const dir = path.resolve(parent, name)
   const pcbjs = pcbjsRunner([parent, ...roots()], h.nodePath(), h.env)
-  if (!(await step(`creating ${path.basename(dir)}`, pcbjs, ['create', name.trim()], parent, h))) return undefined
+  if (!(await step(`creating ${path.basename(dir)}`, pcbjs, ['create', name, ...flags], parent, h))) return undefined
   if (!(await ensureInstalled(dir, h))) return undefined
   await h.opened(dir, path.join(dir, 'pcb.tsx'))
   return dir
@@ -319,18 +326,18 @@ export async function convertKicad(h: SetupHost): Promise<string | undefined> {
 }
 
 /** The only project, a pick of several, else a workspace folder. */
-async function pickProject(dirs: string[]): Promise<string | undefined> {
+async function pickProject(dirs: string[], verb: string): Promise<string | undefined> {
   if (dirs.length === 1) return dirs[0]
-  if (!dirs.length) return pickFolder('Install the skills in which folder?', 'Install here')
+  if (!dirs.length) return pickFolder(`${verb} in which folder?`, 'Here')
   const c = await vscode.window.showQuickPick(
     dirs.map(dir => ({ label: path.basename(dir), description: rel(dir), dir })),
-    { placeHolder: 'Install the skills in which pcbjs project?' },
+    { placeHolder: `${verb} in which pcbjs project?` },
   )
   return c?.dir
 }
 
 export async function installSkills(h: SetupHost): Promise<RunResult | undefined> {
-  const root = await pickProject(h.projectDirs())
+  const root = await pickProject(h.projectDirs(), 'Install the skills')
   if (!root) return undefined
   const bin = findBinary(root)
   const title = `installing the agent skills in ${path.basename(root)}`
@@ -350,5 +357,21 @@ export async function installSkills(h: SetupHost): Promise<RunResult | undefined
   if (!res) return undefined
   const lines = res.lines.filter(l => l.trim())
   void vscode.window.showInformationMessage(`pcbjs: skills in ${rel(root)}: ${lines.join('; ') || 'none'}`, 'Show output').then(a => a && h.showOutput())
+  return res
+}
+
+/** pcbjs check in a project: every line to the output, which opens, and its DRC and ERC summary as a message. */
+export async function checkProject(h: SetupHost): Promise<RunResult | undefined> {
+  const root = await pickProject(h.projectDirs(), 'Run pcbjs check')
+  if (!root) return undefined
+  const pcbjs = pcbjsRunner([root, ...roots()], h.nodePath(), h.env)
+  const res = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `pcbjs: checking ${path.basename(root)}` }, p =>
+    run(pcbjs, ['check'], root, h, line => line.trim() && p.report({ message: line.trim() })),
+  )
+  h.showOutput()
+  const lines = res.lines.map(l => l.trim()).filter(Boolean)
+  const summary = [...lines].reverse().find(l => /DRC \d+ errors/.test(l)) ?? lines.at(-1) ?? `exit code ${res.code}`
+  const text = `pcbjs check: ${summary.replace(/\s+/g, ' ')}. Each finding names its file and line; the Findings view lists them while the preview runs.`
+  void (res.code === 0 ? vscode.window.showInformationMessage(text) : vscode.window.showWarningMessage(text))
   return res
 }

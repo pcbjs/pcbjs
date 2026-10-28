@@ -31,6 +31,8 @@ npm run build                              # fab set in .pcbjs/fab/my-board, sit
 
 The board and the package take the directory's name.
 
+`--layers`, `--fab`, `--size` and `--outline` change the board's fab and shape, such as `pcbjs create my-board --layers 4 --size 50x40`, and `--example <name>` starts from one of the example boards instead; `pcbjs create --list-examples` names them. cli.md has the flags.
+
 ## From source
 
 For contributors: clone https://github.com/pcbjs/pcbjs and run `npm install` and `npm run build` at its root. A project made under `examples/` with `npx pcbjs create` joins the workspace, and the root `npm install` links the @pcbjs packages into it. docs/development.md has the layout and the checks.

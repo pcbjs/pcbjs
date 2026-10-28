@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" fill="none">
+<rect x="8" y="8" width="464" height="284" rx="10" fill="var(--vscode-editorWidget-background)" stroke="var(--vscode-widget-border, var(--vscode-panel-border))" stroke-width="1.5"/>
+<rect x="40" y="36" width="400" height="32" rx="4" fill="var(--vscode-editor-background)" stroke="var(--vscode-textLink-foreground)" stroke-width="1.5"/><text x="52" y="57" fill="var(--vscode-descriptionForeground)" font-family="var(--vscode-font-family, sans-serif)" font-size="14">Start from which example board?</text>
+<rect x="40" y="76" width="400" height="30" rx="3" fill="var(--vscode-textLink-foreground)" opacity="0.18"/>
+<g font-family="var(--vscode-font-family, sans-serif)" font-size="14">
+<text x="52" y="96" fill="var(--vscode-foreground)" font-weight="600">blinky</text><text x="170" y="96" fill="var(--vscode-descriptionForeground)">three LED channels in three files</text>
+<text x="52" y="126" fill="var(--vscode-foreground)" font-weight="600">coin</text><text x="170" y="126" fill="var(--vscode-descriptionForeground)">the smallest board, round</text>
+<text x="52" y="156" fill="var(--vscode-foreground)" font-weight="600">quad</text><text x="170" y="156" fill="var(--vscode-descriptionForeground)">four layers, a ground plane</text>
+<text x="52" y="186" fill="var(--vscode-foreground)" font-weight="600">multi</text><text x="170" y="186" fill="var(--vscode-descriptionForeground)">one design, three fabs</text>
+<text x="52" y="216" fill="var(--vscode-foreground)" font-weight="600">led-matrix</text><text x="170" y="216" fill="var(--vscode-descriptionForeground)">8 x 8 pixels from one circuit</text>
+<text x="52" y="246" fill="var(--vscode-foreground)" font-weight="600">qfn-breakout</text><text x="170" y="246" fill="var(--vscode-descriptionForeground)">a QFN64 to four headers</text>
+</g></svg>
