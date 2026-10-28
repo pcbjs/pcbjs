@@ -1,6 +1,6 @@
 # The pcbjs docs site
 
-The VitePress project behind https://pcbjs.dev, with the docs of `main` at https://pcbjs.dev/next/. It renders the topic files in `docs/` where they are, the same files `pcbjs docs` prints, and adds its own pages beside them.
+The VitePress project behind https://pcbjs.dev, built from `main`, with the docs of the last published train at https://pcbjs.dev/stable/. It renders the topic files in `docs/` where they are, the same files `pcbjs docs` prints, and adds its own pages beside them.
 
 ## Commands
 
@@ -40,8 +40,8 @@ A new topic file in `docs/` becomes a page on the next build. Put it in a sideba
 
 | Path | Tree | Built from |
 | --- | --- | --- |
-| https://pcbjs.dev/ | the stable docs | the tag `@pcbjs/pcbjs@<version>` with the highest version, the last published train; `main` while no train is tagged |
-| https://pcbjs.dev/next/ | the docs of `main` | `main`, with `PCBJS_SITE_BASE=/next/` and a `noindex` robots meta |
+| https://pcbjs.dev/ | the site and docs of `main` | `main`, every push that touches the site |
+| https://pcbjs.dev/stable/ | the docs of the last published train | the tag, with `PCBJS_SITE_BASE=/stable/` and a `noindex` robots meta; `/next/` redirects to the root |
 
 Each tree runs `npm ci`, `npm run build` and `npm run docs:build -- --outDir <dir>` on ubuntu-latest, and the workflow keeps the built stable tree in the Actions cache by its tag and builds a train only once, and keeps `site/.gallery` and the examples' route files of `main` by content, which a new train reuses when nothing under `packages/`, `examples/` or `site/scripts/` differs from `main`. `scripts/boards.mjs` keeps a project's numbers and SVGs while its folder and the packages hash the same, versions left out, so a docs-only push compiles nothing and an example edit compiles only that project. The SVGs take their colours from CSS variables, `--pcb-*` from `boardSvg(board, { vars: true })` and `--sch-*` from the schematic style, which `.vitepress/theme/custom.css` and `config.mts` set for the light theme and for VitePress's `.dark`. `PCBJS_SITE_URL` sets the host in the sitemap, the canonical links and the Open Graph tags, `https://pcbjs.dev` by default; `PCBJS_SITE_BASE` sets the VitePress `base`, `/` by default, and any other base adds the `noindex` meta. The workflow writes `CNAME` and `.nojekyll` at the artifact root.
 
@@ -75,8 +75,8 @@ Reserved names, no records yet:
 
 ## Versioned docs, later
 
-pcbjs.dev holds the docs of the last release and pcbjs.dev/next/ those of `main`. When 0.1 ships and 0.2 starts to differ, each minor gets a frozen copy under its own path:
+pcbjs.dev holds the docs of `main` and pcbjs.dev/stable/ those of the last release. When 0.1 ships and 0.2 starts to differ, each minor gets a frozen copy under its own path:
 
 - In `pages.yml`, build the newest tag of each minor into `/0.1/` and so on, with `PCBJS_SITE_BASE=/0.1/`, beside the stable and next trees in the same artifact.
-- Add a version menu to the nav, an item per minor linking to `/0.1/` and so on, with the root labelled as the latest release and a link to `/next/` for `main`.
+- Add a version menu to the nav, an item per minor linking to `/0.1/` and so on, with the root labelled as `main` and `/stable/` as the latest release.
 - Point `pcbjs docs` of a released package at its minor in its output, since the terminal docs are already versioned by the installed package.

@@ -10,7 +10,7 @@ const brand = join(site, 'brand')
 const hasBrand = (f: string) => existsSync(join(brand, f))
 const github = 'https://github.com/pcbjs/pcbjs'
 const host = process.env.PCBJS_SITE_URL ?? 'https://pcbjs.dev'
-// '/next/' for the docs of main beside the stable tree; any base but the root is kept out of search engines
+// '/stable/' for the docs of the last train beside main at the root; any base but the root is kept out of search engines
 const base = process.env.PCBJS_SITE_BASE ?? '/'
 const root = `${host}${base}`
 // the schematic SVGs colour themselves from --sch-*: the exporter's light and dark themes, switched with VitePress's .dark

@@ -1,4 +1,4 @@
-# Builds the whole site into one Pages artifact, since every deploy replaces the site: the latest published train at / for https://pcbjs.dev, main at /next/.
+# Builds the whole site into one Pages artifact, since every deploy replaces the site: main at / for https://pcbjs.dev, the latest published train at /stable/.
 # Runs on pushes to main that touch the site's sources, and from release.yml after a publish; it needs no secret, only Pages set to GitHub Actions, see RELEASING.md.
 name: Pages
 
@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   build:
-    name: Build the stable and next trees
+    name: Build the main and stable trees
     if: github.repository == 'pcbjs/pcbjs'
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -54,7 +54,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: _stable
-          key: stable-site-1-${{ steps.stable.outputs.tag }}
+          key: stable-site-2-${{ steps.stable.outputs.tag }}
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -76,13 +76,11 @@ jobs:
             gallery-
       - run: npm ci
       - run: npm run build
-      - id: next
-        name: Next tree, main at /next/
-        run: npm run build -w pcbjs-site -- --outDir "$OUT/next"
-        env:
-          PCBJS_SITE_BASE: /next/
+      - id: main
+        name: Main tree at /
+        run: npm run build -w pcbjs-site -- --outDir "$OUT"
       - name: Save the gallery of main
-        if: ${{ !cancelled() && steps.next.outcome == 'success' && steps.gallery.outputs.cache-hit != 'true' }}
+        if: ${{ !cancelled() && steps.main.outcome == 'success' && steps.gallery.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: |
@@ -92,9 +90,6 @@ jobs:
             examples/*/.pcbjs/models
             examples/*/*/.pcbjs/models
           key: gallery-${{ steps.hash.outputs.packages }}-${{ steps.hash.outputs.examples }}
-      - name: Stable tree from main
-        if: steps.stable.outputs.tag == ''
-        run: npm run build -w pcbjs-site -- --outDir "$STABLE"
       - name: Check out the train
         if: steps.stable.outputs.tag != '' && steps.tree.outputs.cache-hit != 'true'
         run: git worktree add "$RUNNER_TEMP/stable" "${{ steps.stable.outputs.tag }}"
@@ -121,15 +116,19 @@ jobs:
           npm ci
           npm run build
           npm run build -w pcbjs-site -- --outDir "$STABLE"
+        env:
+          PCBJS_SITE_BASE: /stable/
       - name: Save the stable tree of the train
         if: ${{ !cancelled() && steps.train.outcome == 'success' }}
         uses: actions/cache/save@v4
         with:
           path: _stable
-          key: stable-site-1-${{ steps.stable.outputs.tag }}
-      - name: Stable tree at the root, domain and no Jekyll
+          key: stable-site-2-${{ steps.stable.outputs.tag }}
+      - name: Stable tree at /stable/, the old /next/ redirected, domain and no Jekyll
         run: |
-          cp -R "$STABLE/." "$OUT/"
+          if [ -d "$STABLE" ]; then mkdir -p "$OUT/stable" && cp -R "$STABLE/." "$OUT/stable/"; fi
+          mkdir -p "$OUT/next"
+          echo '<!doctype html><meta http-equiv="refresh" content="0; url=/"><link rel="canonical" href="https://pcbjs.dev/">' > "$OUT/next/index.html"
           echo pcbjs.dev > "$OUT/CNAME"
           touch "$OUT/.nojekyll"
       - uses: actions/upload-pages-artifact@v3
