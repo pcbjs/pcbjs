@@ -22,16 +22,32 @@ export interface DevBoard {
 }
 
 /** One request of a batched inspect: a query, the route table, or both as `inspect --lengths <filter>`; `layer` lists one layer's items, of the query's part or net when there is one. */
-export interface InspectRequest { query?: string; lengths?: boolean; layer?: string }
+export interface InspectRequest {
+  query?: string
+  lengths?: boolean
+  layer?: string
+}
 
 /** The live dev server of a project: its origin and dev.json; null when there is none or its process is gone. */
 export function devServerOf(root: string): { origin: string; info: DevInfo } | null {
   let info: DevInfo
-  try { info = JSON.parse(readFileSync(join(root, '.pcbjs', 'dev.json'), 'utf8')) } catch { return null }
+  try {
+    info = JSON.parse(readFileSync(join(root, '.pcbjs', 'dev.json'), 'utf8'))
+  } catch {
+    return null
+  }
   if (!info || typeof info.port !== 'number' || typeof info.pid !== 'number' || info.pid === process.pid) return null
-  try { process.kill(info.pid, 0) } catch { return null }
+  try {
+    process.kill(info.pid, 0)
+  } catch {
+    return null
+  }
   const url = info.url ?? info.urls?.[0] ?? `http://localhost:${info.port}/`
-  try { return { origin: new URL(url).origin, info } } catch { return null }
+  try {
+    return { origin: new URL(url).origin, info }
+  } catch {
+    return null
+  }
 }
 
 /** GET a /__pcbjs/cli/ path of a dev server as JSON; null on any failure, so the caller compiles itself. */
@@ -41,11 +57,19 @@ export async function askDev<T>(origin: string, path: string, params: Record<str
     const r = await fetch(`${origin}/__pcbjs/cli/${path}?${q}`, { signal: AbortSignal.timeout(timeout) })
     if (!r.ok) return null
     return (await r.json()) as T
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 /** An entry file as both sides name it: its real path. */
-export const realEntry = (file: string): string => { try { return realpathSync(file) } catch { return file } }
+export const realEntry = (file: string): string => {
+  try {
+    return realpathSync(file)
+  } catch {
+    return file
+  }
+}
 
 export const secs = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`)
 

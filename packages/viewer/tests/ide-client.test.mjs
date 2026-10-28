@@ -30,7 +30,8 @@ test('ide request: a net to pin or a finding to pan to, anything else ignored', 
   assert.deepEqual(parseIdeRequest({ type: 'pcbjs:net', board: 'Blinky', net: 'GND' }), { kind: 'net', board: 'Blinky', net: 'GND' })
   assert.deepEqual(parseIdeRequest({ type: 'pcbjs:net', net: null }), { kind: 'net', board: null, net: null })
   assert.deepEqual(parseIdeRequest({ type: 'pcbjs:finding', board: 'Coin', at: [3, 4], layer: 'sch' }), { kind: 'finding', board: 'Coin', at: [3, 4], layer: 'sch' })
-  for (const bad of [null, 'x', { type: 'pcbjs:net' }, { type: 'pcbjs:finding', at: [1] }, { type: 'pcbjs:finding', at: [1, 'a'] }, { type: 'other', net: 'GND' }]) assert.equal(parseIdeRequest(bad), null)
+  for (const bad of [null, 'x', { type: 'pcbjs:net' }, { type: 'pcbjs:finding', at: [1] }, { type: 'pcbjs:finding', at: [1, 'a'] }, { type: 'other', net: 'GND' }])
+    assert.equal(parseIdeRequest(bad), null)
 })
 
 test('ide route: the home path never shows the home page, it shows the focused board or the first', () => {

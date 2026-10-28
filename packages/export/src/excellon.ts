@@ -2,8 +2,16 @@ import type { Board } from '@pcbjs/core/model'
 import { drillFunction } from './gerber.js'
 
 /** One hole: its centre, or a slot's two end centres, board mm y down. */
-export interface DrillHole { x: number; y: number; end?: [number, number]; via: boolean }
-export interface DrillTable { tools: { d: number; count: number; slots: number; vias: number; holes: DrillHole[] }[]; text: string }
+export interface DrillHole {
+  x: number
+  y: number
+  end?: [number, number]
+  via: boolean
+}
+export interface DrillTable {
+  tools: { d: number; count: number; slots: number; vias: number; holes: DrillHole[] }[]
+  text: string
+}
 
 const f3 = (v: number) => (Math.round(v * 1000) / 1000).toFixed(3)
 
@@ -16,9 +24,21 @@ export function excellon(board: Board, plated: boolean, date: string): DrillTabl
   }
   if (!holes.length) return null
   const tools = new Map<number, Hole[]>()
-  for (const h of holes) { const d = Math.min(h.w, h.h); const l = tools.get(d) ?? []; l.push(h); tools.set(d, l) }
+  for (const h of holes) {
+    const d = Math.min(h.w, h.h)
+    const l = tools.get(d) ?? []
+    l.push(h)
+    tools.set(d, l)
+  }
   const sorted = [...tools.keys()].sort((a, b) => a - b)
-  const out = ['M48', `; DRILL file {pcbjs} date ${date}`, '; FORMAT={-:-/ absolute / metric / decimal}', `; #@! TF.FileFunction,${drillFunction(board, plated)}`, 'FMAT,2', 'METRIC,TZ']
+  const out = [
+    'M48',
+    `; DRILL file {pcbjs} date ${date}`,
+    '; FORMAT={-:-/ absolute / metric / decimal}',
+    `; #@! TF.FileFunction,${drillFunction(board, plated)}`,
+    'FMAT,2',
+    'METRIC,TZ',
+  ]
   sorted.forEach((d, i) => out.push(`T${i + 1}C${f3(d)}`))
   out.push('%', 'G90', 'G05')
   sorted.forEach((d, i) => {
@@ -27,10 +47,13 @@ export function excellon(board: Board, plated: boolean, date: string): DrillTabl
       if (h.w === h.h) out.push(`X${f3(h.x)}Y${f3(-h.y)}`)
       else {
         // slot: route between the two end centres
-        const len = Math.abs(h.w - h.h), a = ((h.w > h.h ? 0 : 90) - h.rot) * Math.PI / 180
-        const dx = (len / 2) * Math.cos(a), dy = (len / 2) * Math.sin(a)
+        const len = Math.abs(h.w - h.h),
+          a = (((h.w > h.h ? 0 : 90) - h.rot) * Math.PI) / 180
+        const dx = (len / 2) * Math.cos(a),
+          dy = (len / 2) * Math.sin(a)
         out.push(`X${f3(h.x - dx)}Y${f3(-(h.y - dy))}G85X${f3(h.x + dx)}Y${f3(-(h.y + dy))}`)
-        h.start = [h.x - dx, h.y - dy]; h.end = [h.x + dx, h.y + dy]
+        h.start = [h.x - dx, h.y - dy]
+        h.end = [h.x + dx, h.y + dy]
       }
     }
   })
@@ -38,8 +61,13 @@ export function excellon(board: Board, plated: boolean, date: string): DrillTabl
   return {
     tools: sorted.map(d => {
       const hs = tools.get(d)!
-      return { d, count: hs.length, slots: hs.filter(h => h.end).length, vias: hs.filter(h => h.via).length,
-        holes: hs.map(h => (h.end ? { x: h.start![0], y: h.start![1], end: h.end, via: h.via } : { x: h.x, y: h.y, via: h.via })) }
+      return {
+        d,
+        count: hs.length,
+        slots: hs.filter(h => h.end).length,
+        vias: hs.filter(h => h.via).length,
+        holes: hs.map(h => (h.end ? { x: h.start![0], y: h.start![1], end: h.end, via: h.via } : { x: h.x, y: h.y, via: h.via })),
+      }
     }),
     text: out.join('\n'),
   }

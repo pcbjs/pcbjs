@@ -4,10 +4,11 @@ import { fileURLToPath } from 'node:url'
 
 export const skillsDir = resolve(dirname(fileURLToPath(import.meta.url)), 'skills')
 
-export const skillNames = () => readdirSync(skillsDir, { withFileTypes: true })
-  .filter(d => d.isDirectory() && existsSync(join(skillsDir, d.name, 'SKILL.md')))
-  .map(d => d.name)
-  .sort()
+export const skillNames = () =>
+  readdirSync(skillsDir, { withFileTypes: true })
+    .filter(d => d.isDirectory() && existsSync(join(skillsDir, d.name, 'SKILL.md')))
+    .map(d => d.name)
+    .sort()
 
 export function describe(name) {
   const head = /^---\n([\s\S]*?)\n---/.exec(readFileSync(join(skillsDir, name, 'SKILL.md'), 'utf8'))?.[1] ?? ''

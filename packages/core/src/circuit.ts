@@ -2,10 +2,19 @@
 import { h } from './jsx-runtime.js'
 import type { At, Child, Connection, Net, NoConnect, PcbNode, Side } from './types.js'
 import {
-  INSTANCE_STATE, PROBES, SchematicError, callerSite, instanceOf, isNC, isNet, netProxy, partOf, schematicRegistry,
-  type InstanceState, type PartState,
+  INSTANCE_STATE,
+  PROBES,
+  SchematicError,
+  callerSite,
+  instanceOf,
+  isNC,
+  isNet,
+  netProxy,
+  partOf,
+  schematicRegistry,
+  type InstanceState,
+  type PartState,
 } from './schematic.js'
-
 
 type Required_<K extends string> = K extends `${string}?` ? never : K
 type Optional_<K extends string> = K extends `${infer N}?` ? N : never
@@ -64,7 +73,11 @@ export interface Circuit<P = {}, T extends CircuitMembers = CircuitMembers> {
 }
 
 /** The props of a layout: where it goes, and anything else the render function takes. */
-export interface LayoutProps { at?: At; side?: Side; [k: string]: any }
+export interface LayoutProps {
+  at?: At
+  side?: Side
+  [k: string]: any
+}
 
 /** The instance type of a circuit definition. */
 export type InstanceOf<C> = C extends Circuit<infer P, infer T> ? CircuitInstance<T, P> : C extends GroupBase ? C : never
@@ -77,7 +90,6 @@ export interface Layout<I = CircuitInstance<any, any>> {
   /** the circuit() name it lays out */
   readonly circuit: string
 }
-
 
 const DEF = Symbol.for('pcbjs.circuit.def')
 const IDENT = /^[A-Za-z_]\w*$/
@@ -101,7 +113,11 @@ function publicInstance(inst: InstanceState): any {
   for (const [k, m] of inst.members) Object.defineProperty(pub, k, { value: 'members' in m ? m.instance : m.part, enumerable: true })
   return Object.freeze(pub)
 }
-const pathOf = (i: InstanceState): string[] => { const out: string[] = []; for (let x: InstanceState | null = i; x; x = x.parent) out.unshift(x.name); return out }
+const pathOf = (i: InstanceState): string[] => {
+  const out: string[] = []
+  for (let x: InstanceState | null = i; x; x = x.parent) out.unshift(x.name)
+  return out
+}
 
 /** A new instance state, registered with its parent's build or, at the top, with the registry. */
 function newInstance(circuitName: string, def: object | null, form: InstanceState['form'], name: string | undefined, ports: Record<string, Connection>): InstanceState {
@@ -109,8 +125,20 @@ function newInstance(circuitName: string, def: object | null, form: InstanceStat
   const parent = r.building.at(-1) ?? null
   const src = callerSite()
   const inst: InstanceState = {
-    seq: ++r.seq, circuit: circuitName, def, name: name ?? '', explicitName: name !== undefined, parent, members: new Map(),
-    ports, form, src, declFile: parent ? parent.declFile : src?.file, instance: null, nets: null!, made: [],
+    seq: ++r.seq,
+    circuit: circuitName,
+    def,
+    name: name ?? '',
+    explicitName: name !== undefined,
+    parent,
+    members: new Map(),
+    ports,
+    form,
+    src,
+    declFile: parent ? parent.declFile : src?.file,
+    instance: null,
+    nets: null!,
+    made: [],
   }
   inst.nets = netProxy(undefined, inst)
   if (parent) {
@@ -137,9 +165,16 @@ function newInstance(circuitName: string, def: object | null, form: InstanceStat
 /** Register a finished top-level instance, or forget a failed one and its parts. */
 function settle(inst: InstanceState, ok: boolean): void {
   const r = schematicRegistry()
-  if (ok) { if (!inst.parent) r.instances.push(inst); return }
+  if (ok) {
+    if (!inst.parent) r.instances.push(inst)
+    return
+  }
   const drop = new Set<PartState>()
-  const walk = (i: InstanceState) => { for (const m of i.made) if ('members' in m) walk(m); else drop.add(m) }
+  const walk = (i: InstanceState) => {
+    for (const m of i.made)
+      if ('members' in m) walk(m)
+      else drop.add(m)
+  }
   walk(inst)
   if (drop.size) r.parts = r.parts.filter(p => !drop.has(p))
 }
@@ -152,24 +187,29 @@ function adopt(inst: InstanceState, members: unknown, where: string, fresh: bool
   for (const [k, v] of Object.entries(members)) {
     if (RESERVED.has(k)) throw new SchematicError(`${where}: the key ${JSON.stringify(k)} is reserved for the instance itself; rename the member`)
     if (!IDENT.test(k)) throw new SchematicError(`${where}: the key ${JSON.stringify(k)} must be an identifier such as "R1"`)
-    const st = partOf(v), child = instanceOf(v)
+    const st = partOf(v),
+      child = instanceOf(v)
     const m: PartState | InstanceState | null = st ?? child
     if (!m) throw new SchematicError(`${where}: ${k} is neither a part nor a circuit instance`)
     if (seen.has(m)) throw new SchematicError(`${where}: ${k} is the same ${st ? 'part' : 'instance'} as another key`)
     seen.add(m)
     if (st) {
       if (fresh ? st.owner !== inst : st.owner !== undefined)
-        throw new SchematicError(st.owner
-          ? `${where}: ${k}, ${st.label}, already belongs to the circuit instance ${pathOf(st.owner).join('/')}`
-          : `${where}: ${k}, ${st.label}, is made outside the build; make the parts of a circuit inside its build function`)
+        throw new SchematicError(
+          st.owner
+            ? `${where}: ${k}, ${st.label}, already belongs to the circuit instance ${pathOf(st.owner).join('/')}`
+            : `${where}: ${k}, ${st.label}, is made outside the build; make the parts of a circuit inside its build function`,
+        )
       st.owner = inst
       st.key = k
     } else {
       const c = child!
       if (fresh ? c.parent !== inst : c.parent !== null)
-        throw new SchematicError(c.parent
-          ? `${where}: ${k}, the instance ${pathOf(c).join('/')}, already belongs to another circuit instance`
-          : `${where}: ${k}, the instance ${c.name}, is made outside the build; make nested circuit instances inside the build function`)
+        throw new SchematicError(
+          c.parent
+            ? `${where}: ${k}, the instance ${pathOf(c).join('/')}, already belongs to another circuit instance`
+            : `${where}: ${k}, the instance ${c.name}, is made outside the build; make nested circuit instances inside the build function`,
+        )
       if (!fresh) {
         const r = schematicRegistry()
         c.parent = inst
@@ -180,16 +220,19 @@ function adopt(inst: InstanceState, members: unknown, where: string, fresh: bool
     inst.members.set(k, m)
   }
   // a member a group in the build took belongs to that group
-  if (fresh) for (const m of inst.made) if (!seen.has(m) && ('members' in m ? m.parent === inst : m.owner === inst)) {
-    const what = 'members' in m ? `the instance ${m.name} of ${m.circuit}` : partOf(m.part)!.label
-    throw new SchematicError(`${where}: ${what} is made in the build but not returned; return it under a key, such as { R1: … }`)
-  }
+  if (fresh)
+    for (const m of inst.made)
+      if (!seen.has(m) && ('members' in m ? m.parent === inst : m.owner === inst)) {
+        const what = 'members' in m ? `the instance ${m.name} of ${m.circuit}` : partOf(m.part)!.label
+        throw new SchematicError(`${where}: ${what} is made in the build but not returned; return it under a key, such as { R1: … }`)
+      }
   const names = new Map<string, string>()
-  for (const [k, m] of inst.members) if ('members' in m) {
-    const other = names.get(m.name)
-    if (other !== undefined) throw new SchematicError(`${where}: ${other} and ${k} are both instances named ${m.name}`)
-    names.set(m.name, k)
-  }
+  for (const [k, m] of inst.members)
+    if ('members' in m) {
+      const other = names.get(m.name)
+      if (other !== undefined) throw new SchematicError(`${where}: ${other} and ${k} are both instances named ${m.name}`)
+      names.set(m.name, k)
+    }
 }
 
 /** The ports as a build sees them: reading a port the caller left out throws, naming it. */
@@ -201,7 +244,9 @@ function portView(circuitName: string, ports: Record<string, Connection>): Recor
       if (PROBES.has(k)) return undefined
       throw new SchematicError(`${circuitName}(…): the port ${k} is not connected; pass a Net, or NC for a port the circuit tolerates open`)
     },
-    set() { throw new SchematicError(`${circuitName}: the ports are read-only`) },
+    set() {
+      throw new SchematicError(`${circuitName}: the ports are read-only`)
+    },
   })
 }
 
@@ -213,7 +258,8 @@ function checkPorts(circuitName: string, ports: unknown): Record<string, Connect
   for (const [k, v] of Object.entries(ports)) {
     if (k === '__src') continue
     if (v === undefined) continue
-    if (!isNet(v) && !isNC(v)) throw new SchematicError(`${circuitName}(…): the port ${k} needs a Net from nets() or NC, got ${typeof v === 'string' ? JSON.stringify(v) : String(v)}`)
+    if (!isNet(v) && !isNC(v))
+      throw new SchematicError(`${circuitName}(…): the port ${k} needs a Net from nets() or NC, got ${typeof v === 'string' ? JSON.stringify(v) : String(v)}`)
     out[k] = v
   }
   return Object.freeze(out)
@@ -227,12 +273,17 @@ export function circuit(name: string, build: unknown): any {
   if (typeof build !== 'function') {
     // the object form: one instance of parts made beforehand
     const inst = newInstance(name, null, 'object', name, Object.freeze({}) as Record<string, Connection>)
-    try { adopt(inst, build, `circuit(${JSON.stringify(name)}, { … })`, false) } catch (e) { settle(inst, false); throw e }
+    try {
+      adopt(inst, build, `circuit(${JSON.stringify(name)}, { … })`, false)
+    } catch (e) {
+      settle(inst, false)
+      throw e
+    }
     settle(inst, true)
     // it sits where its first member was declared, for the numbering
     const seqs = [...inst.members.values()].map(m => m.seq)
     if (seqs.length) inst.seq = Math.min(...seqs)
-    return inst.instance = publicInstance(inst)
+    return (inst.instance = publicInstance(inst))
   }
   const make = (ports: unknown, instName: string | undefined): any => {
     const conn = checkPorts(name, ports)
@@ -242,11 +293,18 @@ export function circuit(name: string, build: unknown): any {
     r.building.push(inst)
     try {
       let out: unknown
-      try { out = (build as Function)(portView(name, conn), { nets: inst.nets, local: inst.nets }) } finally { r.building.pop() }
+      try {
+        out = (build as Function)(portView(name, conn), { nets: inst.nets, local: inst.nets })
+      } finally {
+        r.building.pop()
+      }
       adopt(inst, out, `the circuit ${name}`, true)
-    } catch (e) { settle(inst, false); throw e }
+    } catch (e) {
+      settle(inst, false)
+      throw e
+    }
     settle(inst, true)
-    return inst.instance = publicInstance(inst)
+    return (inst.instance = publicInstance(inst))
   }
   const def: any = function (ports?: unknown, instName?: unknown) {
     if (instName !== undefined && typeof instName !== 'string') throw new SchematicError(`${name}(ports, name): the name must be a string`)
@@ -255,10 +313,14 @@ export function circuit(name: string, build: unknown): any {
   Object.defineProperty(def, 'name', { value: name })
   Object.defineProperty(def, '$$', { value: 'circuit-def' })
   Object.defineProperty(def, DEF, { value: true })
-  Object.defineProperty(def, 'named', { value: (instName: string) => { checkName(`${name}.named`, instName); return (ports?: unknown) => make(ports, instName) } })
+  Object.defineProperty(def, 'named', {
+    value: (instName: string) => {
+      checkName(`${name}.named`, instName)
+      return (ports?: unknown) => make(ports, instName)
+    },
+  })
   return def
 }
-
 
 const GROUP_RESERVED = new Set(['$$', 'name', 'circuit', 'path'])
 
@@ -276,16 +338,19 @@ export function group<T extends object>(name: string, members: T): Group<T> {
       if (twin) throw new SchematicError(`${where}: the group ${name} is already made in this circuit, at ${site(twin as InstanceState)}; give each group its own name`)
     } else {
       const twin = r.instances.find(i => !i.parent && i.name === name && i.declFile === inst.declFile)
-      if (twin) throw new SchematicError(`${where}: the name ${name} is already taken by ${twin.circuit === 'group' ? 'the group' : `the instance of ${twin.circuit}`} at ${site(twin)}; give each group its own name`)
+      if (twin)
+        throw new SchematicError(
+          `${where}: the name ${name} is already taken by ${twin.circuit === 'group' ? 'the group' : `the instance of ${twin.circuit}`} at ${site(twin)}; give each group its own name`,
+        )
     }
     const building = inst.parent
     const seen = new Set<PartState | InstanceState>()
     const take = (k: string, v: unknown): void => {
-      const st = partOf(v), child = instanceOf(v)
+      const st = partOf(v),
+        child = instanceOf(v)
       if (st) {
         if (seen.has(st)) throw new SchematicError(`${where}: ${k} is the same part as another key`)
-        if (st.owner !== undefined && st.owner !== building)
-          throw new SchematicError(`${where}: ${k}, ${st.label}, already belongs to ${pathOf(st.owner).join('/')}`)
+        if (st.owner !== undefined && st.owner !== building) throw new SchematicError(`${where}: ${k}, ${st.label}, already belongs to ${pathOf(st.owner).join('/')}`)
         seen.add(st)
         st.owner = inst
         st.key = k
@@ -293,7 +358,11 @@ export function group<T extends object>(name: string, members: T): Group<T> {
       } else if (child) {
         if (child === inst || seen.has(child)) throw new SchematicError(`${where}: ${k} is the same instance as another key`)
         if (child.parent !== building)
-          throw new SchematicError(child.parent ? `${where}: ${k}, ${pathOf(child).join('/')}, already belongs to ${pathOf(child.parent).join('/')}` : `${where}: ${k}, the instance ${child.name}, is made outside the circuit build this group is made in`)
+          throw new SchematicError(
+            child.parent
+              ? `${where}: ${k}, ${pathOf(child).join('/')}, already belongs to ${pathOf(child.parent).join('/')}`
+              : `${where}: ${k}, the instance ${child.name}, is made outside the circuit build this group is made in`,
+          )
         seen.add(child)
         if (!building) r.instances = r.instances.filter(i => i !== child)
         child.parent = inst
@@ -308,12 +377,16 @@ export function group<T extends object>(name: string, members: T): Group<T> {
       take(k, v)
     }
     const names = new Map<string, string>()
-    for (const [k, m] of inst.members) if ('members' in m) {
-      const other = names.get(m.name)
-      if (other !== undefined) throw new SchematicError(`${where}: ${other} and ${k} are both instances named ${m.name}`)
-      names.set(m.name, k)
-    }
-  } catch (e) { settle(inst, false); throw e }
+    for (const [k, m] of inst.members)
+      if ('members' in m) {
+        const other = names.get(m.name)
+        if (other !== undefined) throw new SchematicError(`${where}: ${other} and ${k} are both instances named ${m.name}`)
+        names.set(m.name, k)
+      }
+  } catch (e) {
+    settle(inst, false)
+    throw e
+  }
   settle(inst, true)
   const seqs = [...inst.members.values()].map(m => m.seq)
   if (seqs.length) inst.seq = Math.min(...seqs)
@@ -324,7 +397,7 @@ export function group<T extends object>(name: string, members: T): Group<T> {
   Object.defineProperty(out, 'name', { get: () => inst.name })
   Object.defineProperty(out, 'circuit', { value: 'group' })
   Object.defineProperty(out, 'path', { get: () => pathOf(inst) })
-  return inst.instance = out
+  return (inst.instance = out)
 }
 const site = (i: InstanceState) => (i.src ? `${i.src.file}:${i.src.line}` : 'another call')
 
@@ -333,24 +406,29 @@ export const isCircuitInstance = (v: unknown): v is CircuitInstance => !!instanc
 /** True for a circuit definition made by circuit() with a build function. */
 export const isCircuit = (v: unknown): v is Circuit<any, any> => typeof v === 'function' && !!(v as any)[DEF]
 
-
 /** The marker the flattener reads on a <g> a layout renders. */
 export const LAYOUT_PROP = '__layout'
-export interface LayoutMark { inst: InstanceState; name: string; src?: unknown }
+export interface LayoutMark {
+  inst: InstanceState
+  name: string
+  src?: unknown
+}
 
 /** A component placing one instance, `layout(buck, (g, { at }) => <g at={at}>…</g>)`; the name defaults to the render function's. */
 export function layout<C extends Circuit<any, any> | GroupBase>(target: C, render: (g: InstanceOf<C>, props: LayoutProps) => Child, name?: string): Layout<InstanceOf<C>> {
   const one = instanceOf(target)
   if (!one && !isCircuit(target)) throw new SchematicError('layout() takes a circuit from circuit() or a circuit instance, then a render function')
   if (typeof render !== 'function') throw new SchematicError('layout(circuit, render): the render function is missing')
-  const circuitName = one ? one.circuit : (target as any).name as string
+  const circuitName = one ? one.circuit : ((target as any).name as string)
   const lname = name ?? (render.name || `${circuitName}Layout`)
   const fn: any = function (props: Record<string, any> = {}) {
     const { g, __src, ...rest } = props ?? {}
     const inst = instanceOf(g)
     if (!inst) throw new SchematicError(`<${lname}> needs g={…}, an instance of the circuit ${circuitName}`)
     if (one ? inst !== one : inst.def !== target)
-      throw new SchematicError(`<${lname}> lays out ${one ? `the instance ${one.name}` : `the circuit ${circuitName}`}, but g is ${pathOf(inst).join('/')}, an instance of ${inst.circuit}`)
+      throw new SchematicError(
+        `<${lname}> lays out ${one ? `the instance ${one.name}` : `the circuit ${circuitName}`}, but g is ${pathOf(inst).join('/')}, an instance of ${inst.circuit}`,
+      )
     const mark: LayoutMark = { inst, name: lname, ...(__src ? { src: __src } : {}) }
     return h('g', { [LAYOUT_PROP]: mark, ...(__src ? { __src } : {}) }, render(g, rest))
   }

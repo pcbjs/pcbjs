@@ -42,7 +42,14 @@ const isRequest = (msg: unknown): msg is { id: number | string; method: string }
 
 /** The bare names of a schematic namespace as the compiler injects them, the modules read as the editor has them. */
 const inject: Inject = (file, text, read) => {
-  const r = scopeInject(text, (spec, from) => { const m = resolveFile(spec, from); return m && { file: m.file, source: read(m.file) ?? m.source } }, file)
+  const r = scopeInject(
+    text,
+    (spec, from) => {
+      const m = resolveFile(spec, from)
+      return m && { file: m.file, source: read(m.file) ?? m.source }
+    },
+    file,
+  )
   return r && { text: r.code, at: r.at, length: r.text.length }
 }
 
@@ -51,17 +58,20 @@ export function lspHub(provider: Provider): LspHub {
   const sessions = new Map<unknown, Session>()
 
   const start = (key: unknown, s: Session, send: (msg: unknown) => boolean | void) => {
-    loadLsp().then(mod => {
-      if (s.closed) return
-      s.channel = mod.messageChannel(m => send(m))
-      s.server = mod.startLanguageServer(s.channel, provider)
-      for (const m of s.pending.splice(0)) s.channel.push(m)
-    }, (e: any) => {
-      // the language server is not installed: answer the requests that wait, and forget the session
-      provider.log?.(`the language server could not load: ${String(e?.message ?? e).split('\n')[0]}; install @pcbjs/lsp, which @pcbjs/pcbjs brings`)
-      for (const m of s.pending) if (isRequest(m)) send({ jsonrpc: '2.0', id: m.id, error: { code: -32603, message: '@pcbjs/lsp is not installed' } })
-      if (sessions.get(key) === s) sessions.delete(key)
-    })
+    loadLsp().then(
+      mod => {
+        if (s.closed) return
+        s.channel = mod.messageChannel(m => send(m))
+        s.server = mod.startLanguageServer(s.channel, provider)
+        for (const m of s.pending.splice(0)) s.channel.push(m)
+      },
+      (e: any) => {
+        // the language server is not installed: answer the requests that wait, and forget the session
+        provider.log?.(`the language server could not load: ${String(e?.message ?? e).split('\n')[0]}; install @pcbjs/lsp, which @pcbjs/pcbjs brings`)
+        for (const m of s.pending) if (isRequest(m)) send({ jsonrpc: '2.0', id: m.id, error: { code: -32603, message: '@pcbjs/lsp is not installed' } })
+        if (sessions.get(key) === s) sessions.delete(key)
+      },
+    )
   }
 
   return {
@@ -95,7 +105,10 @@ export function lspHub(provider: Provider): LspHub {
       return sessions.get(key)?.server?.select(sel) ?? false
     },
     padSource(board, ref, num) {
-      for (const s of sessions.values()) { const r = s.server?.padSource(board, ref, num); if (r) return r }
+      for (const s of sessions.values()) {
+        const r = s.server?.padSource(board, ref, num)
+        if (r) return r
+      }
       return undefined
     },
     keys() {
@@ -115,5 +128,9 @@ export function lspHub(provider: Provider): LspHub {
 
 /** The pcbjs version the language server reports in its handshake. */
 export const LSP_VERSION: string = (() => {
-  try { return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version } catch { return '0.0.0' }
+  try {
+    return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
+  } catch {
+    return '0.0.0'
+  }
 })()

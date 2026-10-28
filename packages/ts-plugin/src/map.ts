@@ -1,7 +1,10 @@
 import { toInjected, toSource, type ScopeInjection } from '@pcbjs/compile/scope'
 
 export type Inj = ScopeInjection | null | undefined
-export interface Span { start: number; length: number }
+export interface Span {
+  start: number
+  length: number
+}
 
 export const DROP = Symbol('drop')
 
@@ -29,8 +32,7 @@ export const intoSpan = (inj: Inj, s: Span): Span => {
   return { start, length: intoEnd(inj, s.start + s.length) - start }
 }
 
-const isSpan = (v: any): v is Span =>
-  typeof v.start === 'number' && typeof v.length === 'number' && Object.keys(v).length === 2
+const isSpan = (v: any): v is Span => typeof v.start === 'number' && typeof v.length === 'number' && Object.keys(v).length === 2
 
 /** Keys whose span in the inserted text means the item is about injected code. */
 const OWN = new Set(['textSpan', 'span', 'triggerSpan', 'nameSpan', 'selectionSpan'])

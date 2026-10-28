@@ -32,18 +32,28 @@ export function traceModel(stackup: Stackup, layer: string): TraceModel {
   const L = stackup.layers
   const name = canonical(layer)
   const idx = L.findIndex(l => l.type === 'copper' && l.name === name)
-  if (idx < 0) throw new Error(`impedance: ${JSON.stringify(layer)} is not a copper layer of the stackup (it has ${L.filter((l): l is Copper => l.type === 'copper').map(l => l.name).join(', ')})`)
+  if (idx < 0)
+    throw new Error(
+      `impedance: ${JSON.stringify(layer)} is not a copper layer of the stackup (it has ${L.filter((l): l is Copper => l.type === 'copper')
+        .map(l => l.name)
+        .join(', ')})`,
+    )
   const cu = L[idx] as Copper
   const side = (dir: 1 | -1) => {
-    let h = 0, erh = 0
+    let h = 0,
+      erh = 0
     for (let i = idx + dir; i >= 0 && i < L.length; i += dir) {
       const l = L[i]
       if (l.type === 'copper') return { plane: l.name, h, er: h > 0 ? erh / h : DEFAULT_ER }
-      if (l.type === 'core' || l.type === 'prepreg') { h += l.thickness; erh += l.thickness * (l.er ?? DEFAULT_ER) }
+      if (l.type === 'core' || l.type === 'prepreg') {
+        h += l.thickness
+        erh += l.thickness * (l.er ?? DEFAULT_ER)
+      }
     }
     return null
   }
-  const up = side(-1), down = side(1)
+  const up = side(-1),
+    down = side(1)
   if (!up && !down) throw new Error(`impedance: the stackup has no reference plane for ${name}, it needs a copper layer above or below it`)
   for (const s of [up, down]) if (s && !(s.h > 0)) throw new Error(`impedance: no dielectric between ${name} and ${s.plane}`)
   const t = cu.thickness
@@ -74,7 +84,8 @@ function eeff(u: number, er: number): number {
   return (er + 1) / 2 + ((er - 1) / 2) * Math.pow(1 + 10 / u, -a * b)
 }
 function microstrip(w: number, m: TraceModel): number {
-  const u = w / m.h, t = m.t / m.h
+  const u = w / m.h,
+    t = m.t / m.h
   let ur = u
   if (t > 0) {
     const coth = 1 / Math.tanh(Math.sqrt(6.517 * u))
@@ -92,15 +103,17 @@ function stripSym(w: number, t: number, b: number, er: number): number {
   let wp = w / (b - t)
   if (x > 0) {
     const n = 2 / (1 + (2 / 3) * (x / (1 - x)))
-    wp += (x / (Math.PI * (1 - x))) * (1 - 0.5 * Math.log((x / (2 - x)) ** 2 + Math.pow(0.0796 * x / (w / b + 1.1 * x), n)))
+    wp += (x / (Math.PI * (1 - x))) * (1 - 0.5 * Math.log((x / (2 - x)) ** 2 + Math.pow((0.0796 * x) / (w / b + 1.1 * x), n)))
   }
   const k = 8 / (Math.PI * wp)
   return (30 / Math.sqrt(er)) * Math.log(1 + (4 / (Math.PI * wp)) * (k + Math.sqrt(k * k + 6.27)))
 }
 function stripline(w: number, m: TraceModel): number {
-  const h1 = m.h, h2 = m.h2!
+  const h1 = m.h,
+    h2 = m.h2!
   // each half seen as a symmetric stripline with the trace at that plane's distance, in parallel
-  const za = stripSym(w, m.t, 2 * h1 + m.t, m.er), zb = stripSym(w, m.t, 2 * h2 + m.t, m.er)
+  const za = stripSym(w, m.t, 2 * h1 + m.t, m.er),
+    zb = stripSym(w, m.t, 2 * h2 + m.t, m.er)
   return (2 * za * zb) / (za + zb)
 }
 
@@ -113,7 +126,9 @@ function differential(w: number, s: number, m: TraceModel): number {
   return 2 * single(w, m) * (1 - 0.347 * Math.exp((-2.9 * s) / b))
 }
 
-const positive = (v: number, what: string) => { if (!(typeof v === 'number' && Number.isFinite(v) && v > 0)) throw new Error(`impedance: ${what} must be a positive number of mm, got ${JSON.stringify(v)}`) }
+const positive = (v: number, what: string) => {
+  if (!(typeof v === 'number' && Number.isFinite(v) && v > 0)) throw new Error(`impedance: ${what} must be a positive number of mm, got ${JSON.stringify(v)}`)
+}
 
 /** Impedance in ohms of a trace `width` mm wide, differential when `gap`, edge to edge, is given. */
 export function impedanceOf(stackup: Stackup, layer: string, width: number, gap?: number): number {
@@ -126,13 +141,20 @@ export function impedanceOf(stackup: Stackup, layer: string, width: number, gap?
 
 /** Solve f(x) = target for x in [lo, hi] by bisection on log x; f is monotonic, falling with x unless `rising`. */
 function solve(f: (x: number) => number, target: number, what: string, rising = false, lo = 0.005, hi = 50): number {
-  if (!(typeof target === 'number' && target > 0 && Number.isFinite(target))) throw new Error(`impedance: the target must be a positive number of ohms, got ${JSON.stringify(target)}`)
-  const fl = f(lo), fh = f(hi), min = Math.min(fl, fh), max = Math.max(fl, fh)
-  if (!(target >= min && target <= max)) throw new Error(`impedance: ${target} ohms is out of reach for ${what}, which spans ${Math.round(min * 10) / 10} to ${Math.round(max * 10) / 10} ohms`)
-  let a = Math.log(lo), b = Math.log(hi)
+  if (!(typeof target === 'number' && target > 0 && Number.isFinite(target)))
+    throw new Error(`impedance: the target must be a positive number of ohms, got ${JSON.stringify(target)}`)
+  const fl = f(lo),
+    fh = f(hi),
+    min = Math.min(fl, fh),
+    max = Math.max(fl, fh)
+  if (!(target >= min && target <= max))
+    throw new Error(`impedance: ${target} ohms is out of reach for ${what}, which spans ${Math.round(min * 10) / 10} to ${Math.round(max * 10) / 10} ohms`)
+  let a = Math.log(lo),
+    b = Math.log(hi)
   for (let i = 0; i < 80; i++) {
     const c = (a + b) / 2
-    if ((f(Math.exp(c)) > target) !== rising) a = c; else b = c
+    if (f(Math.exp(c)) > target !== rising) a = c
+    else b = c
   }
   return Math.exp((a + b) / 2)
 }

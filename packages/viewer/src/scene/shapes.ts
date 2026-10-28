@@ -10,16 +10,25 @@ export function signedArea(r: Ring): number {
 export function inside(p: [number, number], r: Ring): boolean {
   let c = false
   for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
-    const [xi, yi] = r[i], [xj, yj] = r[j]
-    if ((yi > p[1]) !== (yj > p[1]) && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) c = !c
+    const [xi, yi] = r[i],
+      [xj, yj] = r[j]
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) c = !c
   }
   return c
 }
 
 type Box = [number, number, number, number]
 function boxOf(r: Ring): Box {
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
-  for (const [x, y] of r) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity
+  for (const [x, y] of r) {
+    if (x < x0) x0 = x
+    if (x > x1) x1 = x
+    if (y < y0) y0 = y
+    if (y > y1) y1 = y
+  }
   return [x0, y0, x1, y1]
 }
 const holds = (a: Box, b: Box) => b[0] >= a[0] && b[1] >= a[1] && b[2] <= a[2] && b[3] <= a[3]
@@ -29,7 +38,9 @@ const meets = (a: Box, b: Box) => b[0] <= a[2] && b[2] >= a[0] && b[1] <= a[3] &
 export class RingIndex {
   readonly ring: Ring
   readonly box: Box
-  private y0: number; private k: number; private bands: number[][] | null = null
+  private y0: number
+  private k: number
+  private bands: number[][] | null = null
   constructor(ring: Ring) {
     this.ring = ring
     this.box = boxOf(ring)
@@ -40,8 +51,10 @@ export class RingIndex {
     if (!bandsN) return
     const bands: number[][] = Array.from({ length: bandsN }, () => [])
     for (let i = 0, j = n - 1; i < n; j = i++) {
-      const a = Math.min(ring[i][1], ring[j][1]), b = Math.max(ring[i][1], ring[j][1])
-      const lo = Math.max(0, Math.floor((a - this.y0) * this.k)), hi = Math.min(bandsN - 1, Math.floor((b - this.y0) * this.k))
+      const a = Math.min(ring[i][1], ring[j][1]),
+        b = Math.max(ring[i][1], ring[j][1])
+      const lo = Math.max(0, Math.floor((a - this.y0) * this.k)),
+        hi = Math.min(bandsN - 1, Math.floor((b - this.y0) * this.k))
       for (let q = lo; q <= hi; q++) bands[q].push(i)
     }
     this.bands = bands
@@ -50,13 +63,15 @@ export class RingIndex {
     const b = this.box
     if (p[0] < b[0] || p[0] > b[2] || p[1] < b[1] || p[1] > b[3]) return false
     if (!this.bands) return inside(p, this.ring)
-    const r = this.ring, n = r.length
+    const r = this.ring,
+      n = r.length
     const band = this.bands[Math.min(this.bands.length - 1, Math.max(0, Math.floor((p[1] - this.y0) * this.k)))]
     let c = false
     for (const i of band) {
       const j = i === 0 ? n - 1 : i - 1
-      const [xi, yi] = r[i], [xj, yj] = r[j]
-      if ((yi > p[1]) !== (yj > p[1]) && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) c = !c
+      const [xi, yi] = r[i],
+        [xj, yj] = r[j]
+      if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) c = !c
     }
     return c
   }
@@ -95,7 +110,12 @@ export function markupRings(svg: string): { id: number | null; rings: Ring[] }[]
     const id = /data-id="(\d+)"/.exec(a)?.[1]
     const rings: Ring[] = []
     for (const sub of d.split(/Z/i)) {
-      const nums = sub.replace(/[ML]/g, ' ').trim().split(/[\s,]+/).map(Number).filter(n => !isNaN(n))
+      const nums = sub
+        .replace(/[ML]/g, ' ')
+        .trim()
+        .split(/[\s,]+/)
+        .map(Number)
+        .filter(n => !isNaN(n))
       if (nums.length < 6) continue
       const r: Ring = []
       for (let i = 0; i + 1 < nums.length; i += 2) r.push([nums[i], nums[i + 1]])

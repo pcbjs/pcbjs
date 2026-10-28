@@ -43,11 +43,18 @@ before(async () => {
   const log = console.log
   console.log = () => {}
   const code = process.exitCode
-  try { await build({ entries: ['alpha.tsx', 'beta.tsx'], root }) } finally { console.log = log; process.exitCode = code }
+  try {
+    await build({ entries: ['alpha.tsx', 'beta.tsx'], root })
+  } finally {
+    console.log = log
+    process.exitCode = code
+  }
   out = join(root, '.pcbjs', 'dist')
   ssr = await import(pathToFileURL(join(root, '.pcbjs', 'cache', 'ssr', 'entry-server.mjs')).href)
 })
-after(() => { if (root) rmSync(root, { recursive: true, force: true }) })
+after(() => {
+  if (root) rmSync(root, { recursive: true, force: true })
+})
 
 const data = () => JSON.parse(readFileSync(join(out, '404.html'), 'utf8').match(/window\.__PCBJS_DATA__=(.*?)<\/script>/)[1])
 
@@ -128,6 +135,9 @@ test('ssr: the route list and the page template', () => {
   assert.equal(scriptJson({ s: '</script>\u2028' }), '{"s":"\\u003c/script>\\u2028"}')
   const tpl = '<html><head><title>pcbjs</title></head><body><div id="app"></div></body></html>'
   const page = pageHtml(tpl, '{}', { html: '<p>$& $1</p>', title: 'A & B', head: '<meta name="x">' })
-  assert.equal(page, '<html><head><title>A &amp; B</title>\n  <meta name="x"></head><body><div id="app" data-ssr><p>$& $1</p></div><script>window.__PCBJS_DATA__={}</script></body></html>')
+  assert.equal(
+    page,
+    '<html><head><title>A &amp; B</title>\n  <meta name="x"></head><body><div id="app" data-ssr><p>$& $1</p></div><script>window.__PCBJS_DATA__={}</script></body></html>',
+  )
   assert.throws(() => pageHtml('<body></body>', '{}'), /no <div id="app">/)
 })

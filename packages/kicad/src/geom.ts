@@ -12,7 +12,9 @@ export function fmt(v: number): string {
 /** Rotate a point by `deg` counter-clockwise on screen, y down: KiCad's and pcbjs's rotation. */
 export function rotate(p: Pt, deg: number): Pt {
   if (!deg) return p
-  const t = (deg * Math.PI) / 180, c = Math.cos(t), s = Math.sin(t)
+  const t = (deg * Math.PI) / 180,
+    c = Math.cos(t),
+    s = Math.sin(t)
   return [p[0] * c + p[1] * s, -p[0] * s + p[1] * c]
 }
 
@@ -37,10 +39,13 @@ export function arcThrough(a: Pt, m: Pt, b: Pt): { c: Pt; r: number; a0: number;
   const k = circleThrough(a, m, b)
   if (!k) return null
   const ang = (p: Pt) => Math.atan2(p[1] - k.c[1], p[0] - k.c[0])
-  const a0 = ang(a), am = ang(m), ab = ang(b)
+  const a0 = ang(a),
+    am = ang(m),
+    ab = ang(b)
   const tau = 2 * Math.PI
   const pos = (x: number) => ((x % tau) + tau) % tau
-  const dm = pos(am - a0), db = pos(ab - a0)
+  const dm = pos(am - a0),
+    db = pos(ab - a0)
   // the direction that passes the mid point before the end
   const sweep = dm <= db ? (db === 0 ? tau : db) : -(tau - db)
   return { c: k.c, r: k.r, a0, sweep }

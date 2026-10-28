@@ -1,6 +1,24 @@
 // State lives on globalThis and values are recognised by their `$$` brand, never instanceof: the CLI's copy compiles what Vite's copy made.
 import { h } from './jsx-runtime.js'
-import type { Child, Component, Connection, Rules, FootprintFactory, Length, Net, NetRules, NoConnect, Part, PartOptions, PartRules, PcbNode, PinList, PinRef, SourcingSpec, Src } from './types.js'
+import type {
+  Child,
+  Component,
+  Connection,
+  Rules,
+  FootprintFactory,
+  Length,
+  Net,
+  NetRules,
+  NoConnect,
+  Part,
+  PartOptions,
+  PartRules,
+  PcbNode,
+  PinList,
+  PinRef,
+  SourcingSpec,
+  Src,
+} from './types.js'
 import { mm } from './units.js'
 import { clearanceValue, mergeClearance } from './clearance.js'
 import type { KindClearanceMM } from './model.js'
@@ -12,17 +30,24 @@ const REGISTRY = Symbol.for('pcbjs.schematic')
 
 /** A mistake in the schematic, thrown where it is made: a wrong pin count, an unknown pin, a pin connected twice. */
 export class SchematicError extends Error {
-  constructor(message: string) { super(message); this.name = 'SchematicError' }
+  constructor(message: string) {
+    super(message)
+    this.name = 'SchematicError'
+  }
 }
 
 /** True for a SchematicError from any copy of this module. */
 export const isSchematicError = (e: unknown): e is SchematicError => !!e && typeof e === 'object' && (e as Error).name === 'SchematicError'
 
-interface NetMeta { seq: number; scope: string | InstanceState | null; rules?: { clearance?: number | KindClearanceMM } }
+interface NetMeta {
+  seq: number
+  scope: string | InstanceState | null
+  rules?: { clearance?: number | KindClearanceMM }
+}
 
 /** The keys of PartRules, the rule overrides of a part. */
 export const PART_RULE_KEYS = ['clearance', 'edgeClearance', 'holeClearance', 'trackWidth', 'thermal'] as const
-export type PartRuleKey = typeof PART_RULE_KEYS[number]
+export type PartRuleKey = (typeof PART_RULE_KEYS)[number]
 /** Rule overrides in mm: `clearance` a length or one per kind of the other item, `thermal` the spoke angle, the rest lengths. */
 export type RuleSet<K extends string> = { [P in K]?: P extends 'clearance' ? number | KindClearanceMM : P extends 'thermal' ? { angle?: 90 | 45 } : number }
 
@@ -31,23 +56,36 @@ export function mergeRuleSets<K extends string>(lower: RuleSet<K>, upper: RuleSe
   const out: Record<string, unknown> = { ...lower }
   for (const [k, v] of Object.entries(upper ?? {})) {
     if (v === undefined) continue
-    out[k] = k === 'clearance' ? mergeClearance(out[k] as number | object | undefined, v as number | object) : k === 'thermal' ? { ...(out[k] as object ?? {}), ...(v as object) } : v
+    out[k] =
+      k === 'clearance' ? mergeClearance(out[k] as number | object | undefined, v as number | object) : k === 'thermal' ? { ...((out[k] as object) ?? {}), ...(v as object) } : v
   }
   return out as RuleSet<K>
 }
 
 /** Rule overrides checked and in mm: keys among `keys`, non-negative lengths, a positive track width; throws naming `where`. */
 export function ruleOverrides<K extends string>(v: unknown, keys: readonly K[], where: string, self = true): RuleSet<K> {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error(`${where} must be an object such as { clearance: 0.2 }, got ${v === null ? 'null' : Array.isArray(v) ? 'an array' : JSON.stringify(v)}`)
+  if (!v || typeof v !== 'object' || Array.isArray(v))
+    throw new Error(`${where} must be an object such as { clearance: 0.2 }, got ${v === null ? 'null' : Array.isArray(v) ? 'an array' : JSON.stringify(v)}`)
   const out: Record<string, unknown> = {}
   for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
     if (k === '__src' || x === undefined) continue
     if (!(keys as readonly string[]).includes(k)) throw new Error(`${where}: unknown rule ${JSON.stringify(k)}; it takes ${keys.join(', ')}`)
-    if (k === 'clearance') { out[k] = clearanceValue(x, where, self); continue }
-    if (k === 'thermal') { out[k] = thermalRule(x, where); continue }
+    if (k === 'clearance') {
+      out[k] = clearanceValue(x, where, self)
+      continue
+    }
+    if (k === 'thermal') {
+      out[k] = thermalRule(x, where)
+      continue
+    }
     let n: number
-    try { n = mm(x as Length) } catch (e) { throw new Error(`${where}: ${k}: ${(e as Error).message}`) }
-    if (!(Number.isFinite(n) && (k === 'trackWidth' ? n > 0 : n >= 0))) throw new Error(`${where}: ${k} must be a ${k === 'trackWidth' ? 'positive' : 'non-negative'} length, got ${JSON.stringify(x)}`)
+    try {
+      n = mm(x as Length)
+    } catch (e) {
+      throw new Error(`${where}: ${k}: ${(e as Error).message}`)
+    }
+    if (!(Number.isFinite(n) && (k === 'trackWidth' ? n > 0 : n >= 0)))
+      throw new Error(`${where}: ${k} must be a ${k === 'trackWidth' ? 'positive' : 'non-negative'} length, got ${JSON.stringify(x)}`)
     out[k] = n
   }
   return out as RuleSet<K>
@@ -141,7 +179,9 @@ export function topInstance(i: InstanceState): InstanceState {
 /** Every part of an instance and of its descendants, in key order. */
 export function instanceParts(i: InstanceState): PartState[] {
   const out: PartState[] = []
-  for (const m of i.members.values()) if (isInstanceState(m)) out.push(...instanceParts(m)); else out.push(m)
+  for (const m of i.members.values())
+    if (isInstanceState(m)) out.push(...instanceParts(m))
+    else out.push(m)
   return out
 }
 export const isInstanceState = (m: PartState | InstanceState): m is InstanceState => 'members' in m
@@ -156,7 +196,11 @@ interface SourceRule {
   src?: Src
 }
 
-interface RenderScope { stack: string[]; counts: Map<string, number>; rules?: Readonly<Rules> }
+interface RenderScope {
+  stack: string[]
+  counts: Map<string, number>
+  rules?: Readonly<Rules>
+}
 interface Registry {
   seq: number
   netSeq: number
@@ -204,11 +248,12 @@ export function bindRef<T>(value: T, name: string, src?: Src): T {
 ;(globalThis as any)[Symbol.for('pcbjs.bindRef')] = bindRef
 
 /** Install or remove, with null, the stack position to source mapper. */
-export function setSourceMapper(fn: ((src: Src) => Src) | null): void { registry().mapSrc = fn }
+export function setSourceMapper(fn: ((src: Src) => Src) | null): void {
+  registry().mapSrc = fn
+}
 
 /** The registry, for circuit.ts. */
 export const schematicRegistry = (): Registry => registry()
-
 
 function makeNet(name: string, cls: string | undefined, scope: string | InstanceState | null): Net {
   const n: any = { $$: 'net', name }
@@ -220,7 +265,11 @@ function makeNet(name: string, cls: string | undefined, scope: string | Instance
   Object.defineProperty(n, 'rules', {
     value: (r: NetRules): Net => {
       let got: RuleSet<'clearance'>
-      try { got = ruleOverrides(r, ['clearance'] as const, `net ${name}.rules`, false) } catch (e) { throw new SchematicError((e as Error).message) }
+      try {
+        got = ruleOverrides(r, ['clearance'] as const, `net ${name}.rules`, false)
+      } catch (e) {
+        throw new SchematicError((e as Error).message)
+      }
       meta.rules = mergeRuleSets(meta.rules ?? {}, got)
       return n
     },
@@ -237,11 +286,13 @@ export function netProxy(classes: Record<string, { class?: string } | undefined>
     get(_t, k) {
       if (typeof k === 'symbol' || PROBES.has(k)) return undefined
       let n = cache.get(k)
-      if (!n) cache.set(k, n = makeNet(prefix + k, classes?.[k]?.class, scope))
+      if (!n) cache.set(k, (n = makeNet(prefix + k, classes?.[k]?.class, scope)))
       return n
     },
     has: (_t, k) => typeof k === 'string',
-    set() { throw new SchematicError('nets() is read-only: declare a net by reading it, const { GND } = nets()') },
+    set() {
+      throw new SchematicError('nets() is read-only: declare a net by reading it, const { GND } = nets()')
+    },
   })
 }
 
@@ -255,16 +306,20 @@ export function nets(a?: string | Record<string, { class?: string }>, b?: Record
     checkClasses(b, `nets(${JSON.stringify(a)}, …)`)
     return netProxy(b, null, `${p}/`)
   }
-  if (b !== undefined) throw new TypeError('nets(classes, …): a second argument follows only a prefix, nets(\'P1\', { VBUS: { class: \'power\' } })')
+  if (b !== undefined) throw new TypeError("nets(classes, …): a second argument follows only a prefix, nets('P1', { VBUS: { class: 'power' } })")
   checkClasses(a, 'nets(…)')
   return netProxy(a, null)
 }
 
 function checkClasses(c: unknown, call: string): void {
   if (c === undefined) return
-  if (c === null || typeof c !== 'object' || Array.isArray(c)) throw new TypeError(`${call}: takes a namespace prefix string or a class table such as { VIN: { class: 'power' } }, got ${Array.isArray(c) ? 'an array' : c === null ? 'null' : typeof c}`)
+  if (c === null || typeof c !== 'object' || Array.isArray(c))
+    throw new TypeError(
+      `${call}: takes a namespace prefix string or a class table such as { VIN: { class: 'power' } }, got ${Array.isArray(c) ? 'an array' : c === null ? 'null' : typeof c}`,
+    )
   for (const [k, v] of Object.entries(c))
-    if (v === null || typeof v !== 'object' || (v.class !== undefined && typeof v.class !== 'string')) throw new TypeError(`${call}: the entry ${JSON.stringify(k)} must be { class: 'name' }, got ${JSON.stringify(v)}`)
+    if (v === null || typeof v !== 'object' || (v.class !== undefined && typeof v.class !== 'string'))
+      throw new TypeError(`${call}: the entry ${JSON.stringify(k)} must be { class: 'name' }, got ${JSON.stringify(v)}`)
 }
 
 /** Nets private to one instance, named after its path such as `LedChannel#2/led`; outside a render after `label`. */
@@ -308,7 +363,6 @@ export function netOwner(v: Net): InstanceState | null {
   return scope && typeof scope === 'object' ? scope : null
 }
 
-
 /** The state behind a Part, or null for anything else. */
 export function partOf(v: unknown): PartState | null {
   return typeof v === 'function' ? ((v as any)[PART_STATE] ?? null) : null
@@ -329,7 +383,9 @@ export function pinOfPad(pins: readonly string[], pad: { num: string; name: stri
 
 /** Pads `<pad nc>` marked, set by the flattener and shared through globalThis. */
 const NC_PADS: WeakSet<object> = ((globalThis as any)[Symbol.for('pcbjs.pads.nc')] ??= new WeakSet())
-export const markNcPad = (pad: object): void => { NC_PADS.add(pad) }
+export const markNcPad = (pad: object): void => {
+  NC_PADS.add(pad)
+}
 
 /** A pad left unconnected on purpose: `nc` on the pad, or its number or name in the footprint's `nc` list. */
 export function isNcPad(st: PartState, pad: { num: string; name: string }): boolean {
@@ -344,7 +400,9 @@ export function pinsOfPads(st: PartState, pads: readonly { num: string; name: st
     if (pin !== null) return pin
     const label = pad.name !== pad.num ? `${pad.num} "${pad.name}"` : pad.num
     const near = didYouMean(pad.name, st.pins) ?? (pad.name !== pad.num ? didYouMean(pad.num, st.pins) : null)
-    throw new SchematicError(`${st.label}: pad ${label} of footprint ${st.footprintId} matches no pin${near ? `; did you mean ${near}?` : '.'} Its pins are ${st.pins.join(', ')}. Name the pad after a pin, or mark it unconnected with nc on the pad or in the footprint's nc list`)
+    throw new SchematicError(
+      `${st.label}: pad ${label} of footprint ${st.footprintId} matches no pin${near ? `; did you mean ${near}?` : '.'} Its pins are ${st.pins.join(', ')}. Name the pad after a pin, or mark it unconnected with nc on the pad or in the footprint's nc list`,
+    )
   })
 }
 
@@ -354,16 +412,21 @@ export function didYouMean(name: string, candidates: readonly string[]): string 
   const low = name.toLowerCase()
   const ci = candidates.find(c => c.toLowerCase() === low)
   if (ci !== undefined) return ci
-  let best: string | null = null, bestD = Infinity
+  let best: string | null = null,
+    bestD = Infinity
   const limit = Math.max(1, Math.floor(name.length / 3))
   for (const c of candidates) {
     const d = editDistance(low, c.toLowerCase())
-    if (d <= limit && d < bestD) { best = c; bestD = d }
+    if (d <= limit && d < bestD) {
+      best = c
+      bestD = d
+    }
   }
   return best
 }
 function editDistance(a: string, b: string): number {
-  let prev = Array.from({ length: b.length + 1 }, (_, j) => j), prev2 = prev
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j),
+    prev2 = prev
   for (let i = 1; i <= a.length; i++) {
     const cur = [i]
     for (let j = 1; j <= b.length; j++) {
@@ -376,7 +439,13 @@ function editDistance(a: string, b: string): number {
   return prev[b.length]
 }
 
-const HERE = (() => { try { return new URL('.', import.meta.url).pathname } catch { return '' } })()
+const HERE = (() => {
+  try {
+    return new URL('.', import.meta.url).pathname
+  } catch {
+    return ''
+  }
+})()
 // the parent of every pcbjs package: packages/ in the repository, node_modules/@pcbjs/ installed
 const PACKAGES = HERE ? HERE.replace(/[\\/][^\\/]+[\\/]dist[\\/]?$/, '/') : ''
 
@@ -392,12 +461,29 @@ export function callerSite(anyPackage = false): Src | undefined {
     const m = /\(?((?:file:\/\/)?[^()\s]+?):(\d+):(\d+)\)?$/.exec(t)
     if (!m) continue
     let file = m[1]
-    if (file.startsWith('file://')) { try { file = decodeURIComponent(new URL(file).pathname) } catch { continue } }
-    if (file.startsWith('node:') || file.includes('/node_modules/') || (HERE && file.startsWith(HERE)) || (anyPackage && PACKAGES && file.startsWith(PACKAGES) && /^[^\\/]+[\\/]dist[\\/]/.test(file.slice(PACKAGES.length))) || !/^([\\/]|[A-Za-z]:)/.test(file)) continue
+    if (file.startsWith('file://')) {
+      try {
+        file = decodeURIComponent(new URL(file).pathname)
+      } catch {
+        continue
+      }
+    }
+    if (
+      file.startsWith('node:') ||
+      file.includes('/node_modules/') ||
+      (HERE && file.startsWith(HERE)) ||
+      (anyPackage && PACKAGES && file.startsWith(PACKAGES) && /^[^\\/]+[\\/]dist[\\/]/.test(file.slice(PACKAGES.length))) ||
+      !/^([\\/]|[A-Za-z]:)/.test(file)
+    )
+      continue
     const raw: Src = { file, line: Number(m[2]), col: Number(m[3]) }
     const map = registry().mapSrc
     if (!map) return raw
-    try { return map(raw) } catch { return raw }
+    try {
+      return map(raw)
+    } catch {
+      return raw
+    }
   }
   return undefined
 }
@@ -437,14 +523,30 @@ export function part<P extends string = string, D extends string = never>(footpr
   const building = r.building.at(-1)
   const v = value === undefined || value === null ? undefined : String(value)
   const st: PartState = {
-    seq: ++r.seq, footprint, props: { ...rest, ...own }, value: v, pins, nc, prefix, footprintId: String(footprint.id ?? name),
-    conn: new Map(), src: callerSite(true), render: !!r.render, label: `${name}(${v !== undefined ? JSON.stringify(v) : ''})`, part: null!,
-    source: {}, sourced: {}, rules: {},
+    seq: ++r.seq,
+    footprint,
+    props: { ...rest, ...own },
+    value: v,
+    pins,
+    nc,
+    prefix,
+    footprintId: String(footprint.id ?? name),
+    conn: new Map(),
+    src: callerSite(true),
+    render: !!r.render,
+    label: `${name}(${v !== undefined ? JSON.stringify(v) : ''})`,
+    part: null!,
+    source: {},
+    sourced: {},
+    rules: {},
   }
   // a model file is relative to the file of this call
   if (st.props.model) st.props.model = anchorModel(st.props.model, st.src?.file)
-  if (building) { st.owner = building; st.declFile = building.declFile; building.made.push(st) }
-  else st.declFile = st.src?.file
+  if (building) {
+    st.owner = building
+    st.declFile = building.declFile
+    building.made.push(st)
+  } else st.declFile = st.src?.file
   if (sourceOpt !== undefined) st.source = sourcingSpec(sourceOpt, `${st.label}: source`)
   // `.net` is read lazily, so a handle taken before connect() still answers after it
   const handle = (p: string, pad?: string): PinRef => {
@@ -457,21 +559,22 @@ export function part<P extends string = string, D extends string = never>(footpr
     const p = canonicalPin(pins, key)
     if (p === null) throw new SchematicError(`${st.label} has no pin ${JSON.stringify(String(key))}; its pins are ${pins.join(', ')}`)
     let ref = pinRefs.get(p)
-    if (!ref) pinRefs.set(p, ref = handle(p))
+    if (!ref) pinRefs.set(p, (ref = handle(p)))
     return ref
   }
   const padRefs = new Map<string, PinRef>()
   // checked against the footprint when the board compiles
   const pad = (key: unknown): PinRef => {
-    if ((typeof key !== 'string' && typeof key !== 'number') || String(key) === '') throw new SchematicError(`${st.label}.pad: needs a pad number or name such as 'B4', got ${String(key)}`)
+    if ((typeof key !== 'string' && typeof key !== 'number') || String(key) === '')
+      throw new SchematicError(`${st.label}.pad: needs a pad number or name such as 'B4', got ${String(key)}`)
     const k = String(key)
     let ref = padRefs.get(k)
-    if (!ref) padRefs.set(k, ref = handle(k, k))
+    if (!ref) padRefs.set(k, (ref = handle(k, k)))
     return ref
   }
   // a numeric key is a pad number; any other key is a pin name first, then a pad name
   let padList: PadInfo[] | null | undefined
-  const pads = (): PadInfo[] | null => padList === undefined ? (padList = padsOf(st)) : padList
+  const pads = (): PadInfo[] | null => (padList === undefined ? (padList = padsOf(st)) : padList)
   let padIds: string[] | null | undefined
   const key = (k: string): PinRef => {
     if (/^\d+$/.test(k)) {
@@ -481,7 +584,9 @@ export function part<P extends string = string, D extends string = never>(footpr
       if (pins.includes(k) && (!all || (hit.length > 0 && all.every(q => (q.num === k) === (pinOfPad(pins, q) === k))))) return pin(k)
       if (!all || hit.length) return pad(k)
       const nums = [...new Set(all.map(q => q.num).filter(n => n !== ''))]
-      throw new SchematicError(`${st.label} has no pad numbered ${JSON.stringify(k)}; a number key is a pad number, never a pin position. Its pads are ${nums.join(', ') || 'none'}; its pins are ${pins.join(', ')}`)
+      throw new SchematicError(
+        `${st.label} has no pad numbered ${JSON.stringify(k)}; a number key is a pad number, never a pin position. Its pads are ${nums.join(', ') || 'none'}; its pins are ${pins.join(', ')}`,
+      )
     }
     if (pins.includes(k)) return pin(k)
     // a pad named after a pin is reached through the pin
@@ -495,13 +600,25 @@ export function part<P extends string = string, D extends string = never>(footpr
   const connectPin = (k: string): string => {
     if (pins.includes(k)) return k
     const all = /^\d+$/.test(k) ? pads() : null
-    const own = [...new Set((all ?? []).filter(q => q.num === k).map(q => pinOfPad(pins, q)).filter((q): q is string => q !== null))]
+    const own = [
+      ...new Set(
+        (all ?? [])
+          .filter(q => q.num === k)
+          .map(q => pinOfPad(pins, q))
+          .filter((q): q is string => q !== null),
+      ),
+    ]
     if (own.length === 1) return own[0]
-    throw new SchematicError(`${st.label}.connect: no pin ${JSON.stringify(k)}${own.length > 1 ? `; pad ${k} belongs to pins ${own.join(' and ')}` : ''}; its pins are ${pins.join(', ')}`)
+    throw new SchematicError(
+      `${st.label}.connect: no pin ${JSON.stringify(k)}${own.length > 1 ? `; pad ${k} belongs to pins ${own.join(' and ')}` : ''}; its pins are ${pins.join(', ')}`,
+    )
   }
   const connection = (pinName: string, c: unknown): Connection => {
     if (isNC(c)) return c
-    if (isNet(c)) { crossing(st, pinName, c); return c }
+    if (isNet(c)) {
+      crossing(st, pinName, c)
+      return c
+    }
     throw new SchematicError(`${st.label}.connect: pin ${pinName} needs a Net from nets() or NC, got ${typeof c === 'string' ? JSON.stringify(c) : String(c)}`)
   }
   const join = (pinName: string, c: Connection) => {
@@ -516,7 +633,10 @@ export function part<P extends string = string, D extends string = never>(footpr
         join(p, connection(p, c))
       }
     } else {
-      if (args.length !== pins.length) throw new SchematicError(`${st.label}.connect: ${args.length} net${args.length === 1 ? '' : 's'} for ${pins.length} pin${pins.length === 1 ? '' : 's'} (${pins.join(', ')})`)
+      if (args.length !== pins.length)
+        throw new SchematicError(
+          `${st.label}.connect: ${args.length} net${args.length === 1 ? '' : 's'} for ${pins.length} pin${pins.length === 1 ? '' : 's'} (${pins.join(', ')})`,
+        )
       args.forEach((c, i) => join(pins[i], connection(pins[i], c)))
     }
     return proxy
@@ -531,33 +651,51 @@ export function part<P extends string = string, D extends string = never>(footpr
     return proxy
   }
   function addRules(r: PartRules): Part<any> {
-    try { st.rules = mergeRuleSets(st.rules, ruleOverrides(r, PART_RULE_KEYS, `${st.label}.rules`)) } catch (e) { throw new SchematicError((e as Error).message) }
+    try {
+      st.rules = mergeRuleSets(st.rules, ruleOverrides(r, PART_RULE_KEYS, `${st.label}.rules`))
+    } catch (e) {
+      throw new SchematicError((e as Error).message)
+    }
     return proxy
   }
   // calling a part is writing it as JSX
-  const target = function Part(props?: Record<string, any>): PcbNode { return h(proxy as any, props ?? {}) }
+  const target = function Part(props?: Record<string, any>): PcbNode {
+    return h(proxy as any, props ?? {})
+  }
   const proxy: Part<any> = new Proxy(target, {
     get(t, k) {
       if (k === PART_STATE) return st
       if (typeof k === 'symbol') return Reflect.get(t, k)
       switch (k) {
-        case '$$': return 'part'
-        case 'connect': return connect
-        case 'ref': return setRef
-        case 'source': return addSource
-        case 'rules': return addRules
-        case 'pin': return pin
-        case 'pad': return pad
-        case 'value': return st.value
-        case 'prefix': return st.prefix
-        case 'pins': return [...pins]
+        case '$$':
+          return 'part'
+        case 'connect':
+          return connect
+        case 'ref':
+          return setRef
+        case 'source':
+          return addSource
+        case 'rules':
+          return addRules
+        case 'pin':
+          return pin
+        case 'pad':
+          return pad
+        case 'value':
+          return st.value
+        case 'prefix':
+          return st.prefix
+        case 'pins':
+          return [...pins]
       }
       if (PROBES.has(k) && canonicalPin(pins, k) === null) return k === 'prototype' ? Reflect.get(t, k) : undefined
       if (k in t && canonicalPin(pins, k) === null) return Reflect.get(t, k)
       return key(k)
     },
     has: (t, k) => k in t || canonicalPin(pins, k) !== null,
-    set() { throw new SchematicError(`${st.label} is read-only: use .connect(…), .ref(…), .source(…) and .rules(…)`) },
+    set() {
+      throw new SchematicError(`${st.label} is read-only: use .connect(…), .ref(…), .source(…) and .rules(…)`)
+    },
   }) as any
   st.part = proxy
   if (!st.render) {
@@ -573,7 +711,11 @@ export function part<P extends string = string, D extends string = never>(footpr
 }
 
 /** A pad of a footprint rendered outside a board. */
-interface PadInfo { num: string; name: string; nc: boolean }
+interface PadInfo {
+  num: string
+  name: string
+  nc: boolean
+}
 
 /** The pads of a part's footprint in pad order, unnumbered holes left out; null when it does not render outside a board. */
 function padsOf(st: PartState): PadInfo[] | null {
@@ -582,7 +724,10 @@ function padsOf(st: PartState): PadInfo[] | null {
   const walk = (c: unknown, depth: number): void => {
     if (depth > 64 || c === null || c === undefined || typeof c === 'boolean') return
     const list = childList(c)
-    if (list) { for (const x of list) walk(x, depth + 1); return }
+    if (list) {
+      for (const x of list) walk(x, depth + 1)
+      return
+    }
     if (!isNode(c) || seen.has(c)) return
     seen.add(c)
     if (c.type === 'pad') {
@@ -603,7 +748,9 @@ function padsOf(st: PartState): PadInfo[] | null {
   }
   try {
     walk((st.footprint as Component)({ ...st.props, ref: st.explicitRef ?? `${st.prefix}?`, at: [0, 0] }), 0)
-  } catch { return null }
+  } catch {
+    return null
+  }
   return out
 }
 
@@ -611,7 +758,8 @@ function padsOf(st: PartState): PadInfo[] | null {
 function padIdsOf(st: PartState): string[] | null {
   const pads = padsOf(st)
   if (!pads) return null
-  const nums: string[] = [], names: string[] = []
+  const nums: string[] = [],
+    names: string[] = []
   for (const p of pads) {
     if (p.num !== '' && !nums.includes(p.num)) nums.push(p.num)
     if (p.name !== '' && p.name !== p.num && !names.includes(p.name)) names.push(p.name)
@@ -650,9 +798,10 @@ function crossing(st: PartState, pin: string, n: Net): void {
   for (const c of Object.values(owner.ports)) if (c === n) return
   const own = netOwner(n)
   const what = own ? `the private net ${instancePath(own).join('/')}/${n.name}` : `the net ${n.name}`
-  throw new SchematicError(`${st.label}.connect: pin ${pin} of a part in the circuit ${owner.circuit} reaches ${what}, which is neither a port nor one of its own nets; pass it in as a port`)
+  throw new SchematicError(
+    `${st.label}.connect: pin ${pin} of a part in the circuit ${owner.circuit} reaches ${what}, which is neither a port nor one of its own nets; pass it in as a port`,
+  )
 }
-
 
 const isRenderProps = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && ('ref' in v || 'at' in v)
 
@@ -712,7 +861,6 @@ export function defineFootprint<const P extends string, Props = any, const D ext
   return factory as any
 }
 
-
 /** A sourcing spec checked and copied; numbers become strings. */
 export function sourcingSpec(spec: unknown, where: string): Record<string, string> {
   if (!spec || typeof spec !== 'object' || Array.isArray(spec)) throw new SchematicError(`${where} needs an object such as { MPN: 'RC0603FR-07330RL' }, got ${String(spec)}`)
@@ -749,14 +897,18 @@ export function source(target: unknown, a: unknown, b?: unknown): void {
     const parts = new Set<PartState>()
     list.forEach((p, i) => {
       const inst = instanceOf(p)
-      if (inst) { for (const st of instanceParts(inst)) parts.add(st); return }
+      if (inst) {
+        for (const st of instanceParts(inst)) parts.add(st)
+        return
+      }
       const st = partOf(p)
       if (!st) throw new SchematicError(`source(): item ${i + 1} is not a part or a circuit instance`)
       parts.add(st)
     })
     rule = { seq: 0, parts, spec: sourcingSpec(a, 'source()') }
   } else if (typeof target === 'function') {
-    if (typeof a !== 'string' && typeof a !== 'number') throw new SchematicError(`source(factory, value, spec) needs a value such as '330', got ${a === undefined ? 'nothing' : typeof a}`)
+    if (typeof a !== 'string' && typeof a !== 'number')
+      throw new SchematicError(`source(factory, value, spec) needs a value such as '330', got ${a === undefined ? 'nothing' : typeof a}`)
     const name = (target as any).displayName || target.name || 'Footprint'
     rule = { seq: 0, factory: target as Component, value: String(a), spec: sourcingSpec(b, `source(${name}, ${JSON.stringify(String(a))})`) }
   } else throw new SchematicError('source() takes a part, a circuit instance, an array of them, or a footprint factory and a value')
@@ -773,7 +925,8 @@ export function source(target: unknown, a: unknown, b?: unknown): void {
 const sameFactory = (a: Component, b: Component): boolean => {
   if (a === b) return true
   // two module copies of one library factory are not ===
-  const x = a as any, y = b as any
+  const x = a as any,
+    y = b as any
   return x.id !== undefined && x.id === y.id && (x.displayName || x.name) === (y.displayName || y.name)
 }
 const stripQuery = (f: string) => f.replace(/[?#].*$/, '')
@@ -781,15 +934,19 @@ const stripQuery = (f: string) => f.replace(/[?#].*$/, '')
 /** A part's sourcing keys, lowest first: factory rules, part rules, options, `.source()`; `files` limits factory rules to those files. */
 export function sourcingOf(st: PartState, files?: ReadonlySet<string>): Record<string, string> {
   const rules = registry().sources
-  const byFactory = rules.filter(x => x.factory && st.value !== undefined && x.value === st.value && sameFactory(x.factory, st.footprint)
-    && (!files || !x.src || files.has(stripQuery(x.src.file))))
+  const byFactory = rules.filter(
+    x => x.factory && st.value !== undefined && x.value === st.value && sameFactory(x.factory, st.footprint) && (!files || !x.src || files.has(stripQuery(x.src.file))),
+  )
   const byPart = rules.filter(x => x.parts?.has(st))
   return Object.assign({}, ...byFactory.map(x => x.spec), ...byPart.map(x => x.spec), st.props.fields ?? {}, st.source, st.sourced)
 }
 
-
 /** The state of one compile, see beginCompile. */
-export interface CompileScope { parts: PartState[]; instances: InstanceState[]; prev: RenderScope | null }
+export interface CompileScope {
+  parts: PartState[]
+  instances: InstanceState[]
+  prev: RenderScope | null
+}
 
 /** Start a compile: a new epoch, a snapshot of module-level parts, and a render scope. */
 export function beginCompile(rules?: Readonly<Rules>): CompileScope {
@@ -799,7 +956,9 @@ export function beginCompile(rules?: Readonly<Rules>): CompileScope {
   r.render = { stack: [], counts: new Map(), rules }
   return scope
 }
-export function endCompile(scope: CompileScope): void { registry().render = scope.prev }
+export function endCompile(scope: CompileScope): void {
+  registry().render = scope.prev
+}
 
 /** The rules of the board being compiled, for a component that sizes itself by them; undefined outside a compile. */
 export const boardRules = (): Readonly<Rules> | undefined => registry().render?.rules
@@ -812,5 +971,9 @@ export function renderComponent<T>(fn: Component, props: any): T {
   const k = (r.counts.get(name) ?? 0) + 1
   r.counts.set(name, k)
   r.stack.push(`${name}#${k}`)
-  try { return fn(props) as T } finally { r.stack.pop() }
+  try {
+    return fn(props) as T
+  } finally {
+    r.stack.pop()
+  }
 }

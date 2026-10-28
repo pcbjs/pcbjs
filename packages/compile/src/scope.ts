@@ -5,7 +5,10 @@ import { dirname, extname, resolve } from 'node:path'
 import ts from 'typescript'
 
 /** A module's file and source text. */
-export interface ScopeModule { file: string; source: string }
+export interface ScopeModule {
+  file: string
+  source: string
+}
 /** Finds the module a specifier names from the importing file, or null when it is not a local source file. */
 export type ResolveModule = (spec: string, from: string) => ScopeModule | null | undefined
 
@@ -23,11 +26,24 @@ export interface ScopeInjection {
 
 /** Thrown for a file the injector cannot scope, such as one passing two schematic namespaces. */
 export class ScopeError extends Error {
-  constructor(message: string, readonly file: string, readonly pos: number) { super(message); this.name = 'ScopeError' }
+  constructor(
+    message: string,
+    readonly file: string,
+    readonly pos: number,
+  ) {
+    super(message)
+    this.name = 'ScopeError'
+  }
 }
 
 const EXTS = ['.ts', '.tsx', '.mts', '.js', '.jsx', '.mjs']
-const isFile = (f: string) => { try { return statSync(f).isFile() } catch { return false } }
+const isFile = (f: string) => {
+  try {
+    return statSync(f).isFile()
+  } catch {
+    return false
+  }
+}
 
 /** Resolves a relative specifier on disk the way a bundler does: as written, with a source extension, `.js` as `.ts`, or an index file. */
 export const resolveFile: ResolveModule = (spec, from) => {
@@ -56,11 +72,13 @@ export function moduleExports(mod: ScopeModule, resolveModule: ResolveModule = r
   if (seen.has(mod.file)) return out
   seen.add(mod.file)
   const sf = parse(mod.file, mod.source)
-  const types = new Set<string>(), values = new Set<string>()
+  const types = new Set<string>(),
+    values = new Set<string>()
   for (const st of sf.statements) {
     if (ts.isInterfaceDeclaration(st) || ts.isTypeAliasDeclaration(st)) types.add(st.name.text)
     else if (ts.isVariableStatement(st)) for (const d of st.declarationList.declarations) bindingNames(d.name).forEach(n => values.add(n))
-    else if ((ts.isFunctionDeclaration(st) || ts.isClassDeclaration(st) || ts.isEnumDeclaration(st) || ts.isModuleDeclaration(st)) && st.name && ts.isIdentifier(st.name)) values.add(st.name.text)
+    else if ((ts.isFunctionDeclaration(st) || ts.isClassDeclaration(st) || ts.isEnumDeclaration(st) || ts.isModuleDeclaration(st)) && st.name && ts.isIdentifier(st.name))
+      values.add(st.name.text)
     else if (ts.isImportDeclaration(st) && st.importClause && !st.importClause.isTypeOnly) {
       const c = st.importClause
       if (c.name) values.add(c.name.text)
@@ -76,28 +94,56 @@ export function moduleExports(mod: ScopeModule, resolveModule: ResolveModule = r
         const m = spec !== undefined ? resolveModule(spec, mod.file) : null
         if (m) for (const n of moduleExports(m, resolveModule, seen)) out.add(n)
       } else if (ts.isNamespaceExport(st.exportClause)) out.add(st.exportClause.name.text)
-      else for (const e of st.exportClause.elements) {
-        const local = (e.propertyName ?? e.name).text
-        if (!e.isTypeOnly && (spec !== undefined || !types.has(local) || values.has(local))) out.add(e.name.text)
-      }
+      else
+        for (const e of st.exportClause.elements) {
+          const local = (e.propertyName ?? e.name).text
+          if (!e.isTypeOnly && (spec !== undefined || !types.has(local) || values.has(local))) out.add(e.name.text)
+        }
       continue
     }
     if (!has(st, ts.SyntaxKind.ExportKeyword) || has(st, ts.SyntaxKind.DefaultKeyword)) continue
     if (ts.isVariableStatement(st)) for (const d of st.declarationList.declarations) bindingNames(d.name).forEach(n => out.add(n))
-    else if ((ts.isFunctionDeclaration(st) || ts.isClassDeclaration(st) || ts.isEnumDeclaration(st) || ts.isModuleDeclaration(st) || ts.isImportEqualsDeclaration(st)) && st.name && ts.isIdentifier(st.name)) out.add(st.name.text)
+    else if (
+      (ts.isFunctionDeclaration(st) || ts.isClassDeclaration(st) || ts.isEnumDeclaration(st) || ts.isModuleDeclaration(st) || ts.isImportEqualsDeclaration(st)) &&
+      st.name &&
+      ts.isIdentifier(st.name)
+    )
+      out.add(st.name.text)
   }
   out.delete('default')
   return out
 }
 
 /** Names the runtime and the TypeScript libs provide, never taken from a schematic module. */
-const GLOBALS = new Set([...Object.getOwnPropertyNames(globalThis), 'globalThis', 'undefined', 'arguments', 'require', 'module', 'exports', '__dirname', '__filename', 'window', 'document', 'self', 'navigator', 'location'])
+const GLOBALS = new Set([
+  ...Object.getOwnPropertyNames(globalThis),
+  'globalThis',
+  'undefined',
+  'arguments',
+  'require',
+  'module',
+  'exports',
+  '__dirname',
+  '__filename',
+  'window',
+  'document',
+  'self',
+  'navigator',
+  'location',
+])
 
 class Scope {
   readonly names = new Set<string>()
   readonly fn: Scope
-  constructor(readonly parent: Scope | null, fn = false) { this.fn = fn || !parent ? this : parent.fn }
-  has(n: string): boolean { return this.names.has(n) || !!this.parent?.has(n) }
+  constructor(
+    readonly parent: Scope | null,
+    fn = false,
+  ) {
+    this.fn = fn || !parent ? this : parent.fn
+  }
+  has(n: string): boolean {
+    return this.names.has(n) || !!this.parent?.has(n)
+  }
 }
 
 /** The identifiers a file reads as values without declaring or importing them, in order of first use. */
@@ -115,7 +161,12 @@ export function freeNames(sf: ts.SourceFile): string[] {
     }
   }
   const typeRefs = (n: ts.Node, s: Scope): void => {
-    if (ts.isTypeQueryNode(n)) { let e: ts.EntityName = n.exprName; while (ts.isQualifiedName(e)) e = e.left; refs.push([e.text, s]); return }
+    if (ts.isTypeQueryNode(n)) {
+      let e: ts.EntityName = n.exprName
+      while (ts.isQualifiedName(e)) e = e.left
+      refs.push([e.text, s])
+      return
+    }
     ts.forEachChild(n, c => typeRefs(c, s))
   }
   const fnLike = (n: ts.SignatureDeclaration, s: Scope) => {
@@ -123,7 +174,13 @@ export function freeNames(sf: ts.SourceFile): string[] {
     if (ts.isFunctionExpression(n) && n.name) f.names.add(n.name.text)
     if (!ts.isArrowFunction(n)) f.names.add('arguments')
     if (n.name && ts.isComputedPropertyName(n.name)) visit(n.name.expression, s)
-    for (const p of n.parameters) { declare(p.name, f); binding(p.name, f); if (p.type) typeRefs(p.type, f); if (p.initializer) visit(p.initializer, f); p.modifiers?.forEach(m => visit(m, f)) }
+    for (const p of n.parameters) {
+      declare(p.name, f)
+      binding(p.name, f)
+      if (p.type) typeRefs(p.type, f)
+      if (p.initializer) visit(p.initializer, f)
+      p.modifiers?.forEach(m => visit(m, f))
+    }
     if (n.type) typeRefs(n.type, f)
     const body = (n as ts.FunctionLikeDeclaration).body
     if (body && ts.isBlock(body)) body.statements.forEach(st => visit(st, f))
@@ -142,7 +199,10 @@ export function freeNames(sf: ts.SourceFile): string[] {
     }
   }
   const visit = (n: ts.Node, s: Scope): void => {
-    if (ts.isIdentifier(n)) { refs.push([n.text, s]); return }
+    if (ts.isIdentifier(n)) {
+      refs.push([n.text, s])
+      return
+    }
     if (ts.isExpressionWithTypeArguments(n)) return visit(n.expression, s)
     if (ts.isTypeNode(n)) return typeRefs(n, s)
     switch (n.kind) {
@@ -152,43 +212,84 @@ export function freeNames(sf: ts.SourceFile): string[] {
         if (c?.namedBindings) ts.isNamespaceImport(c.namedBindings) ? root.names.add(c.namedBindings.name.text) : c.namedBindings.elements.forEach(e => root.names.add(e.name.text))
         return
       }
-      case ts.SyntaxKind.ImportEqualsDeclaration: s.names.add((n as ts.ImportEqualsDeclaration).name.text); return
+      case ts.SyntaxKind.ImportEqualsDeclaration:
+        s.names.add((n as ts.ImportEqualsDeclaration).name.text)
+        return
       case ts.SyntaxKind.ExportDeclaration: {
         const e = n as ts.ExportDeclaration
         if (!e.moduleSpecifier && !e.isTypeOnly && e.exportClause && ts.isNamedExports(e.exportClause))
           for (const x of e.exportClause.elements) if (!x.isTypeOnly) refs.push([(x.propertyName ?? x.name).text, s])
         return
       }
-      case ts.SyntaxKind.InterfaceDeclaration: case ts.SyntaxKind.TypeAliasDeclaration: return typeRefs(n, s)
+      case ts.SyntaxKind.InterfaceDeclaration:
+      case ts.SyntaxKind.TypeAliasDeclaration:
+        return typeRefs(n, s)
       case ts.SyntaxKind.TypeParameter:
-      case ts.SyntaxKind.BreakStatement: case ts.SyntaxKind.ContinueStatement: case ts.SyntaxKind.MetaProperty:
-      case ts.SyntaxKind.JsxClosingElement: case ts.SyntaxKind.JsxNamespacedName: return
-      case ts.SyntaxKind.EnumDeclaration: s.names.add((n as ts.EnumDeclaration).name.text); return
-      case ts.SyntaxKind.ModuleDeclaration: { const m = n as ts.ModuleDeclaration; if (ts.isIdentifier(m.name)) s.names.add(m.name.text); return }
+      case ts.SyntaxKind.BreakStatement:
+      case ts.SyntaxKind.ContinueStatement:
+      case ts.SyntaxKind.MetaProperty:
+      case ts.SyntaxKind.JsxClosingElement:
+      case ts.SyntaxKind.JsxNamespacedName:
+        return
+      case ts.SyntaxKind.EnumDeclaration:
+        s.names.add((n as ts.EnumDeclaration).name.text)
+        return
+      case ts.SyntaxKind.ModuleDeclaration: {
+        const m = n as ts.ModuleDeclaration
+        if (ts.isIdentifier(m.name)) s.names.add(m.name.text)
+        return
+      }
       case ts.SyntaxKind.VariableDeclarationList: {
         const l = n as ts.VariableDeclarationList
         const target = l.flags & (ts.NodeFlags.Let | ts.NodeFlags.Const | ts.NodeFlags.Using) ? s : s.fn
-        for (const d of l.declarations) { declare(d.name, target); binding(d.name, s); if (d.type) typeRefs(d.type, s); if (d.initializer) visit(d.initializer, s) }
+        for (const d of l.declarations) {
+          declare(d.name, target)
+          binding(d.name, s)
+          if (d.type) typeRefs(d.type, s)
+          if (d.initializer) visit(d.initializer, s)
+        }
         return
       }
-      case ts.SyntaxKind.FunctionDeclaration: { const f = n as ts.FunctionDeclaration; if (f.name) s.names.add(f.name.text); return fnLike(f, s) }
-      case ts.SyntaxKind.ClassDeclaration: { const c = n as ts.ClassDeclaration; if (c.name) s.names.add(c.name.text); return klass(c, s) }
-      case ts.SyntaxKind.ClassExpression: return klass(n as ts.ClassExpression, s)
-      case ts.SyntaxKind.FunctionExpression: case ts.SyntaxKind.ArrowFunction: case ts.SyntaxKind.MethodDeclaration:
-      case ts.SyntaxKind.GetAccessor: case ts.SyntaxKind.SetAccessor: case ts.SyntaxKind.Constructor:
+      case ts.SyntaxKind.FunctionDeclaration: {
+        const f = n as ts.FunctionDeclaration
+        if (f.name) s.names.add(f.name.text)
+        return fnLike(f, s)
+      }
+      case ts.SyntaxKind.ClassDeclaration: {
+        const c = n as ts.ClassDeclaration
+        if (c.name) s.names.add(c.name.text)
+        return klass(c, s)
+      }
+      case ts.SyntaxKind.ClassExpression:
+        return klass(n as ts.ClassExpression, s)
+      case ts.SyntaxKind.FunctionExpression:
+      case ts.SyntaxKind.ArrowFunction:
+      case ts.SyntaxKind.MethodDeclaration:
+      case ts.SyntaxKind.GetAccessor:
+      case ts.SyntaxKind.SetAccessor:
+      case ts.SyntaxKind.Constructor:
         return fnLike(n as ts.SignatureDeclaration, s)
-      case ts.SyntaxKind.Block: case ts.SyntaxKind.CaseBlock: case ts.SyntaxKind.ForStatement: case ts.SyntaxKind.ForInStatement: case ts.SyntaxKind.ForOfStatement: {
+      case ts.SyntaxKind.Block:
+      case ts.SyntaxKind.CaseBlock:
+      case ts.SyntaxKind.ForStatement:
+      case ts.SyntaxKind.ForInStatement:
+      case ts.SyntaxKind.ForOfStatement: {
         const b = new Scope(s)
         ts.forEachChild(n, c => visit(c, b))
         return
       }
       case ts.SyntaxKind.CatchClause: {
-        const c = n as ts.CatchClause, b = new Scope(s)
-        if (c.variableDeclaration) { declare(c.variableDeclaration.name, b); binding(c.variableDeclaration.name, b) }
+        const c = n as ts.CatchClause,
+          b = new Scope(s)
+        if (c.variableDeclaration) {
+          declare(c.variableDeclaration.name, b)
+          binding(c.variableDeclaration.name, b)
+        }
         c.block.statements.forEach(st => visit(st, b))
         return
       }
-      case ts.SyntaxKind.PropertyAccessExpression: return visit((n as ts.PropertyAccessExpression).expression, s)
+      case ts.SyntaxKind.PropertyAccessExpression:
+        return visit((n as ts.PropertyAccessExpression).expression, s)
       case ts.SyntaxKind.PropertyAssignment: {
         const p = n as ts.PropertyAssignment
         if (ts.isComputedPropertyName(p.name)) visit(p.name.expression, s)
@@ -200,9 +301,15 @@ export function freeNames(sf: ts.SourceFile): string[] {
         if (p.objectAssignmentInitializer) visit(p.objectAssignmentInitializer, s)
         return
       }
-      case ts.SyntaxKind.LabeledStatement: return visit((n as ts.LabeledStatement).statement, s)
-      case ts.SyntaxKind.JsxAttribute: { const a = n as ts.JsxAttribute; if (a.initializer) visit(a.initializer, s); return }
-      case ts.SyntaxKind.JsxOpeningElement: case ts.SyntaxKind.JsxSelfClosingElement: {
+      case ts.SyntaxKind.LabeledStatement:
+        return visit((n as ts.LabeledStatement).statement, s)
+      case ts.SyntaxKind.JsxAttribute: {
+        const a = n as ts.JsxAttribute
+        if (a.initializer) visit(a.initializer, s)
+        return
+      }
+      case ts.SyntaxKind.JsxOpeningElement:
+      case ts.SyntaxKind.JsxSelfClosingElement: {
         const e = n as ts.JsxOpeningElement
         // a lowercase name is an intrinsic element, not a value
         if (!ts.isIdentifier(e.tagName) || !/^[a-z]/.test(e.tagName.text)) visit(e.tagName, s)
@@ -248,16 +355,24 @@ export function scopeInject(source: string, resolveModule: ResolveModule = resol
   const found = schematicImports(sf)
   if (!found.length) return null
   if (found.length > 1) {
-    const at = found[1].attr.getStart(sf), { line } = sf.getLineAndCharacterOfPosition(at)
-    throw new ScopeError(`${file}:${line + 1}: <PCB schematic> takes the namespaces ${found.map(f => f.ns).join(' and ')} in one file; put each board with its own schematic module in a file of its own`, file, at)
+    const at = found[1].attr.getStart(sf),
+      { line } = sf.getLineAndCharacterOfPosition(at)
+    throw new ScopeError(
+      `${file}:${line + 1}: <PCB schematic> takes the namespaces ${found.map(f => f.ns).join(' and ')} in one file; put each board with its own schematic module in a file of its own`,
+      file,
+      at,
+    )
   }
   const { ns, decl } = found[0]
   const mod = resolveModule((decl.moduleSpecifier as ts.StringLiteral).text, file)
   if (!mod) return null
   const exported = moduleExports(mod, resolveModule)
-  const names = freeNames(sf).filter(n => exported.has(n)).sort()
+  const names = freeNames(sf)
+    .filter(n => exported.has(n))
+    .sort()
   if (!names.length) return null
-  const at = decl.getEnd(), text = `;const {${names.join(',')}}=${ns};`
+  const at = decl.getEnd(),
+    text = `;const {${names.join(',')}}=${ns};`
   return { code: source.slice(0, at) + text + source.slice(at), at, text, ns, module: mod.file, names }
 }
 
@@ -265,8 +380,7 @@ export function scopeInject(source: string, resolveModule: ResolveModule = resol
 export const toSource = (inj: Pick<ScopeInjection, 'at' | 'text'> | null | undefined, pos: number): number =>
   !inj || pos <= inj.at ? pos : pos < inj.at + inj.text.length ? inj.at : pos - inj.text.length
 /** A position in the original source as a position in the injected code. */
-export const toInjected = (inj: Pick<ScopeInjection, 'at' | 'text'> | null | undefined, pos: number): number =>
-  !inj || pos < inj.at ? pos : pos + inj.text.length
+export const toInjected = (inj: Pick<ScopeInjection, 'at' | 'text'> | null | undefined, pos: number): number => (!inj || pos < inj.at ? pos : pos + inj.text.length)
 
 /**
  * A compiler host whose source files under `root` carry their injection; `injections` holds each one by file name, for
@@ -283,8 +397,14 @@ export function scopeHost(options: ts.CompilerOptions, root?: string, base: ts.C
       const text = base.readFile(name)
       if (text === undefined) return base.getSourceFile(name, lang, onError, fresh)
       let inj: ScopeInjection | null = null
-      try { inj = scopeInject(text, resolveFile, name) } catch (e) { if (e instanceof ScopeError) errors.set(name, e); else throw e }
-      if (inj) injections.set(name, inj); else injections.delete(name)
+      try {
+        inj = scopeInject(text, resolveFile, name)
+      } catch (e) {
+        if (e instanceof ScopeError) errors.set(name, e)
+        else throw e
+      }
+      if (inj) injections.set(name, inj)
+      else injections.delete(name)
       return ts.createSourceFile(name, inj ? inj.code : text, lang, false)
     },
   }

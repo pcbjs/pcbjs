@@ -7,34 +7,93 @@ import { nets, local, route, pour, via, NC } from '@pcbjs/core'
 import { twoLayer } from '@pcbjs/lib/stackups'
 import { Brand, USBC, SOT23, QFN, Crystal3225, withPins, R0402, C0402, C0603, rect, roundedRect } from '@pcbjs/lib'
 
-const W = 50, H = 30
-const usb = { class: 'usb' } as const, power = { class: 'power' } as const
+const W = 50,
+  H = 30
+const usb = { class: 'usb' } as const,
+  power = { class: 'power' } as const
 
 const { GND, VBUS, V3V3, XI, XO, RST, RREF, OVCUR, D0P, D0N, D1P, D1N, D2P, D2N, D3P, D3N, D4P, D4N } = nets({
-  GND: power, VBUS: power, V3V3: power,
-  D0P: usb, D0N: usb, D1P: usb, D1N: usb, D2P: usb, D2N: usb, D3P: usb, D3N: usb, D4P: usb, D4N: usb,
+  GND: power,
+  VBUS: power,
+  V3V3: power,
+  D0P: usb,
+  D0N: usb,
+  D1P: usb,
+  D1N: usb,
+  D2P: usb,
+  D2N: usb,
+  D3P: usb,
+  D3N: usb,
+  D4P: usb,
+  D4N: usb,
 })
 
 // the hub controller: a QFN-28 5 x 5 mm, 0.5 mm pitch: upstream on the left side, ports 1 to 3 on the top side, port 4 and the
 // crystal on the right side, supplies on the bottom. The pin map is laid out for this board, modelled on GL850G class hubs.
 const HUB_PINS = {
-  1: 'VDD1', 2: 'VDDA', 3: 'DM0', 4: 'DP0', 5: 'RREF', 6: 'RST', 7: 'NC',
-  8: 'NC', 9: 'NC', 10: 'VDD2', 11: 'VDD3', 12: 'OVCUR', 13: 'NC', 14: 'PWREN',
-  15: 'NC', 16: 'NC', 17: 'XO', 18: 'XI', 19: 'NC', 20: 'DM4', 21: 'DP4',
-  22: 'VDD4', 23: 'DM3', 24: 'DP3', 25: 'DM2', 26: 'DP2', 27: 'DM1', 28: 'DP1', EP: 'GND',
+  1: 'VDD1',
+  2: 'VDDA',
+  3: 'DM0',
+  4: 'DP0',
+  5: 'RREF',
+  6: 'RST',
+  7: 'NC',
+  8: 'NC',
+  9: 'NC',
+  10: 'VDD2',
+  11: 'VDD3',
+  12: 'OVCUR',
+  13: 'NC',
+  14: 'PWREN',
+  15: 'NC',
+  16: 'NC',
+  17: 'XO',
+  18: 'XI',
+  19: 'NC',
+  20: 'DM4',
+  21: 'DP4',
+  22: 'VDD4',
+  23: 'DM3',
+  24: 'DP3',
+  25: 'DM2',
+  26: 'DP2',
+  27: 'DM1',
+  28: 'DP1',
+  EP: 'GND',
 } as const
-const U1 = QFN(28, 5, 0.5, 3.1, { pinNames: HUB_PINS, vias: 2 })('GL850G').source({ MPN: 'GL850G-OHY50' })
-  .connect({ DM1: D1N, DP1: D1P, VDD1: V3V3, XI, XO, VDDA: V3V3, RST, DM0: D0N, DP0: D0P, RREF, VDD2: V3V3, PWREN: NC, OVCUR,
-    VDD3: V3V3, DM4: D4N, DP4: D4P, DP3: D3P, DM3: D3N, VDD4: V3V3, DP2: D2P, DM2: D2N, GND })
+const U1 = QFN(28, 5, 0.5, 3.1, { pinNames: HUB_PINS, vias: 2 })('GL850G').source({ MPN: 'GL850G-OHY50' }).connect({
+  DM1: D1N,
+  DP1: D1P,
+  VDD1: V3V3,
+  XI,
+  XO,
+  VDDA: V3V3,
+  RST,
+  DM0: D0N,
+  DP0: D0P,
+  RREF,
+  VDD2: V3V3,
+  PWREN: NC,
+  OVCUR,
+  VDD3: V3V3,
+  DM4: D4N,
+  DP4: D4P,
+  DP3: D3P,
+  DM3: D3N,
+  VDD4: V3V3,
+  DP2: D2P,
+  DM2: D2N,
+  GND,
+})
 
 // clock: a 12 MHz crystal with its two load capacitors
-const Y1 = withPins(Crystal3225, { 1: 'X1', 3: 'X2', 2: 'GND', 4: 'GND' })('12MHz').source({ MPN: 'X322512MSB4SI', 'MPN:LCSC': 'C9002' })
-  .connect({ X1: XI, X2: XO, GND })
+const Y1 = withPins(Crystal3225, { 1: 'X1', 3: 'X2', 2: 'GND', 4: 'GND' })('12MHz').source({ MPN: 'X322512MSB4SI', 'MPN:LCSC': 'C9002' }).connect({ X1: XI, X2: XO, GND })
 const C_XI = C0402('22p').source({ MPN: 'CL05C220JB5NNNC', 'MPN:LCSC': 'C1555' }).connect(XI, GND)
 const C_XO = C0402('22p').source({ MPN: 'CL05C220JB5NNNC', 'MPN:LCSC': 'C1555' }).connect(XO, GND)
 
 // 3.3 V regulator from VBUS
-const LDO = SOT23(5, { pinNames: ['VIN', 'GND', 'EN', 'NC', 'VOUT'] })('AP2112K-3.3').source({ MPN: 'AP2112K-3.3TRG1', 'MPN:LCSC': 'C51118' })
+const LDO = SOT23(5, { pinNames: ['VIN', 'GND', 'EN', 'NC', 'VOUT'] })('AP2112K-3.3')
+  .source({ MPN: 'AP2112K-3.3TRG1', 'MPN:LCSC': 'C51118' })
   .connect({ VIN: VBUS, GND, EN: VBUS, VOUT: V3V3 })
 const C_IN = C0603('10u').source({ MPN: 'CL10A106KP8NNNC', 'MPN:LCSC': 'C19702' }).connect(VBUS, GND)
 const C_OUT = C0603('10u').source({ MPN: 'CL10A106KP8NNNC', 'MPN:LCSC': 'C19702' }).connect(V3V3, GND)
@@ -52,19 +111,24 @@ const RECEPTACLE = USBC.footprint('full16')
 
 // upstream: a sink, so 5.1 k pull downs on CC
 const { UCC1, UCC2 } = nets()
-const J1 = RECEPTACLE('TYPE-C-31-M-12').source({ MPN: 'TYPE-C-31-M-12', 'MPN:LCSC': 'C165948' })
+const J1 = RECEPTACLE('TYPE-C-31-M-12')
+  .source({ MPN: 'TYPE-C-31-M-12', 'MPN:LCSC': 'C165948' })
   .connect({ GND, VBUS, CC1: UCC1, CC2: UCC2, DP: D0P, DN: D0N, SBU1: NC, SBU2: NC, SHIELD: GND })
 const R_UCC1 = R0402('5.1k').source({ MPN: '0402WGF5101TCE', 'MPN:LCSC': 'C25905' }).connect(UCC1, GND)
 const R_UCC2 = R0402('5.1k').source({ MPN: '0402WGF5101TCE', 'MPN:LCSC': 'C25905' }).connect(UCC2, GND)
 const U3 = ESD('USBLC6-2SC6').source({ MPN: 'USBLC6-2SC6', 'MPN:LCSC': 'C7519' }).connect({ IO1: D0P, IO2: D0N, GND, VBUS })
 
 // downstream: sources, so 56 k pull ups on CC advertise default USB power
-const PAIRS = [[D1P, D1N], [D2P, D2N], [D3P, D3N], [D4P, D4N]] as const
+const PAIRS = [
+  [D1P, D1N],
+  [D2P, D2N],
+  [D3P, D3N],
+  [D4P, D4N],
+] as const
 const PORTS = PAIRS.map(([P, N], i) => {
   const { CC1, CC2 } = local(`P${i + 1}`)
   return {
-    J: RECEPTACLE('TYPE-C-31-M-12').source({ MPN: 'TYPE-C-31-M-12', 'MPN:LCSC': 'C165948' })
-      .connect({ GND, VBUS, CC1, CC2, DP: P, DN: N, SBU1: NC, SBU2: NC, SHIELD: GND }),
+    J: RECEPTACLE('TYPE-C-31-M-12').source({ MPN: 'TYPE-C-31-M-12', 'MPN:LCSC': 'C165948' }).connect({ GND, VBUS, CC1, CC2, DP: P, DN: N, SBU1: NC, SBU2: NC, SHIELD: GND }),
     R1: R0402('56k').source({ MPN: '0402WGF5602TCE', 'MPN:LCSC': 'C25796' }).connect(VBUS, CC1),
     R2: R0402('56k').source({ MPN: '0402WGF5602TCE', 'MPN:LCSC': 'C25796' }).connect(VBUS, CC2),
     E: ESD('USBLC6-2SC6').source({ MPN: 'USBLC6-2SC6', 'MPN:LCSC': 'C7519' }).connect({ IO1: P, IO2: N, GND, VBUS }),
@@ -81,7 +145,12 @@ function joinAB(J: Recept, c: [number, number], u: [number, number], v: [number,
   const r2 = (n: number) => Math.round(n * 100) / 100
   const at = (o: number, d: number): [number, number] => [r2(c[0] + u[0] * o + v[0] * d), r2(c[1] + u[1] * o + v[1] * d)]
   const back = (o: number, d: number): [number, number, string] => [...at(o, d), 'B.Cu']
-  const ends = [['B6', P, -0.75, 2.8], ['A6', P, 0.25, 2.8], ['A7', N, -0.25, 2.0], ['B7', N, 0.75, 2.0]] as const
+  const ends = [
+    ['B6', P, -0.75, 2.8],
+    ['A6', P, 0.25, 2.8],
+    ['A7', N, -0.25, 2.0],
+    ['B7', N, 0.75, 2.0],
+  ] as const
   return [
     ...ends.map(([pad, net, o, d]) => [route(J[pad], at(o, d), 'Z').width(0.2), via(net, at(o, d), SMALL)]),
     route(back(-0.75, 2.8), back(0.25, 2.8), 'Z').net(P).width(0.2),
@@ -95,10 +164,15 @@ const STACKUP = twoLayer({ thickness: 0.4, finish: 'HASL' })
 const PX = PORT_X
 
 export default (
-  <PCB name="usb-hub" revision="0.1.0" stackup={STACKUP} classes={{
-    usb: { impedance: 90, gap: 0.15, skew: 0.1, uncoupled: 10, via: { drill: 0.2, size: 0.45 } },
-    power: { width: 0.5, via: { drill: 0.3, size: 0.6 } },
-  }}>
+  <PCB
+    name="usb-hub"
+    revision="0.1.0"
+    stackup={STACKUP}
+    classes={{
+      usb: { impedance: 90, gap: 0.15, skew: 0.1, uncoupled: 10, via: { drill: 0.2, size: 0.45 } },
+      power: { width: 0.5, via: { drill: 0.3, size: 0.6 } },
+    }}
+  >
     <path layer="Edge.Cuts" d={roundedRect(W, H, 1)} />
 
     {/* upstream on the left edge, its ESD array beside it, the CC pull downs above and below the pair */}
@@ -125,7 +199,9 @@ export default (
     {/* turned so its GND pad faces the open pour on the right: at 180deg the 3V3 track fenced it into a 1 mm² piece */}
     <C_RST at="22.8 23.8" />
     <R_OC at="28.6 24.5 90deg" />
-    {DEC.map((C, i) => <C at={['22.6 17.2 180deg', '22.6 18.5 180deg', '25.8 24.5 -90deg', '27.2 24.5 -90deg', '31.2 16.4'][i]} />)}
+    {DEC.map((C, i) => (
+      <C at={['22.6 17.2 180deg', '22.6 18.5 180deg', '25.8 24.5 -90deg', '27.2 24.5 -90deg', '31.2 16.4'][i]} />
+    ))}
 
     {/* power: the LDO and its capacitors along the bottom edge */}
     <LDO at="17 26.6" />
@@ -158,21 +234,33 @@ export default (
     {PORTS.map(({ J, E, R1, R2 }, i) => {
       const x = PX[i]
       return [
-        via(VBUS, `${x - 2.45} 9.1`), via(VBUS, `${x + 2.45} 9.1`),
+        via(VBUS, `${x - 2.45} 9.1`),
+        via(VBUS, `${x + 2.45} 9.1`),
         route(J.B4, `${x - 2.45} 9.1`, 'Z'),
         route(J.A4, `${x + 2.45} 9.1`, 'Z'),
         // the array's supply and ground pins sit between its signal pins: a via each inside the body
-        route(E.VBUS, `${x - 0.85} 11.9`, 'Z').width(0.2), via(VBUS, `${x - 0.85} 11.9`, SMALL),
-        route(`${x - 0.85} 11.9 B.Cu`, `${x - 0.85} 9.1 B.Cu`, 'Z').net(VBUS).width(0.3),
-        route(E.GND, `${x - 0.15} 11.9`, 'Z').width(0.2), via(GND, `${x - 0.15} 11.9`, SMALL),
-        route(R1[1], `${x + 2.45} 9.1`).width(0.3), route(R1[2], J.CC1).width(0.2),
-        route(R2[1], `${x - 2.45} 9.1`).width(0.3), route(R2[2], J.CC2).width(0.2),
+        route(E.VBUS, `${x - 0.85} 11.9`, 'Z').width(0.2),
+        via(VBUS, `${x - 0.85} 11.9`, SMALL),
+        route(`${x - 0.85} 11.9 B.Cu`, `${x - 0.85} 9.1 B.Cu`, 'Z')
+          .net(VBUS)
+          .width(0.3),
+        route(E.GND, `${x - 0.15} 11.9`, 'Z').width(0.2),
+        via(GND, `${x - 0.15} 11.9`, SMALL),
+        route(R1[1], `${x + 2.45} 9.1`).width(0.3),
+        route(R1[2], J.CC1).width(0.2),
+        route(R2[1], `${x - 2.45} 9.1`).width(0.3),
+        route(R2[2], J.CC2).width(0.2),
       ]
     })}
-    {via(VBUS, '9 19.05')}{route(J1.A4, '9 19.05', 'Z')}
-    {via(VBUS, '9 25.2')}{route(J1.B4, '9 25.2')}
-    {route(U3.VBUS, '11.4 21.65', 'Z').width(0.2)}{via(VBUS, '11.4 21.65', SMALL)}{route('11.4 21.65 B.Cu', '9 21.65 B.Cu', 'Z').net(VBUS).width(0.3)}
-    {route(U3.GND, '11.4 22.35', 'Z').width(0.2)}{via(GND, '11.4 22.35', SMALL)}
+    {via(VBUS, '9 19.05')}
+    {route(J1.A4, '9 19.05', 'Z')}
+    {via(VBUS, '9 25.2')}
+    {route(J1.B4, '9 25.2')}
+    {route(U3.VBUS, '11.4 21.65', 'Z').width(0.2)}
+    {via(VBUS, '11.4 21.65', SMALL)}
+    {route('11.4 21.65 B.Cu', '9 21.65 B.Cu', 'Z').net(VBUS).width(0.3)}
+    {route(U3.GND, '11.4 22.35', 'Z').width(0.2)}
+    {via(GND, '11.4 22.35', SMALL)}
     {route(J1.CC1, R_UCC1[1]).width(0.2)}
     {route(J1.CC2, R_UCC2[1]).width(0.2)}
     {route('9 25.2', C_IN[1])}
@@ -181,8 +269,15 @@ export default (
 
     {/* 3.3 V: LDO to its output capacitor, then along the bottom of the hub to every supply pin's capacitor */}
     {route(LDO.VOUT, C_OUT[1])}
-    {[[C_OUT[1], DEC[2][1]], [DEC[2][1], DEC[3][1]], [DEC[3][1], R_OC[1]], [DEC[2][1], R_RST[1]], [R_RST[1], DEC[1][1]], [DEC[1][1], DEC[0][1]], [DEC[3][1], DEC[4][1]]]
-      .map(([a, b]) => route(a, b))}
+    {[
+      [C_OUT[1], DEC[2][1]],
+      [DEC[2][1], DEC[3][1]],
+      [DEC[3][1], R_OC[1]],
+      [DEC[2][1], R_RST[1]],
+      [R_RST[1], DEC[1][1]],
+      [DEC[1][1], DEC[0][1]],
+      [DEC[3][1], DEC[4][1]],
+    ].map(([a, b]) => route(a, b))}
     {route(U1.VDD1, DEC[0][1]).width(0.2)}
     {route(U1.VDDA, DEC[1][1]).width(0.2)}
     {route(U1.VDD2, DEC[2][1]).width(0.2)}
@@ -190,9 +285,12 @@ export default (
     {route(U1.VDD4, DEC[4][1]).width(0.2)}
 
     {/* the hub's small signals */}
-    {route(U1.XI, Y1.X1).width(0.2)}{route(Y1.X1, C_XI[1]).width(0.2)}
-    {route(U1.XO, Y1.X2).width(0.2)}{route(Y1.X2, C_XO[1]).width(0.2)}
-    {route(U1.RST, R_RST[2]).width(0.2)}{route(R_RST[2], C_RST[1]).width(0.2)}
+    {route(U1.XI, Y1.X1).width(0.2)}
+    {route(Y1.X1, C_XI[1]).width(0.2)}
+    {route(U1.XO, Y1.X2).width(0.2)}
+    {route(Y1.X2, C_XO[1]).width(0.2)}
+    {route(U1.RST, R_RST[2]).width(0.2)}
+    {route(R_RST[2], C_RST[1]).width(0.2)}
     {route(U1.RREF, R_REF[1]).width(0.2)}
     {route(U1.OVCUR, R_OC[2]).width(0.2)}
 
@@ -200,11 +298,21 @@ export default (
     {pour(GND, 'F.Cu', rect(W, H), { connect: 'solid' })}
     {pour(GND, 'B.Cu', rect(W, H), { connect: 'solid' })}
 
-    <text layer="F.SilkS" at="41.5 25" size={1.2}>usb-hub</text>
-    <text layer="F.SilkS" at="41.5 27" size={0.8}>rev 0.1.0  4 x USB 2.0</text>
-    <text layer="F.SilkS" at="4 14.6" size={0.8}>UPSTREAM</text>
+    <text layer="F.SilkS" at="41.5 25" size={1.2}>
+      usb-hub
+    </text>
+    <text layer="F.SilkS" at="41.5 27" size={0.8}>
+      rev 0.1.0 4 x USB 2.0
+    </text>
+    <text layer="F.SilkS" at="4 14.6" size={0.8}>
+      UPSTREAM
+    </text>
     {/* the port 2 label sits 0.5 mm higher to leave room for the skew bump on its hub leg below */}
-    {PX.map((x, i) => <text layer="F.SilkS" at={`${x + 3.4} ${i === 1 ? 12.9 : 13.4}`} size={1}>{String(i + 1)}</text>)}
+    {PX.map((x, i) => (
+      <text layer="F.SilkS" at={`${x + 3.4} ${i === 1 ? 12.9 : 13.4}`} size={1}>
+        {String(i + 1)}
+      </text>
+    ))}
     <Brand at="39.35 25.75" height={5} layer="B.SilkS" />
   </PCB>
 )

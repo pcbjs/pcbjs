@@ -14,7 +14,12 @@ function netClasses(board: Board): Map<string, ResolvedNetClass> {
     m = new Map()
     const names = new Map<string, string>()
     const t = board.classes
-    if (t) for (const n of board.schematic?.nets ?? []) if (n.class && t[n.class]) { m.set(n.name, t[n.class]); names.set(n.name, n.class) }
+    if (t)
+      for (const n of board.schematic?.nets ?? [])
+        if (n.class && t[n.class]) {
+          m.set(n.name, t[n.class])
+          names.set(n.name, n.class)
+        }
     NET_CLASSES.set(board, m)
     NET_CLASS_NAMES.set(board, names)
   }
@@ -45,10 +50,11 @@ export function classClearance(board: Board, netA: string | undefined, netB: str
 /** The largest class clearance on the board, kind scoped ones included, or the rules' clearance when that is larger. */
 export function maxClassClearance(board: Board): number {
   let c = board.rules.clearance
-  if (board.classes) for (const k of Object.values(board.classes)) {
-    if (k.clearance !== undefined && k.clearance > c) c = k.clearance
-    if (k.clearanceTo) c = Math.max(c, kindMax(k.clearanceTo))
-  }
+  if (board.classes)
+    for (const k of Object.values(board.classes)) {
+      if (k.clearance !== undefined && k.clearance > c) c = k.clearance
+      if (k.clearanceTo) c = Math.max(c, kindMax(k.clearanceTo))
+    }
   return c
 }
 
@@ -94,12 +100,13 @@ function padOverrides(board: Board): { clearance: number; holeClearance: number;
   let m = PAD_MAX.get(board)
   if (!m || m.n !== board.items.length) {
     m = { n: board.items.length, clearance: 0, holeClearance: 0, any: false }
-    for (const it of board.items) if (it.kind === 'pad' && it.override) {
-      m.any = true
-      if (it.clearance !== undefined && it.clearance > m.clearance) m.clearance = it.clearance
-      if (it.clearanceTo) m.clearance = Math.max(m.clearance, kindMax(it.clearanceTo))
-      if (it.holeClearance !== undefined && it.holeClearance > m.holeClearance) m.holeClearance = it.holeClearance
-    }
+    for (const it of board.items)
+      if (it.kind === 'pad' && it.override) {
+        m.any = true
+        if (it.clearance !== undefined && it.clearance > m.clearance) m.clearance = it.clearance
+        if (it.clearanceTo) m.clearance = Math.max(m.clearance, kindMax(it.clearanceTo))
+        if (it.holeClearance !== undefined && it.holeClearance > m.holeClearance) m.holeClearance = it.holeClearance
+      }
     PAD_MAX.set(board, m)
   }
   return m
@@ -139,7 +146,8 @@ function overrideToward(board: Board, a: Ask, b: Ask): Toward | undefined {
 
 /** The larger override between two items, a pad's own, part or `self` clearance or a track's or via's kind-scoped class clearance; undefined for none. */
 export function overrideBetween(board: Board, a: Ask, b: Ask): number | undefined {
-  const oa = overrideToward(board, a, b), ob = overrideToward(board, b, a)
+  const oa = overrideToward(board, a, b),
+    ob = overrideToward(board, b, a)
   return oa || ob ? Math.max(oa?.v ?? 0, ob?.v ?? 0) : undefined
 }
 
@@ -171,13 +179,15 @@ export function clearanceSource(board: Board, it: Item, key: 'clearance' | 'hole
 
 /** The source of the clearance that holds between two items, see itemClearance; '' when it is the rules'. */
 export function pairSource(board: Board, a: Item, b: Item, rules: { clearance: number } = board.rules): string {
-  const oa = overrideToward(board, a, b), ob = overrideToward(board, b, a)
+  const oa = overrideToward(board, a, b),
+    ob = overrideToward(board, b, a)
   if (oa || ob) {
     const [it, o] = !ob || (oa && oa.v >= ob.v) ? [a, oa!] : [b, ob]
     const to = o.scope === 'self' ? ', to its own pads' : o.scope ? `, to ${o.scope}s` : ''
     return (o.from === 'class' ? `class ${classNameOf(board, it.net)}` : clearanceSource(board, it)) + to
   }
-  const ca = ownClearance(board, a, rules), cb = ownClearance(board, b, rules)
+  const ca = ownClearance(board, a, rules),
+    cb = ownClearance(board, b, rules)
   return clearanceSource(board, ca >= cb ? a : b) || (ca === cb ? clearanceSource(board, b) : '')
 }
 
@@ -187,8 +197,9 @@ const pairKey = (a: string, b: string) => (a < b ? `${a}\u0000${b}` : `${b}\u000
 /** Records the two nets of a differential pair and its gap; the router calls it before routing, DRC reads board.pairs too. */
 export function notePair(board: Board, a: string, b: string, gap: number): void {
   let m = PAIR_GAPS.get(board)
-  if (!m) PAIR_GAPS.set(board, m = new Map())
-  const k = pairKey(a, b), g = m.get(k)
+  if (!m) PAIR_GAPS.set(board, (m = new Map()))
+  const k = pairKey(a, b),
+    g = m.get(k)
   m.set(k, g === undefined ? gap : Math.min(g, gap))
 }
 /** The gap of the pair the two nets form, or undefined when they form none. */

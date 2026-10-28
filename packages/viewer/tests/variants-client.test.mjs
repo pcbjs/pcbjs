@@ -1,7 +1,26 @@
 // The viewer's grouping of fab targets and its board routes, imported straight from the client TypeScript.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { appBase, assetUrl, boardPath, drcSummary, failingCount, groupBoards, hashToPath, isAppPath, parseBoardHash, pickTarget, routeFromPath, sameEntry, targetBySlug, targetName, upsertEntry, variantSlug, withForeign, worstTarget } from '../src/variants.ts'
+import {
+  appBase,
+  assetUrl,
+  boardPath,
+  drcSummary,
+  failingCount,
+  groupBoards,
+  hashToPath,
+  isAppPath,
+  parseBoardHash,
+  pickTarget,
+  routeFromPath,
+  sameEntry,
+  targetBySlug,
+  targetName,
+  upsertEntry,
+  variantSlug,
+  withForeign,
+  worstTarget,
+} from '../src/variants.ts'
 
 const names = ['JLCPCB 2-Layer', 'OSH Park 2-Layer', 'Aisler & Co/4L?']
 const v = (i, extra = {}) => ({ name: 'Blinky', variant: { name: names[i], index: i, names }, drc: [], unconnected: 0, ...extra })
@@ -11,7 +30,10 @@ const warn = { severity: 'warning', rule: 'silk', message: 'y', at: [0, 0] }
 test('entries group by board name in first-appearance order, targets by variant index', () => {
   const coin = { name: 'Coin', drc: [], unconnected: 0 }
   const g = groupBoards([v(2), coin, v(0), v(1)])
-  assert.deepEqual(g.map(x => x.name), ['Blinky', 'Coin'])
+  assert.deepEqual(
+    g.map(x => x.name),
+    ['Blinky', 'Coin'],
+  )
   assert.deepEqual(g[0].targets.map(targetName), names)
   assert.deepEqual(g[1].targets, [coin])
   assert.equal(targetName(coin), null)
@@ -33,7 +55,10 @@ test('an update replaces only the entry with the same name and target', () => {
   assert.equal(list[1], next)
   assert.equal(list.length, 3)
   assert.equal(upsertEntry(list, v(2)), 2)
-  assert.deepEqual(list.map(b => b.variant?.name ?? b.name), [names[0], names[1], names[2], 'Coin'])
+  assert.deepEqual(
+    list.map(b => b.variant?.name ?? b.name),
+    [names[0], names[1], names[2], 'Coin'],
+  )
   assert.equal(upsertEntry(list, { name: 'Quad' }), 4)
   const newCoin = { name: 'Coin', x: 1 }
   upsertEntry(list, newCoin)

@@ -7,7 +7,7 @@ import { circleRing } from '../dist/path.js'
 // a small deterministic generator, so a failure reproduces
 function rng(seed) {
   let s = seed >>> 0
-  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32)
+  return () => (s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32
 }
 function randomBoxes(n, size, span, seed) {
   const r = rng(seed)
@@ -23,7 +23,10 @@ test('spatial: a query returns exactly the overlapping boxes, ascending', () => 
 })
 
 test('spatial: boxes that only touch count as overlapping, as bboxOverlap has it', () => {
-  const grid = new Grid([{ x: 0, y: 0, w: 1, h: 1 }, { x: 2, y: 0, w: 1, h: 1 }])
+  const grid = new Grid([
+    { x: 0, y: 0, w: 1, h: 1 },
+    { x: 2, y: 0, w: 1, h: 1 },
+  ])
   assert.deepEqual(grid.query({ x: 1, y: 0, w: 0, h: 0 }), [0])
   assert.deepEqual(grid.query({ x: 1, y: 0, w: 1, h: 1 }), [0, 1])
   assert.deepEqual(grid.query({ x: 1.5, y: 0, w: 0, h: 1 }, 0.5), [0, 1])
@@ -64,15 +67,31 @@ test('spatial: a ring index keeps the rings near a box in their order, and clipp
   // a pour with a grid of round holes, and small shapes over it
   const holes = []
   for (let i = 0; i < 12; i++) for (let j = 0; j < 12; j++) holes.push(circleRing(2 + i * 3, 2 + j * 3, 0.8))
-  const pour = polysToRings(difference([[[0, 0], [37, 0], [37, 37], [0, 37]]], holes))
+  const pour = polysToRings(
+    difference(
+      [
+        [
+          [0, 0],
+          [37, 0],
+          [37, 37],
+          [0, 37],
+        ],
+      ],
+      holes,
+    ),
+  )
   const idx = new RingIndex(pour)
   assert.ok(pour.length > 100)
   const near = idx.near({ x: 4, y: 4, w: 1, h: 1 })
   assert.ok(near.length < 10 && near.length >= 1)
-  assert.deepEqual(near, pour.filter(r => bboxOverlap(bbox([r]), { x: 4, y: 4, w: 1, h: 1 })))
+  assert.deepEqual(
+    near,
+    pour.filter(r => bboxOverlap(bbox([r]), { x: 4, y: 4, w: 1, h: 1 })),
+  )
   const r = rng(7)
   for (let k = 0; k < 60; k++) {
-    const x = r() * 37, y = r() * 37
+    const x = r() * 37,
+      y = r() * 37
     const shape = [circleRing(x, y, 0.3 + r() * 1.2)]
     const s = new RingIndex(shape)
     assert.equal(overlapsNear(s, idx), overlaps(shape, pour), `shape at ${x}, ${y}`)

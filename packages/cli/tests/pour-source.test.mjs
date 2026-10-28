@@ -42,7 +42,7 @@ export default (
 )
 `
 const lines = code.split('\n')
-const text = (r) => r.start[0] === r.end[0] ? lines[r.start[0] - 1].slice(r.start[1] - 1, r.end[1]) : null
+const text = r => (r.start[0] === r.end[0] ? lines[r.start[0] - 1].slice(r.start[1] - 1, r.end[1]) : null)
 let dir, board, sources
 
 before(async () => {
@@ -50,12 +50,14 @@ before(async () => {
   const t = transformSourceRanges(code, join(dir, 'board.tsx'), 'board.tsx').code
   writeFileSync(join(dir, 'board.mjs'), (await transform(t, { loader: 'tsx', jsx: 'automatic', jsxImportSource: '@pcbjs/core', format: 'esm' })).code)
   board = compileBoard((await import(pathToFileURL(join(dir, 'board.mjs')).href)).default)
-  sources = sourceIndex(board, (f) => f)
+  sources = sourceIndex(board, f => f)
 })
-after(() => { if (dir) rmSync(dir, { recursive: true, force: true }) })
+after(() => {
+  if (dir) rmSync(dir, { recursive: true, force: true })
+})
 
 // the range the viewer opens for an item
-const rangeOf = (id) => rangeFor(sources, id).range
+const rangeOf = id => rangeFor(sources, id).range
 
 test('stitch(net) keeps its net and gets the range as an argument of its own', () => {
   const out = transformSourceRanges(code, '/p/board.tsx', 'board.tsx').code
@@ -64,14 +66,14 @@ test('stitch(net) keeps its net and gets the range as an argument of its own', (
 })
 
 test('a layout element lists the items drawn inside it as outer', () => {
-  const row = sources['board.tsx'].find((r) => text(r) === '<Row g={CH1} at="0 5" />')
-  const zone = board.items.find((i) => i.kind === 'zone' && i.layer === 'F.Cu' && row.ids.includes(i.id))
+  const row = sources['board.tsx'].find(r => text(r) === '<Row g={CH1} at="0 5" />')
+  const zone = board.items.find(i => i.kind === 'zone' && i.layer === 'F.Cu' && row.ids.includes(i.id))
   assert.ok(zone && row.outer.includes(zone.id))
 })
 
 test('every pour opens its whole pour() call or <zone> element', () => {
-  const zones = board.items.filter((i) => i.kind === 'zone')
-  assert.deepEqual(zones.map((z) => text(rangeOf(z.id))).sort(), [
+  const zones = board.items.filter(i => i.kind === 'zone')
+  assert.deepEqual(zones.map(z => text(rangeOf(z.id))).sort(), [
     `<zone net={GND} islands="keep" layer="F.Cu" d="M 20 20 H 30 V 28 H 20 Z" />`,
     `pour(GND, 'B.Cu', 'M 0 0 H 40 V 30 H 0 Z', { islands: 'keep' })`,
     `pour(GND, 'F.Cu', 'M 0 -2 H 10 V 2 H 0 Z', { priority: 1 })`,
@@ -80,7 +82,7 @@ test('every pour opens its whole pour() call or <zone> element', () => {
 })
 
 test('stitching vias open their stitch() call', () => {
-  const vias = board.items.filter((i) => i.kind === 'via' && i.stitch)
-  const calls = new Set(vias.map((v) => text(rangeOf(v.id))))
+  const vias = board.items.filter(i => i.kind === 'via' && i.stitch)
+  const calls = new Set(vias.map(v => text(rangeOf(v.id))))
   assert.deepEqual([...calls].sort(), ['stitch(GND)', 'stitch(GND, { pitch: 3 })'])
 })

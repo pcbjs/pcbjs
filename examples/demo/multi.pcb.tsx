@@ -26,7 +26,9 @@ export default (
     {route(OUT, { from: R1[2], to: TP2[1], width: 0.3 })}
 
     {/* silk */}
-    <text layer="F.SilkS" at="10 6" size={1}>Multi · pcbjs</text>
+    <text layer="F.SilkS" at="10 6" size={1}>
+      Multi · pcbjs
+    </text>
     <Brand at="10 10" height={4} layer="B.SilkS" />
   </PCB>
 )

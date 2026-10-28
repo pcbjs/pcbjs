@@ -33,7 +33,10 @@ function service(edits = {}) {
   }
   const base = ts.createLanguageService(host)
   const ls = init({ typescript: ts }).create({ languageService: base, languageServiceHost: host, project: undefined, config: {} })
-  const edit = (f, t) => { texts.set(f, t); versions.set(f, (versions.get(f) ?? 0) + 1) }
+  const edit = (f, t) => {
+    texts.set(f, t)
+    versions.set(f, (versions.get(f) ?? 0) + 1)
+  }
   return { ls, edit, text: f => texts.get(f) ?? readFileSync(f, 'utf8') }
 }
 
@@ -91,7 +94,7 @@ test('ts-plugin: a name the module does not export is reported at its use', () =
 })
 
 test('ts-plugin: an export the injector misses but TypeScript rejects points at the use', () => {
-  const sch = readFileSync(SCH, 'utf8') + 'export type { FootprintProps as U7 } from \'@pcbjs/core\'\nexport { U7 } from \'./nowhere\'\n'
+  const sch = readFileSync(SCH, 'utf8') + "export type { FootprintProps as U7 } from '@pcbjs/core'\nexport { U7 } from './nowhere'\n"
   const src = readFileSync(PCB, 'utf8').replace('<U1 at="10 10" />', '<U1 at="10 10" />\n    {String(U7)}')
   const { ls } = service({ 'pcb.tsx': src, 'board.sch.tsx': sch })
   const d = errors(ls).find(d => message(d).startsWith('U7'))
@@ -112,7 +115,10 @@ test('ts-plugin: positions on the import line round-trip around the insertion', 
   const vssa = ls.getQuickInfoAtPosition(PCB, posOf(src, 'VSSA'))
   assert.equal(vssa.textSpan.start, posOf(src, 'VSSA'))
   const def = ls.getDefinitionAtPosition(PCB, posOf(src, 'U1.VSSA'))
-  assert.deepEqual(def.map(d => d.fileName), [SCH])
+  assert.deepEqual(
+    def.map(d => d.fileName),
+    [SCH],
+  )
   const later = ls.getQuickInfoAtPosition(PCB, posOf(src, 'U1 at'))
   assert.equal(later.textSpan.start, posOf(src, 'U1 at'))
   const sel = ls.getSmartSelectionRange(PCB, k)
@@ -142,6 +148,6 @@ test('ts-plugin: an edit to the schematic module injects again', () => {
   const src = readFileSync(PCB, 'utf8').replace('<U1 at="10 10" />', '<U1 at="10 10" />\n    {String(U2)}')
   const { ls, edit } = service({ 'pcb.tsx': src })
   assert.deepEqual(errors(ls).map(message), ['U2 is not exported by ./board.sch'])
-  edit(SCH, readFileSync(SCH, 'utf8') + 'export const U2 = MCU(\'x\').connect(VCC, GND, SIG)\n')
+  edit(SCH, readFileSync(SCH, 'utf8') + "export const U2 = MCU('x').connect(VCC, GND, SIG)\n")
   assert.deepEqual(errors(ls).map(message), [])
 })

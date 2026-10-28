@@ -5,7 +5,16 @@ import { defineFootprint } from '@pcbjs/core/schematic'
 import { courtyard, smd, withGenerated } from './footprint.js'
 import { oneOf, show } from './gen.js'
 
-interface Chip { id: string; pitch: number; padW: number; padH: number; body: [number, number]; height: number; names?: [string, string]; polarity?: boolean }
+interface Chip {
+  id: string
+  pitch: number
+  padW: number
+  padH: number
+  body: [number, number]
+  height: number
+  names?: [string, string]
+  polarity?: boolean
+}
 
 const CHIPS: Record<string, Chip> = {
   '0402': { id: '0402_1005Metric', pitch: 0.96, padW: 0.54, padH: 0.64, body: [1.0, 0.5], height: 0.5 },
@@ -20,23 +29,32 @@ const LED_COLOURS = ['red', 'green', 'blue', 'yellow', 'white', 'amber', 'orange
 function chipModel(prefix: 'R' | 'C' | 'LED' | 'L' | 'D', size: '0402' | '0603' | '0805' | '1206', value: unknown, color?: string): ModelSpec {
   if (prefix !== 'LED') return { kind: 'chip', part: prefix, size }
   if (color) return { kind: 'led', size, color }
-  const word = String(value ?? '').trim().toLowerCase()
+  const word = String(value ?? '')
+    .trim()
+    .toLowerCase()
   return LED_COLOURS.includes(word) ? { kind: 'led', size, color: word } : { kind: 'led', size }
 }
 
 /** A two-terminal chip footprint: `R0603('330')` makes a part, `<R0603 ref="R1" />` renders. */
-export function chip<const N extends string = '1' | '2'>(prefix: 'R' | 'C' | 'LED' | 'L' | 'D', size: '0402' | '0603' | '0805' | '1206', opts: { names?: [N, N]; polarity?: boolean; color?: string } = {}): FootprintFactory<N | '1' | '2'> {
+export function chip<const N extends string = '1' | '2'>(
+  prefix: 'R' | 'C' | 'LED' | 'L' | 'D',
+  size: '0402' | '0603' | '0805' | '1206',
+  opts: { names?: [N, N]; polarity?: boolean; color?: string } = {},
+): FootprintFactory<N | '1' | '2'> {
   oneOf('chip', 'the prefix', prefix, ['R', 'C', 'LED', 'L', 'D'] as const)
   const c = CHIPS[size]
   if (!c) throw new TypeError(`chip: the size must be 0402, 0603, 0805 or 1206, got ${JSON.stringify(size)}`)
   const id = `${prefix === 'LED' ? 'LED' : prefix}_${c.id}`
   const [n1, n2] = opts.names ?? ['1', '2']
-  const cw = c.pitch + c.padW + 0.5, ch = Math.max(c.padH, c.body[1]) + 0.5
+  const cw = c.pitch + c.padW + 0.5,
+    ch = Math.max(c.padH, c.body[1]) + 0.5
   const render = function Chip(props: FootprintProps): PcbNode {
     const { children, ...rest } = props
     const silkY = c.body[1] / 2 + 0.25
     const silkX = c.pitch / 2 - c.padW / 2 - 0.2
-    return h('footprint', { id: `pcbjs:${id}`, value: prefix, height: prefix === 'LED' ? 0.8 : c.height, ...rest, ...withGenerated(chipModel(prefix, size, rest.value, opts.color), rest) },
+    return h(
+      'footprint',
+      { id: `pcbjs:${id}`, value: prefix, height: prefix === 'LED' ? 0.8 : c.height, ...rest, ...withGenerated(chipModel(prefix, size, rest.value, opts.color), rest) },
       smd(1, -c.pitch / 2, 0, c.padW, c.padH, { name: n1 }),
       smd(2, c.pitch / 2, 0, c.padW, c.padH, { name: n2 }),
       courtyard(cw, ch),
@@ -47,7 +65,12 @@ export function chip<const N extends string = '1' | '2'>(prefix: 'R' | 'C' | 'LE
       children,
     )
   }
-  return defineFootprint<N | '1' | '2'>(render, { pins: [n1, n2] as N[], prefix: prefix === 'LED' ? 'D' : prefix, id: `pcbjs:${id}`, name: `${prefix}${size}${opts.color ? `_${opts.color}` : ''}` })
+  return defineFootprint<N | '1' | '2'>(render, {
+    pins: [n1, n2] as N[],
+    prefix: prefix === 'LED' ? 'D' : prefix,
+    id: `pcbjs:${id}`,
+    name: `${prefix}${size}${opts.color ? `_${opts.color}` : ''}`,
+  })
 }
 
 export const R0402 = chip('R', '0402')
@@ -75,6 +98,9 @@ export function LED(size: '0402' | '0603' | '0805' | '1206' = '0603', color?: st
   }
   const key = `${size}:${color ?? ''}`
   let f = leds.get(key)
-  if (!f) { f = chip('LED', size, { names: ['K', 'A'], polarity: true, ...(color ? { color: color.toLowerCase() } : {}) }); leds.set(key, f) }
+  if (!f) {
+    f = chip('LED', size, { names: ['K', 'A'], polarity: true, ...(color ? { color: color.toLowerCase() } : {}) })
+    leds.set(key, f)
+  }
   return f
 }

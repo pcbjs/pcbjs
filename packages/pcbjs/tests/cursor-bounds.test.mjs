@@ -20,12 +20,19 @@ export default () => (
 `
 // every range the transform wrote, named by the text it starts with, one id each
 const out = transformSourceRanges(code, '/p/main.tsx', 'main.tsx').code
-const ranges = [...out.matchAll(/\{ file: "main\.tsx", line: (\d+), col: (\d+), endLine: (\d+), endCol: (\d+)(?:, fn: \{[^}]*\})? \}/g)]
-  .map((m, i) => ({ start: [+m[1], +m[2]], end: [+m[3], +m[4]], ids: [i], refs: [] }))
+const ranges = [...out.matchAll(/\{ file: "main\.tsx", line: (\d+), col: (\d+), endLine: (\d+), endCol: (\d+)(?:, fn: \{[^}]*\})? \}/g)].map((m, i) => ({
+  start: [+m[1], +m[2]],
+  end: [+m[3], +m[4]],
+  ids: [i],
+  refs: [],
+}))
 const lines = code.split('\n')
 const name = r => lines[r.start[0] - 1].slice(r.start[1] - 1).match(/^<?[A-Za-z0-9]+/)[0]
 const sources = { 'main.tsx': ranges }
-const at = (line, col) => { const h = resolveCursor(sources, 'main.tsx', line, col); return h ? name(h.range) : null }
+const at = (line, col) => {
+  const h = resolveCursor(sources, 'main.tsx', line, col)
+  return h ? name(h.range) : null
+}
 
 test('the transform records the last character as the end, inclusive', () => {
   assert.deepEqual(ranges.map(name), ['<PCB', '<g', '<R1', '<Box', '<C1', 'route', 'V', 'H'])

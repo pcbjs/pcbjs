@@ -5,14 +5,21 @@ import type { BoardsPayload } from './boards.js'
 import { variantSlug } from '@pcbjs/core/variants'
 
 /** What the SSR bundle's `render` returns. */
-export interface Rendered { html: string; title: string; head: string }
+export interface Rendered {
+  html: string
+  title: string
+  head: string
+}
 
 /** The routes of a site as decoded segment lists: `[]` for home, `board/<name>` per board, `board/<name>/<slug>` per target. */
 export function siteRoutes(data: Pick<BoardsPayload, 'boards'>): string[][] {
   const routes: string[][] = [[]]
   const seen = new Set<string>()
   for (const b of data.boards) {
-    if (!seen.has(b.name)) { seen.add(b.name); routes.push(['board', b.name]) }
+    if (!seen.has(b.name)) {
+      seen.add(b.name)
+      routes.push(['board', b.name])
+    }
     if (b.variant) routes.push(['board', b.name, variantSlug(b.variant.name)])
   }
   return routes
@@ -22,8 +29,7 @@ export function siteRoutes(data: Pick<BoardsPayload, 'boards'>): string[][] {
 export const safeSegment = (s: string): boolean => !!s && s !== '.' && s !== '..' && !/[/\\\0]/.test(s)
 
 /** JSON safe to place in an inline <script>: no `</script>`, no line separators JavaScript rejects. */
-export const scriptJson = (v: unknown): string =>
-  JSON.stringify(v).replace(/[<\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'))
+export const scriptJson = (v: unknown): string => JSON.stringify(v).replace(/[<\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'))
 
 const escText = (s: string) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)
 
@@ -47,7 +53,11 @@ export function previewPrerendered(outDir: string, base: string): Plugin {
         const [path, query] = (req.url ?? '/').split(/(?=\?)/)
         if (!path.startsWith(b) || /\.[a-z0-9]+$/i.test(path)) return next()
         let rel: string
-        try { rel = decodeURIComponent(path.slice(b.length)) } catch { return next() }
+        try {
+          rel = decodeURIComponent(path.slice(b.length))
+        } catch {
+          return next()
+        }
         const file = join(outDir, rel, 'index.html')
         if (existsSync(file) && statSync(file).isFile()) req.url = b + path.slice(b.length).replace(/\/?$/, '/') + 'index.html' + (query ?? '')
         next()
@@ -59,7 +69,11 @@ export function previewPrerendered(outDir: string, base: string): Plugin {
           if ((req.method !== 'GET' && req.method !== 'HEAD') || !accept.includes('text/html') || !existsSync(page)) return next()
           // a page Vite's fallback found, such as /index.html for /, is served by the handler after this one
           let asked: string
-          try { asked = join(outDir, decodeURIComponent((req.url ?? '/').split('?')[0])) } catch { asked = '' }
+          try {
+            asked = join(outDir, decodeURIComponent((req.url ?? '/').split('?')[0]))
+          } catch {
+            asked = ''
+          }
           if (asked && existsSync(asked) && statSync(asked).isFile()) return next()
           res.statusCode = 404
           res.setHeader('content-type', 'text/html; charset=utf-8')

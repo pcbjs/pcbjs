@@ -13,7 +13,12 @@ import { scopeHost, sourcePosition } from '@pcbjs/compile/scope'
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..', '..', '..')
 const scripts = new Set(['ts', 'tsx', 'js', 'mjs'])
-const pages = [...readdirSync(join(repo, 'docs')).filter(f => f.endsWith('.md')).map(f => join(repo, 'docs', f)), join(repo, 'README.md')]
+const pages = [
+  ...readdirSync(join(repo, 'docs'))
+    .filter(f => f.endsWith('.md'))
+    .map(f => join(repo, 'docs', f)),
+  join(repo, 'README.md'),
+]
 // names a sample may use as placeholders: nets and refs in capitals, and the report's types
 const REF = /^(BT|SW|TP|[CDEFHJKLQRUY])\d+$/
 const PLACEHOLDER = /^([A-Z][A-Z0-9_]*|Stats|Timings|Routing|Finding)$/
@@ -30,16 +35,22 @@ function samples(text) {
   return out
 }
 
-const owns = (code, n) => new RegExp(`import[^;\\n]*\\b${n}\\b|\\b(const|let|var|function|class|type|interface)\\s+${n}\\b|\\b(const|let|var)\\s*[{[][^=]*\\b${n}\\b[^=]*[}\\]]\\s*=|\\(\\s*\\{[^)]*\\b${n}\\b[^)]*\\}`).test(code)
+const owns = (code, n) =>
+  new RegExp(
+    `import[^;\\n]*\\b${n}\\b|\\b(const|let|var|function|class|type|interface)\\s+${n}\\b|\\b(const|let|var)\\s*[{[][^=]*\\b${n}\\b[^=]*[}\\]]\\s*=|\\(\\s*\\{[^)]*\\b${n}\\b[^)]*\\}`,
+  ).test(code)
 const uses = (code, n) => new RegExp(`(?<![\\w.$'"])${n}\\b`).test(code)
 
 test('docs: every TypeScript and JavaScript sample type checks', async () => {
   const ts = (await import('typescript')).default
-  const exported = [['@pcbjs/core', Object.keys(await import('@pcbjs/core'))], ['@pcbjs/lib', Object.keys(await import('@pcbjs/lib'))]]
+  const exported = [
+    ['@pcbjs/core', Object.keys(await import('@pcbjs/core'))],
+    ['@pcbjs/lib', Object.keys(await import('@pcbjs/lib'))],
+  ]
   const work = join(here, `.docs-samples-${process.pid}`)
   const blocks = new Map()
   // a ref such as Q1 is a part, so route(Q1[1]) takes the builder overload; any other placeholder is any
-  const stub = n => REF.test(n) ? `declare const ${n}: import('@pcbjs/core').Part & { [pin: string]: any }` : `declare const ${n}: any`
+  const stub = n => (REF.test(n) ? `declare const ${n}: import('@pcbjs/core').Part & { [pin: string]: any }` : `declare const ${n}: any`)
   const prelude = (code, missing = []) => {
     const lines = []
     if (/<PCB\b/.test(code) && !owns(code, 'PCB')) lines.push(`import PCB from '@pcbjs/core'`)
@@ -49,16 +60,25 @@ test('docs: every TypeScript and JavaScript sample type checks', async () => {
       take.forEach(n => seen.add(n))
       if (take.length) lines.push(`import { ${take.join(', ')} } from '${from}'`)
     }
-        for (const n of missing) lines.push(stub(n), `type ${n} = any`)
+    for (const n of missing) lines.push(stub(n), `type ${n} = any`)
     // bare JSX children, such as a few placed parts, become one fragment
     if (/^\s*</.test(code) && !/^(import|export)\b/m.test(code)) lines.push('export default <>')
     return lines.join('; ') + '\n'
   }
   const body = code => (/^\s*</.test(code) && !/^(import|export)\b/m.test(code) ? code + '</>\n' : code)
   const options = {
-    strict: true, noEmit: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler, jsx: ts.JsxEmit.ReactJSX, jsxImportSource: '@pcbjs/core',
-    allowJs: true, checkJs: false, allowImportingTsExtensions: true, skipLibCheck: true, types: ['node'],
+    strict: true,
+    noEmit: true,
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    jsx: ts.JsxEmit.ReactJSX,
+    jsxImportSource: '@pcbjs/core',
+    allowJs: true,
+    checkJs: false,
+    allowImportingTsExtensions: true,
+    skipLibCheck: true,
+    types: ['node'],
   }
   let injections
   const run = () => {
@@ -70,12 +90,14 @@ test('docs: every TypeScript and JavaScript sample type checks', async () => {
   try {
     for (const md of pages) {
       const dir = join(work, relative(repo, md).replace(/[\\/.]/g, '_'))
-      samples(readFileSync(md, 'utf8')).filter(s => scripts.has(s.lang) && s.code !== blinky).forEach((s, i) => {
-        const file = join(dir, s.file ?? `sample${i}.${s.lang}`)
-        mkdirSync(dirname(file), { recursive: true })
-        writeFileSync(file, prelude(s.code) + body(s.code))
-        blocks.set(file, { md: relative(repo, md), line: s.line, code: s.code })
-      })
+      samples(readFileSync(md, 'utf8'))
+        .filter(s => scripts.has(s.lang) && s.code !== blinky)
+        .forEach((s, i) => {
+          const file = join(dir, s.file ?? `sample${i}.${s.lang}`)
+          mkdirSync(dirname(file), { recursive: true })
+          writeFileSync(file, prelude(s.code) + body(s.code))
+          blocks.set(file, { md: relative(repo, md), line: s.line, code: s.code })
+        })
       // a module of another page's example, imported by name: a stub with those names
       for (const [file, b] of blocks) {
         if (!file.startsWith(dir + '/')) continue
@@ -83,7 +105,15 @@ test('docs: every TypeScript and JavaScript sample type checks', async () => {
           const target = resolve(dirname(file), m[2])
           if (['.ts', '.tsx', ''].some(x => blocks.has(target + x))) continue
           mkdirSync(dirname(target), { recursive: true })
-          writeFileSync(target + '.ts', m[1].split(',').map(n => n.trim()).filter(Boolean).map(n => `export ${stub(n)}`).join('\n') + '\n')
+          writeFileSync(
+            target + '.ts',
+            m[1]
+              .split(',')
+              .map(n => n.trim())
+              .filter(Boolean)
+              .map(n => `export ${stub(n)}`)
+              .join('\n') + '\n',
+          )
         }
       }
     }
@@ -103,5 +133,7 @@ test('docs: every TypeScript and JavaScript sample type checks', async () => {
     })
     console.log(`docs samples: ${blocks.size} blocks from ${pages.length} pages`)
     assert.deepEqual(errors, [])
-  } finally { rmSync(work, { recursive: true, force: true }) }
+  } finally {
+    rmSync(work, { recursive: true, force: true })
+  }
 })

@@ -11,10 +11,13 @@ import { IDE_MAJOR, IDE_PROTOCOL, parseIdeUrl, readyProtocol } from './host-clie
 import { PKG_DIR } from './vite.js'
 
 export interface DevOptions {
-  entries?: string[]; root?: string; config?: string
+  entries?: string[]
+  root?: string
+  config?: string
   /** 0 lets the system pick a free port; unset tries 5173 and the ports after it */
   port?: number
-  host?: string | boolean; open?: boolean
+  host?: string | boolean
+  open?: boolean
   /** an editor host to dial, `ws://127.0.0.1:<port>/<token>` */
   ide?: string
   /** let `ide` name a host other than 127.0.0.1, localhost or [::1] */
@@ -25,20 +28,34 @@ export interface DevOptions {
 
 /** `.pcbjs/dev.json` while a dev server runs. */
 export interface DevInfo {
-  port: number; host: string; urls: string[]; root: string; pid: number; startedAt: string
+  port: number
+  host: string
+  urls: string[]
+  root: string
+  pid: number
+  startedAt: string
   /** `/`, or `/<scope>/` on a workspace server with several scopes */
   route: string
   scope?: string
   url?: string
-  protocol?: number; major?: number; version?: string
+  protocol?: number
+  major?: number
+  version?: string
 }
 
 /** `pcbjs:ide:ready`. */
 export interface ReadyInfo {
-  port: number; host: string; urls: string[]; root: string; pid: number; version: string
+  port: number
+  host: string
+  urls: string[]
+  root: string
+  pid: number
+  version: string
   /** a workspace server's folders, `root` first */
   folders?: string[]
-  protocol: number; major: number; capabilities: string[]
+  protocol: number
+  major: number
+  capabilities: string[]
 }
 
 export const VERSION: string = JSON.parse(readFileSync(join(PKG_DIR, 'package.json'), 'utf8')).version
@@ -54,10 +71,24 @@ export async function dev(opts: DevOptions): Promise<ViteDevServer> {
   server.config.logger.info(`\n  pcbjs dev  ${cfg.root}\n  ${cfg.entries.length === 1 ? 'entry   ' : 'entries '}   ${cfg.entries.map(e => e.rel).join(', ')}\n`)
   server.printUrls()
   const info = writeDevInfo(server, cfg.root)
-  if (info) state.host?.send('pcbjs:ide:ready', { port: info.port, host: info.host, urls: info.urls, root: info.root, pid: info.pid, version: VERSION, ...readyProtocol() } satisfies ReadyInfo)
+  if (info)
+    state.host?.send('pcbjs:ide:ready', {
+      port: info.port,
+      host: info.host,
+      urls: info.urls,
+      root: info.root,
+      pid: info.pid,
+      version: VERSION,
+      ...readyProtocol(),
+    } satisfies ReadyInfo)
   if (process.env.TERM_PROGRAM === 'vscode') {
     // never blocks startup and never installs anything; silent when `code` is missing or slow
-    extensionHint().then(h => { if (h) server.config.logger.info(h) }, () => {})
+    extensionHint().then(
+      h => {
+        if (h) server.config.logger.info(h)
+      },
+      () => {},
+    )
   }
   return server
 }
@@ -77,7 +108,8 @@ export async function listenDev(make: () => InlineConfig, opts: Pick<DevOptions,
       await server.listen()
       return server
     } catch (e: any) {
-      state.host?.close(); state.host = null
+      state.host?.close()
+      state.host = null
       await server.close().catch(() => {})
       if (opts.port !== 0 || attempt >= FREE_PORT_TRIES || !/already in use|EADDRINUSE/.test(String(e?.message ?? e) + (e?.code ?? ''))) throw e
     }
@@ -93,24 +125,33 @@ function closeSettled(server: ViteDevServer, state: PluginState): void {
   const close = server.close.bind(server)
   let closing: Promise<void> | null = null
   open++
-  server.close = () => (closing ??= (async () => {
-    state.closing = true
-    const opt = server.environments.client?.depsOptimizer
-    const deps = (async () => {
-      await opt?.scanProcessing
-      await Promise.all(Object.values(opt?.metadata.discovered ?? {}).map(d => d.processing))
-    })()
-    let timer: NodeJS.Timeout | undefined
-    const cap = new Promise<void>(done => { timer = setTimeout(done, SETTLE_MS) })
-    await Promise.race([Promise.all([state.idle?.(), deps]).catch(() => {}), cap])
-    clearTimeout(timer)
-    try { await close() } finally { if (--open === 0) await stopEsbuild() }
-  })())
+  server.close = () =>
+    (closing ??= (async () => {
+      state.closing = true
+      const opt = server.environments.client?.depsOptimizer
+      const deps = (async () => {
+        await opt?.scanProcessing
+        await Promise.all(Object.values(opt?.metadata.discovered ?? {}).map(d => d.processing))
+      })()
+      let timer: NodeJS.Timeout | undefined
+      const cap = new Promise<void>(done => {
+        timer = setTimeout(done, SETTLE_MS)
+      })
+      await Promise.race([Promise.all([state.idle?.(), deps]).catch(() => {}), cap])
+      clearTimeout(timer)
+      try {
+        await close()
+      } finally {
+        if (--open === 0) await stopEsbuild()
+      }
+    })())
 }
 
 /** Stop Vite's copy of esbuild; a later call starts it again. */
 async function stopEsbuild(): Promise<void> {
-  try { await createRequire(import.meta.resolve('vite'))('esbuild').stop() } catch {}
+  try {
+    await createRequire(import.meta.resolve('vite'))('esbuild').stop()
+  } catch {}
 }
 
 /** A port the system calls free on the host Vite will listen on, for `--port 0`. */
@@ -135,8 +176,17 @@ export function writeDevInfo(server: ViteDevServer, root: string, extra: Partial
   const urls = [...(server.resolvedUrls?.local ?? []), ...(server.resolvedUrls?.network ?? [])]
   const h = server.config.server.host
   const info: DevInfo = {
-    port: addr.port, host: typeof h === 'string' ? h : h ? '0.0.0.0' : 'localhost', urls, root,
-    pid: process.pid, startedAt: new Date().toISOString(), route: '/', version: VERSION, protocol: IDE_PROTOCOL, major: IDE_MAJOR, ...extra,
+    port: addr.port,
+    host: typeof h === 'string' ? h : h ? '0.0.0.0' : 'localhost',
+    urls,
+    root,
+    pid: process.pid,
+    startedAt: new Date().toISOString(),
+    route: '/',
+    version: VERSION,
+    protocol: IDE_PROTOCOL,
+    major: IDE_MAJOR,
+    ...extra,
   }
   mkdirSync(join(root, '.pcbjs'), { recursive: true })
   writeFileSync(file, JSON.stringify(info, null, 2) + '\n')
@@ -146,7 +196,9 @@ export function writeDevInfo(server: ViteDevServer, root: string, extra: Partial
   const remove = () => {
     if (removed) return
     removed = true
-    try { if (JSON.parse(readFileSync(file, 'utf8')).pid === process.pid) rmSync(file, { force: true }) } catch {}
+    try {
+      if (JSON.parse(readFileSync(file, 'utf8')).pid === process.pid) rmSync(file, { force: true })
+    } catch {}
   }
   server.httpServer!.on('close', remove)
   process.on('exit', remove)
@@ -155,7 +207,9 @@ export function writeDevInfo(server: ViteDevServer, root: string, extra: Partial
   if (signalled.has(server)) return info
   signalled.add(server)
   for (const sig of ['SIGINT', 'SIGHUP'] as const) {
-    process.once(sig, () => { void server.close().finally(() => process.exit(sig === 'SIGINT' ? 130 : 129)) })
+    process.once(sig, () => {
+      void server.close().finally(() => process.exit(sig === 'SIGINT' ? 130 : 129))
+    })
   }
   return info
 }

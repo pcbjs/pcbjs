@@ -22,9 +22,12 @@ test('lines through the origin, minor ones not doubled under the major, pixel ce
   const xs = d => [...d.matchAll(/M(-?[\d.]+) -5V/g)].map(m => +m[1])
   const major = xs(p.major)
   assert.deepEqual(major.map(Math.round), [0, 10, 20, 30, 40, 50, 60, 70, 80, 90])
-  assert.ok(major.every(x => Math.abs(((x + 5) / 0.1) % 1 - 0.5) < 1e-6), 'on pixel centres')
+  assert.ok(
+    major.every(x => Math.abs((((x + 5) / 0.1) % 1) - 0.5) < 1e-6),
+    'on pixel centres',
+  )
   const minor = xs(p.minor).map(Math.round)
-  assert.equal(minor.length, 101 - 10, "-5 to 95 but the majors")
+  assert.equal(minor.length, 101 - 10, '-5 to 95 but the majors')
   assert.ok(!minor.includes(10))
   assert.match(p.axes, /^M0\.05 -5V45M-5 0\.05H95$/)
 })

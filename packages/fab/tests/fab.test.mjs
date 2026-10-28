@@ -37,15 +37,31 @@ test('fab: a preset spreads back into bindPCB, and the result type checks', asyn
   const jlc = new URL(import.meta.resolve('../dist/JLCPCB/2-Layer.js')).pathname
   const dir = mkdtempSync(join(tmpdir(), 'pcbjs-fab-'))
   const file = join(dir, 'house.ts')
-  writeFileSync(file, [
-    `import { bindPCB } from ${JSON.stringify(fab)}`,
-    `import JLC, * as M from ${JSON.stringify(jlc)}`,
-    `export const A = bindPCB({ ...JLC.preset, name: 'House A' })`,
-    `export const B = bindPCB({ name: 'House B', stackup: M.stackup, rules: M.rules, colors: M.colors, finishes: M.finishes, sourcing: M.sourcing })`,
-  ].join('\n') + '\n')
+  writeFileSync(
+    file,
+    [
+      `import { bindPCB } from ${JSON.stringify(fab)}`,
+      `import JLC, * as M from ${JSON.stringify(jlc)}`,
+      `export const A = bindPCB({ ...JLC.preset, name: 'House A' })`,
+      `export const B = bindPCB({ name: 'House B', stackup: M.stackup, rules: M.rules, colors: M.colors, finishes: M.finishes, sourcing: M.sourcing })`,
+    ].join('\n') + '\n',
+  )
   try {
-    const program = ts.createProgram([file], { strict: true, noEmit: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, skipLibCheck: true, types: [] })
+    const program = ts.createProgram([file], {
+      strict: true,
+      noEmit: true,
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      skipLibCheck: true,
+      types: [],
+    })
     const diags = ts.getPreEmitDiagnostics(program).filter(d => d.file?.fileName === file)
-    assert.deepEqual(diags.map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n')), [])
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+    assert.deepEqual(
+      diags.map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n')),
+      [],
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

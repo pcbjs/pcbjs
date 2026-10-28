@@ -66,9 +66,23 @@ export interface SchLabel {
   auto: boolean
   src?: Src
 }
-export interface SchJunction { net: string; at: Pt }
-export interface SchSheetBox { name: string; path: string[]; box: [number, number, number, number]; auto: boolean; src?: Src }
-export interface SchText { text: string; at: Pt; size: number; src?: Src }
+export interface SchJunction {
+  net: string
+  at: Pt
+}
+export interface SchSheetBox {
+  name: string
+  path: string[]
+  box: [number, number, number, number]
+  auto: boolean
+  src?: Src
+}
+export interface SchText {
+  text: string
+  at: Pt
+  size: number
+  src?: Src
+}
 /** What the drawing holds; `length` in mm, `crossings` wire over wire of another net, `rounds` of negotiation. */
 export interface SchStats {
   symbols: number

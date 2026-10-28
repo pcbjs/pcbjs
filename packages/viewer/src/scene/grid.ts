@@ -7,11 +7,13 @@ const SNAP = 10
 
 function labelSprite(text: string, color: string): THREE.Sprite {
   const c = document.createElement('canvas')
-  c.width = 64; c.height = 32
+  c.width = 64
+  c.height = 32
   const g = c.getContext('2d')!
   g.font = '500 20px system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif'
   g.fillStyle = '#ffffff'
-  g.textAlign = 'center'; g.textBaseline = 'middle'
+  g.textAlign = 'center'
+  g.textBaseline = 'middle'
   g.fillText(text, 32, 17)
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
@@ -32,11 +34,15 @@ export class Grid {
   on = true
   z = 0
 
-  constructor() { this.root.name = 'grid'; this.root.renderOrder = -1 }
+  constructor() {
+    this.root.name = 'grid'
+    this.root.renderOrder = -1
+  }
 
   /** Size the plane for a board extent in three coordinates; `pad` is the margin around it, 2 mm by default, snapped out to 10 mm. */
   build(box: THREE.Box3, pad = 2) {
-    const lo = (v: number) => Math.floor((v - pad) / SNAP) * SNAP, hi = (v: number) => Math.ceil((v + pad) / SNAP) * SNAP
+    const lo = (v: number) => Math.floor((v - pad) / SNAP) * SNAP,
+      hi = (v: number) => Math.ceil((v + pad) / SNAP) * SNAP
     this.extent = [lo(box.min.x), lo(box.min.y), hi(box.max.x), hi(box.max.y)]
     this.z = box.min.z - 0.5
     this.root.position.z = this.z
@@ -44,7 +50,10 @@ export class Grid {
   }
 
   /** The grid's colours, as the --grid-* tokens give them. */
-  setTones(t: Tones) { this.tones = t; this.draw() }
+  setTones(t: Tones) {
+    this.tones = t
+    this.draw()
+  }
 
   private draw() {
     this.clear()
@@ -54,8 +63,14 @@ export class Grid {
     const on = (v: number, s: number) => Math.abs(v / s - Math.round(v / s)) < 1e-6
     const seg = (pick: (v: number) => boolean) => {
       const pts: number[] = []
-      for (let k = Math.ceil(x0 / this.step); k * this.step <= x1 + 1e-6; k++) { const x = k * this.step; if (pick(x)) pts.push(x, y0, 0, x, y1, 0) }
-      for (let k = Math.ceil(y0 / this.step); k * this.step <= y1 + 1e-6; k++) { const y = k * this.step; if (pick(y)) pts.push(x0, y, 0, x1, y, 0) }
+      for (let k = Math.ceil(x0 / this.step); k * this.step <= x1 + 1e-6; k++) {
+        const x = k * this.step
+        if (pick(x)) pts.push(x, y0, 0, x, y1, 0)
+      }
+      for (let k = Math.ceil(y0 / this.step); k * this.step <= y1 + 1e-6; k++) {
+        const y = k * this.step
+        if (pick(y)) pts.push(x0, y, 0, x1, y, 0)
+      }
       return pts
     }
     const add = (pts: number[], tone: string, order: number) => {
@@ -68,13 +83,35 @@ export class Grid {
       this.lines.push(l)
       this.root.add(l)
     }
-    add(seg(v => !on(v, major) && Math.abs(v) > 1e-6), this.tones.minor, -3)
-    add(seg(v => on(v, major) && Math.abs(v) > 1e-6), this.tones.major, -2)
-    add(seg(v => Math.abs(v) < 1e-6), this.tones.origin, -1)
+    add(
+      seg(v => !on(v, major) && Math.abs(v) > 1e-6),
+      this.tones.minor,
+      -3,
+    )
+    add(
+      seg(v => on(v, major) && Math.abs(v) > 1e-6),
+      this.tones.major,
+      -2,
+    )
+    add(
+      seg(v => Math.abs(v) < 1e-6),
+      this.tones.origin,
+      -1,
+    )
     // labels in board millimetres: x along the near edge, y (down on the board, -y in three) along the left edge
-    const every = Math.max(major, SNAP), color = parseColor(this.tones.origin)?.hex ?? '#9aa6b5'
-    for (let x = Math.ceil(x0 / every) * every; x <= x1 + 1e-6; x += every) { const s = labelSprite(String(x), color); s.position.set(x, y0 - 2, 0); this.labels.add(s) }
-    for (let y = Math.ceil(y0 / every) * every; y <= y1 + 1e-6; y += every) { if (y === y0) continue; const s = labelSprite(String(-y), color); s.position.set(x0 - 3, y, 0); this.labels.add(s) }
+    const every = Math.max(major, SNAP),
+      color = parseColor(this.tones.origin)?.hex ?? '#9aa6b5'
+    for (let x = Math.ceil(x0 / every) * every; x <= x1 + 1e-6; x += every) {
+      const s = labelSprite(String(x), color)
+      s.position.set(x, y0 - 2, 0)
+      this.labels.add(s)
+    }
+    for (let y = Math.ceil(y0 / every) * every; y <= y1 + 1e-6; y += every) {
+      if (y === y0) continue
+      const s = labelSprite(String(-y), color)
+      s.position.set(x0 - 3, y, 0)
+      this.labels.add(s)
+    }
     this.root.add(this.labels)
   }
 
@@ -84,16 +121,30 @@ export class Grid {
     let changed = this.root.visible !== show
     this.root.visible = show
     const step = gridStep(ppm).minor
-    if (show && step !== this.step) { this.step = step; this.draw(); changed = true }
+    if (show && step !== this.step) {
+      this.step = step
+      this.draw()
+      changed = true
+    }
     return changed
   }
 
   /** Move the plane, for the exploded view whose lowest group goes below the board. */
-  setZ(z: number) { this.root.position.z = z }
+  setZ(z: number) {
+    this.root.position.z = z
+  }
 
   clear() {
-    for (const l of this.lines) { l.geometry.dispose(); (l.material as THREE.Material).dispose(); this.root.remove(l) }
-    for (const s of [...this.labels.children] as THREE.Sprite[]) { s.material.map?.dispose(); s.material.dispose(); this.labels.remove(s) }
+    for (const l of this.lines) {
+      l.geometry.dispose()
+      ;(l.material as THREE.Material).dispose()
+      this.root.remove(l)
+    }
+    for (const s of [...this.labels.children] as THREE.Sprite[]) {
+      s.material.map?.dispose()
+      s.material.dispose()
+      this.labels.remove(s)
+    }
     this.lines = []
   }
 }

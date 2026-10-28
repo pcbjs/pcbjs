@@ -8,7 +8,7 @@ import { pixel, PixelCell, PITCH, type Step } from './lib/pixel'
 
 const N = Number(process.env.PCB_N ?? 8)
 const STRIP = 8 // header strip above and below the matrix
-const AUTO_ROW = process.env.PCB_AUTOROW === "1" // hand row 0 of the data chain to the autorouter, for comparison
+const AUTO_ROW = process.env.PCB_AUTOROW === '1' // hand row 0 of the data chain to the autorouter, for comparison
 const W = N * PITCH
 const H = N * PITCH + 2 * STRIP
 
@@ -18,7 +18,9 @@ const D = bus('D', N * N + 1)
 
 // Power and data in, data out.
 const J1 = PinHeader(4).source({ MPN: 'PZ254V-11-04P', 'MPN:LCSC': 'C492403' }).connect(V5, DATA, GND, GND)
-const J2 = PinHeader(4).source({ MPN: 'PZ254V-11-04P', 'MPN:LCSC': 'C492403' }).connect(V5, D[N * N], GND, GND)
+const J2 = PinHeader(4)
+  .source({ MPN: 'PZ254V-11-04P', 'MPN:LCSC': 'C492403' })
+  .connect(V5, D[N * N], GND, GND)
 const R1 = R0603('33').source({ MPN: 'RC0603FR-0733RL', 'MPN:LCSC': 'C23140' }).connect(DATA, D[0])
 const C1 = C0805('22u').source({ MPN: 'CL21A226MAQNNNE', 'MPN:LCSC': 'C45783' }).connect(V5, GND)
 
@@ -53,7 +55,9 @@ export default (
     {via(GND, '25.5 4')}
 
     {/* the matrix */}
-    {cells.map(({ g, x, y, rot, step }) => <PixelCell g={g} at={`${x} ${y} ${rot}deg`} step={step} />)}
+    {cells.map(({ g, x, y, rot, step }) => (
+      <PixelCell g={g} at={`${x} ${y} ${rot}deg`} step={step} />
+    ))}
 
     {/* row 0 autorouted pixel to pixel when AUTO_ROW is set */}
     {AUTO_ROW && cells.slice(0, N - 1).map(({ g }, i) => route(g.LED.DOUT, cells[i + 1].g.LED.DIN, 'XZ').width(0.2))}

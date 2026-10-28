@@ -30,7 +30,10 @@ test('fab: every preset in FABS loads and default-exports a bound component', as
   }
   assert.equal(bindRoot, bindPCB)
   assert.equal(isBoundRoot, isBoundPCB)
-  assert.equal(isBoundPCB(() => null), false)
+  assert.equal(
+    isBoundPCB(() => null),
+    false,
+  )
 })
 
 test('fab: the preset spec reads back from the JLCPCB 2-Layer module', () => {
@@ -142,7 +145,18 @@ test('fab: teardrops are regions of the copper Gerbers and pass the Gerber self 
   const { buildFab } = await import('@pcbjs/export/fab')
   const { route } = await import('@pcbjs/core')
   const tht = (ref, x) => h('footprint', { ref, at: [x, 5], nets: { 1: 'A' } }, h('pad', { num: 1, size: 1.7, drill: 1, type: 'tht' }))
-  const make = teardrops => compileBoard(h(PCB2, { name: 'TD', silkRefs: false, teardrops }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 10 }), tht('J1', 4), tht('J2', 16), route('J1.1', 'J2.1', 'Z').width(0.3)), { routeCache: false })
+  const make = teardrops =>
+    compileBoard(
+      h(
+        PCB2,
+        { name: 'TD', silkRefs: false, teardrops },
+        h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 10 }),
+        tht('J1', 4),
+        tht('J2', 16),
+        route('J1.1', 'J2.1', 'Z').width(0.3),
+      ),
+      { routeCache: false },
+    )
   const fab = buildFab(make({ pads: 'tht' }), '2026-01-01T00:00:00Z', { check: true })
   assert.match(fab.readme, /STATUS: ORDERABLE/)
   assert.match(fab.readme, /Gerber self check: passed/)

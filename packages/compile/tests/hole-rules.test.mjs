@@ -48,10 +48,14 @@ test('hole rules: hole to hole by kind, via between two vias, pad otherwise', ()
   // two vias 0.3 mm apart edge to edge, two holes 0.3 mm apart, a via 0.3 mm from a hole
   const b = mk(rules, via(5), via(5.6), hole(10, 10, 'H1'), hole(11.3, 10, 'H2'), via(20), hole(20.95, 5, 'H3'))
   const f = find(b, 'hole-to-hole').map(d => d.message)
-  assert.deepEqual(f, [
-    'holes of unplated hole of H1 at (10, 10) and unplated hole of H2 at (11.3, 10) are 0.3 mm apart edge to edge, minimum 0.45 mm (pad)',
-    'holes of via A and unplated hole of H3 at (20.95, 5) are 0.3 mm apart edge to edge, minimum 0.45 mm (pad)',
-  ], 'the two vias keep 0.2')
+  assert.deepEqual(
+    f,
+    [
+      'holes of unplated hole of H1 at (10, 10) and unplated hole of H2 at (11.3, 10) are 0.3 mm apart edge to edge, minimum 0.45 mm (pad)',
+      'holes of via A and unplated hole of H3 at (20.95, 5) are 0.3 mm apart edge to edge, minimum 0.45 mm (pad)',
+    ],
+    'the two vias keep 0.2',
+  )
   assert.equal(find(mk({ minHoleToHole: 0.45 }, via(5), via(5.6)), 'hole-to-hole').length, 1, 'a number holds between vias too')
 })
 

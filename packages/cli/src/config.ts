@@ -69,14 +69,20 @@ export function expandEntries(patterns: string[], dir: string, shown: string): s
     let files: string[]
     if (isGlob(p)) {
       files = globSync(p, { cwd: dir, exclude: (f: string) => f === 'node_modules' || f === '.pcbjs' })
-        .map(f => resolve(dir, f)).filter(f => statSync(f).isFile()).sort()
+        .map(f => resolve(dir, f))
+        .filter(f => statSync(f).isFile())
+        .sort()
       if (!files.length) throw new Error(`no file matches the entry pattern ${JSON.stringify(p)} in ${shown}`)
     } else {
       const f = resolve(dir, p)
       if (!existsSync(f)) throw new Error(`entry not found: ${p}, listed in entries in ${shown}`)
       files = [f]
     }
-    for (const f of files) if (!seen.has(f)) { seen.add(f); out.push(f) }
+    for (const f of files)
+      if (!seen.has(f)) {
+        seen.add(f)
+        out.push(f)
+      }
   }
   return out
 }
@@ -107,13 +113,19 @@ export function pickEntries(cli: string[], configEntries: unknown, o: { root: st
   }
   if (fromConfig.length) return { files: fromConfig, from: 'config', note: null }
   const name = o.shown ?? 'pcb.config.ts'
-  throw new Error(o.configFile
-    ? `no entries: add entries: ['pcb.tsx'] to ${name}, or pass the entries on the command line`
-    : `no entries: create ${name} with export default defineConfig({ entries: ['pcb.tsx'] }), or pass the entries on the command line`)
+  throw new Error(
+    o.configFile
+      ? `no entries: add entries: ['pcb.tsx'] to ${name}, or pass the entries on the command line`
+      : `no entries: create ${name} with export default defineConfig({ entries: ['pcb.tsx'] }), or pass the entries on the command line`,
+  )
 }
 
 /** The config file and what it exports, without the entries: for a command that only needs the settings. */
-export async function loadUserConfig(command: 'serve' | 'build', configArg?: string, root = process.cwd()): Promise<{ root: string; file: string | null; shown: string | null; user: UserConfig & { entry?: unknown; title?: unknown } }> {
+export async function loadUserConfig(
+  command: 'serve' | 'build',
+  configArg?: string,
+  root = process.cwd(),
+): Promise<{ root: string; file: string | null; shown: string | null; user: UserConfig & { entry?: unknown; title?: unknown } }> {
   root = resolve(root)
   let file: string | null = configArg ? resolve(root, configArg) : null
   if (!file) {
@@ -136,7 +148,13 @@ export async function loadUserConfig(command: 'serve' | 'build', configArg?: str
 }
 
 /** The config of the project in the working directory, entries by pickEntries. */
-export async function resolveConfig(entries: string[], command: 'serve' | 'build', configArg?: string, root = process.cwd(), log: (line: string) => void = l => console.log(l)): Promise<ResolvedConfig> {
+export async function resolveConfig(
+  entries: string[],
+  command: 'serve' | 'build',
+  configArg?: string,
+  root = process.cwd(),
+  log: (line: string) => void = l => console.log(l),
+): Promise<ResolvedConfig> {
   const loaded = await loadUserConfig(command, configArg, root)
   return configFrom(loaded, entries, log)
 }
@@ -157,9 +175,14 @@ export function configFrom(loaded: Awaited<ReturnType<typeof loadUserConfig>>, e
     list.push({ file: f, rel: relative(root, f).split('\\').join('/') })
   }
   return {
-    root, configFile: file, entries: list,
-    outDir: abs(user.outDir ?? '.pcbjs/dist'), fabDir: abs(user.fabDir ?? '.pcbjs/fab'),
-    base: user.base ?? '/', vite: user.vite, repo: user.repo,
+    root,
+    configFile: file,
+    entries: list,
+    outDir: abs(user.outDir ?? '.pcbjs/dist'),
+    fabDir: abs(user.fabDir ?? '.pcbjs/fab'),
+    base: user.base ?? '/',
+    vite: user.vite,
+    repo: user.repo,
     editor: { follow: followMode(user.editor?.follow) },
   }
 }

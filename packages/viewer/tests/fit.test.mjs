@@ -5,14 +5,28 @@ import * as THREE from 'three'
 import { fitBox, fitDistance, fitSphere } from '../src/scene/fit.ts'
 
 const near = (a, b) => a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-5, `${a} near ${b}`))
-const slab = (w, h, t, name) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, t)); m.name = name; return m }
+const slab = (w, h, t, name) => {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, t))
+  m.name = name
+  return m
+}
 
 function scene() {
-  const s = new THREE.Scene(), board = new THREE.Group()
-  const core = new THREE.Group(); core.name = 'core'; core.add(slab(40, 30, 1.6)); core.position.z = 0.8
-  const parts = new THREE.Group(); parts.name = 'bodies:F'; parts.add(slab(5, 5, 2)); parts.position.set(10, 0, 2.6)
+  const s = new THREE.Scene(),
+    board = new THREE.Group()
+  const core = new THREE.Group()
+  core.name = 'core'
+  core.add(slab(40, 30, 1.6))
+  core.position.z = 0.8
+  const parts = new THREE.Group()
+  parts.name = 'bodies:F'
+  parts.add(slab(5, 5, 2))
+  parts.position.set(10, 0, 2.6)
   board.add(core, parts)
-  const grid = new THREE.Group(); grid.name = 'grid'; grid.add(slab(400, 400, 0.01)); grid.position.z = -1
+  const grid = new THREE.Group()
+  grid.name = 'grid'
+  grid.add(slab(400, 400, 0.01))
+  grid.position.z = -1
   s.add(board, grid)
   return { board, parts }
 }
@@ -27,7 +41,10 @@ test('the fit is the board group alone: a grid ten times its size changes nothin
 
 test('a referenced board in the group widens the fit', () => {
   const { board } = scene()
-  const ref = new THREE.Group(); ref.name = 'References'; ref.add(slab(10, 10, 1)); ref.position.set(30, 0, 0)
+  const ref = new THREE.Group()
+  ref.name = 'References'
+  ref.add(slab(10, 10, 1))
+  ref.position.set(30, 0, 0)
   board.add(ref)
   near([fitBox(board).max.x], [35])
 })
@@ -41,7 +58,8 @@ test('the exploded stack: each group moved to where the explode is heading', () 
 
 test('the camera distance puts every corner of the box on screen, and only just', () => {
   const box = new THREE.Box3(new THREE.Vector3(-20, -10, 0), new THREE.Vector3(20, 10, 2))
-  const up = new THREE.Vector3(0, 0, 1), vfov = Math.PI / 4
+  const up = new THREE.Vector3(0, 0, 1),
+    vfov = Math.PI / 4
   // from above on a square screen the 40 mm side decides: 20 / tan(22.5 deg) past the top face
   assert.ok(Math.abs(fitDistance(box, new THREE.Vector3(0, -1e-3, 1), up, vfov, 1, 1) - (1 + 20 / Math.tan(vfov / 2))) < 0.05)
   // a tall exploded stack seen from the side needs more room than its footprint

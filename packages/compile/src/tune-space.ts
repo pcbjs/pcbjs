@@ -14,9 +14,20 @@ const CAP = 0.5
 
 type Shape = { t: 'disc'; c: Pt; r: number } | { t: 'seg'; a: Pt; b: Pt; r: number } | { t: 'ring'; ring: Ring }
 type Cls = 'cu' | 'hole' | 'keep' | 'crt' | 'silk' | 'edge'
-interface Prim { cls: Cls; layers: string[]; net?: string; except?: string[]; npth?: boolean; ref?: string; item: number; shape: Shape; box: Box
+interface Prim {
+  cls: Cls
+  layers: string[]
+  net?: string
+  except?: string[]
+  npth?: boolean
+  ref?: string
+  item: number
+  shape: Shape
+  box: Box
   /** a pad's clearance and hole clearance overrides */
-  cl?: number; hcl?: number }
+  cl?: number
+  hcl?: number
+}
 
 export interface SpaceQuery {
   /** plated holes of this net do not count */
@@ -41,24 +52,38 @@ export class TuneSpace {
   private edges: [Pt, Pt][] = []
   private rows = new Map<number, number[]>()
 
-  constructor(private board: Board, private rules: Rules) {
+  constructor(
+    private board: Board,
+    private rules: Rules,
+  ) {
     this.cu = copperLayers(board.copper)
     let gap = Math.max(rules.clearance, rules.holeClearance, rules.edgeClearance, NEAR_PAD)
     for (const c of Object.values(board.classes ?? {})) if (typeof c?.clearance === 'number') gap = Math.max(gap, c.clearance)
     for (const it of board.items) if (it.kind === 'pad') gap = Math.max(gap, it.clearance ?? 0, it.clearanceTo?.track ?? 0, it.holeClearance ?? 0)
     this.gap = gap
     for (const it of board.items) this.add(it)
-    for (const k of board.keepouts ?? []) if (k.tracks) for (const ring of k.outline) this.push({ cls: 'keep', layers: k.layers, ...(k.except ? { except: k.except } : {}), item: -1, shape: { t: 'ring', ring } })
-    for (const ring of board.outline) for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const a = ring[j], b = ring[i]
-      this.edges.push([a, b])
-      this.push({ cls: 'edge', layers: this.cu, item: -1, shape: { t: 'seg', a, b, r: 0 } })
-      const y0 = Math.floor(Math.min(a[1], b[1])), y1 = Math.floor(Math.max(a[1], b[1]))
-      for (let y = y0; y <= y1; y++) { let row = this.rows.get(y); if (!row) this.rows.set(y, row = []); row.push(this.edges.length - 1) }
-    }
+    for (const k of board.keepouts ?? [])
+      if (k.tracks) for (const ring of k.outline) this.push({ cls: 'keep', layers: k.layers, ...(k.except ? { except: k.except } : {}), item: -1, shape: { t: 'ring', ring } })
+    for (const ring of board.outline)
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const a = ring[j],
+          b = ring[i]
+        this.edges.push([a, b])
+        this.push({ cls: 'edge', layers: this.cu, item: -1, shape: { t: 'seg', a, b, r: 0 } })
+        const y0 = Math.floor(Math.min(a[1], b[1])),
+          y1 = Math.floor(Math.max(a[1], b[1]))
+        for (let y = y0; y <= y1; y++) {
+          let row = this.rows.get(y)
+          if (!row) this.rows.set(y, (row = []))
+          row.push(this.edges.length - 1)
+        }
+      }
   }
 
-  update(it: Item) { this.remove(it.id); this.add(it) }
+  update(it: Item) {
+    this.remove(it.id)
+    this.add(it)
+  }
 
   remove(id: number) {
     for (const k of this.byItem.get(id) ?? []) this.prims[k] = null
@@ -70,16 +95,26 @@ export class TuneSpace {
     const s = p.shape
     let box: Box
     if (s.t === 'disc') box = { x: s.c[0] - s.r, y: s.c[1] - s.r, w: 2 * s.r, h: 2 * s.r }
-    else if (s.t === 'seg') box = { x: Math.min(s.a[0], s.b[0]) - s.r, y: Math.min(s.a[1], s.b[1]) - s.r, w: Math.abs(s.a[0] - s.b[0]) + 2 * s.r, h: Math.abs(s.a[1] - s.b[1]) + 2 * s.r }
+    else if (s.t === 'seg')
+      box = { x: Math.min(s.a[0], s.b[0]) - s.r, y: Math.min(s.a[1], s.b[1]) - s.r, w: Math.abs(s.a[0] - s.b[0]) + 2 * s.r, h: Math.abs(s.a[1] - s.b[1]) + 2 * s.r }
     else box = ringBox(s.ring)
     const k = this.prims.push({ ...p, box }) - 1
-    if (p.item >= 0) { const l = this.byItem.get(p.item); if (l) l.push(k); else this.byItem.set(p.item, [k]) }
+    if (p.item >= 0) {
+      const l = this.byItem.get(p.item)
+      if (l) l.push(k)
+      else this.byItem.set(p.item, [k])
+    }
     this.grid = null
   }
 
   private add(it: Item) {
-    const base = { item: it.id, ...(it.net !== undefined ? { net: it.net } : {}), ...(it.ref !== undefined ? { ref: it.ref } : {}),
-      ...(it.kind === 'pad' && padClearanceTo(it, 'track') !== undefined ? { cl: padClearanceTo(it, 'track') } : {}), ...(it.kind === 'pad' && it.holeClearance !== undefined ? { hcl: it.holeClearance } : {}) }
+    const base = {
+      item: it.id,
+      ...(it.net !== undefined ? { net: it.net } : {}),
+      ...(it.ref !== undefined ? { ref: it.ref } : {}),
+      ...(it.kind === 'pad' && padClearanceTo(it, 'track') !== undefined ? { cl: padClearanceTo(it, 'track') } : {}),
+      ...(it.kind === 'pad' && it.holeClearance !== undefined ? { hcl: it.holeClearance } : {}),
+    }
     const ls = copperLayersOf(it, this.cu)
     const segs = (cls: Cls, layers: string[], pts: Pt[], r: number, closed = false) => {
       for (let i = 1; i < pts.length; i++) this.push({ cls, layers, ...base, shape: { t: 'seg', a: pts[i - 1], b: pts[i], r } })
@@ -90,12 +125,26 @@ export class TuneSpace {
     if (it.kind === 'via') this.push({ cls: 'hole', layers: this.cu, ...base, shape: { t: 'disc', c: it.at, r: it.drill / 2 } })
     if (ls.length) {
       switch (it.kind) {
-        case 'pad': this.push({ cls: 'cu', layers: ls, ...base, shape: { t: 'ring', ring: it.poly } }); break
-        case 'via': this.push({ cls: 'cu', layers: ls, ...base, shape: { t: 'disc', c: it.at, r: it.size / 2 } }); break
-        case 'track': segs('cu', ls, it.pts, it.width / 2); break
-        case 'graphic': it.paths.forEach((p, i) => (it.fill && p.length >= 3 ? this.push({ cls: 'cu', layers: ls, ...base, shape: { t: 'ring', ring: p } }) : segs('cu', ls, p, it.width / 2, it.closed[i]))); break
-        case 'text': if (it.polys) for (const q of it.polys) this.push({ cls: 'cu', layers: ls, ...base, shape: { t: 'ring', ring: q.outer } }); else for (const s of it.strokes) segs('cu', ls, s, it.thickness / 2); break
-        default: for (const ring of copperRings(it, ls[0])) this.push({ cls: 'cu', layers: ls, ...base, shape: { t: 'ring', ring } })
+        case 'pad':
+          this.push({ cls: 'cu', layers: ls, ...base, shape: { t: 'ring', ring: it.poly } })
+          break
+        case 'via':
+          this.push({ cls: 'cu', layers: ls, ...base, shape: { t: 'disc', c: it.at, r: it.size / 2 } })
+          break
+        case 'track':
+          segs('cu', ls, it.pts, it.width / 2)
+          break
+        case 'graphic':
+          it.paths.forEach((p, i) =>
+            it.fill && p.length >= 3 ? this.push({ cls: 'cu', layers: ls, ...base, shape: { t: 'ring', ring: p } }) : segs('cu', ls, p, it.width / 2, it.closed[i]),
+          )
+          break
+        case 'text':
+          if (it.polys) for (const q of it.polys) this.push({ cls: 'cu', layers: ls, ...base, shape: { t: 'ring', ring: q.outer } })
+          else for (const s of it.strokes) segs('cu', ls, s, it.thickness / 2)
+          break
+        default:
+          for (const ring of copperRings(it, ls[0])) this.push({ cls: 'cu', layers: ls, ...base, shape: { t: 'ring', ring } })
       }
       return
     }
@@ -103,14 +152,32 @@ export class TuneSpace {
     const side = it.layer.startsWith('F.') ? this.cu[0] : it.layer.startsWith('B.') ? this.cu[this.cu.length - 1] : undefined
     if (!side) return
     if (it.layer.endsWith('.CrtYd') && it.kind === 'graphic' && it.ref !== undefined)
-      it.paths.forEach((p, i) => (it.closed[i] && p.length >= 3 ? this.push({ cls: 'crt', layers: [side], ...base, shape: { t: 'ring', ring: p } }) : segs('crt', [side], p, it.width / 2)))
+      it.paths.forEach((p, i) =>
+        it.closed[i] && p.length >= 3 ? this.push({ cls: 'crt', layers: [side], ...base, shape: { t: 'ring', ring: p } }) : segs('crt', [side], p, it.width / 2),
+      )
     else if (it.layer.endsWith('.SilkS')) {
       if (it.kind === 'text' && (it.strokes.length || it.polys?.length)) {
         // a label blocks its whole box, so a meander never runs between its letters
-        const b = ringBox(it.polys ? it.polys.flatMap(q => q.outer) : it.strokes.flat()), g = it.thickness / 2
-        this.push({ cls: 'silk', layers: [side], ...base, shape: { t: 'ring', ring: [[b.x - g, b.y - g], [b.x + b.w + g, b.y - g], [b.x + b.w + g, b.y + b.h + g], [b.x - g, b.y + b.h + g]] } })
+        const b = ringBox(it.polys ? it.polys.flatMap(q => q.outer) : it.strokes.flat()),
+          g = it.thickness / 2
+        this.push({
+          cls: 'silk',
+          layers: [side],
+          ...base,
+          shape: {
+            t: 'ring',
+            ring: [
+              [b.x - g, b.y - g],
+              [b.x + b.w + g, b.y - g],
+              [b.x + b.w + g, b.y + b.h + g],
+              [b.x - g, b.y + b.h + g],
+            ],
+          },
+        })
       } else if (it.kind === 'graphic' && it.ref === undefined)
-        it.paths.forEach((p, i) => (it.fill && p.length >= 3 ? this.push({ cls: 'silk', layers: [side], ...base, shape: { t: 'ring', ring: p } }) : segs('silk', [side], p, it.width / 2, it.closed[i])))
+        it.paths.forEach((p, i) =>
+          it.fill && p.length >= 3 ? this.push({ cls: 'silk', layers: [side], ...base, shape: { t: 'ring', ring: p } }) : segs('silk', [side], p, it.width / 2, it.closed[i]),
+        )
     }
   }
 
@@ -118,7 +185,12 @@ export class TuneSpace {
     if (this.grid) return this.grid
     this.live = []
     const boxes: Box[] = []
-    this.prims.forEach((p, k) => { if (p) { this.live.push(k); boxes.push(p.box) } })
+    this.prims.forEach((p, k) => {
+      if (p) {
+        this.live.push(k)
+        boxes.push(p.box)
+      }
+    })
     return (this.grid = new Grid(boxes))
   }
 
@@ -128,7 +200,7 @@ export class TuneSpace {
     let c = false
     for (const e of this.rows.get(Math.floor(y)) ?? []) {
       const [[xi, yi], [xj, yj]] = this.edges[e]
-      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c
     }
     return c
   }
@@ -136,7 +208,8 @@ export class TuneSpace {
   /** How far a track centred at (x, y) may move and stay clear, capped at CAP, negative where it may not be. */
   slack(layer: string, x: number, y: number, width: number, q: SpaceQuery): number {
     if (!this.onBoard(x, y)) return -1
-    const g = this.index(), hw = width / 2
+    const g = this.index(),
+      hw = width / 2
     let s = CAP
     const own = (n: string | undefined) => q.net !== undefined && (n === q.net || (q.twin !== undefined && n === q.twin))
     const exempt = (p: Prim) => {
@@ -161,11 +234,23 @@ export class TuneSpace {
           if (!p.npth && own(p.net)) continue
           d = dist(p.shape, x, y) - hw - Math.max(this.rules.holeClearance, p.hcl ?? 0)
           break
-        case 'keep': if (q.net !== undefined && p.except?.includes(q.net)) continue; d = dist(p.shape, x, y) - hw; break
-        case 'edge': d = dist(p.shape, x, y) - hw - this.rules.edgeClearance; break
-        case 'crt': case 'silk': if (!q.outer) continue; d = Math.max(dist(p.shape, x, y) - hw, exempt(p)); break
+        case 'keep':
+          if (q.net !== undefined && p.except?.includes(q.net)) continue
+          d = dist(p.shape, x, y) - hw
+          break
+        case 'edge':
+          d = dist(p.shape, x, y) - hw - this.rules.edgeClearance
+          break
+        case 'crt':
+        case 'silk':
+          if (!q.outer) continue
+          d = Math.max(dist(p.shape, x, y) - hw, exempt(p))
+          break
       }
-      if (d < s) { s = d; if (s < 0) return s }
+      if (d < s) {
+        s = d
+        if (s < 0) return s
+      }
     }
     return s
   }
@@ -192,13 +277,20 @@ function ringDist(r: Ring, x: number, y: number): number {
 /** Even-odd point in ring. */
 export function inRing(r: Ring, x: number, y: number): boolean {
   let c = false
-  for (let i = 0, j = r.length - 1; i < r.length; j = i++)
-    if ((r[i][1] > y) !== (r[j][1] > y) && x < ((r[j][0] - r[i][0]) * (y - r[i][1])) / (r[j][1] - r[i][1]) + r[i][0]) c = !c
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) if (r[i][1] > y !== r[j][1] > y && x < ((r[j][0] - r[i][0]) * (y - r[i][1])) / (r[j][1] - r[i][1]) + r[i][0]) c = !c
   return c
 }
 
 function ringBox(r: Pt[]): Box {
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
-  for (const [x, y] of r) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y }
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity
+  for (const [x, y] of r) {
+    if (x < x0) x0 = x
+    if (y < y0) y0 = y
+    if (x > x1) x1 = x
+    if (y > y1) y1 = y
+  }
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
 }

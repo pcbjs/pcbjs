@@ -6,7 +6,11 @@ import type { ModelSpec, Src, StepModelSpec } from '@pcbjs/core/types'
 export function nodeApi(): { fs: typeof import('node:fs'); path: typeof import('node:path'); url: typeof import('node:url') } | null {
   const p = (globalThis as any).process
   if (!p || typeof p.getBuiltinModule !== 'function') return null
-  try { return { fs: p.getBuiltinModule('node:fs'), path: p.getBuiltinModule('node:path'), url: p.getBuiltinModule('node:url') } } catch { return null }
+  try {
+    return { fs: p.getBuiltinModule('node:fs'), path: p.getBuiltinModule('node:path'), url: p.getBuiltinModule('node:url') }
+  } catch {
+    return null
+  }
 }
 
 /** True for a model spec that names a STEP file: kind `step`, or no kind and a `step` string. */
@@ -18,7 +22,8 @@ export function isStepSpec(m: unknown): m is StepModelSpec {
 
 const triple = (v: unknown, name: string, ref: string): [number, number, number] | undefined => {
   if (v === undefined) return undefined
-  if (!Array.isArray(v) || v.length !== 3 || !v.every(n => typeof n === 'number' && Number.isFinite(n))) throw new Error(`${ref}: model ${name} needs three numbers [x, y, z], got ${JSON.stringify(v)}`)
+  if (!Array.isArray(v) || v.length !== 3 || !v.every(n => typeof n === 'number' && Number.isFinite(n)))
+    throw new Error(`${ref}: model ${name} needs three numbers [x, y, z], got ${JSON.stringify(v)}`)
   return [v[0], v[1], v[2]]
 }
 
@@ -36,7 +41,9 @@ export function stepSpec(spec: StepModelSpec, ref: string, sites: (Src | undefin
   if (spec.fallback !== undefined && (!spec.fallback || typeof spec.fallback !== 'object' || typeof spec.fallback.kind !== 'string' || isStepSpec(spec.fallback)))
     throw new Error(`${ref}: model fallback must be a generated model such as { kind: 'box', w, h, height }`)
   const out: StepModelSpec = { kind: 'step', step: spec.step }
-  const offset = triple(spec.offset, 'offset', ref), rotate = triple(spec.rotate, 'rotate', ref), scale = triple(spec.scale, 'scale', ref)
+  const offset = triple(spec.offset, 'offset', ref),
+    rotate = triple(spec.rotate, 'rotate', ref),
+    scale = triple(spec.scale, 'scale', ref)
   if (offset) out.offset = offset
   if (rotate) out.rotate = rotate
   if (scale) out.scale = scale
@@ -72,7 +79,7 @@ export function footprintModel(model: ModelSpec, ref: string, sites: (Src | unde
   const source = typeof model.step === 'string' ? remoteSource(model.step) : null
   if (!source) return stepSpec(model, ref, sites, files)
   const resolve = (globalThis as any)[REMOTE_MODEL] as RemoteModelResolver | undefined
-  const path = nodeApi() ? resolve?.(source) ?? null : null
+  const path = nodeApi() ? (resolve?.(source) ?? null) : null
   if (path) return { ...stepSpec({ ...model, step: path }, ref, sites, files), step: source }
   if (model.fallback?.kind === 'box') return { ...model.fallback, fetch: source }
   return model.fallback ?? stepSpec({ ...model, step: source }, ref, sites, files)
@@ -87,8 +94,19 @@ export function modelErc(board: Board): DrcMarker[] {
     const m = fp.model
     if (!m || m.kind !== 'step' || !m.path) continue
     let ok = false
-    try { ok = node.fs.statSync(m.path).isFile() } catch { /* missing */ }
-    if (!ok) out.push({ severity: 'warning', rule: 'model-missing', message: `${fp.ref}: STEP model ${m.step} not found at ${m.path}; the 3D view draws the generated model`, at: [fp.at[0], fp.at[1]], ...(fp.src ? { src: fp.src } : {}) })
+    try {
+      ok = node.fs.statSync(m.path).isFile()
+    } catch {
+      /* missing */
+    }
+    if (!ok)
+      out.push({
+        severity: 'warning',
+        rule: 'model-missing',
+        message: `${fp.ref}: STEP model ${m.step} not found at ${m.path}; the 3D view draws the generated model`,
+        at: [fp.at[0], fp.at[1]],
+        ...(fp.src ? { src: fp.src } : {}),
+      })
   }
   return out
 }

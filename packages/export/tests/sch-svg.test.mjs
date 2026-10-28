@@ -15,7 +15,15 @@ const R = defineFootprint(p => h('footprint', p, pad(1, -1), pad(2, 1)), { pins:
 function board(schematic) {
   const { A, B, GND } = nets()
   const parts = [R('1k').connect(A, B), R('2k').connect(B, GND)]
-  return compileBoard(h(PCB, { name: 'S', silkRefs: false, ...(schematic ? { schematic } : {}) }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 10 }), ...parts.map((p, i) => h(p, { at: [4 + i * 8, 5] }))), { routeCache: false })
+  return compileBoard(
+    h(
+      PCB,
+      { name: 'S', silkRefs: false, ...(schematic ? { schematic } : {}) },
+      h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 10 }),
+      ...parts.map((p, i) => h(p, { at: [4 + i * 8, 5] })),
+    ),
+    { routeCache: false },
+  )
 }
 
 test('symbols, pins, wires and labels carry the ids of the board', () => {
@@ -25,8 +33,7 @@ test('symbols, pins, wires and labels carry the ids of the board', () => {
   assert.match(svg, /^<\?xml/)
   for (const ref of ['R1', 'R2']) {
     assert.match(svg, new RegExp(`<g class="sch-sym" id="sch-sym-${ref}" data-kind="symbol" data-ref="${ref}" data-items="[0-9 ]+"`))
-    for (const p of pads.filter(x => x.ref === ref))
-      assert.ok(svg.includes(`data-ref="${ref}" data-pin="${p.num}" data-net="${p.net}" data-items="${p.id}"`), `${ref}.${p.num}`)
+    for (const p of pads.filter(x => x.ref === ref)) assert.ok(svg.includes(`data-ref="${ref}" data-pin="${p.num}" data-net="${p.net}" data-items="${p.id}"`), `${ref}.${p.num}`)
   }
   assert.match(svg, /<path class="sch-wire" id="sch-wire-1" data-kind="wire" data-id="wire:1" data-net="B"/)
   assert.match(svg, /<g class="sch-label sch-power" data-kind="label" data-id="label:\d+" data-net="GND"/)
@@ -60,7 +67,17 @@ test('the page is the drawing grown by a margin: no frame, title block or paper 
 test('an automatic sheet box draws no name; a <Sheet> the author wrote keeps its own', () => {
   const { A, B, GND } = nets()
   const blk = group('BLK', { R1: R('1k').connect(A, B), R2: R('2k').connect(B, GND) })
-  const make = sch => compileBoard(h(PCB, { name: 'G', silkRefs: false, ...(sch ? { schematic: sch } : {}) }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 10 }), h(blk.R1, { at: [4, 5] }), h(blk.R2, { at: [12, 5] })), { routeCache: false })
+  const make = sch =>
+    compileBoard(
+      h(
+        PCB,
+        { name: 'G', silkRefs: false, ...(sch ? { schematic: sch } : {}) },
+        h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 10 }),
+        h(blk.R1, { at: [4, 5] }),
+        h(blk.R2, { at: [12, 5] }),
+      ),
+      { routeCache: false },
+    )
   const auto = make()
   assert.equal(auto.schematic.drawing.sheets.length, 1)
   assert.ok(auto.schematic.drawing.sheets[0].auto)

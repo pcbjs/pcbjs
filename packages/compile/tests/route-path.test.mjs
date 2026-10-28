@@ -5,7 +5,12 @@ import { coordString } from '@pcbjs/core/units'
 
 // the steps without the character ranges, which tests/segments.test.mjs checks
 const steps = (src, layer) => parseRoutePath(src, layer).map(({ at: _, ...st }) => st)
-const bad = (src, re) => assert.throws(() => parseRoutePath(src), e => re.test(e.message), `${src} should fail with ${re}`)
+const bad = (src, re) =>
+  assert.throws(
+    () => parseRoutePath(src),
+    e => re.test(e.message),
+    `${src} should fail with ${re}`,
+  )
 
 test('route path: the cursor starts at a, so line commands come first and M is refused', () => {
   assert.deepEqual(steps('V 14 L 5 16 Z'), [{ op: 'V', y: 14, rel: false }, { op: 'L', x: 5, y: 16, rel: false }, { op: 'Z' }])
@@ -15,8 +20,12 @@ test('route path: the cursor starts at a, so line commands come first and M is r
 
 test('route path: relative commands, repeated arguments and SVG number syntax', () => {
   assert.deepEqual(steps('l 1 2 3 4 h -1.5 v.5 x 2,2 z'), [
-    { op: 'L', x: 1, y: 2, rel: true }, { op: 'L', x: 3, y: 4, rel: true }, { op: 'H', x: -1.5, rel: true },
-    { op: 'V', y: 0.5, rel: true }, { op: 'X', x: 2, y: 2, rel: true }, { op: 'Z' },
+    { op: 'L', x: 1, y: 2, rel: true },
+    { op: 'L', x: 3, y: 4, rel: true },
+    { op: 'H', x: -1.5, rel: true },
+    { op: 'V', y: 0.5, rel: true },
+    { op: 'X', x: 2, y: 2, rel: true },
+    { op: 'Z' },
   ])
 })
 
@@ -42,7 +51,10 @@ test('route path: @<layer> places a via, with or without a space, through the la
 test('route path: U <layer> is still accepted for compatibility', () => {
   assert.deepEqual(steps('X 3 4 U B.Cu XZ'), [{ op: 'X', x: 3, y: 4, rel: false }, { op: 'U', layer: 'B.Cu' }, { op: 'XZ' }])
   assert.deepEqual(steps('u In2.Cu Z'), [{ op: 'U', layer: 'In2.Cu' }, { op: 'Z' }])
-  assert.deepEqual(steps('U bottom XZ', l => (l === 'bottom' ? 'B.Cu' : l)), [{ op: 'U', layer: 'B.Cu' }, { op: 'XZ' }])
+  assert.deepEqual(
+    steps('U bottom XZ', l => (l === 'bottom' ? 'B.Cu' : l)),
+    [{ op: 'U', layer: 'B.Cu' }, { op: 'XZ' }],
+  )
   bad('U', /U needs a layer/)
 })
 

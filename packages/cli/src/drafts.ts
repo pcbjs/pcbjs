@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs'
 import { transformWithEsbuild, type Plugin } from 'vite'
 import { loadLsp } from './lsp.js'
 
-export interface Span { start: number; end: number }
+export interface Span {
+  start: number
+  end: number
+}
 
 export interface Draft {
   /** the file as the editor names it, which may be through a symbolic link */
@@ -36,10 +39,17 @@ export function drafts(changed: (file: string) => void, delayMs = 200): Drafts {
 
   const apply = async (file: string, text: string | null, named: string, n: number) => {
     let disk: string | null = null
-    try { disk = readFileSync(file, 'utf8') } catch { /* a file not saved yet */ }
+    try {
+      disk = readFileSync(file, 'utf8')
+    } catch {
+      /* a file not saved yet */
+    }
     const d = text === null || text === disk ? null : { ...(await prepare(file, text)), named }
     if (seq.get(file) !== n) return
-    if (!d) { if (map.delete(file)) changed(file); return }
+    if (!d) {
+      if (map.delete(file)) changed(file)
+      return
+    }
     map.set(file, d)
     changed(file)
   }
@@ -50,8 +60,17 @@ export function drafts(changed: (file: string) => void, delayMs = 200): Drafts {
       seq.set(file, n)
       clearTimeout(timers.get(file))
       timers.delete(file)
-      if (text === null) { void apply(file, null, named, n); return }
-      timers.set(file, setTimeout(() => { timers.delete(file); void apply(file, text, named, n) }, delayMs))
+      if (text === null) {
+        void apply(file, null, named, n)
+        return
+      }
+      timers.set(
+        file,
+        setTimeout(() => {
+          timers.delete(file)
+          void apply(file, text, named, n)
+        }, delayMs),
+      )
     },
     get: file => map.get(file),
     files: () => [...map.keys()],
@@ -77,7 +96,12 @@ export async function syntaxError(file: string, code: string): Promise<number | 
     const lines = code.split('\n')
     const start = lines.slice(0, at.line - 1).reduce((n, l) => n + l.length + 1, 0)
     // esbuild counts columns in UTF-8 bytes
-    return start + Buffer.from(lines[at.line - 1] ?? '').subarray(0, at.column).toString().length
+    return (
+      start +
+      Buffer.from(lines[at.line - 1] ?? '')
+        .subarray(0, at.column)
+        .toString().length
+    )
   }
 }
 
@@ -107,7 +131,10 @@ export function draftsPlugin(store: () => Drafts | null | undefined): Plugin {
   }
 }
 
-interface Position { line: number; character: number }
+interface Position {
+  line: number
+  character: number
+}
 
 /** The spans each draft's repair skipped, as LSP ranges of the editor's text. */
 export function skippedRanges(store: Drafts | null | undefined): { file: string; ranges: { start: Position; end: Position }[] }[] {

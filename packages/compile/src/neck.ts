@@ -4,7 +4,10 @@ import type { IsFree } from './length.js'
 import { primsLength, splitPrims, tidyPrims } from './round.js'
 
 /** The neck of one route: its narrow width and longest length, mm. */
-export interface Neck { width: number; length: number }
+export interface Neck {
+  width: number
+  length: number
+}
 
 /** Default longest neck, mm. */
 export const NECK_LENGTH = 2
@@ -41,7 +44,9 @@ export function padReach(pad: Pad, at: Pt, d: Pt): number {
 export function pointAt(pts: Pt[], s: number): Pt {
   let rest = s
   for (let i = 1; i < pts.length; i++) {
-    const a = pts[i - 1], b = pts[i], l = Math.hypot(b[0] - a[0], b[1] - a[1])
+    const a = pts[i - 1],
+      b = pts[i],
+      l = Math.hypot(b[0] - a[0], b[1] - a[1])
     if (rest <= l || i === pts.length - 1) {
       const k = l > EPS ? Math.min(1, rest / l) : 0
       return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]
@@ -71,11 +76,15 @@ export function splitAt(pts: Pt[], t: number, fromEnd = false): { neck: Pt[]; re
   const src = fromEnd ? pts.slice().reverse() : pts
   if (t <= EPS) return { neck: [], rest: pts.slice() }
   const out: Pt[] = [src[0]]
-  let rest = t, i = 1
+  let rest = t,
+    i = 1
   for (; i < src.length; i++) {
-    const a = src[i - 1], b = src[i], l = Math.hypot(b[0] - a[0], b[1] - a[1])
+    const a = src[i - 1],
+      b = src[i],
+      l = Math.hypot(b[0] - a[0], b[1] - a[1])
     if (rest < l - EPS) {
-      const k = rest / l, p: Pt = [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]
+      const k = rest / l,
+        p: Pt = [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]
       out.push(p)
       const tail = [p, ...src.slice(i)]
       return fromEnd ? { neck: out.reverse(), rest: tail.reverse() } : { neck: out, rest: tail }
@@ -89,18 +98,25 @@ export function splitAt(pts: Pt[], t: number, fromEnd = false): { neck: Pt[]; re
 const dedupe = (pts: Pt[]) => pts.filter((p, i) => i === 0 || Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > 1e-9)
 
 /** A polyline with its width, one track. */
-export interface WidePts { pts: Pt[]; width: number }
+export interface WidePts {
+  pts: Pt[]
+  width: number
+}
 
 /** A track split into its head neck, full width middle and tail neck, end to end; empty pieces dropped. */
 export function neckPieces(pts: Pt[], width: number, head: Neck | null, tail: Neck | null): WidePts[] {
   const total = lengthOf(pts)
-  const h = head && head.length > EPS ? head : null, t = tail && tail.length > EPS ? tail : null
+  const h = head && head.length > EPS ? head : null,
+    t = tail && tail.length > EPS ? tail : null
   if (!h && !t) return [{ pts, width }]
   if ((h?.length ?? 0) + (t?.length ?? 0) >= total - EPS) return [{ pts, width: Math.min(h?.width ?? width, t?.width ?? width) }]
   const a = h ? splitAt(pts, h.length) : { neck: [], rest: pts }
   const b = t ? splitAt(a.rest, t.length, true) : { neck: [], rest: a.rest }
   const out: WidePts[] = []
-  const add = (q: Pt[], w: number) => { const c = dedupe(q); if (c.length >= 2) out.push({ pts: c, width: w }) }
+  const add = (q: Pt[], w: number) => {
+    const c = dedupe(q)
+    if (c.length >= 2) out.push({ pts: c, width: w })
+  }
   if (h) add(a.neck, h.width)
   add(b.rest, width)
   if (t) add(b.neck, t.width)
@@ -109,7 +125,8 @@ export function neckPieces(pts: Pt[], width: number, head: Neck | null, tail: Ne
 
 /** Directions to leave a pad by: its long axis away from the footprint centre, back, then square to it toward `toward` first. */
 export function padDirections(pad: Pad, fp: Pt | undefined, toward: Pt): Pt[] {
-  const ax = padAxis(pad), sq: Pt = [-ax[1], ax[0]]
+  const ax = padAxis(pad),
+    sq: Pt = [-ax[1], ax[0]]
   const dot = (v: Pt, d: Pt) => v[0] * d[0] + v[1] * d[1]
   const rel = (q: Pt): Pt => [q[0] - pad.at[0], q[1] - pad.at[1]]
   const out = fp ? dot(rel(fp), ax) : 0
@@ -119,7 +136,17 @@ export function padDirections(pad: Pad, fp: Pt | undefined, toward: Pt): Pt[] {
 }
 
 /** The end of a neck-width stub out of a pad to where `width`, track plus margins, is free; null when none is needed or free. */
-export function neckStub(isFree: IsFree, pad: Pad, layer: string, net: string | undefined, width: number, neck: Neck, clearance: number, fp: Pt | undefined, toward: Pt): Pt | null {
+export function neckStub(
+  isFree: IsFree,
+  pad: Pad,
+  layer: string,
+  net: string | undefined,
+  width: number,
+  neck: Neck,
+  clearance: number,
+  fp: Pt | undefined,
+  toward: Pt,
+): Pt | null {
   const wide = width > padMinor(pad) + EPS
   if (!wide && isFree(layer, pad.at[0], pad.at[1], net, width)) return null
   for (const d of padDirections(pad, fp, toward)) {
@@ -132,7 +159,10 @@ export function neckStub(isFree: IsFree, pad: Pad, layer: string, net: string | 
       if (s >= edge - EPS && isFree(layer, p[0], p[1], net, width)) {
         // the full width must stay free for one more clearance past the end of the neck
         const q: Pt = [p[0] + d[0] * (clearance + STEP), p[1] + d[1] * (clearance + STEP)]
-        if (isFree(layer, q[0], q[1], net, width)) { end = s + clearance + STEP; break }
+        if (isFree(layer, q[0], q[1], net, width)) {
+          end = s + clearance + STEP
+          break
+        }
       }
     }
     if (end > 0) return [pad.at[0] + d[0] * end, pad.at[1] + d[1] * end]
@@ -143,13 +173,17 @@ export function neckStub(isFree: IsFree, pad: Pad, layer: string, net: string | 
 /** `neckPieces` for lines and arcs, an arc cut where its neck ends. */
 export function neckPrims(prims: Prim[], width: number, head: Neck | null, tail: Neck | null): { prims: Prim[]; width: number }[] {
   const total = primsLength(prims)
-  const h = head && head.length > EPS ? head : null, t = tail && tail.length > EPS ? tail : null
+  const h = head && head.length > EPS ? head : null,
+    t = tail && tail.length > EPS ? tail : null
   if (!h && !t) return [{ prims, width }]
   if ((h?.length ?? 0) + (t?.length ?? 0) >= total - EPS) return [{ prims, width: Math.min(h?.width ?? width, t?.width ?? width) }]
   const [hn, rest] = h ? splitPrims(prims, h.length) : [[], prims]
   const [mid, tn] = t ? splitPrims(rest, primsLength(rest) - t.length) : [rest, []]
   const out: { prims: Prim[]; width: number }[] = []
-  const add = (q: Prim[], w: number) => { const c = tidyPrims(q); if (c.length) out.push({ prims: c, width: w }) }
+  const add = (q: Prim[], w: number) => {
+    const c = tidyPrims(q)
+    if (c.length) out.push({ prims: c, width: w })
+  }
   if (h) add(hn, h.width)
   add(mid, width)
   if (t) add(tn, t.width)

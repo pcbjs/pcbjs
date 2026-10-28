@@ -8,7 +8,7 @@ const f = (v: number) => String(Math.round(v * 1e4) / 1e4)
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;').replace(/\n/g, '&#10;')
 
 export function ringPath(rings: Ring[]): string {
-  return rings.map(r => r.length ? 'M' + r.map(([x, y]) => `${f(x)} ${f(y)}`).join('L') + 'Z' : '').join('')
+  return rings.map(r => (r.length ? 'M' + r.map(([x, y]) => `${f(x)} ${f(y)}`).join('L') + 'Z' : '')).join('')
 }
 function polylinePath(pts: Ring): string {
   return 'M' + pts.map(([x, y]) => `${f(x)} ${f(y)}`).join('L')
@@ -17,7 +17,10 @@ function polylinePath(pts: Ring): string {
 function primsPath(prims: Prim[]): string {
   let s = `M${f(prims[0].from[0])} ${f(prims[0].from[1])}`
   for (const p of prims) {
-    if (p.kind === 'line') { s += `L${f(p.to[0])} ${f(p.to[1])}`; continue }
+    if (p.kind === 'line') {
+      s += `L${f(p.to[0])} ${f(p.to[1])}`
+      continue
+    }
     const r = Math.hypot(p.from[0] - p.center[0], p.from[1] - p.center[1])
     s += `A${f(r)} ${f(r)} 0 ${Math.abs(arcSweep(p)) > Math.PI ? 1 : 0} ${p.cw ? 1 : 0} ${f(p.to[0])} ${f(p.to[1])}`
   }
@@ -49,25 +52,47 @@ export function layerMarkup(board: Board, layer: string, doc = false): string {
   const out: string[] = []
   // zones first so everything else paints over them
   for (const it of board.items) {
-    if (it.kind === 'zone' && it.layer === layer && it.fill.length)
-      out.push(`<path${attrs(it)} fill-rule="evenodd" d="${ringPath(polysToRings(it.fill))}"/>`)
+    if (it.kind === 'zone' && it.layer === layer && it.fill.length) out.push(`<path${attrs(it)} fill-rule="evenodd" d="${ringPath(polysToRings(it.fill))}"/>`)
   }
   for (const it of board.items) {
     switch (it.kind) {
-      case 'pad': { const r = padOn(it, layer, board.rules); if (r) out.push(`<path${attrs(it)} data-pad="${esc(it.num)}" d="${ringPath(r)}"/>`); break }
-      case 'track': if (it.layer === layer) out.push(`<path${attrs(it)} fill="none" stroke="currentColor" stroke-width="${f(it.width)}" stroke-linecap="round" stroke-linejoin="round" d="${pathOf(it.pts, it.prims, false)}"/>`); break
-      case 'via': if (spans(it.layers, layer, board)) out.push(`<circle${attrs(it)} cx="${f(it.at[0])}" cy="${f(it.at[1])}" r="${f(it.size / 2)}"/>`); break
+      case 'pad': {
+        const r = padOn(it, layer, board.rules)
+        if (r) out.push(`<path${attrs(it)} data-pad="${esc(it.num)}" d="${ringPath(r)}"/>`)
+        break
+      }
+      case 'track':
+        if (it.layer === layer)
+          out.push(
+            `<path${attrs(it)} fill="none" stroke="currentColor" stroke-width="${f(it.width)}" stroke-linecap="round" stroke-linejoin="round" d="${pathOf(it.pts, it.prims, false)}"/>`,
+          )
+        break
+      case 'via':
+        if (spans(it.layers, layer, board)) out.push(`<circle${attrs(it)} cx="${f(it.at[0])}" cy="${f(it.at[1])}" r="${f(it.size / 2)}"/>`)
+        break
       case 'graphic':
         if (it.layer !== layer) break
-        if (it.fill) out.push(`<path${attrs(it)} fill-rule="evenodd" d="${it.prims ? it.paths.map((p, i) => p.length ? pathOf(p, it.prims![i], true) : '').join('') : ringPath(it.paths)}"/>`)
-        else out.push(`<path${attrs(it)} fill="none" stroke="currentColor" stroke-width="${f(it.width)}" stroke-linecap="round" stroke-linejoin="round" d="${it.paths.map((p, i) => pathOf(p, it.prims?.[i], it.closed[i])).join('')}"/>`)
+        if (it.fill)
+          out.push(
+            `<path${attrs(it)} fill-rule="evenodd" d="${it.prims ? it.paths.map((p, i) => (p.length ? pathOf(p, it.prims![i], true) : '')).join('') : ringPath(it.paths)}"/>`,
+          )
+        else
+          out.push(
+            `<path${attrs(it)} fill="none" stroke="currentColor" stroke-width="${f(it.width)}" stroke-linecap="round" stroke-linejoin="round" d="${it.paths.map((p, i) => pathOf(p, it.prims?.[i], it.closed[i])).join('')}"/>`,
+          )
         break
       case 'text':
         if (it.layer !== layer) break
         // outline text: the filled glyphs, holes by the even-odd rule
-        if (it.polys) { if (it.polys.length) out.push(`<path${attrs(it)}${doc ? ` pcb:text="${esc(it.text)}" pcb:font="${esc(it.font ?? '')}"` : ''} fill-rule="evenodd" d="${ringPath(polysToRings(it.polys))}"/>`); break }
+        if (it.polys) {
+          if (it.polys.length)
+            out.push(`<path${attrs(it)}${doc ? ` pcb:text="${esc(it.text)}" pcb:font="${esc(it.font ?? '')}"` : ''} fill-rule="evenodd" d="${ringPath(polysToRings(it.polys))}"/>`)
+          break
+        }
         if (!it.strokes.length) break
-        out.push(`<path${attrs(it)}${doc ? ` pcb:text="${esc(it.text)}"` : ''} fill="none" stroke="currentColor" stroke-width="${f(it.thickness)}" stroke-linecap="round" stroke-linejoin="round" d="${it.strokes.map(polylinePath).join('')}"/>`)
+        out.push(
+          `<path${attrs(it)}${doc ? ` pcb:text="${esc(it.text)}"` : ''} fill="none" stroke="currentColor" stroke-width="${f(it.thickness)}" stroke-linecap="round" stroke-linejoin="round" d="${it.strokes.map(polylinePath).join('')}"/>`,
+        )
         break
     }
   }
@@ -76,7 +101,9 @@ export function layerMarkup(board: Board, layer: string, doc = false): string {
 
 function spans(ls: [string, string], layer: string, board: Board): boolean {
   const cu = copperLayers(board.copper)
-  const a = cu.indexOf(ls[0]), b = cu.indexOf(ls[1]), i = cu.indexOf(layer)
+  const a = cu.indexOf(ls[0]),
+    b = cu.indexOf(ls[1]),
+    i = cu.indexOf(layer)
   return i >= 0 && i >= Math.min(a, b) && i <= Math.max(a, b)
 }
 
@@ -87,7 +114,10 @@ export function holesMarkup(board: Board): string {
     else if (it.kind === 'pad' && it.drill) {
       const [w, h] = it.drill
       if (w === h) out.push(`<circle data-id="${it.id}" data-kind="pad" cx="${f(it.at[0])}" cy="${f(it.at[1])}" r="${f(w / 2)}"/>`)
-      else out.push(`<rect data-id="${it.id}" data-kind="pad" x="${f(-w / 2)}" y="${f(-h / 2)}" width="${f(w)}" height="${f(h)}" rx="${f(Math.min(w, h) / 2)}" transform="translate(${f(it.at[0])} ${f(it.at[1])}) rotate(${f(-it.rot)})"/>`)
+      else
+        out.push(
+          `<rect data-id="${it.id}" data-kind="pad" x="${f(-w / 2)}" y="${f(-h / 2)}" width="${f(w)}" height="${f(h)}" rx="${f(Math.min(w, h) / 2)}" transform="translate(${f(it.at[0])} ${f(it.at[1])}) rotate(${f(-it.rot)})"/>`,
+        )
     }
   }
   return out.join('\n')
@@ -109,8 +139,10 @@ export interface BoardSvgOptions {
 /** The colours of `vars`: a variable per layer, canvas and substrate, each defaulting to the fixed colours. */
 function varsStyle(layers: Board['layers']): string {
   const v = (name: string, value: string) => `var(--pcb-${name},${value})`
-  return `.pcb-board{background:${v('canvas', BACKGROUND)}}.pcb-substrate{fill:${v('substrate', BACKGROUND)}}.pcb-holes{fill:${v('canvas', BACKGROUND)}}`
-    + layers.map(l => `.pcb-${layerKey(l.id)}{color:${v(layerKey(l.id), l.color)}}`).join('')
+  return (
+    `.pcb-board{background:${v('canvas', BACKGROUND)}}.pcb-substrate{fill:${v('substrate', BACKGROUND)}}.pcb-holes{fill:${v('canvas', BACKGROUND)}}` +
+    layers.map(l => `.pcb-${layerKey(l.id)}{color:${v(layerKey(l.id), l.color)}}`).join('')
+  )
 }
 
 export function boardSvg(board: Board, o: BoardSvgOptions = {}): string {
@@ -118,12 +150,17 @@ export function boardSvg(board: Board, o: BoardSvgOptions = {}): string {
   const layers = [...board.layers].sort((a, b) => a.order - b.order)
   const meta = [
     `<pcb:board name="${esc(board.name)}" title="${esc(board.title)}" revision="${esc(board.revision)}" copper="${board.copper}" thickness="${f(board.thickness)}" units="mm"/>`,
-    `<pcb:rules ${Object.entries(board.rules).map(([k, v]) => `${k}="${v && typeof v === 'object' ? esc(JSON.stringify(v)) : v}"`).join(' ')}/>`,
+    `<pcb:rules ${Object.entries(board.rules)
+      .map(([k, v]) => `${k}="${v && typeof v === 'object' ? esc(JSON.stringify(v)) : v}"`)
+      .join(' ')}/>`,
     `<pcb:nets>${board.nets.map(n => `<pcb:net id="${n.id}" name="${esc(n.name)}"/>`).join('')}</pcb:nets>`,
     `<pcb:footprints>${board.footprints.map(fp => `<pcb:footprint ref="${esc(fp.ref)}" value="${esc(fp.value)}" id="${esc(fp.id)}" x="${f(fp.at[0])}" y="${f(fp.at[1])}" rot="${f(fp.rot)}" side="${fp.side}"${fp.bom ? '' : ' bom="false"'}/>`).join('')}</pcb:footprints>`,
     `<pcb:drc errors="${board.drc.filter(d => d.severity === 'error').length}" warnings="${board.drc.filter(d => d.severity === 'warning').length}" unconnected="${board.unconnected}"/>`,
   ].join('\n    ')
-  const groups = layers.map(l => `  <g pcb:layer="${l.id}" id="layer-${layerKey(l.id)}" ${o.vars ? `class="pcb-${layerKey(l.id)}"` : `color="${l.color}"`} fill="currentColor"${l.kind === 'copper' || l.kind === 'edge' ? '' : ' opacity="0.9"'}>\n${layerMarkup(board, l.id, true)}\n  </g>`)
+  const groups = layers.map(
+    l =>
+      `  <g pcb:layer="${l.id}" id="layer-${layerKey(l.id)}" ${o.vars ? `class="pcb-${layerKey(l.id)}"` : `color="${l.color}"`} fill="currentColor"${l.kind === 'copper' || l.kind === 'edge' ? '' : ' opacity="0.9"'}>\n${layerMarkup(board, l.id, true)}\n  </g>`,
+  )
   const substrate = o.vars && board.outline.length ? `  <path class="pcb-substrate" fill-rule="evenodd" d="${ringPath(board.outline)}"/>\n` : ''
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:pcb="https://pcb.svg/ns/1" viewBox="${vb}" width="${f(board.bbox.w + 4)}mm" height="${f(board.bbox.h + 4)}mm" ${o.vars ? 'class="pcb-board"' : `style="background:${BACKGROUND}"`}>

@@ -2,9 +2,18 @@
 import type { SiteData } from '@pcbjs/core/site-data'
 
 /** One board and its entries, one per fab target in the order of its variants list; a board without variants has one. */
-export interface BoardGroup { name: string; targets: SiteData[] }
+export interface BoardGroup {
+  name: string
+  targets: SiteData[]
+}
 export type DrcState = 'ok' | 'warn' | 'err'
-export interface DrcSummary { state: DrcState; text: string; errors: number; warnings: number; infos: number }
+export interface DrcSummary {
+  state: DrcState
+  text: string
+  errors: number
+  warnings: number
+  infos: number
+}
 
 /** The target name of an entry, null for a board without variants. */
 export const targetName = (b: Pick<SiteData, 'variant'>): string | null => b.variant?.name ?? null
@@ -31,9 +40,14 @@ export function pickTarget<T extends Pick<SiteData, 'variant'>>(targets: readonl
 /** Replace the entry with the same name and target in place, or add it after the board's other targets, or at the end. Returns the index. */
 export function upsertEntry<T extends Pick<SiteData, 'name' | 'variant'>>(boards: T[], data: T): number {
   const i = boards.findIndex(b => sameEntry(b, data))
-  if (i >= 0) { boards[i] = data; return i }
+  if (i >= 0) {
+    boards[i] = data
+    return i
+  }
   let last = -1
-  boards.forEach((b, j) => { if (b.name === data.name) last = j })
+  boards.forEach((b, j) => {
+    if (b.name === data.name) last = j
+  })
   const at = last >= 0 ? last + 1 : boards.length
   boards.splice(at, 0, data)
   return at
@@ -47,22 +61,31 @@ export function drcSummary(b: Pick<SiteData, 'drc' | 'unconnected'>): DrcSummary
 const rank: Record<DrcState, number> = { ok: 0, warn: 1, err: 2 }
 /** The target that fares worst on DRC and ERC together: errors first, then warnings, then unconnected; the earliest on a tie. */
 export function worstTarget<T extends Pick<SiteData, 'drc' | 'unconnected'> & { erc?: SiteData['erc'] }>(targets: readonly T[]): T | null {
-  let best: T | null = null, key: number[] = []
+  let best: T | null = null,
+    key: number[] = []
   for (const t of targets) {
     const s = checkSummary(t)
     const k = [rank[s.state], s.errors, s.warnings, t.unconnected]
     const d = k.findIndex((v, i) => v !== key[i])
-    if (!best || (d >= 0 && k[d] > key[d])) { best = t; key = k }
+    if (!best || (d >= 0 && k[d] > key[d])) {
+      best = t
+      key = k
+    }
   }
   return best
 }
 
 /** How many targets fail: DRC or ERC errors, or unconnected nets. */
-export const failingCount = (targets: readonly (Pick<SiteData, 'drc' | 'unconnected'> & { erc?: SiteData['erc'] })[]): number => targets.filter(t => checkSummary(t).state === 'err').length
+export const failingCount = (targets: readonly (Pick<SiteData, 'drc' | 'unconnected'> & { erc?: SiteData['erc'] })[]): number =>
+  targets.filter(t => checkSummary(t).state === 'err').length
 
 export type CheckState = DrcState
 /** `infos` never count against a board; they are shown apart from warnings */
-export interface CheckCounts { errors: number; warnings: number; infos: number }
+export interface CheckCounts {
+  errors: number
+  warnings: number
+  infos: number
+}
 /** The DRC and the ERC of one entry together: the pill's state and label, the tooltip, and the summed counts for ranking targets. */
 export interface CheckSummary {
   state: CheckState
@@ -83,7 +106,16 @@ const count = (ms: readonly Pick<SiteData['drc'][number], 'severity'>[]): CheckC
   return { errors: n('error'), warnings: n('warning'), infos: n('info') }
 }
 const plural = (n: number, w: string) => `${n} ${n === 1 || w === 'unconnected' || w === 'info' ? w : w + 's'}`
-const words = (c: CheckCounts, unconnected = 0, sep = ' · ') => [[c.errors, 'error'], [c.warnings, 'warning'], [unconnected, 'unconnected'], [c.infos, 'info']].filter(([n]) => n).map(([n, w]) => plural(n as number, w as string)).join(sep) || 'clean'
+const words = (c: CheckCounts, unconnected = 0, sep = ' · ') =>
+  [
+    [c.errors, 'error'],
+    [c.warnings, 'warning'],
+    [unconnected, 'unconnected'],
+    [c.infos, 'info'],
+  ]
+    .filter(([n]) => n)
+    .map(([n, w]) => plural(n as number, w as string))
+    .join(sep) || 'clean'
 const infoTail = (c: CheckCounts) => (c.infos ? `, ${plural(c.infos, 'info')}` : '')
 const allClean = (...cs: CheckCounts[]) => cs.every(c => !c.infos)
 
@@ -97,9 +129,16 @@ export function ercSummary(b: { erc?: readonly Pick<SiteData['drc'][number], 'se
 }
 
 /** The combined status: red when either check has errors or a net is unconnected, amber for warnings only, green when both are clean. */
-export function checkSummary(b: { drc?: readonly Pick<SiteData['drc'][number], 'severity'>[] | null; erc?: readonly Pick<SiteData['drc'][number], 'severity'>[] | null; unconnected?: number }): CheckSummary {
-  const drc = count(b.drc ?? []), erc = ercCounts(b), unconnected = b.unconnected ?? 0
-  const errors = drc.errors + (erc?.errors ?? 0), warnings = drc.warnings + (erc?.warnings ?? 0)
+export function checkSummary(b: {
+  drc?: readonly Pick<SiteData['drc'][number], 'severity'>[] | null
+  erc?: readonly Pick<SiteData['drc'][number], 'severity'>[] | null
+  unconnected?: number
+}): CheckSummary {
+  const drc = count(b.drc ?? []),
+    erc = ercCounts(b),
+    unconnected = b.unconnected ?? 0
+  const errors = drc.errors + (erc?.errors ?? 0),
+    warnings = drc.warnings + (erc?.warnings ?? 0)
   const state: CheckState = errors || unconnected ? 'err' : warnings ? 'warn' : 'ok'
   const drcText = words(drc, unconnected)
   // the DRC list holds an `unconnected` error per gap already: only gaps it does not list add to the count
@@ -108,7 +147,12 @@ export function checkSummary(b: { drc?: readonly Pick<SiteData['drc'][number], '
   const drcTitle = `DRC: ${plural(drc.errors, 'error')}, ${plural(drc.warnings, 'warning')}, ${unconnected} unconnected${infoTail(drc)}`
   if (!erc) return { state, label: 'DRC ' + drcText, text: drcText, title: drcTitle, errors, warnings, unconnected, drc, erc }
   return {
-    state, errors, warnings, unconnected, drc, erc,
+    state,
+    errors,
+    warnings,
+    unconnected,
+    drc,
+    erc,
     label: `DRC ${drcN} · ERC ${erc.errors + erc.warnings}`,
     text: state === 'ok' && allClean(drc, erc) ? 'clean' : `DRC ${words(drc, unconnected, ', ')} · ERC ${words(erc, 0, ', ')}`,
     title: `${drcTitle}\nERC: ${plural(erc.errors, 'error')}, ${plural(erc.warnings, 'warning')}${infoTail(erc)}`,
@@ -118,7 +162,11 @@ export function checkSummary(b: { drc?: readonly Pick<SiteData['drc'][number], '
 // routes: `<base>`, `<base>board/<name>` and `<base>board/<name>/<target slug>`
 
 /** The URL and file name form of a target name, as the compiler makes it: lowercase, every run of other characters a single `-`, none at the ends. */
-export const variantSlug = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+export const variantSlug = (name: string): string =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 
 /** The target whose name has this slug, null when none has. */
 export function targetBySlug<T extends Pick<SiteData, 'variant'>>(targets: readonly T[], slug: string): T | null {
@@ -127,7 +175,13 @@ export function targetBySlug<T extends Pick<SiteData, 'variant'>>(targets: reado
 
 /** A route as the path gives it: the home page, which a single-entry site shows as its board, or a board with an optional target slug. */
 export type PathRoute = { page: 'home' } | { page: 'board'; name: string; target: string | null }
-const dec = (s: string) => { try { return decodeURIComponent(s) } catch { return s } }
+const dec = (s: string) => {
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return s
+  }
+}
 const slash = (b: string) => (b.endsWith('/') ? b : b + '/')
 /** The route of a URL path under an absolute base such as `/` or `/site/`; query and fragment are ignored, and so is a trailing `index.html`. */
 export function routeFromPath(path: string, base: string): PathRoute {
@@ -140,7 +194,8 @@ export function routeFromPath(path: string, base: string): PathRoute {
 }
 /** True for a path the viewer routes itself: the base, its index.html, or a board under it. */
 export function isAppPath(path: string, base: string): boolean {
-  const b = slash(base), p = path.replace(/[?#].*$/, '')
+  const b = slash(base),
+    p = path.replace(/[?#].*$/, '')
   return p === b || p + '/' === b || p === b + 'index.html' || p.startsWith(b + 'board/')
 }
 /** The path of a board, with the target's slug when a target name is given. */
@@ -157,7 +212,10 @@ export function appBase(baseUrl: string, pathname: string): string {
 export const assetUrl = (url: string, base: string): string => (/^([a-z][a-z0-9+.-]*:|\/)/i.test(url) ? url : slash(base) + url)
 
 /** The old hash routes, `#/` and `#/board/<name>` with an optional `?target=<name>`. */
-export interface BoardRoute { name: string; target: string | null }
+export interface BoardRoute {
+  name: string
+  target: string | null
+}
 /** Parse an old `#/board/<name>` hash with an optional `?target=<name>`; null for any other hash. */
 export function parseBoardHash(hash: string): BoardRoute | null {
   const m = /^#\/board\/([^?]+)(?:\?(.*))?$/.exec(hash)

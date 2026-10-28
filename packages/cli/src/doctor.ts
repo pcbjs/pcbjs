@@ -10,7 +10,11 @@ import { findConfig, resolveConfig } from './config.js'
 import { installedModels } from '@pcbjs/kicad'
 import { fetchedDir, KICAD_3D_TAG } from './fetch-model.js'
 
-export interface InstalledPackage { name: string; version: string; dir: string }
+export interface InstalledPackage {
+  name: string
+  version: string
+  dir: string
+}
 
 /** The editor extension, which ships inside @pcbjs/cli and is versioned on its own. */
 const UNVERSIONED = new Set(['@pcbjs/vscode'])
@@ -18,7 +22,11 @@ const UNVERSIONED = new Set(['@pcbjs/vscode'])
 const cliDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 export function cliVersion(): string {
-  try { return JSON.parse(readFileSync(join(cliDir, 'package.json'), 'utf8')).version } catch { return '0.0.0' }
+  try {
+    return JSON.parse(readFileSync(join(cliDir, 'package.json'), 'utf8')).version
+  } catch {
+    return '0.0.0'
+  }
 }
 
 /** The dist-tag a version is published under: beta for 0.0.1-beta.2, next for a snapshot, else latest. */
@@ -40,12 +48,15 @@ export function installedPackages(root: string): InstalledPackage[] {
   const found = new Map<string, InstalledPackage>()
   for (let dir = resolve(root); ; dir = dirname(dir)) {
     const scope = join(dir, 'node_modules', '@pcbjs')
-    if (existsSync(scope)) for (const sub of readdirSync(scope).sort()) {
-      const name = `@pcbjs/${sub}`
-      const pkgFile = join(scope, sub, 'package.json')
-      if (found.has(name) || !existsSync(pkgFile)) continue
-      try { found.set(name, { name, version: JSON.parse(readFileSync(pkgFile, 'utf8')).version, dir: join(scope, sub) }) } catch {}
-    }
+    if (existsSync(scope))
+      for (const sub of readdirSync(scope).sort()) {
+        const name = `@pcbjs/${sub}`
+        const pkgFile = join(scope, sub, 'package.json')
+        if (found.has(name) || !existsSync(pkgFile)) continue
+        try {
+          found.set(name, { name, version: JSON.parse(readFileSync(pkgFile, 'utf8')).version, dir: join(scope, sub) })
+        } catch {}
+      }
     if (dirname(dir) === dir) break
   }
   return [...found.values()].sort((a, b) => a.name.localeCompare(b.name))
@@ -93,12 +104,18 @@ export function stepConverter(): string | null {
     const occt = createRequire(step).resolve('occt-import-js')
     const wasm = join(dirname(occt), 'occt-import-js.wasm')
     return existsSync(wasm) ? wasm : null
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 /** Model files under a folder, its LICENSES.md left out. */
 function countFiles(dir: string): number {
-  try { return readdirSync(dir, { recursive: true, withFileTypes: true }).filter(e => e.isFile() && e.name !== 'LICENSES.md' && !e.name.endsWith('.tmp')).length } catch { return 0 }
+  try {
+    return readdirSync(dir, { recursive: true, withFileTypes: true }).filter(e => e.isFile() && e.name !== 'LICENSES.md' && !e.name.endsWith('.tmp')).length
+  } catch {
+    return 0
+  }
 }
 
 export async function doctor(o: { config?: string; root?: string; log?: (line: string) => void } = {}): Promise<number> {
@@ -128,11 +145,16 @@ export async function doctor(o: { config?: string; root?: string; log?: (line: s
       const lib = installedModels()
       row('kicad models', lib && existsSync(lib) ? show(lib) : `none installed; kicad: models download from KiCad ${KICAD_3D_TAG} on first use`)
       row('fetched models', `${countFiles(fetchedDir(cfg.root))} in ${show(fetchedDir(cfg.root))}; pcbjs model check counts the standard library's parts`)
-    } catch (e) { row('entries', `error: ${(e as Error).message.split('\n')[0]}`) }
+    } catch (e) {
+      row('entries', `error: ${(e as Error).message.split('\n')[0]}`)
+    }
   }
 
   const skew = versionSkew(packages)
-  if (skew) { log(`\nerror: ${skew}`); return 1 }
+  if (skew) {
+    log(`\nerror: ${skew}`)
+    return 1
+  }
   log('\nversions agree')
   return 0
 }

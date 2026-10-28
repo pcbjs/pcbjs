@@ -4,18 +4,41 @@ import assert from 'node:assert/strict'
 import { registerHooks } from 'node:module'
 
 // the client imports its own modules without an extension, as Vite resolves them
-registerHooks({ resolve(s, c, next) { try { return next(s, c) } catch (e) { if (s.startsWith('.') && !/\.[a-z]+$/.test(s)) return next(`${s}.ts`, c); throw e } } })
+registerHooks({
+  resolve(s, c, next) {
+    try {
+      return next(s, c)
+    } catch (e) {
+      if (s.startsWith('.') && !/\.[a-z]+$/.test(s)) return next(`${s}.ts`, c)
+      throw e
+    }
+  },
+})
 const { flatten, packDrills, runJob } = await import('../src/scene/geometry.ts')
 
-const outline = flatten([[[0, 0], [10, 0], [10, 10], [0, 10]]])
+const outline = flatten([
+  [
+    [0, 0],
+    [10, 0],
+    [10, 10],
+    [0, 10],
+  ],
+])
 /** The extent of the slab's vertices off its outline, in board mm, y down. */
 function holeBox(drills) {
   const r = runJob({ kind: 'slab', key: 'k', outline, drills: packDrills(drills), depth: 1.6 })
-  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
+  let x0 = Infinity,
+    x1 = -Infinity,
+    y0 = Infinity,
+    y1 = -Infinity
   for (let i = 0; i < r.position.length; i += 3) {
-    const x = r.position[i], y = -r.position[i + 1]
+    const x = r.position[i],
+      y = -r.position[i + 1]
     if ([0, 10].some(v => Math.abs(x - v) < 1e-6 || Math.abs(y - v) < 1e-6)) continue
-    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y)
+    x0 = Math.min(x0, x)
+    x1 = Math.max(x1, x)
+    y0 = Math.min(y0, y)
+    y1 = Math.max(y1, y)
   }
   return [x1 - x0, y1 - y0, (x0 + x1) / 2, (y0 + y1) / 2]
 }

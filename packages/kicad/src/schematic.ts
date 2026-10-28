@@ -15,7 +15,10 @@ export interface KSymbolFields {
   file: string
 }
 
-const yes = (l: SList | undefined) => { const v = atom(l); return v === undefined ? undefined : v === 'yes' || v === 'true' }
+const yes = (l: SList | undefined) => {
+  const v = atom(l)
+  return v === undefined ? undefined : v === 'yes' || v === 'true'
+}
 const TRUE_TEXT = /^(1|y|yes|true|dnp|x)$/i
 
 /** The root schematic `<name>.kicad_sch` beside the `.kicad_pcb`, if any; its sheets are read through it. */
@@ -34,7 +37,11 @@ export function readSchematicFields(files: string | string[]): Map<string, KSymb
     if (seen.has(file) || !existsSync(file)) continue
     seen.add(file)
     let root: SList
-    try { root = parseSExpr(readFileSync(file, 'utf8')) } catch { continue }
+    try {
+      root = parseSExpr(readFileSync(file, 'utf8'))
+    } catch {
+      continue
+    }
     if (head(root) !== 'kicad_sch') continue
     // KiCad 6 lists the references of every placement at the root, by symbol path
     const legacy = new Map<string, string[]>()
@@ -56,13 +63,17 @@ export function readSchematicFields(files: string | string[]): Map<string, KSymb
       const fields: Record<string, string> = {}
       let ref = ''
       for (const p of children(e, 'property')) {
-        const k = atom(p) ?? '', v = atom(p, 2) ?? ''
+        const k = atom(p) ?? '',
+          v = atom(p, 2) ?? ''
         if (k === 'Reference') ref = v
         else if (k !== 'Footprint') fields[k] = v
       }
       const refs = new Set<string>()
       for (const proj of children(child(e, 'instances'), 'project'))
-        for (const p of children(proj, 'path')) { const r = atom(child(p, 'reference')); if (r) refs.add(r) }
+        for (const p of children(proj, 'path')) {
+          const r = atom(child(p, 'reference'))
+          if (r) refs.add(r)
+        }
       for (const r of legacy.get(atom(child(e, 'uuid')) ?? '') ?? []) refs.add(r)
       if (!refs.size && ref) refs.add(ref)
       const dnpField = Object.entries(fields).find(([k]) => /^dnp$/i.test(k))
@@ -73,7 +84,12 @@ export function readSchematicFields(files: string | string[]): Map<string, KSymb
         if (r.startsWith('#')) continue
         // the units of one symbol merge, the first unit's value kept
         const prev = out.get(r)
-        if (prev) { prev.fields = { ...sym.fields, ...prev.fields }; prev.dnp ||= sym.dnp; prev.inBom &&= sym.inBom; continue }
+        if (prev) {
+          prev.fields = { ...sym.fields, ...prev.fields }
+          prev.dnp ||= sym.dnp
+          prev.inBom &&= sym.inBom
+          continue
+        }
         out.set(r, { ...sym, fields: { ...sym.fields } })
       }
     }

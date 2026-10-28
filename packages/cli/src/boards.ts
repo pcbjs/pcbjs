@@ -55,8 +55,13 @@ export interface BoardsIndex {
 export function boardsIndex(compiled: Compiled[], single: boolean): BoardsIndex {
   return {
     boards: compiled.map(c => ({
-      name: c.board.name, ...(c.board.variant ? { variant: c.board.variant.name } : {}), title: c.board.title, revision: c.board.revision,
-      file: boardFile(c.board), entry: c.entry.rel, status: c.site.fab.status,
+      name: c.board.name,
+      ...(c.board.variant ? { variant: c.board.variant.name } : {}),
+      title: c.board.title,
+      revision: c.board.revision,
+      file: boardFile(c.board),
+      entry: c.entry.rel,
+      status: c.site.fab.status,
     })),
     single,
   }
@@ -75,12 +80,17 @@ export interface BoardsPayload {
 export function boardsPayload(slots: BoardSlot[], transient?: Compiled | null): BoardsPayload {
   const live = liveSlots(slots)
   return {
-    boards: [...live.flatMap(s => s.compiled!.map(c => c.site)), ...(transient ? [{ ...transient.site, transient: true }] : [])], single: slots.length === 1, errors: errorsByEntry(slots),
+    boards: [...live.flatMap(s => s.compiled!.map(c => c.site)), ...(transient ? [{ ...transient.site, transient: true }] : [])],
+    single: slots.length === 1,
+    errors: errorsByEntry(slots),
     entries: Object.fromEntries(live.map(s => [slotName(s), s.entry.rel])),
   }
 }
 
-interface GraphNode { file: string | null; importers: Set<GraphNode> }
+interface GraphNode {
+  file: string | null
+  importers: Set<GraphNode>
+}
 
 /** Walks importers up the module graph; null when the file is not in it, so the caller recompiles everything. */
 export function entriesReaching(modules: Iterable<GraphNode> | undefined, entryFiles: Iterable<string>): Set<string> | null {
@@ -104,9 +114,13 @@ export function entriesReaching(modules: Iterable<GraphNode> | undefined, entryF
 export function routeEndpoint(path: string, names: string[], slugs: Record<string, string[]> = {}): { name: string; variant?: string; file: string } | null {
   const i = path.indexOf('/')
   let name: string, rest: string
-  if (i > 0 && names.includes(decodeURIComponent(path.slice(0, i)))) { name = decodeURIComponent(path.slice(0, i)); rest = path.slice(i + 1) }
-  else if (names.length) { name = names[0]; rest = path }
-  else return null
+  if (i > 0 && names.includes(decodeURIComponent(path.slice(0, i)))) {
+    name = decodeURIComponent(path.slice(0, i))
+    rest = path.slice(i + 1)
+  } else if (names.length) {
+    name = names[0]
+    rest = path
+  } else return null
   const targets = slugs[name]
   if (!targets?.length) return { name, file: decodeURIComponent(rest) }
   const j = rest.indexOf('/')
@@ -125,7 +139,9 @@ export function slugsOf(slots: BoardSlot[]): Record<string, string[]> {
 }
 
 /** Vite's `moduleGraph`, or a stand-in in the tests. */
-export interface ModuleLookup { getModulesByFile(file: string): Iterable<GraphNode> | undefined }
+export interface ModuleLookup {
+  getModulesByFile(file: string): Iterable<GraphNode> | undefined
+}
 
 export interface FocusTarget {
   /** the only live board holding the file, the viewer's own when it is one of several, else the first; null when none */
@@ -138,17 +154,29 @@ export interface FocusTarget {
 
 /** A shared file never moves a viewer off `current`; an entry file always reaches its own board, also before the first compile. */
 export function focusTarget(graph: ModuleLookup | undefined, slots: BoardSlot[], file: string, current: string | null = null): FocusTarget {
-  const hit = entriesReaching(graph?.getModulesByFile(file), slots.map(s => s.entry.file)) ?? new Set<string>()
+  const hit =
+    entriesReaching(
+      graph?.getModulesByFile(file),
+      slots.map(s => s.entry.file),
+    ) ?? new Set<string>()
   if (slots.some(s => s.entry.file === file)) hit.add(file)
   const reached = slots.filter(s => hit.has(s.entry.file))
   const live = reached.filter(s => s.compiled && !s.conflict)
   const names = live.map(slotName)
-  const board = current != null && names.includes(current) ? current : names[0] ?? null
+  const board = current != null && names.includes(current) ? current : (names[0] ?? null)
   const at = board ? live[names.indexOf(board)] : reached[0]
   return { board, entry: at ? at.entry.rel : null, boards: names }
 }
 
-export interface IdeBoard { name: string; title: string; entry: string; targets: string[]; status: 'ok' | 'error' | 'incomplete'; draft?: true; skipped?: number }
+export interface IdeBoard {
+  name: string
+  title: string
+  entry: string
+  targets: string[]
+  status: 'ok' | 'error' | 'incomplete'
+  draft?: true
+  skipped?: number
+}
 
 /** One per entry with a board of its own; `error` marks a last good board, `incomplete` DRC errors or unconnected nets. */
 export function ideBoards(slots: BoardSlot[]): { boards: IdeBoard[]; single: boolean; errors: Record<string, string | null> } {
@@ -156,10 +184,12 @@ export function ideBoards(slots: BoardSlot[]): { boards: IdeBoard[]; single: boo
     boards: liveSlots(slots).map(s => {
       const c = s.compiled!
       return {
-        name: slotName(s), title: c[0].board.title || slotName(s), entry: s.entry.rel,
+        name: slotName(s),
+        title: c[0].board.title || slotName(s),
+        entry: s.entry.rel,
         targets: c.flatMap(t => (t.board.variant ? [t.board.variant.name] : [])),
         status: s.error ? 'error' : c.some(t => t.site.fab.status !== 'ok') ? 'incomplete' : 'ok',
-        ...(c[0].site.draft ? { draft: true, skipped: c[0].site.draft.skipped } as const : {}),
+        ...(c[0].site.draft ? ({ draft: true, skipped: c[0].site.draft.skipped } as const) : {}),
       }
     }),
     single: slots.length === 1,

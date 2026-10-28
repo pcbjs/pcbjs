@@ -8,22 +8,31 @@ import { hoverScope, inScope } from '../src/scene/focus.ts'
 const items = [
   { id: 1, kind: 'track', net: 'TXCP', pair: 'pair:1', role: 'P', width: 0.17 },
   { id: 2, kind: 'track', net: 'TXCN', pair: 'pair:1', role: 'N', width: 0.17 },
-  { id: 3, kind: 'pad', net: 'TXCP', ref: 'C1' }, { id: 4, kind: 'pad', net: 'TXP', ref: 'C1' },
-  { id: 5, kind: 'pad', net: 'TXCN', ref: 'C2' }, { id: 6, kind: 'pad', net: 'TXN', ref: 'C2' },
+  { id: 3, kind: 'pad', net: 'TXCP', ref: 'C1' },
+  { id: 4, kind: 'pad', net: 'TXP', ref: 'C1' },
+  { id: 5, kind: 'pad', net: 'TXCN', ref: 'C2' },
+  { id: 6, kind: 'pad', net: 'TXN', ref: 'C2' },
   { id: 7, kind: 'track', net: 'TXP', pair: 'pair:2', role: 'P', width: 0.17 },
   { id: 8, kind: 'track', net: 'TXN', pair: 'pair:2', role: 'N', width: 0.17 },
   { id: 9, kind: 'track', net: 'TXN', width: 0.17 },
-  { id: 10, kind: 'via', net: 'TXN' }, { id: 11, kind: 'via', net: 'TXP' },
+  { id: 10, kind: 'via', net: 'TXN' },
+  { id: 11, kind: 'via', net: 'TXP' },
   { id: 12, kind: 'track', net: 'TXP', pair: 'pair:3', role: 'P', width: 0.17 },
   { id: 13, kind: 'track', net: 'TXN', pair: 'pair:3', role: 'N', width: 0.17 },
-  { id: 14, kind: 'pad', net: 'TXN', ref: 'U1' }, { id: 15, kind: 'pad', net: 'TXP', ref: 'U1' },
-  { id: 16, kind: 'track', net: 'CLK', width: 0.2 }, { id: 17, kind: 'pad', net: 'CLK', ref: 'U1' },
+  { id: 14, kind: 'pad', net: 'TXN', ref: 'U1' },
+  { id: 15, kind: 'pad', net: 'TXP', ref: 'U1' },
+  { id: 16, kind: 'track', net: 'CLK', width: 0.2 },
+  { id: 17, kind: 'pad', net: 'CLK', ref: 'U1' },
 ]
 // the export names both sides of the capacitors in every route of the group
 const group = ['TXCP', 'TXCN', 'TXP', 'TXN']
 const board = {
   items,
-  footprints: [{ ref: 'C1', pads: [{ net: 'TXCP' }, { net: 'TXP' }] }, { ref: 'C2', pads: [{ net: 'TXCN' }, { net: 'TXN' }] }, { ref: 'U1', pads: [{ net: 'TXN' }, { net: 'TXP' }, { net: 'CLK' }] }],
+  footprints: [
+    { ref: 'C1', pads: [{ net: 'TXCP' }, { net: 'TXP' }] },
+    { ref: 'C2', pads: [{ net: 'TXCN' }, { net: 'TXN' }] },
+    { ref: 'U1', pads: [{ net: 'TXN' }, { net: 'TXP' }, { net: 'CLK' }] },
+  ],
   routes: [
     { id: 'route:1', net: 'TXCP', pair: 'pair:1', nets: group, length: 4.26, skew: 0 },
     { id: 'route:2', net: 'TXP', pair: 'pair:2', nets: group, length: 5.59, skew: 0.11 },
@@ -34,8 +43,12 @@ const board = {
 }
 /** The items a hover or pin on `net` lights, by role. */
 const lit = (b, net) => {
-  const roles = netRoles(b, net), out = { primary: [], secondary: [] }
-  for (const it of b.items) { const r = it.net && roles.get(it.net); if (r) out[r].push(it.id) }
+  const roles = netRoles(b, net),
+    out = { primary: [], secondary: [] }
+  for (const it of b.items) {
+    const r = it.net && roles.get(it.net)
+    if (r) out[r].push(it.id)
+  }
   return out
 }
 

@@ -19,38 +19,66 @@ export function bomCsv(board: Board): string {
   // the catch-all as given, when a tagged number replaced it in the MPN column of some row
   const catchAll = rows.some(r => !!r.sourcing.tag && Object.keys(r.sourcing.all).some(k => mpnTag(k) === ''))
   const head = ['Refs', 'Value', 'Footprint', 'Qty', 'MPN', 'Source', 'Manufacturer', 'Datasheet', ...other, ...tagged, ...(catchAll ? ['MPN:*'] : [])]
-  return csv([head, ...rows.map(r => {
-    const s = r.sourcing
-    const plain = Object.entries(s.all).find(([k]) => mpnTag(k) === '')?.[1] ?? ''
-    return [r.refs.join(' '), r.value, r.footprint, String(r.qty), s.mpn ?? '', s.tag === null ? '' : s.tag || 'MPN', s.manufacturer ?? '', s.datasheet ?? '',
-      ...other.map(k => r.fields[k] ?? ''), ...tagged.map(k => r.fields[k] ?? ''), ...(catchAll ? [plain] : [])]
-  })])
+  return csv([
+    head,
+    ...rows.map(r => {
+      const s = r.sourcing
+      const plain = Object.entries(s.all).find(([k]) => mpnTag(k) === '')?.[1] ?? ''
+      return [
+        r.refs.join(' '),
+        r.value,
+        r.footprint,
+        String(r.qty),
+        s.mpn ?? '',
+        s.tag === null ? '' : s.tag || 'MPN',
+        s.manufacturer ?? '',
+        s.datasheet ?? '',
+        ...other.map(k => r.fields[k] ?? ''),
+        ...tagged.map(k => r.fields[k] ?? ''),
+        ...(catchAll ? [plain] : []),
+      ]
+    }),
+  ])
 }
-
 
 // the courtyard centre is taken in the footprint's own frame so a rotated part keeps its body centre
 export function cplPoint(board: Board, fp: Footprint, origin: 'footprint' | 'center' = board.cpl?.origin ?? 'footprint'): Pt {
   if (origin === 'footprint') return fp.at
-  const a = (fp.rot * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a)
+  const a = (fp.rot * Math.PI) / 180,
+    c = Math.cos(a),
+    s = Math.sin(a)
   // board to footprint frame and back: rotate by the footprint's angle, mirrored in x on the back
-  const local = (p: Pt): Pt => { const dx = p[0] - fp.at[0], dy = p[1] - fp.at[1], x = dx * c - dy * s, y = dx * s + dy * c; return [fp.side === 'B' ? -x : x, y] }
+  const local = (p: Pt): Pt => {
+    const dx = p[0] - fp.at[0],
+      dy = p[1] - fp.at[1],
+      x = dx * c - dy * s,
+      y = dx * s + dy * c
+    return [fp.side === 'B' ? -x : x, y]
+  }
   const layer = `${fp.side}.CrtYd`
   const mine = board.items.filter(it => it.ref === fp.ref)
   let pts = mine.flatMap(it => (it.kind === 'graphic' && it.layer === layer ? it.paths.flat() : []))
-  if (!pts.length) pts = fp.pads.flatMap(id => { const it = board.items[id - 1]; return it?.kind === 'pad' ? it.poly : [] })
+  if (!pts.length)
+    pts = fp.pads.flatMap(id => {
+      const it = board.items[id - 1]
+      return it?.kind === 'pad' ? it.poly : []
+    })
   if (!pts.length) return fp.at
   const l = pts.map(local)
-  const cx = (Math.min(...l.map(p => p[0])) + Math.max(...l.map(p => p[0]))) / 2, cy = (Math.min(...l.map(p => p[1])) + Math.max(...l.map(p => p[1]))) / 2
+  const cx = (Math.min(...l.map(p => p[0])) + Math.max(...l.map(p => p[0]))) / 2,
+    cy = (Math.min(...l.map(p => p[1])) + Math.max(...l.map(p => p[1]))) / 2
   const x = fp.side === 'B' ? -cx : cx
   return [fp.at[0] + x * c + cy * s, fp.at[1] - x * s + cy * c]
 }
 
 /** Placement file in the JLCPCB column layout, Y up like KiCad's position files. */
 export function cplCsv(board: Board): string {
-  const rows = board.footprints.filter(fp => fp.pos && !fp.dnp).map(fp => {
-    const [x, y] = cplPoint(board, fp)
-    return [fp.ref, fp.value, fp.id.split(':').pop() ?? fp.id, f(x), f(-y), f(fp.rot), fp.side === 'F' ? 'Top' : 'Bottom']
-  })
+  const rows = board.footprints
+    .filter(fp => fp.pos && !fp.dnp)
+    .map(fp => {
+      const [x, y] = cplPoint(board, fp)
+      return [fp.ref, fp.value, fp.id.split(':').pop() ?? fp.id, f(x), f(-y), f(fp.rot), fp.side === 'F' ? 'Top' : 'Bottom']
+    })
   return csv([['Designator', 'Val', 'Package', 'Mid X', 'Mid Y', 'Rotation', 'Layer'], ...rows])
 }
 

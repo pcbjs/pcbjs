@@ -6,18 +6,49 @@ import { parseViewQuery, queryMode } from '../src/query.ts'
 
 const src = (line, col, endLine, endCol) => ({ file: 'pcb.tsx', line, col, endLine, endCol })
 const drawing = {
-  grid: 2.54, page: [2.54, 2.54, 120, 80], title: 'T',
-  symbols: [{
-    ref: 'R1', value: '10k', kind: 'resistor', at: [11.27, 13.81], rot: 0, flip: false, m: [2.54, 0, 0, 2.54, 11.27, 13.81], body: [], box: [10, 10, 12.54, 17.62],
-    pins: [
-      { name: '1', net: 'A', nc: false, end: [11.27, 7.46], root: [11.27, 10], side: 'top', items: [1] },
-      { name: '2', net: 'B', nc: false, end: [11.27, 20.16], root: [11.27, 17.62], side: 'bottom', items: [2] },
-    ],
-    names: false, refAt: [13, 12], valueAt: [13, 15], auto: false, path: ['P1'], items: [1, 2], src: src(5, 5, 5, 40),
-  }],
-  wires: [{ id: 'wire:0', net: 'A', pts: [[11.27, 7.46], [30, 7.46]], auto: false, src: src(7, 5, 7, 30) }],
+  grid: 2.54,
+  page: [2.54, 2.54, 120, 80],
+  title: 'T',
+  symbols: [
+    {
+      ref: 'R1',
+      value: '10k',
+      kind: 'resistor',
+      at: [11.27, 13.81],
+      rot: 0,
+      flip: false,
+      m: [2.54, 0, 0, 2.54, 11.27, 13.81],
+      body: [],
+      box: [10, 10, 12.54, 17.62],
+      pins: [
+        { name: '1', net: 'A', nc: false, end: [11.27, 7.46], root: [11.27, 10], side: 'top', items: [1] },
+        { name: '2', net: 'B', nc: false, end: [11.27, 20.16], root: [11.27, 17.62], side: 'bottom', items: [2] },
+      ],
+      names: false,
+      refAt: [13, 12],
+      valueAt: [13, 15],
+      auto: false,
+      path: ['P1'],
+      items: [1, 2],
+      src: src(5, 5, 5, 40),
+    },
+  ],
+  wires: [
+    {
+      id: 'wire:0',
+      net: 'A',
+      pts: [
+        [11.27, 7.46],
+        [30, 7.46],
+      ],
+      auto: false,
+      src: src(7, 5, 7, 30),
+    },
+  ],
   labels: [{ id: 'label:0', net: 'B', at: [11.27, 20.16], side: 'bottom', kind: 'gnd', auto: true }],
-  junctions: [], noConnects: [], texts: [],
+  junctions: [],
+  noConnects: [],
+  texts: [],
   sheets: [{ name: 'P1', path: ['P1'], box: [5, 5, 40, 30], auto: false, src: src(4, 3, 9, 12) }],
   stats: { symbols: 1, wires: 1, segments: 1, bends: 0, crossings: 0, labels: 1, power: 1, junctions: 0, length: 18.73, wired: 1, labelled: 1, rounds: 0 },
 }
@@ -30,7 +61,10 @@ test('the view query opens the schematic with view=sch', () => {
 
 test('a hit names the pin, the wire, the label, the symbol body and the sheet border, in that order', () => {
   const pin = schHit(drawing, [11.3, 8], 0.2)
-  assert.deepEqual({ kind: pin.kind, key: pin.key, ref: pin.ref, pin: pin.pin, net: pin.net, items: pin.items }, { kind: 'pin', key: 'pin:R1.1', ref: 'R1', pin: '1', net: 'A', items: [1] })
+  assert.deepEqual(
+    { kind: pin.kind, key: pin.key, ref: pin.ref, pin: pin.pin, net: pin.net, items: pin.items },
+    { kind: 'pin', key: 'pin:R1.1', ref: 'R1', pin: '1', net: 'A', items: [1] },
+  )
   assert.equal(schHit(drawing, [20, 7.5], 0.2).key, 'wire:0')
   assert.equal(schHit(drawing, [11.27, 21], 0.2).key, 'label:0', 'without measured bounds a label is a grid square at its point')
   assert.equal(schHit(drawing, [11.27, 30], 0.2, new Map([['label:0', [10, 20, 13, 31]]])).key, 'label:0', 'measured bounds win')
@@ -79,6 +113,9 @@ test('the editor cursor finds the innermost drawn element and those nested in it
 test('the rail rows, and the colours of a theme as variables', () => {
   assert.deepEqual(schVars({ wire: '#4ade80', paper: '#1b1f27' }), { '--sch-wire': '#4ade80', '--sch-paper': '#1b1f27' })
   assert.deepEqual(schVars(undefined), {})
-  assert.deepEqual(SCH_LAYERS.map(l => l.id), ['symbols', 'wires', 'labels', 'power', 'sheets', 'texts', 'findings'])
+  assert.deepEqual(
+    SCH_LAYERS.map(l => l.id),
+    ['symbols', 'wires', 'labels', 'power', 'sheets', 'texts', 'findings'],
+  )
   assert.deepEqual(layerCounts(drawing, 2), { symbols: 1, wires: 1, labels: 0, power: 1, sheets: 1, texts: 0, findings: 2 })
 })

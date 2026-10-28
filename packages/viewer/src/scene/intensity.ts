@@ -23,12 +23,20 @@ export function hlStep(s: number): number {
 
 /** The signed area in mm², holes winding against their ring taken out; the plain sum when that is under half the largest ring. */
 export function ringsArea(rings: readonly (readonly (readonly [number, number])[])[]): number {
-  let signed = 0, abs = 0, largest = 0
+  let signed = 0,
+    abs = 0,
+    largest = 0
   for (const r of rings) {
     let a = 0
-    for (let i = 0, n = r.length; i < n; i++) { const p = r[i], q = r[(i + 1) % n]; a += p[0] * q[1] - q[0] * p[1] }
+    for (let i = 0, n = r.length; i < n; i++) {
+      const p = r[i],
+        q = r[(i + 1) % n]
+      a += p[0] * q[1] - q[0] * p[1]
+    }
     a /= 2
-    signed += a; abs += Math.abs(a); largest = Math.max(largest, Math.abs(a))
+    signed += a
+    abs += Math.abs(a)
+    largest = Math.max(largest, Math.abs(a))
   }
   return Math.abs(signed) >= largest / 2 ? Math.abs(signed) : abs
 }

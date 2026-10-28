@@ -11,6 +11,8 @@
     "build": "tsc -b",
     "watch": "tsc -b --watch",
     "clean": "tsc -b --clean",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "npm test --workspaces --if-present",
     "demo:dev": "npm run dev -w demo",
     "demo:build": "npm run build -w demo",
@@ -20,11 +22,21 @@
     "docs:preview": "npm run preview -w pcbjs-site --",
     "changeset": "changeset",
     "version-packages": "changeset version && npm install --package-lock-only",
-    "release": "changeset publish"
+    "release": "changeset publish",
+    "prepare": "simple-git-hooks"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
+    "lint-staged": "^17.6.0",
+    "prettier": "^3.9.10",
+    "simple-git-hooks": "^2.14.0",
     "typescript": "~5.9.0"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged"
+  },
+  "lint-staged": {
+    "*": "prettier --write --ignore-unknown"
   }
 }

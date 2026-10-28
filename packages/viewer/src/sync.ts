@@ -1,16 +1,36 @@
 // hover and focus shared by every viewer of one dev server; free of Vue and the DOM so Node imports it in the tests
 
 /** What the pointer is on: board item ids, the parts of a body, symbol or sheet, and its net; each viewer finds the net's pair group itself. */
-export interface HoverTarget { ids: number[]; refs: string[]; net: string | null }
+export interface HoverTarget {
+  ids: number[]
+  refs: string[]
+  net: string | null
+}
 /** The pinned net and the selection: a part, or a group's parts with its circuit key. */
-export interface FocusTarget { net: string | null; ref: string | null; refs: string[]; circuit: string | null }
+export interface FocusTarget {
+  net: string | null
+  ref: string | null
+  refs: string[]
+  circuit: string | null
+}
 
 /** `pcbjs:sync:hover` and `pcbjs:sync:focus` as they travel; the server adds `from` to what it relays. */
-export interface HoverMsg { board: string; hover: HoverTarget | null; from?: number }
-export interface FocusMsg { board: string; focus: FocusTarget; from?: number }
+export interface HoverMsg {
+  board: string
+  hover: HoverTarget | null
+  from?: number
+}
+export interface FocusMsg {
+  board: string
+  focus: FocusTarget
+  from?: number
+}
 
 /** The part of Vite's `import.meta.hot` the viewer uses. */
-export interface Hot { send(event: string, data?: unknown): void; on(event: string, cb: (data: any) => void): void }
+export interface Hot {
+  send(event: string, data?: unknown): void
+  on(event: string, cb: (data: any) => void): void
+}
 
 export const NO_FOCUS: FocusTarget = { net: null, ref: null, refs: [], circuit: null }
 

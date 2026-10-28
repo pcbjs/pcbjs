@@ -13,15 +13,21 @@ const PORT = 5293
 let server, client, pcb, wire, lay
 
 const open = async file => {
-  const text = readFileSync(file, 'utf8'), uri = pathToFileURL(file).href
+  const text = readFileSync(file, 'utf8'),
+    uri = pathToFileURL(file).href
   await client.conn.sendNotification('textDocument/didOpen', { textDocument: { uri, languageId: 'typescriptreact', version: 1, text } })
   return { text, uri }
 }
 const at = (d, needle, delta = 0, n = 0) => ({ textDocument: { uri: d.uri }, position: posOf(d.text, needle, delta, n) })
 // the text of a hover, after the preview image it starts with, see hover-preview.test.mjs
-const hover = async (d, needle, delta, n) => ((await client.conn.sendRequest('textDocument/hover', at(d, needle, delta, n)))?.contents.value ?? '').replace(/^!\[[^\]]*\]\([^)]*\)\n\n/, '')
-const lenses = async d => (await client.conn.sendRequest('textDocument/codeLens', { textDocument: { uri: d.uri } })).map(l => ({ line: l.range.start.line, title: l.command.title }))
-const hints = async d => (await client.conn.sendRequest('textDocument/inlayHint', { textDocument: { uri: d.uri }, range: { start: { line: 0, character: 0 }, end: { line: 9999, character: 0 } } })).map(h => ({ line: h.position.line, label: h.label }))
+const hover = async (d, needle, delta, n) =>
+  ((await client.conn.sendRequest('textDocument/hover', at(d, needle, delta, n)))?.contents.value ?? '').replace(/^!\[[^\]]*\]\([^)]*\)\n\n/, '')
+const lenses = async d =>
+  (await client.conn.sendRequest('textDocument/codeLens', { textDocument: { uri: d.uri } })).map(l => ({ line: l.range.start.line, title: l.command.title }))
+const hints = async d =>
+  (await client.conn.sendRequest('textDocument/inlayHint', { textDocument: { uri: d.uri }, range: { start: { line: 0, character: 0 }, end: { line: 9999, character: 0 } } })).map(
+    h => ({ line: h.position.line, label: h.label }),
+  )
 const lineOf = (d, needle) => posOf(d.text, needle).line
 
 before(async () => {
@@ -45,8 +51,14 @@ test('helper routes: the call site in the entry hovers and lenses with the route
   // a .map around the call: every route its calls made
   assert.match(await hover(pcb, '.map(([net, pin]) => chain', 3), /^made by this call: 8 routes\n- route nHA: /)
   const ls = await lenses(pcb)
-  assert.ok(ls.some(l => l.line === lineOf(pcb, 'chain(PWR, J_VM[1]') && /^route VM: [\d.]+ mm$/.test(l.title)), JSON.stringify(ls))
-  assert.ok(ls.some(l => /^8 routes: nHA [\d.]+ mm · nHB /.test(l.title)), JSON.stringify(ls))
+  assert.ok(
+    ls.some(l => l.line === lineOf(pcb, 'chain(PWR, J_VM[1]') && /^route VM: [\d.]+ mm$/.test(l.title)),
+    JSON.stringify(ls),
+  )
+  assert.ok(
+    ls.some(l => /^8 routes: nHA [\d.]+ mm · nHB /.test(l.title)),
+    JSON.stringify(ls),
+  )
 })
 
 test('helper routes: the route call inside the helper, in a file outside the project, has its range, hover and lens', async () => {
@@ -62,11 +74,17 @@ test('helper routes: the route call inside the helper, in a file outside the pro
 test('helper routes: the pad arguments of a helper call are pad references, with nets and the other pads as edits', async () => {
   const hs = await hints(pcb)
   const line = lineOf(pcb, 'chain(SIG, R_VT[2], R_VB[1])')
-  assert.deepEqual(hs.filter(x => x.line === line).map(x => x.label), ['net VSNS', 'net VSNS'])
+  assert.deepEqual(
+    hs.filter(x => x.line === line).map(x => x.label),
+    ['net VSNS', 'net VSNS'],
+  )
   // R_VT is the variable the part was declared as in driver.sch.ts, not its ref
   const [seg] = await client.conn.sendRequest('pcbjs/segments', at(pcb, 'R_VT[2]', 5))
   assert.equal(seg.kind, 'pinRef')
-  assert.deepEqual(seg.presentations.map(p => [p.label, p.detail, p.edit.newText]), [['R_VT.1', 'VM', '1']])
+  assert.deepEqual(
+    seg.presentations.map(p => [p.label, p.detail, p.edit.newText]),
+    [['R_VT.1', 'VM', '1']],
+  )
 })
 
 test('layouts placed three times: hover and lens list every instance with its path', async () => {
@@ -82,13 +100,25 @@ test('layouts placed three times: hover and lens list every instance with its pa
   assert.match(await hover(lay, '<g.QH', 2), /parts Q\d+ \(A\/QH\), Q\d+ \(B\/QH\), Q\d+ \(C\/QH\)/)
 })
 
-test('layouts placed three times: a pad reference has every instance\'s net, its edits, and goes to each placement', async () => {
+test("layouts placed three times: a pad reference has every instance's net, its edits, and goes to each placement", async () => {
   const hs = await hints(lay)
-  assert.ok(hs.some(x => x.line === lineOf(lay, 'route(g.RS[2])') && x.label === 'nets A/sl, B/sl, C/sl'), JSON.stringify(hs))
+  assert.ok(
+    hs.some(x => x.line === lineOf(lay, 'route(g.RS[2])') && x.label === 'nets A/sl, B/sl, C/sl'),
+    JSON.stringify(hs),
+  )
   const [seg] = await client.conn.sendRequest('pcbjs/segments', at(lay, 'g.RS[2]', 5))
-  assert.deepEqual(seg.presentations.map(p => [p.label, p.edit.newText]), [['g.RS.1', '1']])
+  assert.deepEqual(
+    seg.presentations.map(p => [p.label, p.edit.newText]),
+    [['g.RS.1', '1']],
+  )
   const defs = await client.conn.sendRequest('textDocument/definition', at(lay, 'g.RS[2]', 5))
-  assert.deepEqual(defs.map(d => [d.uri.split('/').pop(), d.range.start.line]), ['A', 'B', 'C'].map(g => ['pcb.tsx', lineOf(pcb, `<HalfBridgeColumn g={${g}}`)]))
+  assert.deepEqual(
+    defs.map(d => [d.uri.split('/').pop(), d.range.start.line]),
+    ['A', 'B', 'C'].map(g => ['pcb.tsx', lineOf(pcb, `<HalfBridgeColumn g={${g}}`)]),
+  )
   const one = await client.conn.sendRequest('textDocument/definition', at(pcb, 'A.CF[2]', 5))
-  assert.deepEqual(one.map(d => d.range.start.line), [lineOf(pcb, '<HalfBridgeColumn g={A}')])
+  assert.deepEqual(
+    one.map(d => d.range.start.line),
+    [lineOf(pcb, '<HalfBridgeColumn g={A}')],
+  )
 })

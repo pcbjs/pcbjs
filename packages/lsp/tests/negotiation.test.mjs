@@ -95,7 +95,10 @@ test('an extension of an older major is told the fix in the log it shows', async
 
 test('a current extension with widget gets every kind, each segment with its widget', async () => {
   send('pcbjs:ide:hello', { name: 'vscode-pcbjs', version: '0.1.0', protocol: PROTOCOL, major: MAJOR, capabilities: ['ready', 'lsp', 'widget'] })
-  const res = await request('initialize', initParams(project.root, { protocol: PROTOCOL, major: MAJOR, kinds: ['length'], capabilities: ['widget', 'unknown'], name: 'new', version: '0.1.0' }))
+  const res = await request(
+    'initialize',
+    initParams(project.root, { protocol: PROTOCOL, major: MAJOR, kinds: ['length'], capabilities: ['widget', 'unknown'], name: 'new', version: '0.1.0' }),
+  )
   const p = res.capabilities.experimental.pcbjs
   assert.equal(p.protocol, PROTOCOL)
   assert.deepEqual(p.capabilities, ['widget'])
@@ -103,7 +106,10 @@ test('a current extension with widget gets every kind, each segment with its wid
   notify('initialized', {})
   notify('textDocument/didOpen', { textDocument: { uri, languageId: 'typescriptreact', version: 1, text } })
   const segs = await request('pcbjs/segments', { textDocument: { uri } })
-  assert.ok(segs.some(s => s.kind === 'pathCommand'), 'kinds outside the listed ones arrive as they are')
+  assert.ok(
+    segs.some(s => s.kind === 'pathCommand'),
+    'kinds outside the listed ones arrive as they are',
+  )
   for (const s of segs) {
     assert.equal(typeof s.widget?.input, 'string', JSON.stringify(s))
     assert.equal(typeof s.widget.typed, 'boolean')
@@ -112,7 +118,7 @@ test('a current extension with widget gets every kind, each segment with its wid
   assert.deepEqual([pos.widget.input, pos.widget.typed], ['position', true])
 })
 
-test('a future extension is answered with this server\'s protocol', async () => {
+test("a future extension is answered with this server's protocol", async () => {
   const res = await request('initialize', initParams(project.root, { protocol: PROTOCOL + 5, major: MAJOR, kinds: ALL_KINDS, capabilities: ['widget', 'sliders'] }))
   assert.equal(res.capabilities.experimental.pcbjs.protocol, PROTOCOL)
   assert.deepEqual(res.capabilities.experimental.pcbjs.capabilities, ['widget'])

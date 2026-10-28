@@ -3,10 +3,14 @@
 import { layout, route } from '@pcbjs/core'
 import { ledChannel } from './led-channel.sch'
 
-export const LedChannelStack = layout(ledChannel, (g, { at, side }) => (
-  <g at={at} side={side}>
-    <g.R at="0 0 90deg" />
-    <g.D at="0 4 90deg" />
-    {route(g.R[2]).X(g.D.A).width(0.3)}
-  </g>
-), 'LedChannelStack')
+export const LedChannelStack = layout(
+  ledChannel,
+  (g, { at, side }) => (
+    <g at={at} side={side}>
+      <g.R at="0 0 90deg" />
+      <g.D at="0 4 90deg" />
+      {route(g.R[2]).X(g.D.A).width(0.3)}
+    </g>
+  ),
+  'LedChannelStack',
+)

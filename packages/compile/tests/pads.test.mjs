@@ -6,11 +6,19 @@ import { area, bbox, intersection, polysToRings } from '../dist/geom.js'
 import { near } from './helpers.mjs'
 
 const outline = (w = 20, hh = 20) => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w, h: hh })
-const board = (props, ...kids) => { resetDefaults(); return compileBoard(h(PCB, { name: 'P', ...props }, outline(), ...kids), { routeCache: false }) }
+const board = (props, ...kids) => {
+  resetDefaults()
+  return compileBoard(h(PCB, { name: 'P', ...props }, outline(), ...kids), { routeCache: false })
+}
 const errs = (b, rule) => b.drc.filter(d => d.rule === rule)
 const padOf = (b, num, ref = 'U1') => b.items.find(i => i.kind === 'pad' && i.ref === ref && i.num === String(num))
 const zoneOf = b => b.items.find(i => i.kind === 'zone')
-const sq = (x, y, r = 0.02) => [[x - r, y - r], [x + r, y - r], [x + r, y + r], [x - r, y + r]]
+const sq = (x, y, r = 0.02) => [
+  [x - r, y - r],
+  [x + r, y - r],
+  [x + r, y + r],
+  [x - r, y + r],
+]
 const covered = (b, x, y) => polysToRings(intersection(polysToRings(zoneOf(b).fill), [sq(x, y)])).length > 0
 
 test('clearance: a pad or part override is the clearance of every pair the pad is in, the rules and classes aside', () => {
@@ -22,21 +30,33 @@ test('clearance: a pad or part override is the clearance of every pair the pad i
   assert.deepEqual(errs(board({ rules }, fp({}, { clearance: 0.15 }), track), 'clearance'), [], 'the pad override holds')
   // a class asking more on the track's net does not count against the override
   const { GND } = nets({ GND: { class: 'power' } })
-  const classed = board({ rules, classes: { power: { clearance: 0.3 } } }, fp({ rules: { clearance: 0.15 } }), h('track', { net: GND, layer: 'F.Cu', width: 0.2, d: 'M10.77 5 L10.77 15' }))
-  assert.deepEqual(errs(classed, 'clearance').filter(e => /U1/.test(e.message)), [])
+  const classed = board(
+    { rules, classes: { power: { clearance: 0.3 } } },
+    fp({ rules: { clearance: 0.15 } }),
+    h('track', { net: GND, layer: 'F.Cu', width: 0.2, d: 'M10.77 5 L10.77 15' }),
+  )
+  assert.deepEqual(
+    errs(classed, 'clearance').filter(e => /U1/.test(e.message)),
+    [],
+  )
   // an override above the rules still holds, named in the finding
   const big = errs(board({ rules }, fp({ rules: { clearance: 0.25 } }), track), 'clearance')
   assert.equal(big.length, 1)
   assert.match(big[0].message, /closer than 0\.25 mm \(part override of U1\)/)
   // the pour comes to the override, not to the rules
-  const fill = board({ rules: { ...rules, zoneMinWidth: 0.1 } }, fp({}, { clearance: 0.1 }), h('footprint', { ref: 'U2', at: '3 3', 'net:1': 'GND' }, h('pad', { num: 1, size: 1 })), pour('GND', 'F.Cu', 'M0 0 H20 V20 H0 Z'))
+  const fill = board(
+    { rules: { ...rules, zoneMinWidth: 0.1 } },
+    fp({}, { clearance: 0.1 }),
+    h('footprint', { ref: 'U2', at: '3 3', 'net:1': 'GND' }, h('pad', { num: 1, size: 1 })),
+    pour('GND', 'F.Cu', 'M0 0 H20 V20 H0 Z'),
+  )
   assert.ok(covered(fill, 10.5 + 0.15, 10), 'fill 0.15 mm from the pad')
   assert.deepEqual(errs(fill, 'clearance'), [])
 })
 
 test('zone fill: the fill margin widens the clearance only, so a strip at the min width stays', () => {
   // a 0.263 mm strip between two tracks, pour clearance 0.205, minWidth 0.25
-  const kids = (minWidth) => [
+  const kids = minWidth => [
     h('footprint', { ref: 'U1', at: '3 15', 'net:1': 'GND' }, h('pad', { num: 1, size: 1 })),
     h('track', { net: 'A', layer: 'F.Cu', width: 0.254, d: 'M3 4.6 L17 4.6' }),
     h('track', { net: 'B', layer: 'F.Cu', width: 0.4, d: 'M3 5.6 L17 5.6' }),
@@ -49,18 +69,43 @@ test('zone fill: the fill margin widens the clearance only, so a strip at the mi
 })
 
 test('paste: ratio, own shrink, custom windows, a window grid and none', () => {
-  const fp = (pad) => board({}, h('footprint', { ref: 'U1', at: '10 10' }, h('pad', { num: 1, size: [2, 1], shape: 'rect', ...pad })))
+  const fp = pad => board({}, h('footprint', { ref: 'U1', at: '10 10' }, h('pad', { num: 1, size: [2, 1], shape: 'rect', ...pad })))
   assert.equal(padOf(fp({}), 1).pasteRings, undefined, 'the plain pad leaves its paste to the exporters')
   const ratio = padOf(fp({ pasteRatio: -0.1 }), 1)
   const rb = bbox(ratio.pasteRings)
-  near(rb.w, 1.6, 1e-9); near(rb.h, 0.8, 1e-9); near(rb.x, 9.2, 1e-9)
+  near(rb.w, 1.6, 1e-9)
+  near(rb.h, 0.8, 1e-9)
+  near(rb.x, 9.2, 1e-9)
   assert.equal(ratio.pasteRatio, -0.1)
   const both = bbox(padOf(fp({ pasteRatio: -0.1, pasteShrink: 0.05 }), 1).pasteRings)
-  near(both.w, 1.5, 1e-9); near(both.h, 0.7, 1e-9)
+  near(both.w, 1.5, 1e-9)
+  near(both.h, 0.7, 1e-9)
   // custom windows in the pad frame, turned with the pad
-  const custom = padOf(board({}, h('footprint', { ref: 'U1', at: '10 10 90' }, h('pad', { num: 1, size: [2, 1], paste: [[[-0.5, -0.25], [0.5, -0.25], [0.5, 0.25], [-0.5, 0.25]]] }))), 1)
+  const custom = padOf(
+    board(
+      {},
+      h(
+        'footprint',
+        { ref: 'U1', at: '10 10 90' },
+        h('pad', {
+          num: 1,
+          size: [2, 1],
+          paste: [
+            [
+              [-0.5, -0.25],
+              [0.5, -0.25],
+              [0.5, 0.25],
+              [-0.5, 0.25],
+            ],
+          ],
+        }),
+      ),
+    ),
+    1,
+  )
   const cb = bbox(custom.pasteRings)
-  near(cb.w, 0.5, 1e-9); near(cb.h, 1, 1e-9)
+  near(cb.w, 0.5, 1e-9)
+  near(cb.h, 1, 1e-9)
   // an exposed pad: a 3 by 2 grid holding 60 % of the pad
   const ep = padOf(board({}, h('footprint', { ref: 'U1', at: '10 10' }, h('pad', { num: 1, size: [3, 2], shape: 'rect', paste: { rows: 2, cols: 3, coverage: 0.6 } }))), 1)
   assert.equal(ep.pasteRings.length, 6)
@@ -77,7 +122,7 @@ test('paste: ratio, own shrink, custom windows, a window grid and none', () => {
 })
 
 test('mask: a non-plated hole opens the mask on both sides, as KiCad does, unless mask is false', () => {
-  const hole = (pad) => padOf(board({}, h('footprint', { ref: 'H1', at: '10 10' }, h('pad', { num: '', type: 'npth', size: 1.152, drill: 1.152, ...pad }))), '', 'H1')
+  const hole = pad => padOf(board({}, h('footprint', { ref: 'H1', at: '10 10' }, h('pad', { num: '', type: 'npth', size: 1.152, drill: 1.152, ...pad }))), '', 'H1')
   const m = hole({ maskExpansion: 0.148 })
   assert.deepEqual(m.layers, ['F.Mask', 'B.Mask'])
   const b = bbox(m.maskRings)
@@ -111,7 +156,7 @@ test('through-hole pad on fewer copper layers: the barrel joins them, the hole k
 })
 
 test('dnp: out of the BOM and the placement file, still on the board and in the DRC', () => {
-  const Fp = (props) => h('footprint', props, h('pad', { num: 1, size: 1 }), h('pad', { num: 2, at: '1.15 0', size: 1 }))
+  const Fp = props => h('footprint', props, h('pad', { num: 1, size: 1 }), h('pad', { num: 2, at: '1.15 0', size: 1 }))
   Fp.pins = ['1', '2']
   Fp.prefix = 'R'
   const b = board({}, h('footprint', { ref: 'U1', at: '5 5', dnp: true }, h('pad', { num: 1, size: 1 })))
@@ -121,8 +166,18 @@ test('dnp: out of the BOM and the placement file, still on the board and in the 
   const { A, B, C, D, E, F } = nets()
   const R = part(Fp, { value: '1k', dnp: true })
   const S = part(Fp, { value: '2k' })
-  const c = compileBoard(h(PCB, { name: 'P' }, outline(), h(R.connect(A, B), { at: '5 5' }), h(S.connect(C, D), { at: '5 10', dnp: true }), h(part(Fp, { value: '3k' }).connect(E, F), { at: '10 10' })), { routeCache: false })
-  assert.deepEqual(c.footprints.map(f => [f.value, !!f.dnp, f.bom]), [['1k', true, false], ['2k', true, false], ['3k', false, true]])
+  const c = compileBoard(
+    h(PCB, { name: 'P' }, outline(), h(R.connect(A, B), { at: '5 5' }), h(S.connect(C, D), { at: '5 10', dnp: true }), h(part(Fp, { value: '3k' }).connect(E, F), { at: '10 10' })),
+    { routeCache: false },
+  )
+  assert.deepEqual(
+    c.footprints.map(f => [f.value, !!f.dnp, f.bom]),
+    [
+      ['1k', true, false],
+      ['2k', true, false],
+      ['3k', false, true],
+    ],
+  )
   assert.ok(errs(c, 'clearance').length >= 2, 'its pads are still checked')
   assert.throws(() => board({}, h('footprint', { ref: 'U1', dnp: 'yes' })), /U1: dnp must be true or false/)
 })

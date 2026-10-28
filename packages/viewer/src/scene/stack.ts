@@ -1,7 +1,13 @@
 import type { SiteData } from '@pcbjs/core/site-data'
 
-export interface Slice { z0: number; z1: number }
-export const OUTER_COPPER = 0.035, INNER_COPPER = 0.015, MASK = 0.025, SILK = 0.012
+export interface Slice {
+  z0: number
+  z1: number
+}
+export const OUTER_COPPER = 0.035,
+  INNER_COPPER = 0.015,
+  MASK = 0.025,
+  SILK = 0.012
 
 export function copperIds(n: number): string[] {
   return ['F.Cu', ...Array.from({ length: Math.max(0, n - 2) }, (_, i) => `In${i + 1}.Cu`), 'B.Cu']
@@ -22,7 +28,10 @@ export function copperSlices(b: SiteData): Map<string, Slice> {
   const total = stack.reduce((s, l) => s + (l.thickness ?? 0), 0)
   const depth = new Map<string, number>()
   let d = 0
-  for (const l of stack) { if (l.type === 'copper') depth.set(l.name, d); d += l.thickness ?? 0 }
+  for (const l of stack) {
+    if (l.type === 'copper') depth.set(l.name, d)
+    d += l.thickness ?? 0
+  }
   const inner = ids.slice(1, -1)
   inner.forEach((id, i) => {
     const k = total > 0 && depth.has(id) ? depth.get(id)! / total : (i + 1) / (inner.length + 1)

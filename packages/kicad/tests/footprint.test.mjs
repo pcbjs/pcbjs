@@ -16,9 +16,16 @@ before(() => {
   for (const k of ['KICAD10_FOOTPRINT_DIR', 'KICAD_FOOTPRINTS']) saved[k] = process.env[k]
   process.env.KICAD10_FOOTPRINT_DIR = FOOTPRINTS
 })
-after(() => { for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v })
+after(() => {
+  for (const [k, v] of Object.entries(saved))
+    if (v === undefined) delete process.env[k]
+    else process.env[k] = v
+})
 
-const rot = (p, deg) => { const t = deg * Math.PI / 180; return [p[0] * Math.cos(t) + p[1] * Math.sin(t), -p[0] * Math.sin(t) + p[1] * Math.cos(t)] }
+const rot = (p, deg) => {
+  const t = (deg * Math.PI) / 180
+  return [p[0] * Math.cos(t) + p[1] * Math.sin(t), -p[0] * Math.sin(t) + p[1] * Math.cos(t)]
+}
 const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} vs ${b}`)
 const COPPER = /^(F|B)\.Cu$|^\*\.Cu$/
 
@@ -34,8 +41,15 @@ test('sexpr: lists, quoted strings with escapes, atoms', () => {
 })
 
 test('fixtures: a dozen and more library footprints that cover every pad shape and type', () => {
-  const kinds = new Set(), shapes = new Set()
-  for (const [, file] of fixtureFootprints()) for (const p of readKicadMod(file).pads) { kinds.add(p.kind); shapes.add(p.shape); if (p.chamfer) shapes.add('chamfered') ; if (p.drill && p.drill[0] !== p.drill[1]) shapes.add('slot') }
+  const kinds = new Set(),
+    shapes = new Set()
+  for (const [, file] of fixtureFootprints())
+    for (const p of readKicadMod(file).pads) {
+      kinds.add(p.kind)
+      shapes.add(p.shape)
+      if (p.chamfer) shapes.add('chamfered')
+      if (p.drill && p.drill[0] !== p.drill[1]) shapes.add('slot')
+    }
   assert.ok(fixtureFootprints().length >= 12)
   for (const k of ['smd', 'thru_hole', 'np_thru_hole', 'connect']) assert.ok(kinds.has(k), k)
   for (const s of ['circle', 'rect', 'oval', 'roundrect', 'trapezoid', 'custom', 'chamfered', 'slot']) assert.ok(shapes.has(s), s)
@@ -46,7 +60,10 @@ for (const [id, file] of fixtureFootprints()) {
     const def = readFootprint(file)
     const F = defineFootprint(def.render, def.meta)
     const kp = kicadPads(file)
-    for (const [side, a] of [['F', 30], ['B', -60]]) {
+    for (const [side, a] of [
+      ['F', 30],
+      ['B', -60],
+    ]) {
       const at = [20, 15]
       // KiCad's back flip is top to bottom; pcbjs mirrors left to right, so the angle takes a half turn more
       const props = side === 'F' ? { ref: 'U1', at: [...at, a] } : { ref: 'U1', at: [...at, a + 180], side: 'B' }
@@ -67,10 +84,13 @@ for (const [id, file] of fixtureFootprints()) {
           near(hit.size[1], ks[1], 1e-9, `${id} pad ${k.num} height`)
           // the pad's angle on the board: its own plus the part's, the back flip negating its own
           const want = side === 'F' ? k.rot + a : -k.rot + a
-          const d = ((hit.rot - want) % 180 + 540) % 180
+          const d = (((hit.rot - want) % 180) + 540) % 180
           assert.ok(d < 1e-6 || 180 - d < 1e-6 || (ks[0] === ks[1] && k.shape !== 'rect' && k.shape !== 'roundrect'), `${id} pad ${k.num} angle ${hit.rot} vs ${want}`)
         }
-        if (k.drill) { assert.ok(hit.drill, `${id} pad ${k.num} drill`); near(Math.min(...hit.drill), Math.min(...k.drill), 1e-9, `${id} pad ${k.num} drill`) }
+        if (k.drill) {
+          assert.ok(hit.drill, `${id} pad ${k.num} drill`)
+          near(Math.min(...hit.drill), Math.min(...k.drill), 1e-9, `${id} pad ${k.num} drill`)
+        }
       }
     }
   })
@@ -80,24 +100,35 @@ test('pad shapes: trapezoid, chamfered and custom pads are polygons; a paste win
   const trap = readFootprint(join(FOOTPRINTS, 'Diode_SMD.pretty/D_SMA-SMB_Universal_Handsoldering.kicad_mod')).elements.find(e => e.type === 'pad' && e.props.num === '1')
   assert.equal(trap.props.shape, 'custom')
   // rect_delta 0.6 0: the left end 0.6 mm taller than the right
-  const xs = trap.props.points.map(p => p[0]), left = trap.props.points.filter(p => p[0] === Math.min(...xs)), right = trap.props.points.filter(p => p[0] === Math.max(...xs))
+  const xs = trap.props.points.map(p => p[0]),
+    left = trap.props.points.filter(p => p[0] === Math.min(...xs)),
+    right = trap.props.points.filter(p => p[0] === Math.max(...xs))
   near(Math.max(...left.map(p => p[1])) - Math.min(...left.map(p => p[1])) - (Math.max(...right.map(p => p[1])) - Math.min(...right.map(p => p[1]))), 1.2, 1e-9, 'trapezoid')
   const qfn = readFootprint(join(FOOTPRINTS, 'Package_DFN_QFN.pretty/QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm.kicad_mod'))
   const ep = qfn.elements.find(e => e.type === 'pad' && e.props.num === '17')
   assert.ok(ep && ep.props.paste !== false, 'the exposed pad takes the paste of its windows')
   assert.equal(qfn.elements.filter(e => e.type === 'pad' && e.props.num === '').length, 0, 'paste windows are no pads')
   const edge = readFootprint(join(FOOTPRINTS, 'Connector_PCBEdge.pretty/Samtec_MECF-05-0_-NP-L-DV_2x05_P1.27mm_Edge.kicad_mod'))
-  assert.ok(edge.elements.some(e => e.type === 'pad' && e.props.layers?.[0] === 'B.Cu'), 'back pads of an edge connector stay on B.Cu')
+  assert.ok(
+    edge.elements.some(e => e.type === 'pad' && e.props.layers?.[0] === 'B.Cu'),
+    'back pads of an edge connector stay on B.Cu',
+  )
 })
 
 test('graphics: arcs stay arcs, lines chain into paths, every layer with its width', () => {
   const mb = readFootprint(join(FOOTPRINTS, 'Panelization.pretty/MouseBite-Part_2.0x2.0mm_0h.kicad_mod'))
-  assert.ok(mb.elements.some(e => e.type === 'path' && / A /.test(e.props.d)), 'an fp_arc is an A command')
+  assert.ok(
+    mb.elements.some(e => e.type === 'path' && / A /.test(e.props.d)),
+    'an fp_arc is an A command',
+  )
   const soic = readFootprint(join(FOOTPRINTS, 'Package_SO.pretty/SOIC-8_3.9x4.9mm_P1.27mm.kicad_mod'))
   const layers = new Set(soic.elements.filter(e => e.type !== 'pad').map(e => e.props.layer))
   for (const l of ['F.SilkS', 'F.Fab', 'F.CrtYd']) assert.ok(layers.has(l), l)
   assert.ok(soic.elements.some(e => e.props.layer === 'F.SilkS' && e.props.width === 0.12))
-  assert.ok(soic.elements.some(e => e.props.layer === 'F.SilkS' && e.props.fill), 'the filled pin 1 marker')
+  assert.ok(
+    soic.elements.some(e => e.props.layer === 'F.SilkS' && e.props.fill),
+    'the filled pin 1 marker',
+  )
 })
 
 test('kicadFootprint: Lib:Name and bare names resolve, pins from pad numbers, pinNames rename, the model resolves', () => {

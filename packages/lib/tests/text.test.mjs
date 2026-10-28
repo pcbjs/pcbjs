@@ -6,7 +6,8 @@ import { near } from './helpers.mjs'
 const opts = (o = {}) => ({ size: 1, thickness: 0.15, anchor: 'start', ...o })
 const box = strokes => {
   const pts = strokes.flat()
-  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1])
+  const xs = pts.map(p => p[0]),
+    ys = pts.map(p => p[1])
   return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }
 }
 
@@ -15,7 +16,10 @@ test('font: 95 glyphs, every printable ASCII glyph but space has a stroke', () =
   for (let c = 33; c <= 126; c++) {
     const t = strokeText(String.fromCharCode(c), opts())
     assert.ok(t.strokes.length >= 1, `no stroke for ${String.fromCharCode(c)}`)
-    assert.ok(t.strokes.every(s => s.length >= 2), `a one-point stroke in ${String.fromCharCode(c)}`)
+    assert.ok(
+      t.strokes.every(s => s.length >= 2),
+      `a one-point stroke in ${String.fromCharCode(c)}`,
+    )
     assert.deepEqual(t.missing, [])
   }
   assert.equal(strokeText(' ', opts()).strokes.length, 0)
@@ -41,7 +45,9 @@ test('strokeText: coordinates are rounded to 1 nm', () => {
 })
 
 test('strokeText: anchors shift the layout by half and all of the width', () => {
-  const s = strokeText('LED1', opts()), m = strokeText('LED1', opts({ anchor: 'middle' })), e = strokeText('LED1', opts({ anchor: 'end' }))
+  const s = strokeText('LED1', opts()),
+    m = strokeText('LED1', opts({ anchor: 'middle' })),
+    e = strokeText('LED1', opts({ anchor: 'end' }))
   assert.ok(s.width > 0)
   near(box(m.strokes).x0, box(s.strokes).x0 - s.width / 2, 2e-6)
   near(box(e.strokes).x0, box(s.strokes).x0 - s.width, 2e-6)
@@ -52,12 +58,14 @@ test('strokeText: anchors shift the layout by half and all of the width', () => 
 })
 
 test('strokeText: letter spacing widens the line', () => {
-  const a = strokeText('AB', opts()), b = strokeText('AB', opts({ letterSpacing: 0.5 }))
+  const a = strokeText('AB', opts()),
+    b = strokeText('AB', opts({ letterSpacing: 0.5 }))
   near(b.width - a.width, 0.5, 1e-6)
 })
 
 test('strokeText: lines stack downwards by the line height', () => {
-  const one = strokeText('H', opts()), two = strokeText('H\nH', opts({ lineHeight: 2 }))
+  const one = strokeText('H', opts()),
+    two = strokeText('H\nH', opts({ lineHeight: 2 }))
   near(two.height, 3, 1e-6)
   assert.equal(two.strokes.length, 2 * one.strokes.length)
   const second = box(two.strokes.slice(one.strokes.length))

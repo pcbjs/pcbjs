@@ -1,10 +1,13 @@
 // No DOM: shared by the compiler and the 3D view.
 
-const PREFIX: Record<string, number> = { p: 1e-12, n: 1e-9, u: 1e-6, 'µ': 1e-6, 'μ': 1e-6, m: 1e-3, k: 1e3, K: 1e3, M: 1e6, G: 1e9 }
+const PREFIX: Record<string, number> = { p: 1e-12, n: 1e-9, u: 1e-6, µ: 1e-6, μ: 1e-6, m: 1e-3, k: 1e3, K: 1e3, M: 1e6, G: 1e9 }
 
 /** Parse a value with an SI prefix that may stand in for the decimal point: "4k7", "4.7k", "1M", "R47", "10R". */
 function parseValue(text: string, unit: RegExp, point: string[]): number | null {
-  let s = String(text ?? '').trim().replace(/\s+/g, '').replace(unit, '')
+  let s = String(text ?? '')
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(unit, '')
   if (!s) return null
   // the prefix letter, or R for ohms, used as the decimal point: 4k7, 1R5, R47, 4n7
   const m = /^(\d*)([a-zA-Zµμ])(\d*)$/.exec(s)
@@ -34,19 +37,25 @@ export function parseFarads(text: string): number | null {
 /** The value with an engineering prefix: 4700 and "Ω" give "4.7 kΩ". */
 export function formatValue(v: number, unit: string): string {
   if (v === 0) return `0 ${unit}`
-  const steps: [number, string][] = [[1e9, 'G'], [1e6, 'M'], [1e3, 'k'], [1, ''], [1e-3, 'm'], [1e-6, 'µ'], [1e-9, 'n'], [1e-12, 'p']]
+  const steps: [number, string][] = [
+    [1e9, 'G'],
+    [1e6, 'M'],
+    [1e3, 'k'],
+    [1, ''],
+    [1e-3, 'm'],
+    [1e-6, 'µ'],
+    [1e-9, 'n'],
+    [1e-12, 'p'],
+  ]
   const [mult, p] = steps.find(([m]) => Math.abs(v) >= m * 0.9995) ?? steps[steps.length - 1]
   return `${Number((v / mult).toPrecision(4))} ${p}${unit}`
 }
 
 // index 0 is EIA-96 code 01
 export const E96 = [
-  100, 102, 105, 107, 110, 113, 115, 118, 121, 124, 127, 130, 133, 137, 140, 143,
-  147, 150, 154, 158, 162, 165, 169, 174, 178, 182, 187, 191, 196, 200, 205, 210,
-  215, 221, 226, 232, 237, 243, 249, 255, 261, 267, 274, 280, 287, 294, 301, 309,
-  316, 324, 332, 340, 348, 357, 365, 374, 383, 392, 402, 412, 422, 432, 442, 453,
-  464, 475, 487, 499, 511, 523, 536, 549, 562, 576, 590, 604, 619, 634, 649, 665,
-  681, 698, 715, 732, 750, 768, 787, 806, 825, 845, 866, 887, 909, 931, 953, 976,
+  100, 102, 105, 107, 110, 113, 115, 118, 121, 124, 127, 130, 133, 137, 140, 143, 147, 150, 154, 158, 162, 165, 169, 174, 178, 182, 187, 191, 196, 200, 205, 210, 215, 221, 226,
+  232, 237, 243, 249, 255, 261, 267, 274, 280, 287, 294, 301, 309, 316, 324, 332, 340, 348, 357, 365, 374, 383, 392, 402, 412, 422, 432, 442, 453, 464, 475, 487, 499, 511, 523,
+  536, 549, 562, 576, 590, 604, 619, 634, 649, 665, 681, 698, 715, 732, 750, 768, 787, 806, 825, 845, 866, 887, 909, 931, 953, 976,
 ]
 // by power of ten applied to the three-digit E96 value
 const EIA96_LETTER: Record<number, string> = { [-3]: 'Z', [-2]: 'Y', [-1]: 'X', 0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E', 5: 'F' }
@@ -57,7 +66,10 @@ export type ChipSize = '0201' | '0402' | '0603' | '0805' | '1206'
 function sig(v: number, digits: number): [number, number] {
   let exp = Math.floor(Math.log10(v)) - (digits - 1)
   let mant = Math.round(v / 10 ** exp)
-  if (mant >= 10 ** digits) { mant = Math.round(mant / 10); exp++ }
+  if (mant >= 10 ** digits) {
+    mant = Math.round(mant / 10)
+    exp++
+  }
   return [mant, exp]
 }
 
@@ -75,7 +87,8 @@ export function eia96(ohms: number): string | null {
   if (!(ohms > 0)) return null
   const [mant, exp] = sig(ohms, 3)
   if (Math.abs(mant * 10 ** exp - ohms) > ohms * 1e-6) return null
-  const i = E96.indexOf(mant), letter = EIA96_LETTER[exp]
+  const i = E96.indexOf(mant),
+    letter = EIA96_LETTER[exp]
   return i < 0 || !letter ? null : `${String(i + 1).padStart(2, '0')}${letter}`
 }
 

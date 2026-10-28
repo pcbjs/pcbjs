@@ -5,7 +5,8 @@ type Sch = Partial<Schematic> | null | undefined
 
 // natural ref order, as compareRefs in schematic.ts; repeated here so Node can import this file alone
 function compareRefs(a: string, b: string): number {
-  const ra = /^(.*?)(\d+)$/.exec(a), rb = /^(.*?)(\d+)$/.exec(b)
+  const ra = /^(.*?)(\d+)$/.exec(a),
+    rb = /^(.*?)(\d+)$/.exec(b)
   if (ra && rb && ra[1] === rb[1]) return +ra[2] - +rb[2]
   return a < b ? -1 : a > b ? 1 : 0
 }
@@ -25,9 +26,15 @@ export function findInstance(sch: Sch, key: string | null | undefined): Schemati
 
 /** One row of the tree: a part, or an instance with its own parts and child instances. */
 export type TreeNode = PartNode | InstanceNode
-export interface PartNode { kind: 'part'; key: string; part: SchematicPart }
+export interface PartNode {
+  kind: 'part'
+  key: string
+  part: SchematicPart
+}
 export interface InstanceNode {
-  kind: 'instance'; key: string; circuit: SchematicCircuit
+  kind: 'instance'
+  key: string
+  circuit: SchematicCircuit
   /** the instance's own parts in ref order, then its child instances */
   children: TreeNode[]
   /** every part ref of the instance and of its descendants, in ref order */
@@ -48,29 +55,45 @@ export function buildTree(sch: Sch): TreeNode[] {
   // a part's instance: the path it carries, else the deepest instance listing it
   const owner = new Map<string, string>()
   for (const g of [...circuits].sort((a, b) => a.path.length - b.path.length)) for (const r of g.parts ?? []) owner.set(r, instanceKey(g.path))
-  for (const p of parts) { const k = instanceKey(partPath(p)); if (k && byKey.has(k)) owner.set(p.ref, k) }
+  for (const p of parts) {
+    const k = instanceKey(partPath(p))
+    if (k && byKey.has(k)) owner.set(p.ref, k)
+  }
   const ownParts = new Map<string, SchematicPart[]>()
   const root: TreeNode[] = []
   for (const p of parts) {
     const k = owner.get(p.ref)
-    if (k && byKey.has(k)) { let l = ownParts.get(k); if (!l) ownParts.set(k, l = []); l.push(p) } else root.push(partNode(p))
+    if (k && byKey.has(k)) {
+      let l = ownParts.get(k)
+      if (!l) ownParts.set(k, (l = []))
+      l.push(p)
+    } else root.push(partNode(p))
   }
   // the parent of an instance is the longest other instance path that prefixes its own
   const parentOf = (g: SchematicCircuit): string | null => {
-    for (let n = g.path.length - 1; n > 0; n--) { const k = instanceKey(g.path.slice(0, n)); if (byKey.has(k)) return k }
+    for (let n = g.path.length - 1; n > 0; n--) {
+      const k = instanceKey(g.path.slice(0, n))
+      if (byKey.has(k)) return k
+    }
     return null
   }
   const kids = new Map<string, SchematicCircuit[]>()
   const tops: SchematicCircuit[] = []
-  for (const g of circuits) { const p = parentOf(g); if (p) { let l = kids.get(p); if (!l) kids.set(p, l = []); l.push(g) } else tops.push(g) }
+  for (const g of circuits) {
+    const p = parentOf(g)
+    if (p) {
+      let l = kids.get(p)
+      if (!l) kids.set(p, (l = []))
+      l.push(g)
+    } else tops.push(g)
+  }
   const seen = new Set<string>()
   const node = (g: SchematicCircuit): InstanceNode => {
     const key = instanceKey(g.path)
     seen.add(key)
     // child instances in the order the instance lists them, then any others
     const order = g.children ?? []
-    const ch = [...(kids.get(key) ?? [])].filter(c => !seen.has(instanceKey(c.path)))
-      .sort((a, b) => rank(order, a.name ?? a.path.at(-1)!) - rank(order, b.name ?? b.path.at(-1)!))
+    const ch = [...(kids.get(key) ?? [])].filter(c => !seen.has(instanceKey(c.path))).sort((a, b) => rank(order, a.name ?? a.path.at(-1)!) - rank(order, b.name ?? b.path.at(-1)!))
     const childNodes = ch.map(node)
     const own = (ownParts.get(key) ?? []).map(partNode)
     const refs = [...own.map(n => n.part.ref), ...childNodes.flatMap(c => c.refs), ...(g.parts ?? [])]
@@ -78,12 +101,21 @@ export function buildTree(sch: Sch): TreeNode[] {
   }
   return [...root, ...tops.map(node)]
 }
-const rank = (order: readonly string[], name: string) => { const i = order.indexOf(name); return i < 0 ? Infinity : i }
+const rank = (order: readonly string[], name: string) => {
+  const i = order.indexOf(name)
+  return i < 0 ? Infinity : i
+}
 
 /** Every instance node of a tree, depth first. */
 export function instanceNodes(nodes: readonly TreeNode[]): InstanceNode[] {
   const out: InstanceNode[] = []
-  const walk = (ns: readonly TreeNode[]) => { for (const n of ns) if (n.kind === 'instance') { out.push(n); walk(n.children) } }
+  const walk = (ns: readonly TreeNode[]) => {
+    for (const n of ns)
+      if (n.kind === 'instance') {
+        out.push(n)
+        walk(n.children)
+      }
+  }
   walk(nodes)
   return out
 }
@@ -108,11 +140,20 @@ export function filterTree(nodes: readonly TreeNode[], query: string): { nodes: 
   const walk = (ns: readonly TreeNode[]): TreeNode[] => {
     const out: TreeNode[] = []
     for (const n of ns) {
-      if (n.kind === 'part') { if (partHit(n.part)) out.push(n); continue }
+      if (n.kind === 'part') {
+        if (partHit(n.part)) out.push(n)
+        continue
+      }
       const g = n.circuit
-      if (has(g.name) || has(g.circuit) || has(g.layout) || has(pathLabel(g.path))) { out.push(n); continue }
+      if (has(g.name) || has(g.circuit) || has(g.layout) || has(pathLabel(g.path))) {
+        out.push(n)
+        continue
+      }
       const ch = walk(n.children)
-      if (ch.length) { open.add(n.key); out.push({ ...n, children: ch }) }
+      if (ch.length) {
+        open.add(n.key)
+        out.push({ ...n, children: ch })
+      }
     }
     return out
   }
@@ -133,31 +174,46 @@ export function netLabel(n: { name: string; path?: readonly string[] | null }): 
 }
 
 /** The Path line of the Part tab: one link per instance, outermost first, then the part's local key; null for a board-level part. */
-export function partPathLinks(p: Pick<SchematicPart, 'ref'> & { path?: readonly string[] | null; local?: string | null } | null | undefined): { links: { name: string; key: string }[]; local: string } | null {
+export function partPathLinks(
+  p: (Pick<SchematicPart, 'ref'> & { path?: readonly string[] | null; local?: string | null }) | null | undefined,
+): { links: { name: string; key: string }[]; local: string } | null {
   const path = Array.isArray(p?.path) ? p!.path : []
   if (!p || !path.length) return null
   return { links: path.map((name, i) => ({ name, key: instanceKey(path.slice(0, i + 1)) })), local: p.local || p.ref }
 }
 
 /** The box around the placed footprints of some refs, board mm, null when none is placed. */
-export function refsBox(footprints: readonly { ref: string; bbox?: { x: number; y: number; w: number; h: number }; at: [number, number] }[], refs: readonly string[]): { at: [number, number]; w: number; h: number } | null {
+export function refsBox(
+  footprints: readonly { ref: string; bbox?: { x: number; y: number; w: number; h: number }; at: [number, number] }[],
+  refs: readonly string[],
+): { at: [number, number]; w: number; h: number } | null {
   const want = new Set(refs)
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity
   for (const f of footprints) {
     if (!want.has(f.ref)) continue
     const b = f.bbox ?? { x: f.at[0], y: f.at[1], w: 0, h: 0 }
-    x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h)
+    x0 = Math.min(x0, b.x)
+    y0 = Math.min(y0, b.y)
+    x1 = Math.max(x1, b.x + b.w)
+    y1 = Math.max(y1, b.y + b.h)
   }
   return x0 <= x1 ? { at: [(x0 + x1) / 2, (y0 + y1) / 2], w: x1 - x0, h: y1 - y0 } : null
 }
 
 /** The innermost source range that produced every one of these refs, for Show in source of an instance; null when none covers them all. */
-export function enclosingRange(sources: Record<string, { start: [number, number]; end: [number, number]; ids: number[]; refs: string[] }[]> | null | undefined, refs: readonly string[]): { file: string; range: { start: [number, number]; end: [number, number]; ids: number[]; refs: string[] } } | null {
+export function enclosingRange(
+  sources: Record<string, { start: [number, number]; end: [number, number]; ids: number[]; refs: string[] }[]> | null | undefined,
+  refs: readonly string[],
+): { file: string; range: { start: [number, number]; end: [number, number]; ids: number[]; refs: string[] } } | null {
   if (!sources || !refs.length) return null
   let best: { file: string; range: { start: [number, number]; end: [number, number]; ids: number[]; refs: string[] } } | null = null
-  for (const [file, ranges] of Object.entries(sources)) for (const r of ranges) {
-    if (!refs.every(x => r.refs.includes(x))) continue
-    if (!best || r.refs.length < best.range.refs.length) best = { file, range: r }
-  }
+  for (const [file, ranges] of Object.entries(sources))
+    for (const r of ranges) {
+      if (!refs.every(x => r.refs.includes(x))) continue
+      if (!best || r.refs.length < best.range.refs.length) best = { file, range: r }
+    }
   return best
 }

@@ -7,14 +7,25 @@ import { compileBoard } from '@pcbjs/compile'
 import { inspectBoard } from '../dist/inspect.js'
 import { inspectRequests } from '../dist/cli.js'
 
-const pad = (ref, x, y, net) => h('footprint', { ref, value: 'V', id: 'pcbjs:TestPad', at: `${x}mm ${y}mm`, 'net:pad1': net, bom: false },
-  h('pad', { num: 1, size: 1, shape: 'circle', drill: 0.5 }),
-  h('path', { layer: 'F.SilkS', d: 'M -1 -1.5 A 1.5 1.5 0 0 1 1 -1.5', width: 0.2 }))
-const board = () => compileBoard(h(PCB, { name: 'Layers' },
-  h('path', { layer: 'Edge.Cuts', d: 'M 0 0 H 30 V 20 H 0 Z' }),
-  pad('TP1', 5, 10, 'GND'), pad('TP2', 25, 10, 'GND'),
-  h('text', { layer: 'F.SilkS', at: '15 3', size: 1 }, 'rev 2'),
-  h('zone', { layer: 'B.Cu', net: 'GND', d: 'M 1 1 H 29 V 19 H 1 Z' })))
+const pad = (ref, x, y, net) =>
+  h(
+    'footprint',
+    { ref, value: 'V', id: 'pcbjs:TestPad', at: `${x}mm ${y}mm`, 'net:pad1': net, bom: false },
+    h('pad', { num: 1, size: 1, shape: 'circle', drill: 0.5 }),
+    h('path', { layer: 'F.SilkS', d: 'M -1 -1.5 A 1.5 1.5 0 0 1 1 -1.5', width: 0.2 }),
+  )
+const board = () =>
+  compileBoard(
+    h(
+      PCB,
+      { name: 'Layers' },
+      h('path', { layer: 'Edge.Cuts', d: 'M 0 0 H 30 V 20 H 0 Z' }),
+      pad('TP1', 5, 10, 'GND'),
+      pad('TP2', 25, 10, 'GND'),
+      h('text', { layer: 'F.SilkS', at: '15 3', size: 1 }, 'rev 2'),
+      h('zone', { layer: 'B.Cu', net: 'GND', d: 'M 1 1 H 29 V 19 H 1 Z' }),
+    ),
+  )
 
 test('inspect --layer F.SilkS: texts with their strokes, drawings with their arcs, each with ink bounds and source', () => {
   const r = inspectBoard(board(), 'pcb.tsx', '/', undefined, { layer: 'silk' })
@@ -39,7 +50,10 @@ test('inspect --layer F.SilkS: texts with their strokes, drawings with their arc
 test('inspect --layer: a query filters by part, mask and paste give the Gerber openings, edge and an unknown layer', () => {
   const b = board()
   const tp = inspectBoard(b, 'pcb.tsx', '/', 'TP1', { layer: 'F.SilkS' })
-  assert.deepEqual(tp.json.items.map(i => i.ref), ['TP1'])
+  assert.deepEqual(
+    tp.json.items.map(i => i.ref),
+    ['TP1'],
+  )
   const mask = inspectBoard(b, 'pcb.tsx', '/', undefined, { layer: 'F.Mask' }).json.items
   assert.equal(mask.length, 2)
   assert.ok(mask[0].bounds.x[1] - mask[0].bounds.x[0] > 1, 'the opening is the pad grown by the mask expansion')
@@ -60,12 +74,21 @@ test('inspect <net>: one zone line per layer with fill area, pieces and islands 
   assert.equal(z.pieces, 1)
   assert.ok(z.area > 400 && z.area < 28 * 18, `area ${z.area}`)
   assert.deepEqual(z.islandsRemoved, { count: 0, area: 0 })
-  assert.ok(r.text.some(l => /^\s+B\.Cu\s+\d+\.\d\d mm²\s+1\s+0\s+#\d+$/.test(l)), r.text.join('\n'))
+  assert.ok(
+    r.text.some(l => /^\s+B\.Cu\s+\d+\.\d\d mm²\s+1\s+0\s+#\d+$/.test(l)),
+    r.text.join('\n'),
+  )
 })
 
 test('inspectRequests: --layer lists the layer, each query filters it, --lengths beside it adds its tables', () => {
   assert.deepEqual(inspectRequests([], undefined, ['F.SilkS']).requests, [{ layer: 'F.SilkS' }])
-  assert.deepEqual(inspectRequests(['pcb.tsx', 'U1'], undefined, ['F.SilkS', 'B.SilkS']), { entry: 'pcb.tsx', requests: [{ query: 'U1', layer: 'F.SilkS' }, { query: 'U1', layer: 'B.SilkS' }] })
+  assert.deepEqual(inspectRequests(['pcb.tsx', 'U1'], undefined, ['F.SilkS', 'B.SilkS']), {
+    entry: 'pcb.tsx',
+    requests: [
+      { query: 'U1', layer: 'F.SilkS' },
+      { query: 'U1', layer: 'B.SilkS' },
+    ],
+  })
   assert.deepEqual(inspectRequests([], ['D'], ['F.SilkS']).requests, [{ layer: 'F.SilkS' }, { query: 'D', lengths: true }])
 })
 
@@ -81,19 +104,33 @@ test('inspect <net>: the copper area per layer in the header, pads, vias, tracks
   // the fill runs over its own pads, so the union is the fill with the two drills cut out and the pad rims added
   const drills = 2 * Math.PI * 0.0625
   assert.ok(bcu.area >= fill[0].area - drills - 0.01 && bcu.area < fill[0].area + 2 * Math.PI * 0.25, `B.Cu ${bcu.area}, fill ${fill[0].area}`)
-  assert.match(r.text.find(l => l.startsWith('net GND')), /  copper F\.Cu 1\.\d mm², B\.Cu \d+\.\d mm²$/)
+  assert.match(
+    r.text.find(l => l.startsWith('net GND')),
+    /  copper F\.Cu 1\.\d mm², B\.Cu \d+\.\d mm²$/,
+  )
 })
 
 test('inspect <net>: stitch() vias say stitch as their route in the text and in --json', () => {
-  const b = compileBoard(h(PCB, { name: 'Stitched' },
-    h('path', { layer: 'Edge.Cuts', d: 'M 0 0 H 30 V 20 H 0 Z' }),
-    pad('TP1', 5, 10, 'GND'),
-    h('zone', { layer: 'F.Cu', net: 'GND', d: 'M 1 1 H 29 V 19 H 1 Z' }),
-    h('zone', { layer: 'B.Cu', net: 'GND', d: 'M 1 1 H 29 V 19 H 1 Z' }),
-    stitch('GND', { pitch: 5 })))
+  const b = compileBoard(
+    h(
+      PCB,
+      { name: 'Stitched' },
+      h('path', { layer: 'Edge.Cuts', d: 'M 0 0 H 30 V 20 H 0 Z' }),
+      pad('TP1', 5, 10, 'GND'),
+      h('zone', { layer: 'F.Cu', net: 'GND', d: 'M 1 1 H 29 V 19 H 1 Z' }),
+      h('zone', { layer: 'B.Cu', net: 'GND', d: 'M 1 1 H 29 V 19 H 1 Z' }),
+      stitch('GND', { pitch: 5 }),
+    ),
+  )
   const r = inspectBoard(b, 'pcb.tsx', '/', 'GND')
   assert.ok(r.json.vias.length > 4)
-  assert.ok(r.json.vias.every(v => v.route === 'stitch'), JSON.stringify(r.json.vias[0]))
+  assert.ok(
+    r.json.vias.every(v => v.route === 'stitch'),
+    JSON.stringify(r.json.vias[0]),
+  )
   assert.equal(r.json.stitch.count, r.json.vias.length)
-  assert.ok(r.text.some(l => /^\s+#\d+\s.*\sstitch$/.test(l)), r.text.join('\n'))
+  assert.ok(
+    r.text.some(l => /^\s+#\d+\s.*\sstitch$/.test(l)),
+    r.text.join('\n'),
+  )
 })

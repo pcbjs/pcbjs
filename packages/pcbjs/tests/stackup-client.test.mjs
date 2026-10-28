@@ -7,8 +7,17 @@ import { siteData } from '@pcbjs/export/site-data'
 import { JLCPCB_4L_7628, fourLayer } from '@pcbjs/lib/stackups'
 import { cssColor, sideColors, stackupRows } from '@pcbjs/viewer/src/stackup.ts'
 
-const site = props => siteData(compileBoard(h(PCB, { name: 'S', ...props }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 }))),
-  { root: '/', fabUrl: '', fabName: '', fabFiles: [], fabStatus: 'ok', svgUrl: '', dev: false, bom: [] })
+const site = props =>
+  siteData(compileBoard(h(PCB, { name: 'S', ...props }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 }))), {
+    root: '/',
+    fabUrl: '',
+    fabName: '',
+    fabFiles: [],
+    fabStatus: 'ok',
+    svgUrl: '',
+    dev: false,
+    bom: [],
+  })
 
 test('site data carries the stackup, generated or given', () => {
   assert.deepEqual(site({ stackup: JLCPCB_4L_7628 }).stackup, JLCPCB_4L_7628)
@@ -21,7 +30,8 @@ test('stackupRows lists every layer top to bottom with thickness and material or
   assert.deepEqual(rows.map(r => r.type).slice(3, 10), ['copper', 'prepreg', 'copper', 'core', 'copper', 'prepreg', 'copper'])
   assert.deepEqual(rows[3], { type: 'copper', name: 'F.Cu', thickness: '0.035', detail: '1 oz', color: null, title: 'copper, F.Cu, 0.035 mm, 1 oz' })
   assert.deepEqual(rows[4], { type: 'prepreg', name: '', thickness: '0.2104', detail: '7628', color: null, title: 'prepreg, 0.2104 mm, 7628, er 4.4, loss tangent 0.02' })
-  assert.equal(rows[2].name, 'F.Mask'); assert.equal(rows[2].detail, 'Green')
+  assert.equal(rows[2].name, 'F.Mask')
+  assert.equal(rows[2].detail, 'Green')
 })
 
 test('mask and silk colours: the side layer first, then the stackup, fab names mapped', () => {

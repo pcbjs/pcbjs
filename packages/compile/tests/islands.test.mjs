@@ -5,9 +5,17 @@ import { compileBoard } from '../dist/index.js'
 import { intersection, polysToRings } from '../dist/geom.js'
 
 const outline = () => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 20 })
-const board = (rules, ...kids) => { resetDefaults(); return compileBoard(h(PCB, { name: 'I', ...(rules ? { rules } : {}) }, outline(), ...kids), { routeCache: false }) }
+const board = (rules, ...kids) => {
+  resetDefaults()
+  return compileBoard(h(PCB, { name: 'I', ...(rules ? { rules } : {}) }, outline(), ...kids), { routeCache: false })
+}
 const zoneOf = b => b.items.find(i => i.kind === 'zone')
-const sq = (x, y, r = 0.02) => [[x - r, y - r], [x + r, y - r], [x + r, y + r], [x - r, y + r]]
+const sq = (x, y, r = 0.02) => [
+  [x - r, y - r],
+  [x + r, y - r],
+  [x + r, y + r],
+  [x - r, y + r],
+]
 const covered = (b, x, y) => polysToRings(intersection(polysToRings(zoneOf(b).fill), [sq(x, y)])).length > 0
 /** a GND pad on the left half only, and a SIG track across the whole board that splits the pour in two */
 const split = () => [

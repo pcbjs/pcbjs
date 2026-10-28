@@ -5,9 +5,12 @@ import PCB, { h } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
 import { inspectBoard } from '../dist/inspect.js'
 
-const pad = (ref, x, net) => h('footprint', { ref, value: 'V', id: 'pcbjs:TestPad', at: `${x}mm 10mm`, 'net:pad1': net, bom: false }, h('pad', { num: 1, size: 2, shape: 'circle', drill: 1 }))
-const board = () => compileBoard(h(PCB, { name: 'Clash' },
-  h('path', { layer: 'Edge.Cuts', d: 'M 0 0 H 30 V 20 H 0 Z' }), pad('D3', 5, 'A'), pad('TP1', 15, 'D3'), pad('TP2', 25, 'D3'), pad('TP3', 20, 'A')))
+const pad = (ref, x, net) =>
+  h('footprint', { ref, value: 'V', id: 'pcbjs:TestPad', at: `${x}mm 10mm`, 'net:pad1': net, bom: false }, h('pad', { num: 1, size: 2, shape: 'circle', drill: 1 }))
+const board = () =>
+  compileBoard(
+    h(PCB, { name: 'Clash' }, h('path', { layer: 'Edge.Cuts', d: 'M 0 0 H 30 V 20 H 0 Z' }), pad('D3', 5, 'A'), pad('TP1', 15, 'D3'), pad('TP2', 25, 'D3'), pad('TP3', 20, 'A')),
+  )
 
 test('inspect: a bare name that is both a part and a net prints both', () => {
   const r = inspectBoard(board(), 'pcb.tsx', '/', 'D3')

@@ -10,4 +10,3 @@ npm run preview   # serve the built site
 ```
 
 `npm run build` prints the DRC and ERC summary and fails when the board has errors or unconnected nets. The fab zip in `.pcbjs/fab/sensor-hat` is what you upload to the fab.
-

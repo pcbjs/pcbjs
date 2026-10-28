@@ -13,14 +13,15 @@ test('create: the board template is listed', () => {
 })
 
 test('create: copies the template and names the board after the directory', () => {
-  const cwd = scratch(), lines = []
+  const cwd = scratch(),
+    lines = []
   try {
     const r = create({ dir: 'blinky-mini', cwd, log: l => lines.push(l) })
     assert.equal(r.name, 'blinky-mini')
     assert.deepEqual(readdirSync(r.dir).sort(), ['.gitignore', 'README.md', 'package.json', 'pcb.config.ts', 'pcb.tsx', 'tsconfig.json'])
     const main = readFileSync(join(r.dir, 'pcb.tsx'), 'utf8')
     assert.match(main, /<PCB name="blinky-mini" revision="0\.1\.0">/)
-    assert.match(main, />blinky-mini<\/text>/)
+    assert.match(main, />\s*blinky-mini\s*<\/text>/)
     assert.doesNotMatch(main, /\bHello\b/)
     assert.match(readFileSync(join(r.dir, 'README.md'), 'utf8'), /^# blinky-mini\n/)
     const pkg = JSON.parse(readFileSync(join(r.dir, 'package.json'), 'utf8'))
@@ -32,7 +33,9 @@ test('create: copies the template and names the board after the directory', () =
     assert.match(readFileSync(join(r.dir, '.gitignore'), 'utf8'), /^\.pcbjs$/m)
     assert.ok(lines.some(l => l.includes('cd blinky-mini')))
     assert.ok(lines.some(l => l.includes('npm run dev')))
-  } finally { rmSync(cwd, { recursive: true, force: true }) }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
 })
 
 test('create: an empty directory is fine, a package name is lowercase', () => {
@@ -42,7 +45,9 @@ test('create: an empty directory is fine, a package name is lowercase', () => {
     const r = create({ dir: 'My Board', cwd, log: () => {} })
     assert.equal(r.name, 'My-Board')
     assert.equal(JSON.parse(readFileSync(join(r.dir, 'package.json'), 'utf8')).name, 'my-board')
-  } finally { rmSync(cwd, { recursive: true, force: true }) }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
 })
 
 test('create: refuses a directory that is not empty, and an unknown template', () => {
@@ -53,7 +58,9 @@ test('create: refuses a directory that is not empty, and an unknown template', (
     assert.throws(() => create({ dir: 'taken', cwd, log: () => {} }), /taken is not empty/)
     assert.deepEqual(readdirSync(join(cwd, 'taken')), ['notes.txt'])
     assert.throws(() => create({ dir: 'x', cwd, template: 'nope', log: () => {} }), /unknown template "nope", available: board/)
-  } finally { rmSync(cwd, { recursive: true, force: true }) }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
 })
 
 test('create: board names keep letters, digits, dot, dash and underscore', () => {

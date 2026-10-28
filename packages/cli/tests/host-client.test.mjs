@@ -17,23 +17,39 @@ async function mockHost() {
     ws.on('message', raw => {
       const f = JSON.parse(raw.toString())
       frames.push(f)
-      for (const w of [...waiters]) if (w.match(f)) { waiters.splice(waiters.indexOf(w), 1); w.done(f) }
+      for (const w of [...waiters])
+        if (w.match(f)) {
+          waiters.splice(waiters.indexOf(w), 1)
+          w.done(f)
+        }
     })
   })
   return {
     url: `ws://127.0.0.1:${wss.address().port}/tok3n`,
-    frames, sockets, wss,
+    frames,
+    sockets,
+    wss,
     /** the next frame of this event, or one already received after `from` */
     next(event, from = 0) {
       const had = frames.slice(from).find(f => f.event === event)
       if (had) return Promise.resolve(had)
       return new Promise((done, fail) => {
         const t = setTimeout(() => fail(new Error(`no ${event} within 3 s`)), 3000)
-        waiters.push({ match: f => f.event === event, done: f => { clearTimeout(t); done(f) } })
+        waiters.push({
+          match: f => f.event === event,
+          done: f => {
+            clearTimeout(t)
+            done(f)
+          },
+        })
       })
     },
     connection: () => once(wss, 'connection').then(([ws]) => ws),
-    close: () => new Promise(done => { for (const s of wss.clients) s.terminate(); wss.close(() => done()) }),
+    close: () =>
+      new Promise(done => {
+        for (const s of wss.clients) s.terminate()
+        wss.close(() => done())
+      }),
   }
 }
 
@@ -71,7 +87,10 @@ test('host client: sends ready on connect and again, with the last boards, after
     assert.deepEqual(r2.data, ready)
     assert.deepEqual(b2.data, boards)
     assert.ok(host.frames.indexOf(r2) < host.frames.indexOf(b2))
-  } finally { client.close(); await host.close() }
+  } finally {
+    client.close()
+    await host.close()
+  }
 })
 
 test('host client: keeps dialling a host that is not up yet', async () => {
@@ -93,8 +112,13 @@ test('host client: keeps dialling a host that is not up yet', async () => {
     assert.equal(JSON.parse(raw.toString()).event, 'pcbjs:ide:ready')
     assert.equal(client.connected(), true)
     client.close()
-    await new Promise(d => { for (const s of late.clients) s.terminate(); late.close(d) })
-  } finally { client.close() }
+    await new Promise(d => {
+      for (const s of late.clients) s.terminate()
+      late.close(d)
+    })
+  } finally {
+    client.close()
+  }
 })
 
 test('host client: hello, cursor, focus and close reach the callbacks; select goes to the host', async () => {
@@ -138,8 +162,14 @@ test('host client: hello, cursor, focus and close reach the callbacks; select go
     ws.terminate()
     await again
     await new Promise(d => setTimeout(d, 100))
-    assert.equal(host.frames.slice(mark).some(f => f.event === 'pcbjs:ide:select'), false)
-  } finally { client.close(); await host.close() }
+    assert.equal(
+      host.frames.slice(mark).some(f => f.event === 'pcbjs:ide:select'),
+      false,
+    )
+  } finally {
+    client.close()
+    await host.close()
+  }
 })
 
 test('host client: send while disconnected is dropped and reported, close stops the dialling', async () => {
@@ -150,7 +180,9 @@ test('host client: send while disconnected is dropped and reported, close stops 
   assert.equal(client.connected(), false)
   assert.equal(client.send('pcbjs:ide:log', { level: 'info', text: 'x' }), false)
   let dialled = false
-  host.wss.on('connection', () => { dialled = true })
+  host.wss.on('connection', () => {
+    dialled = true
+  })
   await new Promise(d => setTimeout(d, 150))
   assert.equal(dialled, false)
   await host.close()
@@ -169,7 +201,10 @@ test('JSON-RPC frames ride the same socket: onRpc takes them, sendRpc sends them
     assert.deepEqual(rpc, [{ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }])
     assert.equal(c.sendRpc({ jsonrpc: '2.0', id: 1, result: {} }), true)
     while (!host.frames.some(f => f.jsonrpc)) await new Promise(r => setTimeout(r, 5))
-    assert.deepEqual(host.frames.find(f => f.jsonrpc), { jsonrpc: '2.0', id: 1, result: {} })
+    assert.deepEqual(
+      host.frames.find(f => f.jsonrpc),
+      { jsonrpc: '2.0', id: 1, result: {} },
+    )
   } finally {
     c.close()
     await host.close()

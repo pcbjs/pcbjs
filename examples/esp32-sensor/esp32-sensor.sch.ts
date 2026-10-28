@@ -20,8 +20,24 @@ export const LDO = ldo({ VIN: VBUS, VOUT: V3V3, GND }, 'LDO')
 
 // the module and its decoupling: 10u bulk and 100n at the 3V3 pin
 export const U1 = ESP32C3Mini().ref('U1').connect({
-  GND, '3V3': V3V3, EN, IO0: NC, IO1: NC, IO2: NC, IO3: NC, IO4: SDA, IO5: SCL, IO6: NC, IO7: NC, IO8: LED, IO9: BOOT, IO10: NC,
-  IO18: DN, IO19: DP, RXD0: RXD, TXD0: TXD,
+  GND,
+  '3V3': V3V3,
+  EN,
+  IO0: NC,
+  IO1: NC,
+  IO2: NC,
+  IO3: NC,
+  IO4: SDA,
+  IO5: SCL,
+  IO6: NC,
+  IO7: NC,
+  IO8: LED,
+  IO9: BOOT,
+  IO10: NC,
+  IO18: DN,
+  IO19: DP,
+  RXD0: RXD,
+  TXD0: TXD,
 })
 export const C1 = C0603('10u').connect(V3V3, GND)
 export const C2 = C0603('100n').connect(V3V3, GND)

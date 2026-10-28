@@ -56,12 +56,16 @@ export interface ReferenceOptions {
 function nodePath(): typeof import('node:path') | null {
   const p = (globalThis as any).process
   if (!p || typeof p.getBuiltinModule !== 'function') return null
-  try { return p.getBuiltinModule('node:path') } catch { return null }
+  try {
+    return p.getBuiltinModule('node:path')
+  } catch {
+    return null
+  }
 }
 
 /** Another entry's board as a mechanical reference, placed by `mate` or `at`; the path is relative to the calling file. */
 export function reference(path: string, opts: ReferenceOptions = {}): PcbNode {
-  if (typeof path !== 'string' || !path.trim()) throw new TypeError('reference(path, options) needs the path of another entry, such as \'../driver/pcb.tsx\'')
+  if (typeof path !== 'string' || !path.trim()) throw new TypeError("reference(path, options) needs the path of another entry, such as '../driver/pcb.tsx'")
   if (opts === null || typeof opts !== 'object') throw new TypeError(`reference(${JSON.stringify(path)}, options): options must be an object`)
   const site = callerSite(true)
   const np = nodePath()
@@ -75,13 +79,15 @@ export function reference(path: string, opts: ReferenceOptions = {}): PcbNode {
   return node
 }
 
-
 /** A column-major 4x4 matrix in the 3D view's frame: x board x, y board -y, z up from the bottom face. */
 export type Mat4 = number[]
 
 /** One part of a referenced board in its own board mm. */
 export interface ReferencedFootprint {
-  ref: string; at: Pt; rot: number; side: 'F' | 'B'
+  ref: string
+  at: Pt
+  rot: number
+  side: 'F' | 'B'
   /** body height above its face, 0 for a bare hole */
   height: number
   /** where the height comes from */
@@ -95,7 +101,10 @@ export interface ReferencedFootprint {
 export interface ReferencedBoard {
   /** the entry, absolute */
   entry: string
-  name: string; title: string; revision: string; thickness: number
+  name: string
+  title: string
+  revision: string
+  thickness: number
   outline: Ring[]
   drills: { x: number; y: number; d: number; len?: number; a?: number }[]
   footprints: ReferencedFootprint[]
@@ -130,7 +139,12 @@ export interface BoardReference {
   /** the entry, absolute, and the path as written */
   entry: string
   path: string
-  name: string; title: string; hash: string; mesh?: string; split?: number; status: string
+  name: string
+  title: string
+  hash: string
+  mesh?: string
+  split?: number
+  status: string
   anchor: { kind: 'mate'; local: string; remote: string } | { kind: 'at'; at: [number, number, number] }
   stack?: ReferenceStack
   gap?: number
@@ -164,14 +178,17 @@ export type { Length }
 
 /** A reference as the site carries it: enough to load its mesh, place it and link to its page. */
 export interface SiteReference {
-  name: string; title: string
+  name: string
+  title: string
   /** the entry relative to this project's root */
   entry: string
   /** served at /__pcbjs/model/boards/<mesh> in dev, models/boards/<mesh>.bin built */
   mesh?: string
   transform: Mat4
   /** the tint and opacity of the 3D group, and whether the part bodies show */
-  color: string; opacity: number; bodies: boolean
+  color: string
+  opacity: number
+  bodies: boolean
   /** how many meshes of the binary are the board itself; the part bodies follow */
   split?: number
   /** a panel line: the anchor, the stack and the gap */

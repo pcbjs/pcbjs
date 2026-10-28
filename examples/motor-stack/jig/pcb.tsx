@@ -8,16 +8,25 @@ import { chain } from '../lib/wire'
 import * as sch from './jig.sch'
 
 const Locator = MountingHole(3.2)
-const SIG = 0.25, PWR = 0.5
+const SIG = 0.25,
+  PWR = 0.5
 
 export default (
   <PCB name="jig" title="Motor stack controller jig" revision="0.1.0" schematic={sch} color="red">
     <path layer="Edge.Cuts" d={roundedRect(W, H, 2)} />
-    {HOLES.map(([x, y], i) => <Locator ref={`H${i + 1}`} at={`${x} ${y}`} />)}
+    {HOLES.map(([x, y], i) => (
+      <Locator ref={`H${i + 1}`} at={`${x} ${y}`} />
+    ))}
 
     {/* pogo pins under the controller's test pads */}
-    {P.map((Pin, i) => <Pin at={`${TEST_PADS[i].x} ${TEST_PADS[i].y}`} />)}
-    {TEST_PADS.map(t => <text layer="F.SilkS" at={`${t.x} ${t.y - 2.6}`} size={0.7}>{t.name}</text>)}
+    {P.map((Pin, i) => (
+      <Pin at={`${TEST_PADS[i].x} ${TEST_PADS[i].y}`} />
+    ))}
+    {TEST_PADS.map(t => (
+      <text layer="F.SilkS" at={`${t.x} ${t.y - 2.6}`} size={0.7}>
+        {t.name}
+      </text>
+    ))}
 
     <J1 at="21 12 -90deg" thermal={{ 3: 'solid', 5: 'solid' }} />
     <J2 at="40 10" />
@@ -36,11 +45,20 @@ export default (
 
     {pour(GND, 'B.Cu', rect(W, H))}
     {pour(GND, 'F.Cu', rect(W, H), { connect: 'solid' })}
-    {[[10, 20], [30, 20], [50, 20], [10, 34], [50, 34], [30, 30]].map(([x, y]) => via(GND, `${x} ${y}`))}
+    {[
+      [10, 20],
+      [30, 20],
+      [50, 20],
+      [10, 34],
+      [50, 34],
+      [30, 30],
+    ].map(([x, y]) => via(GND, `${x} ${y}`))}
 
     {/* where the controller lies */}
     <path layer="F.SilkS" d={roundedRect(W - 1, H - 1, 1.5, 0.5, 0.5)} />
-    <text layer="F.SilkS" at="38 30" size={1.2}>motor-stack controller jig</text>
+    <text layer="F.SilkS" at="38 30" size={1.2}>
+      motor-stack controller jig
+    </text>
 
     {/* the controller lying face up on the pogo pins: its GND test pad on the first pin */}
     {reference('../controller/pcb.tsx', { mate: { local: P[0], remote: 'TP1', pin: 1 } })}

@@ -14,9 +14,12 @@ test('the schematic loads the viewer with view=sch, keeping --select and --theme
   assert.equal(shotQuery('sch', { select: 'Q1', theme: 'dark' }), '?view=sch&select=Q1&theme=dark')
   assert.equal(shotQuery('sch', { side: 'bottom', explode: 0.5 }), '?view=sch', 'the board side and explode do not apply')
   const jobs = shotJobs([{ name: 'Blinky', targets: [null] }], shotViews('all'), '/o', { select: 'Q1', layer: 'F.Cu', theme: 'light' })
-  assert.deepEqual(jobs.map(j => [j.view, j.path, j.layer ?? null, j.file]), [
-    ['2d', '/board/Blinky', 'F.Cu', '/o/Blinky-2d-select-Q1-F.Cu-light.png'],
-    ['3d', '/board/Blinky', 'F.Cu', '/o/Blinky-3d-select-Q1-F.Cu-light.png'],
-    ['sch', '/board/Blinky', null, '/o/Blinky-sch-select-Q1-light.png'],
-  ])
+  assert.deepEqual(
+    jobs.map(j => [j.view, j.path, j.layer ?? null, j.file]),
+    [
+      ['2d', '/board/Blinky', 'F.Cu', '/o/Blinky-2d-select-Q1-F.Cu-light.png'],
+      ['3d', '/board/Blinky', 'F.Cu', '/o/Blinky-3d-select-Q1-F.Cu-light.png'],
+      ['sch', '/board/Blinky', null, '/o/Blinky-sch-select-Q1-light.png'],
+    ],
+  )
 })

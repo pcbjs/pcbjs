@@ -31,18 +31,23 @@ const r4 = (v: number) => Math.round(v * 1e4) / 1e4
 
 function build(copper: 2 | 4 | 6 | 8, o: StackupOptions = {}): Stackup {
   const total = o.thickness ?? 1.6
-  const outer = r4((o.outerCopper ?? 1) * OZ), inner = r4((o.innerCopper ?? 0.5) * OZ)
-  const maskColor = o.maskColor ?? 'Green', silkColor = o.silkColor ?? 'White'
+  const outer = r4((o.outerCopper ?? 1) * OZ),
+    inner = r4((o.innerCopper ?? 0.5) * OZ)
+  const maskColor = o.maskColor ?? 'Green',
+    silkColor = o.silkColor ?? 'White'
   const diel = { material: o.material ?? 'FR4', er: o.er ?? 4.5, lossTangent: o.lossTangent ?? 0.02 }
   // n/2 prepregs and n/2 - 1 cores alternate between the n copper layers
-  const prepregs = copper / 2, cores = copper / 2 - 1
-  const pp = copper === 2 ? 0 : o.prepreg ?? (copper === 8 ? 0.15 : 0.2)
+  const prepregs = copper / 2,
+    cores = copper / 2 - 1
+  const pp = copper === 2 ? 0 : (o.prepreg ?? (copper === 8 ? 0.15 : 0.2))
   const rest = total - 2 * MASK - 2 * outer - (copper - 2) * inner - prepregs * pp
   const core = r4(copper === 2 ? rest : rest / cores)
   if (!(core > 0.05)) throw new Error(`a ${copper}-layer stackup ${total} mm thick leaves no room for the cores (${core} mm each)`)
   const cu = (name: string, t: number, oz: number): StackupLayer => ({ type: 'copper', name: name as any, thickness: t, weight: oz })
   const layers: StackupLayer[] = [
-    { type: 'silk', side: 'F', color: silkColor }, { type: 'paste', side: 'F' }, { type: 'mask', side: 'F', thickness: MASK, color: maskColor },
+    { type: 'silk', side: 'F', color: silkColor },
+    { type: 'paste', side: 'F' },
+    { type: 'mask', side: 'F', thickness: MASK, color: maskColor },
     cu('F.Cu', outer, o.outerCopper ?? 1),
   ]
   for (let i = 1; i < copper; i++) {

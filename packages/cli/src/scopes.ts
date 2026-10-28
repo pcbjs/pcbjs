@@ -24,7 +24,12 @@ const RESERVED = new Set(['board', 'src', 'assets', 'node_modules', 'public', 'i
 /** A URL segment for a scope: each path segment kept to letters, digits, dot, dash and underscore, joined by dashes. */
 export function slugOf(rel: string, folder: string): string {
   const raw = rel ? rel : basename(resolve(folder))
-  let s = raw.split('/').map(p => p.replace(/[^A-Za-z0-9._-]+/g, '-')).join('-').replace(/^[-._]+|-+$/g, '') || 'project'
+  let s =
+    raw
+      .split('/')
+      .map(p => p.replace(/[^A-Za-z0-9._-]+/g, '-'))
+      .join('-')
+      .replace(/^[-._]+|-+$/g, '') || 'project'
   if (RESERVED.has(s)) s += '-project'
   return s
 }
@@ -40,7 +45,11 @@ export function findScopes(folders: string[], maxDepth = 8): ScopeInfo[] {
       if (seen.has(dir)) return
       seen.add(dir)
       let names: { name: string; dir: boolean }[]
-      try { names = readdirSync(dir, { withFileTypes: true }).map(d => ({ name: d.name, dir: d.isDirectory() })) } catch { return }
+      try {
+        names = readdirSync(dir, { withFileTypes: true }).map(d => ({ name: d.name, dir: d.isDirectory() }))
+      } catch {
+        return
+      }
       const config = findConfig(dir, file => names.some(n => !n.dir && n.name === basename(file)))
       if (config) {
         const rel = relative(folder, dir).split(sep).join('/')
@@ -70,7 +79,14 @@ export function scopeOf<S extends Pick<ScopeInfo, 'dir'>>(scopes: S[], file: str
 /** Size and modification time of each file, to tell later whether any changed. */
 export function stampFiles(files: Iterable<string>): Map<string, string> {
   const out = new Map<string, string>()
-  for (const f of files) { try { const s = statSync(f); out.set(f, `${s.size}:${s.mtimeMs}`) } catch { out.set(f, 'missing') } }
+  for (const f of files) {
+    try {
+      const s = statSync(f)
+      out.set(f, `${s.size}:${s.mtimeMs}`)
+    } catch {
+      out.set(f, 'missing')
+    }
+  }
   return out
 }
 
@@ -86,7 +102,9 @@ export const NO_DEFAULTS: DefaultsSnapshot = { board: null, rules: null }
 export async function withDefaults<T>(holder: { defaults: DefaultsSnapshot | null }, fn: () => Promise<T>): Promise<T> {
   const before = captureDefaults()
   installDefaults(holder.defaults ?? NO_DEFAULTS)
-  try { return await fn() } finally {
+  try {
+    return await fn()
+  } finally {
     holder.defaults = captureDefaults()
     installDefaults(before)
   }

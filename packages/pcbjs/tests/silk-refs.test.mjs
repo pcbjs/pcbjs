@@ -14,11 +14,17 @@ const box = t => bbox(t.strokes)
 
 test('silk refs: each footprint gets its ref on its side, 1 mm high, 0.15 mm stroke, centred above the courtyard', () => {
   const { A, B } = nets()
-  const R1 = R0603('1k').connect(A, B), R2 = R0603('1k').connect(A, B)
+  const R1 = R0603('1k').connect(A, B),
+    R2 = R0603('1k').connect(A, B)
   const b = board({}, h(R1, { at: '10 10' }), h(R2, { at: '20 10', side: 'B' }))
-  const f = refText(b, 'R1'), k = refText(b, 'R2')
-  assert.equal(f.layer, 'F.SilkS'); assert.equal(f.size, 1); assert.equal(f.thickness, 0.15); assert.equal(f.mirrored, false)
-  assert.equal(k.layer, 'B.SilkS'); assert.equal(k.mirrored, true)
+  const f = refText(b, 'R1'),
+    k = refText(b, 'R2')
+  assert.equal(f.layer, 'F.SilkS')
+  assert.equal(f.size, 1)
+  assert.equal(f.thickness, 0.15)
+  assert.equal(f.mirrored, false)
+  assert.equal(k.layer, 'B.SilkS')
+  assert.equal(k.mirrored, true)
   const cy = bbox(b.items.filter(i => i.kind === 'graphic' && i.layer === 'F.CrtYd' && i.ref === 'R1').flatMap(g => g.paths))
   const t = box(f)
   assert.ok(Math.abs(t.x + t.w / 2 - 10) < 1e-6, 'centred over the part')
@@ -51,7 +57,9 @@ test('silk refs: no clear spot within 3 mm leaves the ref out with one silk-ref 
 
 test('silk refs: silkRefs={false} board wide, ref={false} and refAt per placement', () => {
   const { A, B } = nets()
-  const R1 = R0603('1k').connect(A, B), R2 = R0603('1k').connect(A, B), R3 = R0603('1k').connect(A, B)
+  const R1 = R0603('1k').connect(A, B),
+    R2 = R0603('1k').connect(A, B),
+    R3 = R0603('1k').connect(A, B)
   const off = board({ silkRefs: false }, h(R1, { at: '10 10' }))
   assert.equal(refText(off, 'R1'), undefined)
   const b = board({}, h(R1, { at: '5 10', ref: false }), h(R2, { at: '15 10', refAt: '0 3 90' }), h(R3, { at: '25 10', refAt: false }))
@@ -60,8 +68,14 @@ test('silk refs: silkRefs={false} board wide, ref={false} and refAt per placemen
   const t = refText(b, 'R2')
   assert.deepEqual(t.at, [15, 13])
   assert.equal(t.rot, 90)
-  assert.throws(() => board({ silkRefs: 'no' }), e => e instanceof CompileError && /silkRefs must be true or false/.test(e.message))
-  assert.throws(() => board({}, h(R1, { at: '5 10', ref: 'R7' })), e => e instanceof CompileError && /not from ref/.test(e.message))
+  assert.throws(
+    () => board({ silkRefs: 'no' }),
+    e => e instanceof CompileError && /silkRefs must be true or false/.test(e.message),
+  )
+  assert.throws(
+    () => board({}, h(R1, { at: '5 10', ref: 'R7' })),
+    e => e instanceof CompileError && /not from ref/.test(e.message),
+  )
   // a plain footprint takes refAt too
   const f = board({}, h('footprint', { ref: 'J9', at: '10 10', refAt: false }, h('pad', { num: 1, size: [1, 1] })))
   assert.equal(refText(f, 'J9'), undefined)
@@ -78,14 +92,16 @@ test('silk refs: a 2.54 mm header keeps its ref clear of the pad openings, and t
 test('silk refs: test points, pogo pads, fiducials and mounting holes get none, unless refAt places one', () => {
   const tp = (ref, at, props = {}, pads = [{ num: 1, at: '0 0', size: 1.5 }]) => h('footprint', { ref, at, ...props }, ...pads.map(p => h('pad', p)))
   const probes = [1, 2, 3].map(n => ({ num: n, at: `0 ${2 * (n - 1)}`, size: [1.75, 1.2], drill: 0.8, shape: 'oval' }))
-  const b = board({},
+  const b = board(
+    {},
     tp('TP1', '5 5', { id: 'my:TestPoint_Pad_D1.5mm' }),
     tp('TP2', '10 5', { bom: false, pos: false }),
     tp('FID1', '15 5', { id: 'Fiducial_1mm_Mask2mm' }),
     tp('H1', '20 5', { id: 'MountingHole_3.2mm' }, [{ num: 1, at: '0 0', size: 3.2, drill: 3.2, type: 'npth' }]),
     tp('J9', '25 5', { bom: false, pos: false }, probes),
     tp('TP3', '5 14', { id: 'my:TestPoint_Pad_D1.5mm', refAt: '0 -2 0' }),
-    tp('J1', '15 14'))
+    tp('J1', '15 14'),
+  )
   for (const ref of ['TP1', 'TP2', 'FID1', 'H1', 'J9']) assert.equal(refText(b, ref), undefined, ref)
   assert.ok(refText(b, 'TP3'), 'refAt draws the ref of a test point')
   assert.ok(refText(b, 'J1'), 'a plain one pad footprint keeps its ref')

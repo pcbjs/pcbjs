@@ -5,13 +5,26 @@ import assert from 'node:assert/strict'
 import { openQuery, padOf, targetHighlight } from '../src/source.ts'
 import { hlStrength, ringsArea } from '../src/scene/intensity.ts'
 
-const square = (x, y, s) => [[[x, y], [x + s, y], [x + s, y + s], [x, y + s]]]
+const square = (x, y, s) => [
+  [
+    [x, y],
+    [x + s, y],
+    [x + s, y + s],
+    [x, y + s],
+  ],
+]
 const items = [
   { id: 1, kind: 'pad', ref: 'D1', net: 'SIG', layers: ['F.Cu'], rings: square(0, 0, 1) },
   { id: 2, kind: 'pad', ref: 'D1', net: 'GND', layers: ['F.Cu'], rings: square(2, 0, 1) },
   { id: 3, kind: 'zone', net: 'GND', layers: ['B.Cu'], rings: square(0, 0, 40) },
 ]
-const board = { name: 'B', items, layers: [{ id: 'F.Cu', svg: '<g><path data-id="1" data-kind="pad" data-ref="D1" data-pad="2" d="M0 0"/><path data-id="2" data-kind="pad" data-ref="D1" data-pad="1" d="M2 0"/></g>' }] }
+const board = {
+  name: 'B',
+  items,
+  layers: [
+    { id: 'F.Cu', svg: '<g><path data-id="1" data-kind="pad" data-ref="D1" data-pad="2" d="M0 0"/><path data-id="2" data-kind="pad" data-ref="D1" data-pad="1" d="M2 0"/></g>' },
+  ],
+}
 const target = (kind, b) => ({ kind, boards: [{ board: 'B', ids: [], refs: [], ...b }] })
 
 test('a pad target highlights that pad alone, at full strength for its area', () => {

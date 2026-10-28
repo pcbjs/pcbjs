@@ -3,10 +3,20 @@
 import * as THREE from 'three'
 
 export type P = [number, number]
-export interface Poly { outer: P[]; holes: P[][] }
+export interface Poly {
+  outer: P[]
+  holes: P[][]
+}
 /** A layer of the extrusion: its z, and how far its rings move out along the bevel vectors, mm. */
-export interface Layer { z: number; bs: number }
-export interface Extruded { position: Float32Array; normal: Float32Array; groups: number[] }
+export interface Layer {
+  z: number
+  bs: number
+}
+export interface Extruded {
+  position: Float32Array
+  normal: Float32Array
+  groups: number[]
+}
 
 /** Holes per cell above which a polygon is cut. */
 const CELL_HOLES = 24
@@ -30,9 +40,11 @@ function merged(r: P[]): P[] {
     out.push(p)
   }
   while (out.length > 1) {
-    const p = out[0], q = out[out.length - 1]
+    const p = out[0],
+      q = out[out.length - 1]
     const s = Math.max(Math.abs(p[0]), Math.abs(p[1]), Math.abs(q[0]), Math.abs(q[1])) * 1e-10
-    if ((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 <= s * s) out.pop(); else break
+    if ((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 <= s * s) out.pop()
+    else break
   }
   return out
 }
@@ -54,15 +66,20 @@ function oriented(p: Poly): Poly | null {
 
 /** ExtrudeGeometry's bevel vector: where a point moves for a unit outset of its two edges, with sharp corners capped. */
 function bevelVec(pt: P, prev: P, next: P): P {
-  const vpx = pt[0] - prev[0], vpy = pt[1] - prev[1]
-  const vnx = next[0] - pt[0], vny = next[1] - pt[1]
+  const vpx = pt[0] - prev[0],
+    vpy = pt[1] - prev[1]
+  const vnx = next[0] - pt[0],
+    vny = next[1] - pt[1]
   const vpl2 = vpx * vpx + vpy * vpy
   const col = vpx * vny - vpy * vnx
   let tx: number, ty: number, shrink: number
   if (Math.abs(col) > Number.EPSILON) {
-    const vpl = Math.sqrt(vpl2), vnl = Math.sqrt(vnx * vnx + vny * vny)
-    const psx = prev[0] - vpy / vpl, psy = prev[1] + vpx / vpl
-    const nsx = next[0] - vny / vnl, nsy = next[1] + vnx / vnl
+    const vpl = Math.sqrt(vpl2),
+      vnl = Math.sqrt(vnx * vnx + vny * vny)
+    const psx = prev[0] - vpy / vpl,
+      psy = prev[1] + vpx / vpl
+    const nsx = next[0] - vny / vnl,
+      nsy = next[1] + vnx / vnl
     const sf = ((nsx - psx) * vny - (nsy - psy) * vnx) / (vpx * vny - vpy * vnx)
     tx = psx + vpx * sf - pt[0]
     ty = psy + vpy * sf - pt[1]
@@ -71,11 +88,20 @@ function bevelVec(pt: P, prev: P, next: P): P {
     shrink = Math.sqrt(l2 / 2)
   } else {
     let same = false
-    if (vpx > Number.EPSILON) { if (vnx > Number.EPSILON) same = true }
-    else if (vpx < -Number.EPSILON) { if (vnx < -Number.EPSILON) same = true }
-    else if (Math.sign(vpy) === Math.sign(vny)) same = true
-    if (same) { tx = -vpy; ty = vpx; shrink = Math.sqrt(vpl2) }
-    else { tx = vpx; ty = vpy; shrink = Math.sqrt(vpl2 / 2) }
+    if (vpx > Number.EPSILON) {
+      if (vnx > Number.EPSILON) same = true
+    } else if (vpx < -Number.EPSILON) {
+      if (vnx < -Number.EPSILON) same = true
+    } else if (Math.sign(vpy) === Math.sign(vny)) same = true
+    if (same) {
+      tx = -vpy
+      ty = vpx
+      shrink = Math.sqrt(vpl2)
+    } else {
+      tx = vpx
+      ty = vpy
+      shrink = Math.sqrt(vpl2 / 2)
+    }
   }
   return [tx / shrink, ty / shrink]
 }
@@ -88,9 +114,10 @@ export function cutRing(ring: P[], axis: 0 | 1, c: number): P[][] | null {
   const nodes: Node[] = []
   const crossings: number[] = []
   for (let i = 0; i < ring.length; i++) {
-    const a = ring[i], b = ring[(i + 1) % ring.length]
+    const a = ring[i],
+      b = ring[(i + 1) % ring.length]
     nodes.push({ p: a, cross: -1 })
-    if ((a[axis] < c) !== (b[axis] < c)) {
+    if (a[axis] < c !== b[axis] < c) {
       const t = (c - a[axis]) / (b[axis] - a[axis])
       const q: P = [0, 0]
       q[axis] = c
@@ -104,7 +131,10 @@ export function cutRing(ring: P[], axis: 0 | 1, c: number): P[][] | null {
   // along the line, the inside of a simple ring lies between the first and second crossing, the third and fourth, ...
   const byLine = [...crossings].sort((x, y) => nodes[x].p[o] - nodes[y].p[o])
   const partner = new Map<number, number>()
-  for (let i = 0; i < byLine.length; i += 2) { partner.set(byLine[i], byLine[i + 1]); partner.set(byLine[i + 1], byLine[i]) }
+  for (let i = 0; i < byLine.length; i += 2) {
+    partner.set(byLine[i], byLine[i + 1])
+    partner.set(byLine[i + 1], byLine[i])
+  }
   // every point of the ring is in one piece, every crossing in two, one on each side
   const seen = new Uint8Array(nodes.length)
   const pieces: P[][] = []
@@ -112,7 +142,8 @@ export function cutRing(ring: P[], axis: 0 | 1, c: number): P[][] | null {
   for (let s = 0; s < n; s++) {
     if (seen[s] || nodes[s].cross >= 0) continue
     const piece: P[] = []
-    let i = s, guard = 0
+    let i = s,
+      guard = 0
     do {
       if (guard++ > 2 * n) return null
       if (nodes[i].cross >= 0) {
@@ -134,15 +165,24 @@ export function cutRing(ring: P[], axis: 0 | 1, c: number): P[][] | null {
 const pointIn = (p: P, r: P[]) => {
   let c = false
   for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
-    const [xi, yi] = r[i], [xj, yj] = r[j]
-    if ((yi > p[1]) !== (yj > p[1]) && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) c = !c
+    const [xi, yi] = r[i],
+      [xj, yj] = r[j]
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) c = !c
   }
   return c
 }
 
 /** A line across the polygon at the median hole that crosses no hole and no point of any ring, or null. */
 function cutLine(p: Poly, axis: 0 | 1): number | null {
-  const spans = p.holes.map(h => { let lo = Infinity, hi = -Infinity; for (const q of h) { if (q[axis] < lo) lo = q[axis]; if (q[axis] > hi) hi = q[axis] } return [lo, hi] as [number, number] })
+  const spans = p.holes.map(h => {
+    let lo = Infinity,
+      hi = -Infinity
+    for (const q of h) {
+      if (q[axis] < lo) lo = q[axis]
+      if (q[axis] > hi) hi = q[axis]
+    }
+    return [lo, hi] as [number, number]
+  })
   spans.sort((a, b) => a[0] - b[0])
   // the gaps between the merged spans, with the count of holes before each
   const gaps: { at: number; before: number }[] = []
@@ -165,8 +205,16 @@ function cutLine(p: Poly, axis: 0 | 1): number | null {
 /** The polygon cut into cells of at most CELL_HOLES holes, as polygons that cover it exactly; itself when it cannot be. */
 export function cells(p: Poly, depth = 0): Poly[] {
   if (p.holes.length <= CELL_HOLES || depth > 24) return [p]
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
-  for (const q of p.outer) { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1] }
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity
+  for (const q of p.outer) {
+    if (q[0] < x0) x0 = q[0]
+    if (q[0] > x1) x1 = q[0]
+    if (q[1] < y0) y0 = q[1]
+    if (q[1] > y1) y1 = q[1]
+  }
   const axes: (0 | 1)[] = x1 - x0 >= y1 - y0 ? [0, 1] : [1, 0]
   for (const axis of axes) {
     const c = cutLine(p, axis)
@@ -174,15 +222,19 @@ export function cells(p: Poly, depth = 0): Poly[] {
     const pieces = cutRing(p.outer, axis, c)
     if (!pieces || pieces.length < 2) continue
     // the pieces must cover the ring: their areas add up to its own
-    const total = Math.abs(area(p.outer)), sum = pieces.reduce((s, r) => s + Math.abs(area(r)), 0)
+    const total = Math.abs(area(p.outer)),
+      sum = pieces.reduce((s, r) => s + Math.abs(area(r)), 0)
     if (Math.abs(total - sum) > 1e-6 * Math.max(1, total)) continue
     const polys: Poly[] = pieces.map(r => ({ outer: r, holes: [] }))
     let lost = false
     for (const h of p.holes) {
       const side = h[0][axis] < c
-      const into = polys.find(q => (q.outer[0][axis] < c || (q.outer[0][axis] === c && q.outer[1][axis] < c)) === side && pointIn(h[0], q.outer))
-        ?? polys.find(q => pointIn(h[0], q.outer))
-      if (!into) { lost = true; break }
+      const into =
+        polys.find(q => (q.outer[0][axis] < c || (q.outer[0][axis] === c && q.outer[1][axis] < c)) === side && pointIn(h[0], q.outer)) ?? polys.find(q => pointIn(h[0], q.outer))
+      if (!into) {
+        lost = true
+        break
+      }
       into.holes.push(h)
     }
     if (lost) continue
@@ -193,11 +245,22 @@ export function cells(p: Poly, depth = 0): Poly[] {
 
 /** The face normal of the triangle at `i`, as computeVertexNormals gives it: (c - b) x (a - b), on all three corners. */
 function faceNormal(p: Float32Array, n: Float32Array, i: number) {
-  const bx = p[i + 3], by = p[i + 4], bz = p[i + 5]
-  const ux = p[i + 6] - bx, uy = p[i + 7] - by, uz = p[i + 8] - bz, vx = p[i] - bx, vy = p[i + 1] - by, vz = p[i + 2] - bz
-  let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx
+  const bx = p[i + 3],
+    by = p[i + 4],
+    bz = p[i + 5]
+  const ux = p[i + 6] - bx,
+    uy = p[i + 7] - by,
+    uz = p[i + 8] - bz,
+    vx = p[i] - bx,
+    vy = p[i + 1] - by,
+    vz = p[i + 2] - bz
+  let nx = uy * vz - uz * vy,
+    ny = uz * vx - ux * vz,
+    nz = ux * vy - uy * vx
   const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1
-  nx /= l; ny /= l; nz /= l
+  nx /= l
+  ny /= l
+  nz /= l
   n[i] = n[i + 3] = n[i + 6] = nx
   n[i + 1] = n[i + 4] = n[i + 7] = ny
   n[i + 2] = n[i + 5] = n[i + 8] = nz
@@ -205,11 +268,13 @@ function faceNormal(p: Float32Array, n: Float32Array, i: number) {
 
 export function extrude(polys: Poly[], layers: Layer[]): Extruded {
   const bevel = layers.some(l => l.bs !== 0)
-  const zb = layers[0].z, zt = layers[layers.length - 1].z
+  const zb = layers[0].z,
+    zt = layers[layers.length - 1].z
   const L = layers.length
   const lids: { xy: Float64Array; faces: number[][] }[] = []
   const rings: P[][] = []
-  let lidTris = 0, wallQuads = 0
+  let lidTris = 0,
+    wallQuads = 0
   for (const raw of polys) {
     const p = oriented(raw)
     if (!p) continue
@@ -221,16 +286,27 @@ export function extrude(polys: Poly[], layers: Layer[]): Extruded {
       const faces = THREE.ShapeUtils.triangulateShape(contour, holes) as number[][]
       const all = contour.concat(...holes)
       const xy = new Float64Array(all.length * 2)
-      all.forEach((v, i) => { xy[i * 2] = v.x; xy[i * 2 + 1] = v.y })
+      all.forEach((v, i) => {
+        xy[i * 2] = v.x
+        xy[i * 2 + 1] = v.y
+      })
       lids.push({ xy, faces })
       lidTris += faces.length * 2
     }
-    for (const r of [p.outer, ...p.holes]) { rings.push(r); wallQuads += r.length * (L - 1) }
+    for (const r of [p.outer, ...p.holes]) {
+      rings.push(r)
+      wallQuads += r.length * (L - 1)
+    }
   }
-  const lidVerts = lidTris * 3, wallVerts = wallQuads * 6
+  const lidVerts = lidTris * 3,
+    wallVerts = wallQuads * 6
   const position = new Float32Array((lidVerts + wallVerts) * 3)
   let o = 0
-  const put = (x: number, y: number, z: number) => { position[o++] = x; position[o++] = y; position[o++] = z }
+  const put = (x: number, y: number, z: number) => {
+    position[o++] = x
+    position[o++] = y
+    position[o++] = z
+  }
   // the bottom turned over, the top as earcut gives it
   for (const { xy, faces } of lids) {
     for (const f of faces) for (let k = 2; k >= 0; k--) put(xy[f[k] * 2], xy[f[k] * 2 + 1], zb)
@@ -249,12 +325,21 @@ export function extrude(polys: Poly[], layers: Layer[]): Extruded {
       }
     }
     for (let i = n - 1; i >= 0; i--) {
-      const j = i, k = i - 1 < 0 ? n - 1 : i - 1
+      const j = i,
+        k = i - 1 < 0 ? n - 1 : i - 1
       for (let s = 0; s + 1 < L; s++) {
-        const z0 = layers[s].z, z1 = layers[s + 1].z
-        const a = (s * n + j) * 2, b = (s * n + k) * 2, c = ((s + 1) * n + k) * 2, d = ((s + 1) * n + j) * 2
-        put(at[a], at[a + 1], z0); put(at[b], at[b + 1], z0); put(at[d], at[d + 1], z1)
-        put(at[b], at[b + 1], z0); put(at[c], at[c + 1], z1); put(at[d], at[d + 1], z1)
+        const z0 = layers[s].z,
+          z1 = layers[s + 1].z
+        const a = (s * n + j) * 2,
+          b = (s * n + k) * 2,
+          c = ((s + 1) * n + k) * 2,
+          d = ((s + 1) * n + j) * 2
+        put(at[a], at[a + 1], z0)
+        put(at[b], at[b + 1], z0)
+        put(at[d], at[d + 1], z1)
+        put(at[b], at[b + 1], z0)
+        put(at[c], at[c + 1], z1)
+        put(at[d], at[d + 1], z1)
       }
     }
   }

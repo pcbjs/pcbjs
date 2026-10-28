@@ -26,7 +26,9 @@ interface OcctMesh {
   attributes: { position: { array: ArrayLike<number> }; normal?: { array: ArrayLike<number> } }
   index: { array: ArrayLike<number> }
 }
-interface Occt { ReadStepFile(content: Uint8Array, params: Record<string, unknown> | null): { success: boolean; meshes: OcctMesh[] } }
+interface Occt {
+  ReadStepFile(content: Uint8Array, params: Record<string, unknown> | null): { success: boolean; meshes: OcctMesh[] }
+}
 
 // one OpenCascade per process, on globalThis like the other pcbjs state, so two copies of this package share the 8 MB WASM
 const KEY = Symbol.for('pcbjs.step.occt')
@@ -35,14 +37,19 @@ function occt(): Promise<Occt> {
   if (!g[KEY]) {
     const require = createRequire(import.meta.url)
     const init = require('occt-import-js') as () => Promise<Occt>
-    g[KEY] = init().catch((e: unknown) => { g[KEY] = undefined; throw e })
+    g[KEY] = init().catch((e: unknown) => {
+      g[KEY] = undefined
+      throw e
+    })
   }
   return g[KEY]
 }
 
 /** The faces of one OpenCascade mesh split by colour: one StepMesh per colour, vertices renumbered. */
 function splitByColor(m: OcctMesh): StepMesh[] {
-  const pos = m.attributes.position.array, nor = m.attributes.normal?.array, idx = m.index.array
+  const pos = m.attributes.position.array,
+    nor = m.attributes.normal?.array,
+    idx = m.index.array
   const meshColor = m.color ?? DEFAULT_COLOR
   const groups = new Map<string, { color: [number, number, number]; tris: number[] }>()
   const faces = m.brep_faces.length ? m.brep_faces : [{ first: 0, last: idx.length / 3 - 1, color: null }]
@@ -50,25 +57,29 @@ function splitByColor(m: OcctMesh): StepMesh[] {
     const color = f.color ?? meshColor
     const key = color.map(c => c.toFixed(4)).join()
     let g = groups.get(key)
-    if (!g) groups.set(key, g = { color: [color[0], color[1], color[2]], tris: [] })
+    if (!g) groups.set(key, (g = { color: [color[0], color[1], color[2]], tris: [] }))
     for (let t = f.first; t <= f.last; t++) g.tris.push(t)
   }
   const out: StepMesh[] = []
   for (const g of groups.values()) {
     const remap = new Map<number, number>()
-    const p: number[] = [], n: number[] = [], ix: number[] = []
-    for (const t of g.tris) for (let k = 0; k < 3; k++) {
-      const v = idx[t * 3 + k]
-      let w = remap.get(v)
-      if (w === undefined) {
-        w = remap.size
-        remap.set(v, w)
-        p.push(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2])
-        if (nor) n.push(nor[v * 3], nor[v * 3 + 1], nor[v * 3 + 2])
+    const p: number[] = [],
+      n: number[] = [],
+      ix: number[] = []
+    for (const t of g.tris)
+      for (let k = 0; k < 3; k++) {
+        const v = idx[t * 3 + k]
+        let w = remap.get(v)
+        if (w === undefined) {
+          w = remap.size
+          remap.set(v, w)
+          p.push(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2])
+          if (nor) n.push(nor[v * 3], nor[v * 3 + 1], nor[v * 3 + 2])
+        }
+        ix.push(w)
       }
-      ix.push(w)
-    }
-    const positions = new Float32Array(p), indices = new Uint32Array(ix)
+    const positions = new Float32Array(p),
+      indices = new Uint32Array(ix)
     out.push({ positions, normals: nor ? new Float32Array(n) : flatNormals(positions, indices), indices, color: g.color })
   }
   return out
@@ -79,7 +90,12 @@ export async function stepToMesh(file: string | Uint8Array, opts: StepOptions = 
   const content = typeof file === 'string' ? new Uint8Array(await readFile(file)) : file
   const o = fullOptions(opts)
   const lib = await occt()
-  const r = lib.ReadStepFile(content, { linearUnit: 'millimeter', linearDeflectionType: 'absolute_value', linearDeflection: o.linearDeflection, angularDeflection: o.angularDeflection })
+  const r = lib.ReadStepFile(content, {
+    linearUnit: 'millimeter',
+    linearDeflectionType: 'absolute_value',
+    linearDeflection: o.linearDeflection,
+    angularDeflection: o.angularDeflection,
+  })
   if (!r.success) throw new Error(`cannot read STEP${typeof file === 'string' ? ` file ${file}` : ''}: OpenCascade found no shape in it`)
   return { meshes: r.meshes.flatMap(splitByColor).filter(m => m.indices.length) }
 }

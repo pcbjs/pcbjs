@@ -35,7 +35,9 @@ export interface MeanderResult {
   corners: { pts: Pt[]; radii: number[] }
 }
 
-export interface MeanderMiss { why: string }
+export interface MeanderMiss {
+  why: string
+}
 
 const R2 = Math.SQRT2
 /** length a 90 degree corner loses to a 45 degree chamfer, per unit of leg */
@@ -44,46 +46,77 @@ const CH = 2 - R2
 export const U_LOSS = 8 - 2 * Math.PI
 
 /** Centre to centre pitch of parallel runs. */
-export function runPitch(o: MeanderShape): number { return o.width + Math.max(o.spacing, o.width + o.clearance) }
-export function bumpRadius(o: MeanderShape): number { return Math.max(o.radius ?? runPitch(o) / 2, minRadiusOf(o)) }
+export function runPitch(o: MeanderShape): number {
+  return o.width + Math.max(o.spacing, o.width + o.clearance)
+}
+export function bumpRadius(o: MeanderShape): number {
+  return Math.max(o.radius ?? runPitch(o) / 2, minRadiusOf(o))
+}
 const minRadiusOf = (o: MeanderShape) => o.minRadius ?? o.width
-export function uExtra(A: number, r: number): number { return 2 * A - U_LOSS * r }
-export function uAmplitude(extra: number, r: number): number { return (extra + U_LOSS * r) / 2 }
+export function uExtra(A: number, r: number): number {
+  return 2 * A - U_LOSS * r
+}
+export function uAmplitude(extra: number, r: number): number {
+  return (extra + U_LOSS * r) / 2
+}
 /** A bump of amplitude 2r, legs of no length. */
-export function smallestBump(r: number): number { return uExtra(2 * r, r) }
+export function smallestBump(r: number): number {
+  return uExtra(2 * r, r)
+}
 
 // the legs between chamfers stay a track width long, so the outline has no step narrower than the track
 const chamfer = (A: number, D: number, w: number) => Math.min(Math.min(A, D) / 4, (A - w) / 2)
 const chamferOk = (A: number, D: number, w: number) => chamfer(A, D, w) >= w / 8 - 1e-12
-function chamferExtra(A: number, D: number, w: number): number { return 2 * A - 4 * CH * chamfer(A, D, w) }
+function chamferExtra(A: number, D: number, w: number): number {
+  return 2 * A - 4 * CH * chamfer(A, D, w)
+}
 // bisection: chamferExtra grows with the amplitude
 function chamferAmplitude(e: number, D: number, w: number, lo: number, hi: number): number {
-  for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (chamferExtra(m, D, w) < e) lo = m; else hi = m }
+  for (let i = 0; i < 60; i++) {
+    const m = (lo + hi) / 2
+    if (chamferExtra(m, D, w) < e) lo = m
+    else hi = m
+  }
   return hi
 }
 
-interface Plan { r: number; amps: number[]; D: number; chamfer: boolean }
+interface Plan {
+  r: number
+  amps: number[]
+  D: number
+  chamfer: boolean
+}
 const f2 = (v: number) => v.toFixed(2)
 
 // U bumps at the largest radius that reaches the extra; 45 degree chamfers only when no U fits the amplitude
 function plan(L: number, extra: number, o: MeanderShape): Plan | MeanderMiss {
-  const D = runPitch(o), Amax = o.amplitude, rmin = minRadiusOf(o), r0 = bumpRadius(o), floor = o.minAmplitude ?? 0
+  const D = runPitch(o),
+    Amax = o.amplitude,
+    rmin = minRadiusOf(o),
+    r0 = bumpRadius(o),
+    floor = o.minAmplitude ?? 0
   if (Amax < floor - 1e-12) return { why: `the ${f2(Amax)} mm amplitude is below the lowest bump of ${f2(floor)} mm` }
   if (extra < smallestBump(rmin) - 1e-9) return { why: `${f2(extra)} mm is below the smallest U bump, ${f2(smallestBump(rmin))} mm at the ${f2(rmin)} mm radius` }
   const capAt = (r: number): { N: number; c: number; Dl: number } => {
     if (Amax < 2 * r - 1e-12) return { N: 0, c: 0, Dl: 0 }
-    const Dl = Math.max(D, 2 * r), N = Math.floor((L - 2 * r + Dl) / (2 * Dl) + 1e-9)
+    const Dl = Math.max(D, 2 * r),
+      N = Math.floor((L - 2 * r + Dl) / (2 * Dl) + 1e-9)
     return N >= 1 ? { N, c: N * uExtra(Amax, r), Dl } : { N: 0, c: 0, Dl }
   }
   type Pick = { r: number; N: number; c: number; Dl: number }
-  let pick: Pick | null = null, most: Pick | null = null
+  let pick: Pick | null = null,
+    most: Pick | null = null
   const STEPS = 24
   for (let i = 0; i <= STEPS; i++) {
-    const r = r0 - ((r0 - rmin) * i) / STEPS, k = capAt(r)
+    const r = r0 - ((r0 - rmin) * i) / STEPS,
+      k = capAt(r)
     if (!k.N || extra < smallestBump(r) - 1e-9) continue
     if (!most || k.c > most.c + 1e-9) most = { r, ...k }
     const need = Math.ceil(extra / uExtra(Amax, r) - 1e-9)
-    if (extra <= k.c + 1e-9 && extra >= need * smallestBump(r) - 1e-9) { pick = { r, ...k }; break }
+    if (extra <= k.c + 1e-9 && extra >= need * smallestBump(r) - 1e-9) {
+      pick = { r, ...k }
+      break
+    }
     if (r0 - rmin < 1e-12) break
   }
   pick ??= most
@@ -111,13 +144,22 @@ function plan(L: number, extra: number, o: MeanderShape): Plan | MeanderMiss {
   const w = o.width
   if (Amax < 2 * rmin - 1e-12 && chamferOk(Amax, D, w)) {
     let Amin = Amax
-    for (let lo = 0, hi = Amax, i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (chamferOk(m, D, w)) { hi = m; Amin = m } else lo = m }
+    for (let lo = 0, hi = Amax, i = 0; i < 60; i++) {
+      const m = (lo + hi) / 2
+      if (chamferOk(m, D, w)) {
+        hi = m
+        Amin = m
+      } else lo = m
+    }
     Amin = Math.max(Amin, floor)
     const Nmax = Math.floor((L - 2 * chamfer(Amax, D, w) + D) / (2 * D) + 1e-9)
     if (Nmax >= 1) {
-      const emax = chamferExtra(Amax, D, w), emin = chamferExtra(Amin, D, w), N = Math.ceil(extra / emax - 1e-9)
+      const emax = chamferExtra(Amax, D, w),
+        emin = chamferExtra(Amin, D, w),
+        N = Math.ceil(extra / emax - 1e-9)
       const rest = extra - (N - 1) * emax
-      const amps = N > Nmax ? Array(Nmax).fill(Amax) : rest >= emin - 1e-9 ? [...Array(N - 1).fill(Amax), chamferAmplitude(rest, D, w, Amin, Amax)] : N > 1 ? Array(N - 1).fill(Amax) : [Amin]
+      const amps =
+        N > Nmax ? Array(Nmax).fill(Amax) : rest >= emin - 1e-9 ? [...Array(N - 1).fill(Amax), chamferAmplitude(rest, D, w, Amin, Amax)] : N > 1 ? Array(N - 1).fill(Amax) : [Amin]
       return { r: 0, amps, D, chamfer: true }
     }
     short = true
@@ -150,7 +192,8 @@ export function meander(a: Pt, b: Pt, side: Side, o: MeanderOptions): MeanderRes
   const p = plan(L, extra, o)
   if ('why' in p) return p
   const { amps, D } = p
-  const loc: [number, number][] = [[0, 0]], radii: number[] = [0]
+  const loc: [number, number][] = [[0, 0]],
+    radii: number[] = [0]
   if (p.chamfer) {
     const cs = amps.map(A => chamfer(A, D, o.width))
     let x = (L - ((2 * amps.length - 1) * D + cs[0] + cs[cs.length - 1])) / 2 + cs[0]
@@ -168,9 +211,11 @@ export function meander(a: Pt, b: Pt, side: Side, o: MeanderOptions): MeanderRes
       x += 2 * D
     }
   }
-  loc.push([L, 0]); radii.push(0)
+  loc.push([L, 0])
+  radii.push(0)
   const pts = loc.map(([s, t]) => map(s, t))
-  pts[0] = a; pts[pts.length - 1] = b
+  pts[0] = a
+  pts[pts.length - 1] = b
   const prims = fillet(pts, radii)
   return { pts: flatten(prims), prims, added: primsLength(prims) - L, bumps: amps.length, corners: { pts, radii } }
 }

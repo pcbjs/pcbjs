@@ -9,11 +9,11 @@ import { SOT23 } from './lib/MyPart'
 import { ledChannel } from './lib/led-channel.sch'
 
 export const { GND, VCC, SIG, SW } = nets()
-export const J1 = PinHeader(3)        .connect(GND, VCC, SIG)
+export const J1 = PinHeader(3).connect(GND, VCC, SIG)
 export const Q1 = SOT23('MMBT3904', { MPN: 'MMBT3904LT1G', Manufacturer: 'onsemi' }).connect(SIG, GND, SW)
 
 // decoupling on the supply
-export const C1 = C0603('100n')       .connect(VCC, GND)
+export const C1 = C0603('100n').connect(VCC, GND)
 
 // the channels: CH1.R is a resistor, CH1.nets.led the net between it and CH1.D
 export const CH1 = ledChannel({ VCC, SW }, 'CH1')

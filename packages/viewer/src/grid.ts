@@ -1,6 +1,9 @@
 // the background grid of the 2D, schematic and 3D views; free of Vue and the DOM, so Node imports it in the tests
 export type Box = [number, number, number, number]
-export interface Steps { minor: number; major: number }
+export interface Steps {
+  minor: number
+  major: number
+}
 
 /** screen pixels the minor step spans at least */
 export const MIN_PX = 8
@@ -16,7 +19,9 @@ export const schStep = (grid: number): Steps => ({ minor: grid, major: grid * 10
 
 /** The grid's paths in view units for a view box `vb` at `px` units per screen pixel, lines through `origin` snapped to pixel centres; a step under 4 pixels is left out. */
 export function gridPaths(vb: Box, px: number, steps: Steps, origin: [number, number] = [0, 0]): { minor: string; major: string; axes: string } {
-  const [x0, y0, w, h] = vb, x1 = x0 + w, y1 = y0 + h
+  const [x0, y0, w, h] = vb,
+    x1 = x0 + w,
+    y1 = y0 + h
   const snap = (v: number, o: number) => +(o + (Math.round((v - o) / px - 0.5) + 0.5) * px).toFixed(5)
   const lines = (step: number, skip?: number) => {
     if (step / px < 4) return ''
@@ -37,7 +42,16 @@ export function gridPaths(vb: Box, px: number, steps: Steps, origin: [number, nu
 export function parseColor(css: string): { hex: string; alpha: number } | null {
   const s = css.trim()
   if (/^#[0-9a-f]{6}$/i.test(s)) return { hex: s.toLowerCase(), alpha: 1 }
-  if (/^#[0-9a-f]{3}$/i.test(s)) return { hex: '#' + [...s.slice(1)].map(c => c + c).join('').toLowerCase(), alpha: 1 }
+  if (/^#[0-9a-f]{3}$/i.test(s))
+    return {
+      hex:
+        '#' +
+        [...s.slice(1)]
+          .map(c => c + c)
+          .join('')
+          .toLowerCase(),
+      alpha: 1,
+    }
   const m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(s)
   if (!m) return null
   const hex = '#' + [m[1], m[2], m[3]].map(v => Math.round(+v).toString(16).padStart(2, '0')).join('')

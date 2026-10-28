@@ -3,8 +3,14 @@
 import type { Net } from '@pcbjs/core'
 import { GND, V5, V3V3, SWDIO, SWCLK, NRST, CANH, CANL } from './nets'
 
-export const W = 60, H = 45
-export const HOLES = [[3.5, 3.5], [56.5, 3.5], [3.5, 41.5], [56.5, 41.5]] as const
+export const W = 60,
+  H = 45
+export const HOLES = [
+  [3.5, 3.5],
+  [56.5, 3.5],
+  [3.5, 41.5],
+  [56.5, 41.5],
+] as const
 
 // Test pads on the controller's back, one row along the bottom edge, 4 mm apart for 100 mil pogo pins.
 export const TEST_PADS: readonly { name: string; net: Net; x: number; y: number }[] = [

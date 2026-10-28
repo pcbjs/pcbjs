@@ -4,7 +4,10 @@ import { RingIndex, ringsToPolys } from './shapes'
 import { extrude, type Layer, type P, type Poly } from './extrude'
 
 type Ring = [number, number][]
-export interface FlatRings { xy: Float64Array; len: Uint32Array }
+export interface FlatRings {
+  xy: Float64Array
+  len: Uint32Array
+}
 
 export type GeoJob =
   /** an item's rings extruded from z = 0 to z = 1 */
@@ -15,14 +18,27 @@ export type GeoJob =
   | { kind: 'slab'; key: string; outline: FlatRings; drills: Float64Array; openings?: FlatRings; depth: number }
 
 /** Non-indexed positions and normals, groups as start, count, index triples, sphere as x, y, z, r; null position for no shape. */
-export interface GeoResult { key: string; position: Float32Array | null; normal: Float32Array | null; groups: number[]; sphere: number[] }
+export interface GeoResult {
+  key: string
+  position: Float32Array | null
+  normal: Float32Array | null
+  groups: number[]
+  sphere: number[]
+}
 
 export function flatten(rings: Ring[]): FlatRings {
   let n = 0
   for (const r of rings) n += r.length
-  const xy = new Float64Array(n * 2), len = new Uint32Array(rings.length)
+  const xy = new Float64Array(n * 2),
+    len = new Uint32Array(rings.length)
   let k = 0
-  rings.forEach((r, i) => { len[i] = r.length; for (const p of r) { xy[k++] = p[0]; xy[k++] = p[1] } })
+  rings.forEach((r, i) => {
+    len[i] = r.length
+    for (const p of r) {
+      xy[k++] = p[0]
+      xy[k++] = p[1]
+    }
+  })
   return { xy, len }
 }
 
@@ -39,8 +55,12 @@ export function unflatten(f: FlatRings): Ring[] {
 
 /** A 64-bit FNV-1a style hash of the rings at 1 µm, with the ring and point counts, as a short string. */
 export function hashRings(f: FlatRings, h = [0x811c9dc5, 0x01000193]): string {
-  let a = h[0] ^ f.len.length, b = h[1] ^ f.xy.length
-  for (const n of f.len) { a = Math.imul(a ^ n, 16777619); b = Math.imul(b ^ n, 2246822519) }
+  let a = h[0] ^ f.len.length,
+    b = h[1] ^ f.xy.length
+  for (const n of f.len) {
+    a = Math.imul(a ^ n, 16777619)
+    b = Math.imul(b ^ n, 2246822519)
+  }
   for (let i = 0; i < f.xy.length; i++) {
     const v = Math.round(f.xy[i] * 1000) | 0
     a = Math.imul(a ^ v, 16777619)
@@ -66,11 +86,17 @@ export function packDrills(drills: { x: number; y: number; d: number; len?: numb
 
 /** A drill as ExtrudeGeometry draws an absarc, 48 points round; a slot is a stadium of two such halves, `a` in degrees from +x toward +y. */
 function drillRing(x: number, y: number, d: number, len: number, a: number): P[] {
-  const r = d / 2, half = Math.max(0, len - d) / 2, t = (a * Math.PI) / 180
-  const ux = Math.cos(t), uy = Math.sin(t), out: P[] = []
+  const r = d / 2,
+    half = Math.max(0, len - d) / 2,
+    t = (a * Math.PI) / 180
+  const ux = Math.cos(t),
+    uy = Math.sin(t),
+    out: P[] = []
   for (const s of half ? [1, -1] : [1]) {
-    const cx = x + s * half * ux, cy = y + s * half * uy
-    const n = half ? 25 : 48, from = half ? t - Math.PI / 2 + (s < 0 ? Math.PI : 0) : 0
+    const cx = x + s * half * ux,
+      cy = y + s * half * uy
+    const n = half ? 25 : 48,
+      from = half ? t - Math.PI / 2 + (s < 0 ? Math.PI : 0) : 0
     for (let i = 0; i < n; i++) {
       const p = from + (Math.PI * (half ? 1 : 2) * i) / (half ? n - 1 : n)
       out.push([cx + r * Math.cos(p), -(cy + r * Math.sin(p))])
@@ -92,11 +118,27 @@ function slabPolys(j: Extract<GeoJob, { kind: 'slab' }>): Poly[] {
 
 export function runJob(j: GeoJob): GeoResult {
   let polys: Poly[], layers: Layer[]
-  if (j.kind === 'slab') { polys = slabPolys(j); layers = [{ z: 0, bs: 0 }, { z: j.depth, bs: 0 }] }
-  else {
+  if (j.kind === 'slab') {
+    polys = slabPolys(j)
+    layers = [
+      { z: 0, bs: 0 },
+      { z: j.depth, bs: 0 },
+    ]
+  } else {
     polys = ringsToPolys(unflatten(j.rings), j.kind === 'skin' && j.cutouts ? unflatten(j.cutouts) : []).map(p => ({ outer: flip(p.outer), holes: p.holes.map(flip) }))
     // the skin is ExtrudeGeometry's one-segment bevel round a 1e-4 deep slab: a lens from -t to t, widest at its waist
-    layers = j.kind === 'skin' ? [{ z: -j.t, bs: 0 }, { z: 0, bs: j.flare }, { z: 1e-4, bs: j.flare }, { z: 1e-4 + j.t, bs: 0 }] : [{ z: 0, bs: 0 }, { z: 1, bs: 0 }]
+    layers =
+      j.kind === 'skin'
+        ? [
+            { z: -j.t, bs: 0 },
+            { z: 0, bs: j.flare },
+            { z: 1e-4, bs: j.flare },
+            { z: 1e-4 + j.t, bs: 0 },
+          ]
+        : [
+            { z: 0, bs: 0 },
+            { z: 1, bs: 0 },
+          ]
   }
   const empty: GeoResult = { key: j.key, position: null, normal: null, groups: [], sphere: [0, 0, 0, 0] }
   if (!polys.length) return empty
@@ -107,12 +149,26 @@ export function runJob(j: GeoJob): GeoResult {
 
 /** The bounding sphere as three.js computes it: the centre of the box, the radius to the farthest point. */
 function sphereOf(p: Float32Array): number[] {
-  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity
+  let x0 = Infinity,
+    y0 = Infinity,
+    z0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity,
+    z1 = -Infinity
   for (let i = 0; i < p.length; i += 3) {
-    const x = p[i], y = p[i + 1], z = p[i + 2]
-    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z
+    const x = p[i],
+      y = p[i + 1],
+      z = p[i + 2]
+    if (x < x0) x0 = x
+    if (x > x1) x1 = x
+    if (y < y0) y0 = y
+    if (y > y1) y1 = y
+    if (z < z0) z0 = z
+    if (z > z1) z1 = z
   }
-  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2
+  const cx = (x0 + x1) / 2,
+    cy = (y0 + y1) / 2,
+    cz = (z0 + z1) / 2
   let r2 = 0
   for (let i = 0; i < p.length; i += 3) r2 = Math.max(r2, (p[i] - cx) ** 2 + (p[i + 1] - cy) ** 2 + (p[i + 2] - cz) ** 2)
   return [cx, cy, cz, Math.sqrt(r2)]
@@ -131,7 +187,9 @@ export function toGeometry(r: GeoResult): THREE.BufferGeometry | null {
 
 /** The rough cost of a job, its point count. */
 export function jobSize(j: GeoJob): number {
-  return (j.kind === 'slab' ? j.outline.xy.length + j.drills.length + (j.openings?.xy.length ?? 0) : j.rings.xy.length + (j.kind === 'skin' && j.cutouts ? j.cutouts.xy.length : 0)) / 2
+  return (
+    (j.kind === 'slab' ? j.outline.xy.length + j.drills.length + (j.openings?.xy.length ?? 0) : j.rings.xy.length + (j.kind === 'skin' && j.cutouts ? j.cutouts.xy.length : 0)) / 2
+  )
 }
 
 type Slot = { w: Worker; load: number }
@@ -146,7 +204,10 @@ export class GeometryPool {
   private size: number
   /** per batch, for the dev stats: jobs, points and the ms the worker spent */
   readonly log: { jobs: number; points: number; ms: number }[] = []
-  constructor(spawn: () => Worker, size = 3) { this.spawn = spawn; this.size = size }
+  constructor(spawn: () => Worker, size = 3) {
+    this.spawn = spawn
+    this.size = size
+  }
 
   private slot(): Slot | null {
     if (this.failed) return null
@@ -162,9 +223,17 @@ export class GeometryPool {
           this.log.push({ jobs: e.data.results.length, points: p.load, ms: Math.round(e.data.ms) })
           p.done(e.data.results)
         }
-        w.onerror = e => { console.warn('3D view: a geometry worker failed, building on the main thread', e.message); this.fail() }
+        w.onerror = e => {
+          console.warn('3D view: a geometry worker failed, building on the main thread', e.message)
+          this.fail()
+        }
         this.slots.push(slot)
-      } catch { if (!this.slots.length) { this.failed = true; return null } }
+      } catch {
+        if (!this.slots.length) {
+          this.failed = true
+          return null
+        }
+      }
     }
     return this.slots.reduce((a, b) => (b.load < a.load ? b : a))
   }
@@ -192,5 +261,9 @@ export class GeometryPool {
     })
   }
 
-  dispose() { for (const s of this.slots) s.w.terminate(); this.slots = []; this.waiting.clear() }
+  dispose() {
+    for (const s of this.slots) s.w.terminate()
+    this.slots = []
+    this.waiting.clear()
+  }
 }

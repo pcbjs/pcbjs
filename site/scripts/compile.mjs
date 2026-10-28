@@ -19,7 +19,7 @@ function pcbSvg(board) {
   return coarse(boardSvg(board, { vars: true }))
     .replace(/^<\?xml[^>]*>\n/, '')
     .replace(/\s*<metadata>[\s\S]*?<\/metadata>/, '')
-    .replace(/\s*<g pcb:layer="([^"]+)"[^>]*>[\s\S]*?<\/g>/g, (g, id) => SHOWN.has(id) ? g : '')
+    .replace(/\s*<g pcb:layer="([^"]+)"[^>]*>[\s\S]*?<\/g>/g, (g, id) => (SHOWN.has(id) ? g : ''))
     .replace(/ (?:pcb:[a-z]+|data-[a-z]+|xmlns:pcb)="[^"]*"/g, '')
     .replace(/ width="[^"]*mm" height="[^"]*mm"/, '')
     .replace(/\n\s*\n/g, '\n')

@@ -20,13 +20,19 @@ test('--version: one line with the meta version and every @pcbjs package; --help
   assert.equal(run('--help').split('\n')[0], v)
 })
 
-test('versionLine: the project\'s own packages, the meta package first', () => {
+test("versionLine: the project's own packages, the meta package first", () => {
   const root = mkdtempSync(join(tmpdir(), 'pcbjs-version-'))
   try {
-    for (const [name, version] of [['pcbjs', '0.1.0-beta.1'], ['core', '0.1.0-beta.1'], ['lib', '0.1.0']]) {
+    for (const [name, version] of [
+      ['pcbjs', '0.1.0-beta.1'],
+      ['core', '0.1.0-beta.1'],
+      ['lib', '0.1.0'],
+    ]) {
       mkdirSync(join(root, 'node_modules', '@pcbjs', name), { recursive: true })
       writeFileSync(join(root, 'node_modules', '@pcbjs', name, 'package.json'), JSON.stringify({ name: `@pcbjs/${name}`, version }))
     }
     assert.equal(versionLine(root), 'pcbjs 0.1.0-beta.1: @pcbjs/core 0.1.0-beta.1, @pcbjs/lib 0.1.0')
-  } finally { rmSync(root, { recursive: true, force: true }) }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

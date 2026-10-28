@@ -8,7 +8,7 @@ import { prepare } from '../dist/drafts.js'
 
 const overlay = `import PCB from '@pcbjs/core'\nexport default <PCB name="M">\n  <circle layer="Edge.Cuts" cx={10} cy={10} r={10} />`
 
-test('drafts: a range that ends in the closers ends on the overlay\'s last character', () => {
+test("drafts: a range that ends in the closers ends on the overlay's last character", () => {
   const r = repair(overlay, 'pcb.tsx')
   assert.ok(r.ok && r.limit !== null, r.text)
   const out = transformSourceRanges(r.text, '/p/pcb.tsx', 'pcb.tsx', r.limit).code

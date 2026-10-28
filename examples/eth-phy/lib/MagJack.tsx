@@ -31,5 +31,6 @@ function MagJackFootprint(props: FootprintProps) {
 
 export const MagJack = defineFootprint(MagJackFootprint, {
   pins: ['CT', 'D1P', 'D1N', 'D2P', 'D2N', 'D3P', 'D3N', 'D4P', 'D4N', 'L1A', 'L1K', 'L2A', 'L2K', 'SH'],
-  prefix: 'J', id: 'eth:RJ45_JK0654219NL',
+  prefix: 'J',
+  id: 'eth:RJ45_JK0654219NL',
 })

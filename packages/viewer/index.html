@@ -1,19 +1,33 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="color-scheme" content="light dark" />
-  <title>pcbjs</title>
-  <script>
-    // apply a remembered theme before the first paint; storage may be unavailable
-    try { var t = localStorage.getItem('pcbjs:theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t } catch (e) {}
-    // IDE mode, ?ide=1&theme=dark|light|hc: the editor's theme instead
-    try { var q = new URLSearchParams(location.search), k = q.get('theme'); if (q.has('ide') && k) { var d = document.documentElement; if (k === 'light' || k === 'dark') d.dataset.theme = k; if (k === 'hc') { d.dataset.theme = 'dark'; d.dataset.contrast = 'high' } } } catch (e) {}
-  </script>
-</head>
-<body>
-  <div id="app"></div>
-  <script type="module" src="/src/main.ts"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>pcbjs</title>
+    <script>
+      // apply a remembered theme before the first paint; storage may be unavailable
+      try {
+        var t = localStorage.getItem('pcbjs:theme')
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+      } catch (e) {}
+      // IDE mode, ?ide=1&theme=dark|light|hc: the editor's theme instead
+      try {
+        var q = new URLSearchParams(location.search),
+          k = q.get('theme')
+        if (q.has('ide') && k) {
+          var d = document.documentElement
+          if (k === 'light' || k === 'dark') d.dataset.theme = k
+          if (k === 'hc') {
+            d.dataset.theme = 'dark'
+            d.dataset.contrast = 'high'
+          }
+        }
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

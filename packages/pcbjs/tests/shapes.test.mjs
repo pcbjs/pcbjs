@@ -9,11 +9,18 @@ import { PCB, h } from './fixtures.mjs'
 import { near } from './helpers.mjs'
 
 const box = pts => {
-  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1])
+  const xs = pts.map(p => p[0]),
+    ys = pts.map(p => p[1])
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
 }
 const nearBox = (actual, expected, tol = 1e-6) => expected.forEach((v, i) => near(actual[i], v, tol, `box[${i}]: ${actual} vs ${expected}`))
-const area = ring => Math.abs(ring.reduce((s, [x, y], i) => { const [u, v] = ring[(i + 1) % ring.length]; return s + x * v - u * y }, 0)) / 2
+const area = ring =>
+  Math.abs(
+    ring.reduce((s, [x, y], i) => {
+      const [u, v] = ring[(i + 1) % ring.length]
+      return s + x * v - u * y
+    }, 0),
+  ) / 2
 const outlineOf = (...d) => compileBoard(h(PCB, { name: 'Shapes' }, ...d.map(p => h('path', { layer: 'Edge.Cuts', d: p }))))
 
 test('shapes: rect and roundedRect read as plain path data from the top-left corner', () => {
@@ -34,7 +41,10 @@ test('shapes: a roundedRect outline compiles to its box, with the corners cut', 
 })
 
 test('shapes: roundedRect, circle and slot reach the outline Gerber as lines and arcs', () => {
-  const draws = (...d) => gerberLayer(outlineOf(...d), 'Edge.Cuts', '2026-01-01T00:00:00.000Z').text.split('\n').filter(l => /D01\*$/.test(l))
+  const draws = (...d) =>
+    gerberLayer(outlineOf(...d), 'Edge.Cuts', '2026-01-01T00:00:00.000Z')
+      .text.split('\n')
+      .filter(l => /D01\*$/.test(l))
   const arcs = lines => lines.filter(l => /I-?\d+J-?\d+D01/.test(l)).length
   const rr = draws(roundedRect(30, 20, 2))
   assert.equal(rr.length, 8)
@@ -64,7 +74,9 @@ test('shapes: slot runs between two centres with round ends, at any angle', () =
 })
 
 test('shapes: a pour from rect fills inside the outline', () => {
-  const b = compileBoard(h(PCB, { name: 'Pour' }, h('path', { layer: 'Edge.Cuts', d: roundedRect(20, 10, 1) }), h('zone', { layer: 'B.Cu', net: 'GND', d: rect(20, 10), islands: 'keep' })))
+  const b = compileBoard(
+    h(PCB, { name: 'Pour' }, h('path', { layer: 'Edge.Cuts', d: roundedRect(20, 10, 1) }), h('zone', { layer: 'B.Cu', net: 'GND', d: rect(20, 10), islands: 'keep' })),
+  )
   const zone = b.items.find(i => i.kind === 'zone')
   assert.ok(zone.fill.length > 0)
   nearBox(box(zone.outline[0]), [0, 0, 20, 10])

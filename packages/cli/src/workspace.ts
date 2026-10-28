@@ -18,7 +18,17 @@ export interface WorkspaceOptions extends Omit<DevOptions, 'entries' | 'config' 
 /** The stand-in config before a scope is displayed: no entries, the first scope's directory as the root. */
 function placeholder(ws: Workspace): ResolvedConfig {
   const root = ws.scopes[0]?.dir ?? ws.folders[0]
-  return { root, configFile: null, entries: [], outDir: join(root, '.pcbjs', 'dist'), fabDir: join(root, '.pcbjs', 'fab'), base: '/', vite: undefined, repo: undefined, editor: { follow: followMode(undefined) } }
+  return {
+    root,
+    configFile: null,
+    entries: [],
+    outDir: join(root, '.pcbjs', 'dist'),
+    fabDir: join(root, '.pcbjs', 'fab'),
+    base: '/',
+    vite: undefined,
+    repo: undefined,
+    editor: { follow: followMode(undefined) },
+  }
 }
 
 export async function devWorkspace(opts: WorkspaceOptions): Promise<{ server: ViteDevServer; workspace: Workspace }> {
@@ -46,10 +56,25 @@ export async function devWorkspace(opts: WorkspaceOptions): Promise<{ server: Vi
   if (addr && typeof addr === 'object') {
     const h = server.config.server.host
     const urls = [...(server.resolvedUrls?.local ?? []), ...(server.resolvedUrls?.network ?? [])]
-    state.host?.send('pcbjs:ide:ready', { port: addr.port, host: typeof h === 'string' ? h : h ? '0.0.0.0' : 'localhost', urls, root: folders[0], folders, pid: process.pid, version: VERSION, ...readyProtocol() } satisfies ReadyInfo)
+    state.host?.send('pcbjs:ide:ready', {
+      port: addr.port,
+      host: typeof h === 'string' ? h : h ? '0.0.0.0' : 'localhost',
+      urls,
+      root: folders[0],
+      folders,
+      pid: process.pid,
+      version: VERSION,
+      ...readyProtocol(),
+    } satisfies ReadyInfo)
   }
   // the scopes before any loads, so an editor host can route files at once
   state.host?.send('pcbjs:ide:scopes', scopesInfo(ws))
-  if (process.env.TERM_PROGRAM === 'vscode') extensionHint().then(h => { if (h) server.config.logger.info(h) }, () => {})
+  if (process.env.TERM_PROGRAM === 'vscode')
+    extensionHint().then(
+      h => {
+        if (h) server.config.logger.info(h)
+      },
+      () => {},
+    )
   return { server, workspace: ws }
 }

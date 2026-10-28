@@ -10,9 +10,23 @@ export type { BoardSpec, ResolvedBoardSpec }
 /** The built-in rule set, `BASE` from `@pcbjs/lib/rules`. Frozen. */
 export const BASE_RULES: Readonly<ResolvedRules> = BASE
 /** The built-in board: 2 layers, 1.6 mm, BASE_RULES and the autoroute defaults. Frozen. */
-export const BASE_BOARD: Readonly<ResolvedBoardSpec> = deepFreeze({ revision: '', copper: 2, thickness: 1.6, stackup: twoLayer(), rules: BASE_RULES, sourcing: [], autoroute: { ...BASE_AUTOROUTE }, classes: {}, fabNotes: [], teardrops: { on: false, spec: { ...TEARDROP_DEFAULTS } } })
+export const BASE_BOARD: Readonly<ResolvedBoardSpec> = deepFreeze({
+  revision: '',
+  copper: 2,
+  thickness: 1.6,
+  stackup: twoLayer(),
+  rules: BASE_RULES,
+  sourcing: [],
+  autoroute: { ...BASE_AUTOROUTE },
+  classes: {},
+  fabNotes: [],
+  teardrops: { on: false, spec: { ...TEARDROP_DEFAULTS } },
+})
 
-interface Registry { board: BoardSpec | null; rules: Partial<Rules> | null }
+interface Registry {
+  board: BoardSpec | null
+  rules: Partial<Rules> | null
+}
 const KEY = Symbol.for('pcbjs.defaults')
 function registry(): Registry {
   const g = globalThis as any
@@ -46,7 +60,12 @@ export function defineDefaultBoard(spec: BoardSpec): Readonly<ResolvedBoardSpec>
   if ('name' in spec || 'children' in spec) throw new TypeError('defineDefaultBoard: name and children belong to each <PCB>')
   const prev = registry().board
   registry().board = deepFreeze(clone({ ...spec }))
-  try { return resolved() } catch (e) { registry().board = prev; throw e }
+  try {
+    return resolved()
+  } catch (e) {
+    registry().board = prev
+    throw e
+  }
 }
 
 /** Set the default rules, BASE_RULES with `rules` on top, replacing the earlier ones; returns them frozen. */
@@ -54,7 +73,12 @@ export function defineDefaultRules(rules: Partial<Rules>): Readonly<Rules> {
   if (!rules || typeof rules !== 'object') throw new TypeError('defineDefaultRules needs an object')
   const prev = registry().rules
   registry().rules = deepFreeze(clone({ ...rules }))
-  try { return resolved().rules } catch (e) { registry().rules = prev; throw e }
+  try {
+    return resolved().rules
+  } catch (e) {
+    registry().rules = prev
+    throw e
+  }
 }
 
 /** Clear both default layers, back to BASE_BOARD and BASE_RULES. For tests. */
@@ -67,7 +91,10 @@ export function resetDefaults(): void {
 export { mergeRules }
 
 /** The default layers at one moment, for a dev server that keeps several projects in one process. */
-export interface DefaultsSnapshot { board: BoardSpec | null; rules: Partial<Rules> | null }
+export interface DefaultsSnapshot {
+  board: BoardSpec | null
+  rules: Partial<Rules> | null
+}
 
 /** The default board and rules as they are now. Both are frozen, so the snapshot shares them. */
 export function captureDefaults(): DefaultsSnapshot {

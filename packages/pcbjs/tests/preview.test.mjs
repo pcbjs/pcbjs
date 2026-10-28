@@ -39,9 +39,15 @@ test('preview: an instance without a layout is a row of its parts at the pitch, 
   const row = previewRoot({ default: inst })
   assert.equal(row.kind, 'instance')
   const b = compile(row)
-  assert.deepEqual(b.footprints.map(f => f.at[0]).sort((x, y) => x - y), [0, ROW_PITCH])
+  assert.deepEqual(
+    b.footprints.map(f => f.at[0]).sort((x, y) => x - y),
+    [0, ROW_PITCH],
+  )
   const laid = compile(previewRoot({ default: inst, Row }))
-  assert.deepEqual(laid.footprints.map(f => f.at[0]).sort((x, y) => x - y), [0, 6])
+  assert.deepEqual(
+    laid.footprints.map(f => f.at[0]).sort((x, y) => x - y),
+    [0, 6],
+  )
 })
 
 test('preview: a layout instantiates its circuit, found in the module or the modules it imports, ports on nets named after them', () => {

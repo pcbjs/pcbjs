@@ -8,14 +8,20 @@ import './esp32-sensor.sourcing'
 import { LdoRow } from './lib/ldo.layout'
 import { Bme280Block } from './lib/bme280.layout'
 
-const W = 40, H = 30
+const W = 40,
+  H = 30
 // the pour outline: the whole board but the antenna corner above the module's pads
 const POUR = `M 0 0 H 23 V 6.6 H ${W} V ${H} H 0 Z`
 
 export default (
-  <PCB name="esp32-sensor" revision="0.1.0" schematic={sch} rules={{ strictNets: true, requireSourcing: true }}
+  <PCB
+    name="esp32-sensor"
+    revision="0.1.0"
+    schematic={sch}
+    rules={{ strictNets: true, requireSourcing: true }}
     // both layers for every automatic leg, and the router kept out of the antenna corner
-    autoroute={{ layers: ["F.Cu", "B.Cu"], avoid: [{ x: 23, y: 0, w: 17, h: 6.6 }] }}>
+    autoroute={{ layers: ['F.Cu', 'B.Cu'], avoid: [{ x: 23, y: 0, w: 17, h: 6.6 }] }}
+  >
     <path layer="Edge.Cuts" d={roundedRect(W, H, 1.5)} />
 
     {/* the module in the top-right, antenna at the top edge */}
@@ -53,9 +59,19 @@ export default (
     {route(C2[1], U1['3V3'], 'Z').width(0.4)}
 
     {/* GND: vias in the module's centre pads into the back pour */}
-    {[[29.2, 11.2], [30.8, 11.2], [29.2, 12.8], [30.8, 12.8], [27.6, 9.6]].map(([x, y]) => via(GND, [x, y]))}
+    {[
+      [29.2, 11.2],
+      [30.8, 11.2],
+      [29.2, 12.8],
+      [30.8, 12.8],
+      [27.6, 9.6],
+    ].map(([x, y]) => via(GND, [x, y]))}
     {/* stitching vias for three F.Cu GND pieces the tracks fence off: under U2, beside SW1.3, below U1.14 */}
-    {[[8.5, 17], [9.82, 14.9], [26, 18.55]].map(([x, y]) => via(GND, [x, y], { drill: 0.2, size: 0.45 }))}
+    {[
+      [8.5, 17],
+      [9.82, 14.9],
+      [26, 18.55],
+    ].map(([x, y]) => via(GND, [x, y], { drill: 0.2, size: 0.45 }))}
 
     {/* USB data: DN joined under the pad row, DP joined across the ESD, through the ESD, round the module to IO18 and IO19 */}
     {route('J1.B7', 'J1.A7', 'V 23.65 H 8.25 Z').width(0.2)}
@@ -104,11 +120,21 @@ export default (
     {pour(GND, 'B.Cu', POUR, { connect: 'solid' })}
 
     {/* silk */}
-    <text layer="F.SilkS" at="9.85 4.6" size={0.7}>3V3 GND TX RX EN IO9</text>
-    <text layer="F.SilkS" at="16 17.6" size={0.8}>RST</text>
-    <text layer="F.SilkS" at="17 28.6" size={0.8}>BOOT</text>
-    <text layer="F.SilkS" at="35 22.6" size={0.8}>BME280</text>
-    <text layer="B.SilkS" at="20 27.5" size={1.2}>{'esp32-sensor rev 0.1.0\npcbjs'}</text>
+    <text layer="F.SilkS" at="9.85 4.6" size={0.7}>
+      3V3 GND TX RX EN IO9
+    </text>
+    <text layer="F.SilkS" at="16 17.6" size={0.8}>
+      RST
+    </text>
+    <text layer="F.SilkS" at="17 28.6" size={0.8}>
+      BOOT
+    </text>
+    <text layer="F.SilkS" at="35 22.6" size={0.8}>
+      BME280
+    </text>
+    <text layer="B.SilkS" at="20 27.5" size={1.2}>
+      {'esp32-sensor rev 0.1.0\npcbjs'}
+    </text>
     <Brand at="20 22.75" height={4} layer="B.SilkS" />
   </PCB>
 )

@@ -17,7 +17,10 @@ export function npth(x: number, y: number, drill: number): PcbNode {
 
 /** Courtyard rectangle w by h centred at (cx, cy), the origin by default; `courtyard(w, h, layer)` still works. */
 export function courtyard(w: number, h_: number, cx?: number | string, cy = 0, side = 'F.CrtYd'): PcbNode {
-  if (typeof cx === 'string') { side = cx; cx = 0 }
+  if (typeof cx === 'string') {
+    side = cx
+    cx = 0
+  }
   const x0 = cx ?? 0
   return h('rect', { layer: side, x: r4(x0 - w / 2), y: r4(cy - h_ / 2), w, h: h_, width: 0.05 })
 }
@@ -74,8 +77,17 @@ export function padRowDefs(n: number, pitch: number, o: PadRowOptions): PadDef[]
   for (let i = 0; i < n; i++) {
     const t = ((o.reverse ? n - 1 - i : i) - (n - 1) / 2) * pitch
     const num = String(first + i)
-    const shape = i === 0 && o.firstShape ? o.firstShape : o.shape ?? (o.drill !== undefined ? 'circle' : 'roundrect')
-    out.push({ num, name: o.names?.[i] ?? num, x: r4(o.axis === 'y' ? cx : cx + t), y: r4(o.axis === 'y' ? cy + t : cy), w, h: hh, shape, ...(o.drill !== undefined ? { drill: o.drill } : {}) })
+    const shape = i === 0 && o.firstShape ? o.firstShape : (o.shape ?? (o.drill !== undefined ? 'circle' : 'roundrect'))
+    out.push({
+      num,
+      name: o.names?.[i] ?? num,
+      x: r4(o.axis === 'y' ? cx : cx + t),
+      y: r4(o.axis === 'y' ? cy + t : cy),
+      w,
+      h: hh,
+      shape,
+      ...(o.drill !== undefined ? { drill: o.drill } : {}),
+    })
   }
   return out
 }
@@ -96,14 +108,24 @@ export interface PadGridOptions extends Omit<PadRowOptions, 'axis' | 'reverse'> 
 export function padGridDefs(cols: number, rows: number, pitch: number, o: PadGridOptions): PadDef[] {
   const [cx, cy] = o.at ?? [0, 0]
   const [w, hh] = typeof o.size === 'number' ? [o.size, o.size] : o.size
-  const rp = o.rowPitch ?? pitch, first = o.first ?? 1
+  const rp = o.rowPitch ?? pitch,
+    first = o.first ?? 1
   const out: PadDef[] = []
   for (let k = 0; k < cols * rows; k++) {
     const c = o.order === 'columns' ? Math.floor(k / rows) : k % cols
     const r = o.order === 'columns' ? k % rows : Math.floor(k / cols)
     const num = String(first + k)
-    const shape = k === 0 && o.firstShape ? o.firstShape : o.shape ?? (o.drill !== undefined ? 'circle' : 'roundrect')
-    out.push({ num, name: o.names?.[k] ?? num, x: r4(cx + (c - (cols - 1) / 2) * pitch), y: r4(cy + (r - (rows - 1) / 2) * rp), w, h: hh, shape, ...(o.drill !== undefined ? { drill: o.drill } : {}) })
+    const shape = k === 0 && o.firstShape ? o.firstShape : (o.shape ?? (o.drill !== undefined ? 'circle' : 'roundrect'))
+    out.push({
+      num,
+      name: o.names?.[k] ?? num,
+      x: r4(cx + (c - (cols - 1) / 2) * pitch),
+      y: r4(cy + (r - (rows - 1) / 2) * rp),
+      w,
+      h: hh,
+      shape,
+      ...(o.drill !== undefined ? { drill: o.drill } : {}),
+    })
   }
   return out
 }
@@ -116,14 +138,26 @@ export function padGrid(cols: number, rows: number, pitch: number, o: PadGridOpt
 export function padNode(p: PadDef): PcbNode {
   const plated = p.drill !== undefined && p.type !== 'npth'
   return h('pad', {
-    num: p.num, ...(p.name && p.name !== p.num ? { name: p.name } : {}), at: [p.x, p.y], size: p.shape === 'circle' && p.w === p.h ? p.w : [p.w, p.h],
-    shape: p.shape ?? (plated ? 'circle' : 'roundrect'), ...(p.drill !== undefined ? { drill: p.drill } : {}), ...(p.type ? { type: p.type } : {}),
-    ...(p.layers ? { layers: p.layers } : {}), ...(p.paste !== undefined ? { paste: p.paste } : {}), ...(p.roundness !== undefined ? { roundness: p.roundness } : {}),
+    num: p.num,
+    ...(p.name && p.name !== p.num ? { name: p.name } : {}),
+    at: [p.x, p.y],
+    size: p.shape === 'circle' && p.w === p.h ? p.w : [p.w, p.h],
+    shape: p.shape ?? (plated ? 'circle' : 'roundrect'),
+    ...(p.drill !== undefined ? { drill: p.drill } : {}),
+    ...(p.type ? { type: p.type } : {}),
+    ...(p.layers ? { layers: p.layers } : {}),
+    ...(p.paste !== undefined ? { paste: p.paste } : {}),
+    ...(p.roundness !== undefined ? { roundness: p.roundness } : {}),
     ...(p.thermal ? { thermal: p.thermal } : {}),
   })
 }
 
-export interface Box { cx: number; cy: number; w: number; h: number }
+export interface Box {
+  cx: number
+  cy: number
+  w: number
+  h: number
+}
 
 export interface SilkOutlineOptions {
   cx?: number
@@ -143,21 +177,42 @@ export interface SilkOutlineOptions {
 
 /** A silk outline around a w by h body, broken within `clearance` of a pad so the fab never clips it; null when nothing is left. */
 export function silkOutline(w: number, h_: number, o: SilkOutlineOptions = {}): PcbNode | null {
-  const cx = o.cx ?? 0, cy = o.cy ?? 0, width = o.width ?? 0.15, off = o.offset ?? 0.1
+  const cx = o.cx ?? 0,
+    cy = o.cy ?? 0,
+    width = o.width ?? 0.15,
+    off = o.offset ?? 0.1
   const keep = (o.clearance ?? 0.2) + width / 2
-  const x0 = cx - w / 2 - off, x1 = cx + w / 2 + off, y0 = cy - h_ / 2 - off, y1 = cy + h_ / 2 + off
+  const x0 = cx - w / 2 - off,
+    x1 = cx + w / 2 + off,
+    y0 = cy - h_ / 2 - off,
+    y1 = cy + h_ / 2 + off
   const blocks = (o.pads ?? []).map(p => ({ x0: p.x - p.w / 2 - keep, x1: p.x + p.w / 2 + keep, y0: p.y - p.h / 2 - keep, y1: p.y + p.h / 2 + keep }))
   const parts: string[] = []
   // [fixed coordinate, from, to, horizontal, side]
-  const all: [number, number, number, boolean, string][] = [[y0, x0, x1, true, 'top'], [y1, x0, x1, true, 'bottom'], [x0, y0, y1, false, 'left'], [x1, y0, y1, false, 'right']]
+  const all: [number, number, number, boolean, string][] = [
+    [y0, x0, x1, true, 'top'],
+    [y1, x0, x1, true, 'bottom'],
+    [x0, y0, y1, false, 'left'],
+    [x1, y0, y1, false, 'right'],
+  ]
   const edges = o.edges ? all.filter(e => o.edges!.includes(e[4] as 'top')) : all
   for (const [c, a, b, horiz] of edges) {
     let free: [number, number][] = [[a, b]]
     for (const k of blocks) {
-      const lo = horiz ? k.y0 : k.x0, hi = horiz ? k.y1 : k.x1
+      const lo = horiz ? k.y0 : k.x0,
+        hi = horiz ? k.y1 : k.x1
       if (c < lo || c > hi) continue
-      const s = horiz ? k.x0 : k.y0, e = horiz ? k.x1 : k.y1
-      free = free.flatMap(([u, v]) => (e <= u || s >= v ? [[u, v]] : [[u, Math.min(v, s)], [Math.max(u, e), v]]).filter(([p, q]) => q - p > 1e-9)) as [number, number][]
+      const s = horiz ? k.x0 : k.y0,
+        e = horiz ? k.x1 : k.y1
+      free = free.flatMap(([u, v]) =>
+        (e <= u || s >= v
+          ? [[u, v]]
+          : [
+              [u, Math.min(v, s)],
+              [Math.max(u, e), v],
+            ]
+        ).filter(([p, q]) => q - p > 1e-9),
+      ) as [number, number][]
     }
     for (const [u, v] of free) {
       if (v - u < 0.2) continue
@@ -172,7 +227,12 @@ export function withGenerated(generated: ModelSpec, props: { model?: ModelSpec }
   if (!('model' in props)) return { model: generated }
   const m = props.model as (ModelSpec & { step?: unknown; file?: unknown; fallback?: unknown }) | undefined
   const step = !!m && typeof m === 'object' && (m.kind === 'step' || (m.kind === undefined && (typeof m.step === 'string' || typeof m.file === 'string')))
-  return { model: step && !m!.fallback && generated.kind !== 'step' && (generated as { step?: unknown }).step === undefined && (generated as { file?: unknown }).file === undefined ? { ...m, fallback: generated } as ModelSpec : m }
+  return {
+    model:
+      step && !m!.fallback && generated.kind !== 'step' && (generated as { step?: unknown }).step === undefined && (generated as { file?: unknown }).file === undefined
+        ? ({ ...m, fallback: generated } as ModelSpec)
+        : m,
+  }
 }
 
 export interface FootprintDef {
@@ -242,22 +302,28 @@ function renamed(def: FootprintDef, names: PinNames | undefined): PadDef[] {
   const map = new Map<string, string>()
   if (Array.isArray(names)) {
     if (names.length > pins.length) throw new SchematicError(`${def.name}: ${names.length} pin names for ${pins.length} pins`)
-    names.forEach((n, i) => { if (n !== undefined && n !== '') map.set(pins[i], String(n)) })
+    names.forEach((n, i) => {
+      if (n !== undefined && n !== '') map.set(pins[i], String(n))
+    })
     return def.pads.map(p => (p.name !== '' && map.has(p.name) ? { ...p, name: map.get(p.name)! } : p))
   }
   const rec = names as Record<string, string>
   for (const k of Object.keys(rec))
-    if (!def.pads.some(p => p.num === k || p.name === k)) throw new SchematicError(`${def.name}: pinNames names ${JSON.stringify(k)}, which is neither a pad number nor a pin; its pins are ${pins.join(', ')}`)
+    if (!def.pads.some(p => p.num === k || p.name === k))
+      throw new SchematicError(`${def.name}: pinNames names ${JSON.stringify(k)}, which is neither a pad number nor a pin; its pins are ${pins.join(', ')}`)
   return def.pads.map(p => {
     if (p.name === '') return p
-    const byNum = rec[p.num], byName = rec[p.name]
+    const byNum = rec[p.num],
+      byName = rec[p.name]
     return byNum !== undefined ? { ...p, name: String(byNum) } : byName !== undefined ? { ...p, name: String(byName) } : p
   })
 }
 
 const bboxOf = (boxes: Box[]) => {
-  const x0 = Math.min(...boxes.map(b => b.cx - b.w / 2)), x1 = Math.max(...boxes.map(b => b.cx + b.w / 2))
-  const y0 = Math.min(...boxes.map(b => b.cy - b.h / 2)), y1 = Math.max(...boxes.map(b => b.cy + b.h / 2))
+  const x0 = Math.min(...boxes.map(b => b.cx - b.w / 2)),
+    x1 = Math.max(...boxes.map(b => b.cx + b.w / 2))
+  const y0 = Math.min(...boxes.map(b => b.cy - b.h / 2)),
+    y1 = Math.max(...boxes.map(b => b.cy + b.h / 2))
   return { x0, x1, y0, y1 }
 }
 const ceil2 = (v: number) => Math.ceil(v * 100 - 1e-6) / 100
@@ -265,7 +331,10 @@ const ceil2 = (v: number) => Math.ceil(v * 100 - 1e-6) / 100
 /** The default courtyard: pads and body grown by `margin`, out to the next 0.01 mm. */
 export function courtyardOf(pads: readonly PadDef[], body: Box, margin = 0.25): Box {
   const b = bboxOf([body, ...pads.map(p => ({ cx: p.x, cy: p.y, w: p.w, h: p.h }))])
-  const x0 = -ceil2(-(b.x0 - margin)), x1 = ceil2(b.x1 + margin), y0 = -ceil2(-(b.y0 - margin)), y1 = ceil2(b.y1 + margin)
+  const x0 = -ceil2(-(b.x0 - margin)),
+    x1 = ceil2(b.x1 + margin),
+    y0 = -ceil2(-(b.y0 - margin)),
+    y1 = ceil2(b.y1 + margin)
   return { cx: r4((x0 + x1) / 2), cy: r4((y0 + y1) / 2), w: r4(x1 - x0), h: r4(y1 - y0) }
 }
 
@@ -273,8 +342,10 @@ export function courtyardOf(pads: readonly PadDef[], body: Box, margin = 0.25): 
 function pin1Dot(pads: readonly PadDef[], body: Box): [number, number] | null {
   const p = pads.find(q => q.num === '1') ?? pads.find(q => q.name !== '')
   if (!p) return null
-  const dx = p.x - body.cx, dy = p.y - body.cy
-  const sx = Math.abs(dx) / Math.max(body.w / 2, 1e-6), sy = Math.abs(dy) / Math.max(body.h / 2, 1e-6)
+  const dx = p.x - body.cx,
+    dy = p.y - body.cy
+  const sx = Math.abs(dx) / Math.max(body.w / 2, 1e-6),
+    sy = Math.abs(dy) / Math.max(body.h / 2, 1e-6)
   const gap = 0.45
   return sx >= sy ? [r4(p.x + Math.sign(dx || -1) * (p.w / 2 + gap)), p.y] : [p.x, r4(p.y + Math.sign(dy || -1) * (p.h / 2 + gap))]
 }
@@ -301,7 +372,7 @@ function children(def: FootprintDef, pads: PadDef[], silk: SilkMode = def.mouth 
     } else if (Array.isArray(def.silk)) out.push(...def.silk)
     else if (typeof def.silk === 'function') out.push(...def.silk(mode))
   }
-  const dot = def.pin1 === false || silk === 'none' ? null : def.pin1 ?? pin1Dot(pads, b)
+  const dot = def.pin1 === false || silk === 'none' ? null : (def.pin1 ?? pin1Dot(pads, b))
   if (dot) out.push(h('circle', { layer: 'F.SilkS', cx: dot[0], cy: dot[1], r: 0.1, fill: true }))
   if (def.extra) out.push(...def.extra)
   return out
@@ -314,10 +385,12 @@ type Generated<P extends string, D extends string = never> = LibFootprint<P, D>
 /** A dual-mode footprint factory from a definition: `F('value')` makes a part, `<F ref="U1" at="…" />` renders. */
 export function makeFootprint<P extends string = string, D extends string = never>(def: FootprintDef, opts: GeneratorOptions = {}): Generated<P, D> {
   const pn = opts.pinNames
-  if (pn !== undefined && (pn === null || typeof pn !== 'object')) throw new TypeError(`${def.name}: pinNames must be a list of names in pin order or an object keyed by pad number or pin, got ${JSON.stringify(pn)}`)
+  if (pn !== undefined && (pn === null || typeof pn !== 'object'))
+    throw new TypeError(`${def.name}: pinNames must be a list of names in pin order or an object keyed by pad number or pin, got ${JSON.stringify(pn)}`)
   if (opts.prefix !== undefined && typeof opts.prefix !== 'string') throw new TypeError(`${def.name}: prefix must be letters such as 'U', got ${JSON.stringify(opts.prefix)}`)
   if (opts.value !== undefined && typeof opts.value !== 'string') throw new TypeError(`${def.name}: value must be a string, got ${JSON.stringify(opts.value)}`)
-  if (opts.silk !== undefined && !SILK_MODES.includes(opts.silk)) throw new TypeError(`${def.name}: silk must be ${SILK_MODES.map(m => `'${m}'`).join(', ')}, got ${JSON.stringify(opts.silk)}`)
+  if (opts.silk !== undefined && !SILK_MODES.includes(opts.silk))
+    throw new TypeError(`${def.name}: silk must be ${SILK_MODES.map(m => `'${m}'`).join(', ')}, got ${JSON.stringify(opts.silk)}`)
   const pads = renamed(def, opts.pinNames)
   // each default pin in order becomes the new names of its pads, so a rename can split a pin as well as merge two
   const order = def.pins ?? defaultPins(def.pads)
@@ -330,10 +403,22 @@ export function makeFootprint<P extends string = string, D extends string = neve
   const id = opts.silk === 'none' ? `${def.id}_NoSilkScreen` : opts.silk === 'full' && def.mouth ? `${def.id}_SilkFull` : def.id
   const render = function Footprint(props: FootprintProps): PcbNode {
     const { children: more, ...rest } = props
-    return h('footprint', {
-      id, value, height: def.height, model: def.model, ...(def.bom === false ? { bom: false } : {}), ...(def.pos === false ? { pos: false } : {}),
-      ...(def.description ? { description: def.description } : {}), ...rest, ...withGenerated(def.model, rest),
-    }, ...kids, more)
+    return h(
+      'footprint',
+      {
+        id,
+        value,
+        height: def.height,
+        model: def.model,
+        ...(def.bom === false ? { bom: false } : {}),
+        ...(def.pos === false ? { pos: false } : {}),
+        ...(def.description ? { description: def.description } : {}),
+        ...rest,
+        ...withGenerated(def.model, rest),
+      },
+      ...kids,
+      more,
+    )
   }
   const f = defineFootprint<P>(render, { pins: pinList as P[], nc, prefix: opts.prefix ?? def.prefix, id, name: def.name }) as unknown as Generated<P, D>
   Object.defineProperty(f, GEN, { value: { def, opts } })
@@ -341,7 +426,11 @@ export function makeFootprint<P extends string = string, D extends string = neve
 }
 
 /** A generated footprint with its pins renamed: `withPins(Crystal3225, { 2: 'GND1', 4: 'GND2' })`. */
-export function withPins<P extends string, const N extends string, D extends string = never>(factory: FootprintFactory<P, FootprintProps, D>, pinNames: PinNames<N>, opts: Omit<GeneratorOptions, 'pinNames'> = {}): LibFootprint<PinsOf<P, N>, D> {
+export function withPins<P extends string, const N extends string, D extends string = never>(
+  factory: FootprintFactory<P, FootprintProps, D>,
+  pinNames: PinNames<N>,
+  opts: Omit<GeneratorOptions, 'pinNames'> = {},
+): LibFootprint<PinsOf<P, N>, D> {
   const g = (factory as any)[GEN] as { def: FootprintDef; opts: GeneratorOptions } | undefined
   if (!g) throw new SchematicError(`withPins: ${(factory as any).name ?? 'this footprint'} is not a generated @pcbjs/lib footprint`)
   return makeFootprint<PinsOf<P, N>, D>(g.def, { ...g.opts, ...opts, pinNames })

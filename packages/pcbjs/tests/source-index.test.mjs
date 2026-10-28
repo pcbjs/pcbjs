@@ -19,19 +19,29 @@ const PAD2 = S('lib/Part.tsx', 5, 5, 5, 30)
 const DEV = { fileName: '/proj/main.tsx', lineNumber: 30, columnNumber: 3 }
 
 // The component spreads its props after its own __src: an outer __src that leaked would replace the inner one.
-const Part = props => h('footprint', { __src: FP, ...props, fields: { props: Object.keys(props).join(',') } },
-  h('pad', { num: 1, size: [1, 1], __src: PAD1 }),
-  h('pad', { num: 2, at: [2, 0], size: [1, 1], __src: PAD2 }))
+const Part = props =>
+  h(
+    'footprint',
+    { __src: FP, ...props, fields: { props: Object.keys(props).join(',') } },
+    h('pad', { num: 1, size: [1, 1], __src: PAD1 }),
+    h('pad', { num: 2, at: [2, 0], size: [1, 1], __src: PAD2 }),
+  )
 
 function design(withSrc = true) {
   const s = v => (withSrc ? { __src: v } : {})
-  return h(PCB, { name: 'Src', ...s(S('main.tsx', 1, 1, 40, 1)) },
+  return h(
+    PCB,
+    { name: 'Src', ...s(S('main.tsx', 1, 1, 40, 1)) },
     outline(),
-    h('g', { at: '3 3', ...s(G) },
+    h(
+      'g',
+      { at: '3 3', ...s(G) },
       h(Part, { ref: 'U1', 'net:1': 'A', 'net:2': 'A', ...s(CALL) }),
       route({ net: 'A', layer: 'B.Cu', width: 0.3, d: 'M 0 0 L 2 0', ...s(ROUTE) }),
-      route({ net: 'A', layer: 'F.Cu', width: 0.3, d: { start: 'U1.1', end: 'U1.2', algorithm: 'straight' }, ...s(AUTO) })),
-    jsxDEV('via', { net: 'B', at: '8 8' }, undefined, false, DEV))
+      route({ net: 'A', layer: 'F.Cu', width: 0.3, d: { start: 'U1.1', end: 'U1.2', algorithm: 'straight' }, ...s(AUTO) }),
+    ),
+    jsxDEV('via', { net: 'B', at: '8 8' }, undefined, false, DEV),
+  )
 }
 
 const site = board => siteData(board, { root: '/proj', fabUrl: '', fabName: '', fabFiles: [], fabStatus: 'ok', svgUrl: '', dev: true, bom: [] })
@@ -56,7 +66,10 @@ test('source index: helper calls give their range to their items, autorouted one
   assert.ok(routed.length >= 1)
   assert.deepEqual(explicit[0].src, ROUTE)
   assert.deepEqual(explicit[0].chain, [G])
-  for (const t of routed) { assert.deepEqual(t.src, AUTO); assert.deepEqual(t.chain, [G]) }
+  for (const t of routed) {
+    assert.deepEqual(t.src, AUTO)
+    assert.deepEqual(t.chain, [G])
+  }
 })
 
 test('source index: __src never reaches props, fields or the compiled board', () => {
@@ -69,7 +82,11 @@ test('source index: __src never reaches props, fields or the compiled board', ()
 test('source index: ranges per file, sorted outer first, with ids and refs', () => {
   const b = compileBoard(design())
   const sd = site(b)
-  const ids = pred => b.items.filter(pred).map(i => i.id).sort((x, y) => x - y)
+  const ids = pred =>
+    b.items
+      .filter(pred)
+      .map(i => i.id)
+      .sort((x, y) => x - y)
   const pads = ids(i => i.kind === 'pad')
   const routed = ids(i => i.kind === 'track' && i.layer === 'F.Cu')
   const explicit = ids(i => i.kind === 'track' && i.layer === 'B.Cu')
@@ -112,15 +129,28 @@ test('source index: cmd+click opens the placement, shift+cmd+click the definitio
 
 test('source index: every indexed id is a data-id in the layer SVG', () => {
   const sd = site(compileBoard(design()))
-  const svgIds = new Set([...sd.layers.map(l => l.svg).join('').matchAll(/data-id="(\d+)"/g)].map(m => Number(m[1])))
-  const indexed = Object.values(sd.sources).flat().flatMap(r => r.ids)
+  const svgIds = new Set(
+    [
+      ...sd.layers
+        .map(l => l.svg)
+        .join('')
+        .matchAll(/data-id="(\d+)"/g),
+    ].map(m => Number(m[1])),
+  )
+  const indexed = Object.values(sd.sources)
+    .flat()
+    .flatMap(r => r.ids)
   assert.ok(indexed.length)
   for (const id of indexed) assert.ok(svgIds.has(id), `id ${id} in the SVG`)
 })
 
 test('source index: a start-only jsxDEV board still indexes, end equal to start', () => {
   const at = (line, col) => ({ fileName: '/proj/main.tsx', lineNumber: line, columnNumber: col })
-  const Dev = props => jsxDEV('footprint', { ...props, children: jsxDEV('pad', { num: 1, size: [1, 1] }, undefined, false, { ...at(2, 9), fileName: '/proj/lib/Dev.tsx' }) }, undefined, false, { ...at(1, 9), fileName: '/proj/lib/Dev.tsx' })
+  const Dev = props =>
+    jsxDEV('footprint', { ...props, children: jsxDEV('pad', { num: 1, size: [1, 1] }, undefined, false, { ...at(2, 9), fileName: '/proj/lib/Dev.tsx' }) }, undefined, false, {
+      ...at(1, 9),
+      fileName: '/proj/lib/Dev.tsx',
+    })
   const b = compileBoard(h(PCB, { name: 'Dev' }, outline(), jsxDEV(Dev, { ref: 'D1', at: '5 5' }, undefined, false, at(7, 5))))
   const sd = site(b)
   const pad = b.items.find(i => i.kind === 'pad')

@@ -10,7 +10,10 @@ const derived = new WeakMap<Item, Map<string, unknown>>()
 
 function memo<T>(it: Item, key: string, make: () => T): T {
   let m = derived.get(it)
-  if (!m) { m = new Map(); derived.set(it, m) }
+  if (!m) {
+    m = new Map()
+    derived.set(it, m)
+  }
   if (m.has(key)) return m.get(key) as T
   const v = make()
   m.set(key, v)
@@ -19,37 +22,64 @@ function memo<T>(it: Item, key: string, make: () => T): T {
 
 export function copperLayersOf(it: Item, copper: string[]): string[] {
   switch (it.kind) {
-    case 'pad': return it.layers.filter(isCopper)
-    case 'via': { const a = copper.indexOf(it.layers[0]), b = copper.indexOf(it.layers[1]); const [lo, hi] = a < b ? [a, b] : [b, a]; return copper.slice(lo, hi + 1) }
-    case 'track': case 'zone': return [it.layer]
-    case 'graphic': case 'text': return isCopper(it.layer) ? [it.layer] : []
-    default: return []
+    case 'pad':
+      return it.layers.filter(isCopper)
+    case 'via': {
+      const a = copper.indexOf(it.layers[0]),
+        b = copper.indexOf(it.layers[1])
+      const [lo, hi] = a < b ? [a, b] : [b, a]
+      return copper.slice(lo, hi + 1)
+    }
+    case 'track':
+    case 'zone':
+      return [it.layer]
+    case 'graphic':
+    case 'text':
+      return isCopper(it.layer) ? [it.layer] : []
+    default:
+      return []
   }
 }
 
 /** Polygon rings of an item's copper on one layer (empty when it has none there). */
 export function copperRings(it: Item, layer: string): Ring[] {
   let m = cache.get(it)
-  if (!m) { m = new Map(); cache.set(it, m) }
+  if (!m) {
+    m = new Map()
+    cache.set(it, m)
+  }
   const hit = m.get(layer)
   if (hit) return hit
   let rings: Ring[] = []
   switch (it.kind) {
-    case 'pad': if (it.layers.includes(layer)) rings = [it.poly]; break
-    case 'via': rings = [circleRing(it.at[0], it.at[1], it.size / 2)]; break
-    case 'track': if (it.layer === layer) rings = polysToRings(strokeOpen(it.pts, it.width)); break
-    case 'zone': if (it.layer === layer) rings = polysToRings(it.fill); break
-    case 'graphic':
-      if (it.layer === layer) rings = it.fill ? it.paths.filter(r => r.length >= 3)
-        : it.paths.flatMap((r, i) => polysToRings(it.closed[i] ? strokeClosed(r, it.width) : strokeOpen(r, it.width)))
+    case 'pad':
+      if (it.layers.includes(layer)) rings = [it.poly]
       break
-    case 'text': if (it.layer === layer) rings = it.polys ? polysToRings(it.polys) : it.strokes.flatMap(r => polysToRings(strokeOpen(r, it.thickness))); break
+    case 'via':
+      rings = [circleRing(it.at[0], it.at[1], it.size / 2)]
+      break
+    case 'track':
+      if (it.layer === layer) rings = polysToRings(strokeOpen(it.pts, it.width))
+      break
+    case 'zone':
+      if (it.layer === layer) rings = polysToRings(it.fill)
+      break
+    case 'graphic':
+      if (it.layer === layer)
+        rings = it.fill ? it.paths.filter(r => r.length >= 3) : it.paths.flatMap((r, i) => polysToRings(it.closed[i] ? strokeClosed(r, it.width) : strokeOpen(r, it.width)))
+      break
+    case 'text':
+      if (it.layer === layer) rings = it.polys ? polysToRings(it.polys) : it.strokes.flatMap(r => polysToRings(strokeOpen(r, it.thickness)))
+      break
   }
   m.set(layer, rings)
   return rings
 }
 
-export function invalidate(it: Item) { cache.delete(it); derived.delete(it) }
+export function invalidate(it: Item) {
+  cache.delete(it)
+  derived.delete(it)
+}
 
 /** The bounding box of an item's copper on one layer. */
 export function copperBox(it: Item, layer: string): Box {

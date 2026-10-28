@@ -20,7 +20,12 @@ function BME280Footprint(props: FootprintProps) {
     </footprint>
   )
 }
-export const BME280 = defineFootprint(BME280Footprint, { pins: ['GND', 'CSB', 'SDI', 'SCK', 'SDO', 'VDDIO', 'VDD'], prefix: 'U', id: 'hat:Bosch_LGA-8_2.5x2.5mm_P0.65mm_ClockwisePinNumbering', name: 'BME280' })
+export const BME280 = defineFootprint(BME280Footprint, {
+  pins: ['GND', 'CSB', 'SDI', 'SCK', 'SDO', 'VDDIO', 'VDD'],
+  prefix: 'U',
+  id: 'hat:Bosch_LGA-8_2.5x2.5mm_P0.65mm_ClockwisePinNumbering',
+  name: 'BME280',
+})
 
 // ST LGA-16, 3 x 3 mm, 0.5 mm pitch, 5 pads on the left and right, 3 on the top and bottom, counter-clockwise from pin 1 at the top left.
 // KiCad Package_LGA:LGA-16_3x3mm_P0.5mm_LayoutBorder3x5y. LIS3DH pins below; NC pins 2 and 3, the ADC inputs unused.
@@ -28,10 +33,22 @@ const LIS3DH_PADS = ['VDDIO', 'NC2', 'NC3', 'SCL', 'GND', 'SDA', 'SA0', 'CS', 'I
 function LIS3DHFootprint(props: FootprintProps) {
   const { children, ...rest } = props
   const at: [number, number][] = [
-    [-1.225, -1], [-1.225, -0.5], [-1.225, 0], [-1.225, 0.5], [-1.225, 1],
-    [-0.5, 1.225], [0, 1.225], [0.5, 1.225],
-    [1.225, 1], [1.225, 0.5], [1.225, 0], [1.225, -0.5], [1.225, -1],
-    [0.5, -1.225], [0, -1.225], [-0.5, -1.225],
+    [-1.225, -1],
+    [-1.225, -0.5],
+    [-1.225, 0],
+    [-1.225, 0.5],
+    [-1.225, 1],
+    [-0.5, 1.225],
+    [0, 1.225],
+    [0.5, 1.225],
+    [1.225, 1],
+    [1.225, 0.5],
+    [1.225, 0],
+    [1.225, -0.5],
+    [1.225, -1],
+    [0.5, -1.225],
+    [0, -1.225],
+    [-0.5, -1.225],
   ]
   return (
     <footprint id="hat:LGA-16_3x3mm_P0.5mm_LayoutBorder3x5y" value="LIS3DH" height={1} {...rest}>
@@ -47,11 +64,27 @@ function LIS3DHFootprint(props: FootprintProps) {
     </footprint>
   )
 }
-export const LIS3DH = defineFootprint(LIS3DHFootprint, { pins: ['VDDIO', 'SCL', 'GND', 'SDA', 'SA0', 'CS', 'INT2', 'RES', 'INT1', 'ADC3', 'VDD', 'ADC2', 'ADC1'], nc: ['2', '3'], prefix: 'U', id: 'hat:LGA-16_3x3mm_P0.5mm_LayoutBorder3x5y', name: 'LIS3DH' })
+export const LIS3DH = defineFootprint(LIS3DHFootprint, {
+  pins: ['VDDIO', 'SCL', 'GND', 'SDA', 'SA0', 'CS', 'INT2', 'RES', 'INT1', 'ADC3', 'VDD', 'ADC2', 'ADC1'],
+  nc: ['2', '3'],
+  prefix: 'U',
+  id: 'hat:LGA-16_3x3mm_P0.5mm_LayoutBorder3x5y',
+  name: 'LIS3DH',
+})
 
 // Hirose DM3AT-SF-PEJM5 micro SD socket, push-pull, the card mouth toward +y. KiCad Connector_Card:microSD_HC_Hirose_DM3AT-SF-PEJM5.
 // Pads 1 to 8 are the card contacts, 9 and 10 the card detect switch, SH the four shell tabs. The keepouts are KiCad's: no F.Cu under the contact springs.
-const SD_PADS: [number, string, number][] = [[1, 'DAT2', 2.775], [2, 'DAT3', 1.675], [3, 'CMD', 0.575], [4, 'VDD', -0.525], [5, 'CLK', -1.625], [6, 'VSS', -2.725], [7, 'DAT0', -3.825], [8, 'DAT1', -4.925], [9, 'CD', -5.875]]
+const SD_PADS: [number, string, number][] = [
+  [1, 'DAT2', 2.775],
+  [2, 'DAT3', 1.675],
+  [3, 'CMD', 0.575],
+  [4, 'VDD', -0.525],
+  [5, 'CLK', -1.625],
+  [6, 'VSS', -2.725],
+  [7, 'DAT0', -3.825],
+  [8, 'DAT1', -4.925],
+  [9, 'CD', -5.875],
+]
 function DM3ATFootprint(props: FootprintProps) {
   const { children, ...rest } = props
   const box = (x1: number, y1: number, x2: number, y2: number) => `M ${x1} ${y1} H ${x2} V ${y2} H ${x1} Z`
@@ -74,7 +107,12 @@ function DM3ATFootprint(props: FootprintProps) {
     </footprint>
   )
 }
-export const DM3AT = defineFootprint(DM3ATFootprint, { pins: ['DAT2', 'DAT3', 'CMD', 'VDD', 'CLK', 'VSS', 'DAT0', 'DAT1', 'CD', 'CDCOM', 'SHIELD'], prefix: 'J', id: 'hat:microSD_HC_Hirose_DM3AT-SF-PEJM5', name: 'DM3AT' })
+export const DM3AT = defineFootprint(DM3ATFootprint, {
+  pins: ['DAT2', 'DAT3', 'CMD', 'VDD', 'CLK', 'VSS', 'DAT0', 'DAT1', 'CD', 'CDCOM', 'SHIELD'],
+  prefix: 'J',
+  id: 'hat:microSD_HC_Hirose_DM3AT-SF-PEJM5',
+  name: 'DM3AT',
+})
 
 // Murata PKMCS0909E4000-R1 SMD piezo sounder, 9 x 9 mm, two pads 8.7 mm apart. KiCad Buzzer_Beeper:Buzzer_Murata_PKMCS0909E.
 function PKMCSFootprint(props: FootprintProps) {
@@ -86,7 +124,9 @@ function PKMCSFootprint(props: FootprintProps) {
       {courtyard(10.5, 9.5)}
       <rect layer="F.Fab" x={-4.5} y={-4.5} w={9} h={9} />
       <path layer="F.SilkS" d="M -4.6 -2 V -4.6 H 4.6 V -2 M -4.6 2 V 4.6 H 4.6 V 2" />
-      <text layer="F.SilkS" at="-5.4 -3.6" size={0.8}>+</text>
+      <text layer="F.SilkS" at="-5.4 -3.6" size={0.8}>
+        +
+      </text>
       {children}
     </footprint>
   )

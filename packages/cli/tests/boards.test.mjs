@@ -10,20 +10,27 @@ import { join } from 'node:path'
 
 const entry = rel => ({ file: `/p/${rel}`, rel })
 const fake = (rel, name, status = 'ok') => ({
-  entry: entry(rel), board: { name, title: name, revision: '1' }, site: { name, fab: { status } },
+  entry: entry(rel),
+  board: { name, title: name, revision: '1' },
+  site: { name, fab: { status } },
 })
 // a slot's compile: one Compiled per target
 const one = (...a) => [fake(...a)]
 
 test('boards: a repeated board name is a conflict naming both files, the first entry keeps it', () => {
   const slots = slotsFor([entry('a.tsx'), entry('b.tsx'), entry('c.tsx')])
-  slots[0].compiled = one('a.tsx', 'X'); slots[1].compiled = one('b.tsx', 'Y'); slots[2].compiled = one('c.tsx', 'X')
+  slots[0].compiled = one('a.tsx', 'X')
+  slots[1].compiled = one('b.tsx', 'Y')
+  slots[2].compiled = one('c.tsx', 'X')
   markConflicts(slots)
   assert.equal(slots[0].conflict, null)
   assert.equal(slots[1].conflict, null)
   assert.match(slots[2].conflict, /"X".*a\.tsx.*c\.tsx/)
   const p = boardsPayload(slots)
-  assert.deepEqual(p.boards.map(b => b.name), ['X', 'Y'])
+  assert.deepEqual(
+    p.boards.map(b => b.name),
+    ['X', 'Y'],
+  )
   assert.equal(p.single, false)
   assert.equal(p.errors['a.tsx'], null)
   assert.match(p.errors['c.tsx'], /used by both/)
@@ -32,7 +39,10 @@ test('boards: a repeated board name is a conflict naming both files, the first e
   // a later failed compile keeps the stale clashing board out of the list
   slots[2].error = 'syntax error'
   markConflicts(slots)
-  assert.deepEqual(boardsPayload(slots).boards.map(b => b.name), ['X', 'Y'])
+  assert.deepEqual(
+    boardsPayload(slots).boards.map(b => b.name),
+    ['X', 'Y'],
+  )
   slots[2].error = null
   // renaming the clash away clears it on the next pass
   slots[2].compiled = one('c.tsx', 'Z')
@@ -58,8 +68,13 @@ test('boards: per-board urls in dev and in the built site', () => {
 
 test('boards: a changed file reaches only the entries that import it', () => {
   const node = file => ({ file, importers: new Set() })
-  const a = node('/p/a.tsx'), b = node('/p/b.tsx'), lib = node('/p/lib.tsx'), only = node('/p/only.tsx')
-  lib.importers.add(a); lib.importers.add(b); only.importers.add(b)
+  const a = node('/p/a.tsx'),
+    b = node('/p/b.tsx'),
+    lib = node('/p/lib.tsx'),
+    only = node('/p/only.tsx')
+  lib.importers.add(a)
+  lib.importers.add(b)
+  only.importers.add(b)
   a.importers.add(lib) // a cycle must not loop
   const entries = ['/p/a.tsx', '/p/b.tsx']
   assert.deepEqual([...entriesReaching([only], entries)], ['/p/b.tsx'])
@@ -88,7 +103,10 @@ test('boards: the virtual module keeps the single-board default export and error
   assert.equal(mod.default, null)
   assert.equal(mod.error, 'boom')
   assert.equal(mod.single, false)
-  assert.deepEqual(mod.boards.map(b => b.name), ['B'])
+  assert.deepEqual(
+    mod.boards.map(b => b.name),
+    ['B'],
+  )
   assert.deepEqual(mod.errors, { 'a.tsx': 'boom', 'b.tsx': null })
   assert.deepEqual(mod.entries, { B: 'b.tsx' })
 })
@@ -96,7 +114,10 @@ test('boards: the virtual module keeps the single-board default export and error
 test('config: pcb.config.{ts,mts,js,mjs} first, the old pcbjs.config.* after them and flagged legacy', () => {
   assert.deepEqual(CONFIG_NAMES, ['pcb.config.ts', 'pcb.config.mts', 'pcb.config.js', 'pcb.config.mjs'])
   assert.deepEqual(LEGACY_CONFIG_NAMES, ['pcbjs.config.ts', 'pcbjs.config.mts', 'pcbjs.config.js', 'pcbjs.config.mjs'])
-  const having = (...names) => f => names.some(n => f === `/p/${n}`)
+  const having =
+    (...names) =>
+    f =>
+      names.some(n => f === `/p/${n}`)
   assert.equal(findConfig('/p', having()), null)
   assert.deepEqual(findConfig('/p', having('pcb.config.mjs', 'pcb.config.mts')), { file: '/p/pcb.config.mts', legacy: false })
   assert.deepEqual(findConfig('/p', having('pcbjs.config.ts', 'pcb.config.js')), { file: '/p/pcb.config.js', legacy: false })
@@ -106,7 +127,8 @@ test('config: pcb.config.{ts,mts,js,mjs} first, the old pcbjs.config.* after the
 
 test('config: an old pcbjs.config.ts still loads, with one deprecation line; editor.follow defaults to click', async () => {
   const root = mkdtempSync(join(tmpdir(), 'pcbjs-config-'))
-  const warn = console.warn, lines = []
+  const warn = console.warn,
+    lines = []
   console.warn = (...a) => lines.push(a.join(' '))
   try {
     writeFileSync(join(root, 'main.tsx'), 'export default null\n')
@@ -131,6 +153,9 @@ test('config: an old pcbjs.config.ts still loads, with one deprecation line; edi
   const notes = []
   assert.equal(followMode(undefined), 'click')
   assert.equal(followMode('meta-click'), 'meta-click')
-  assert.equal(followMode('double-click', m => notes.push(m)), 'click')
+  assert.equal(
+    followMode('double-click', m => notes.push(m)),
+    'click',
+  )
   assert.equal(notes.length, 1)
 })

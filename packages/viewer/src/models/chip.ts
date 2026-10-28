@@ -18,7 +18,10 @@ function markingTexture(text: string, w: number, h: number): THREE.CanvasTexture
   let size = canvas.height * 0.62
   g.font = `600 ${size}px system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif`
   const fit = (canvas.width * 0.86) / Math.max(1, g.measureText(text).width)
-  if (fit < 1) { size *= fit; g.font = `600 ${size}px system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif` }
+  if (fit < 1) {
+    size *= fit
+    g.font = `600 ${size}px system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif`
+  }
   g.fillStyle = '#f2f2f2'
   g.textAlign = 'center'
   g.textBaseline = 'middle'
@@ -40,11 +43,20 @@ export function chipModel(spec: ChipSpec, height: number, marking: string): THRE
   for (const s of [-1, 1]) g.add(mesh(roundedBox(cap, w + 0.03, t, r * 1.2), M.tin, s * (l / 2 - cap / 2)))
   const inner = l - 2 * cap - 0.04
   if (spec.part === 'R') {
-    const coat = 0.025, top = t - 0.03 + 0.01
+    const coat = 0.025,
+      top = t - 0.03 + 0.01
     g.add(mesh(roundedBox(inner, w - 0.06, coat, 0.01, top - 0.012), M.overglaze))
     if (marking) {
-      const fw = inner * 0.96, fh = (w - 0.06) * 0.9
-      const mat = new THREE.MeshStandardMaterial({ map: markingTexture(marking, fw, fh), transparent: true, roughness: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })
+      const fw = inner * 0.96,
+        fh = (w - 0.06) * 0.9
+      const mat = new THREE.MeshStandardMaterial({
+        map: markingTexture(marking, fw, fh),
+        transparent: true,
+        roughness: 0.5,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+      })
       g.add(mesh(new THREE.PlaneGeometry(fw, fh), mat, 0, 0, top - 0.012 + coat + 0.002))
     }
   } else if (spec.part === 'D') {

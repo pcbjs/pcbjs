@@ -12,7 +12,11 @@ interface SkillsPackage {
 
 async function load(cwd: string): Promise<SkillsPackage | null> {
   for (const from of [join(cwd, 'package.json'), import.meta.url]) {
-    try { return await import(pathToFileURL(createRequire(from).resolve('@pcbjs/skills')).href) as SkillsPackage } catch { /* the next place */ }
+    try {
+      return (await import(pathToFileURL(createRequire(from).resolve('@pcbjs/skills')).href)) as SkillsPackage
+    } catch {
+      /* the next place */
+    }
   }
   return null
 }

@@ -19,7 +19,10 @@ beforeEach(() => resetDefaults())
 
 const edge = () => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 30, h: 20 })
 const board = (parts, props = {}, C = PCB) => h(C, { name: 'Src', ...props }, edge(), ...parts.map((p, i) => h(p, { at: `${5 + 6 * (i % 4)} ${5 + 6 * Math.floor(i / 4)}` })))
-const two = () => { const { A, B } = nets(); return [A, B] }
+const two = () => {
+  const { A, B } = nets()
+  return [A, B]
+}
 const fieldsOf = (b, ref) => b.footprints.find(f => f.ref === ref).fields
 const rule = (b, r) => b.erc.filter(d => d.rule === r)
 
@@ -45,8 +48,11 @@ test('sourcing: .source() merges over the options, later calls win, and returns 
 
 test('sourcing: out of line by part, by an array of parts and by factory and value', () => {
   const [A, B] = two()
-  const R1 = R0603('121').connect(A, B), R2 = R0603('121').connect(A, B), R3 = R0603('122').connect(A, B)
-  const C1 = C0603('121').connect(A, B), C2 = C0603('1u').connect(A, B)
+  const R1 = R0603('121').connect(A, B),
+    R2 = R0603('121').connect(A, B),
+    R3 = R0603('122').connect(A, B)
+  const C1 = C0603('121').connect(A, B),
+    C2 = C0603('1u').connect(A, B)
   source(R0603, '121', { MPN: 'R-121' })
   source([C1, C2], { MPN: 'C-any' })
   source(C2, { 'MPN:US': 'C-us' })
@@ -81,7 +87,13 @@ test('sourcing: compile option files limits factory rules to the modules the ent
 
 test('sourcing: resolution takes the first tag present, else MPN, else nothing; tags ignore case', () => {
   const f = { MPN: 'any', 'MPN:us': 'us', 'MPN:LCSC': 'lcsc', Manufacturer: 'Yageo', datasheet: 'https://x' }
-  assert.deepEqual(resolveSourcing(f, ['LCSC', 'US']), { mpn: 'lcsc', tag: 'LCSC', all: { MPN: 'any', 'MPN:us': 'us', 'MPN:LCSC': 'lcsc' }, manufacturer: 'Yageo', datasheet: 'https://x' })
+  assert.deepEqual(resolveSourcing(f, ['LCSC', 'US']), {
+    mpn: 'lcsc',
+    tag: 'LCSC',
+    all: { MPN: 'any', 'MPN:us': 'us', 'MPN:LCSC': 'lcsc' },
+    manufacturer: 'Yageo',
+    datasheet: 'https://x',
+  })
   assert.equal(resolveSourcing(f, ['DigiKey', 'US']).tag, 'US', 'the tag as the list spells it')
   assert.equal(resolveSourcing(f, ['DigiKey', 'US']).mpn, 'us')
   assert.deepEqual([resolveSourcing(f, ['EU']).mpn, resolveSourcing(f, ['EU']).tag], ['any', ''])
@@ -98,14 +110,23 @@ test('sourcing: bom rows resolve with the board tags, bom.csv has the fixed colu
   const b = compileBoard(board([R1, R2, R3], { sourcing: ['lcsc', 'US'] }))
   assert.deepEqual(b.sourcingTags, ['lcsc', 'US'])
   const rows = bomRows(b)
-  assert.deepEqual(rows.map(r => [r.sourcing.mpn, r.sourcing.tag]), [['C151', 'lcsc'], ['U-152', 'US'], [null, null]])
+  assert.deepEqual(
+    rows.map(r => [r.sourcing.mpn, r.sourcing.tag]),
+    [
+      ['C151', 'lcsc'],
+      ['U-152', 'US'],
+      [null, null],
+    ],
+  )
   const csv = bomCsv(b).trimEnd().split('\n')
   assert.equal(csv[0], 'Refs,Value,Footprint,Qty,MPN,Source,Manufacturer,Datasheet,tolerance,MPN:LCSC,MPN:US,MPN:*')
   assert.equal(csv[1], 'R1,151,pcbjs:R_0603_1608Metric,1,C151,lcsc,Yageo,,1%,C151,,R-151')
   assert.equal(csv[2], 'R2,152,pcbjs:R_0603_1608Metric,1,U-152,US,,https://d,,,U-152,')
   assert.equal(csv[3], 'R3,153,pcbjs:R_0603_1608Metric,1,,,,,,,,')
   // without tags the catch-all is the MPN column, Source reads MPN, and there is no MPN:* column
-  const plain = bomCsv(compileBoard(board([R1]))).trimEnd().split('\n')
+  const plain = bomCsv(compileBoard(board([R1])))
+    .trimEnd()
+    .split('\n')
   assert.equal(plain[0], 'Refs,Value,Footprint,Qty,MPN,Source,Manufacturer,Datasheet,tolerance,MPN:LCSC')
   assert.equal(plain[1], 'R1,151,pcbjs:R_0603_1608Metric,1,R-151,MPN,Yageo,,1%,C151')
   const readme = buildFab(b).readme
@@ -114,7 +135,8 @@ test('sourcing: bom rows resolve with the board tags, bom.csv has the fixed colu
 
 test('sourcing: unsourced-part warns for a row without any MPN only with requireSourcing', () => {
   const [A, B] = two()
-  const R1 = R0603('161', { MPN: 'R-161' }).connect(A, B), R2 = R0603('162').connect(A, B)
+  const R1 = R0603('161', { MPN: 'R-161' }).connect(A, B),
+    R2 = R0603('162').connect(A, B)
   assert.equal(rule(compileBoard(board([R1, R2])), 'unsourced-part').length, 0)
   const b = compileBoard(board([R1, R2], { rules: { requireSourcing: true } }))
   const w = rule(b, 'unsourced-part')
@@ -132,7 +154,10 @@ test('sourcing: unsourced-target warns when tags are set and only tagged MPNs th
   const R3 = R0603('173').connect(A, B)
   const b = compileBoard(board([R1, R2, R3], { sourcing: ['LCSC'] }))
   const w = rule(b, 'unsourced-target')
-  assert.deepEqual(w.map(x => [x.severity, x.message.split(',')[0]]), [['warning', 'R1']])
+  assert.deepEqual(
+    w.map(x => [x.severity, x.message.split(',')[0]]),
+    [['warning', 'R1']],
+  )
   assert.equal(rule(compileBoard(board([R1, R2, R3], { sourcing: ['us'] })), 'unsourced-target').length, 0)
   assert.equal(rule(compileBoard(board([R1, R2, R3])), 'unsourced-target').length, 0, 'no tags, no target to miss')
   assert.ok(b.erc.every(x => x.severity === 'warning'))
@@ -159,12 +184,24 @@ test('sourcing: variant targets carry their tags, the object form too', () => {
   const [A, B] = two()
   const R = R0603('181', { MPN: 'R-181', 'MPN:LCSC': 'C181', 'MPN:US': 'U-181', 'MPN:EU': 'E-181' }).connect(A, B)
   const V = variants(JLC2, OSH2, { name: 'House' }, { name: 'Euro', sourcing: ['eu'] })
-  assert.deepEqual(V.targets.map(t => t.sourcing), [['LCSC', 'CN'], ['DigiKey', 'US'], undefined, ['eu']])
+  assert.deepEqual(
+    V.targets.map(t => t.sourcing),
+    [['LCSC', 'CN'], ['DigiKey', 'US'], undefined, ['eu']],
+  )
   const boards = compileBoards(board([R], {}, V))
-  assert.deepEqual(boards.map(b => b.sourcingTags), [['LCSC', 'CN'], ['DigiKey', 'US'], [], ['eu']])
-  assert.deepEqual(boards.map(b => bomRows(b)[0].sourcing.mpn), ['C181', 'U-181', 'R-181', 'E-181'])
+  assert.deepEqual(
+    boards.map(b => b.sourcingTags),
+    [['LCSC', 'CN'], ['DigiKey', 'US'], [], ['eu']],
+  )
+  assert.deepEqual(
+    boards.map(b => bomRows(b)[0].sourcing.mpn),
+    ['C181', 'U-181', 'R-181', 'E-181'],
+  )
   const own = compileBoards(board([R], { sourcing: ['US'] }, V))
-  assert.ok(own.every(b => b.sourcingTags.join() === 'US'), 'the element wins over every target')
+  assert.ok(
+    own.every(b => b.sourcingTags.join() === 'US'),
+    'the element wins over every target',
+  )
 })
 
 test('sourcing: site data carries bom[].sourcing and sourcingTags', () => {
@@ -179,7 +216,8 @@ test('sourcing: site data carries bom[].sourcing and sourcingTags', () => {
 })
 
 test('sourcing: plain footprints take the same keys through fields', () => {
-  const b = compileBoard(h(PCB, { name: 'Plain', sourcing: ['US'] }, edge(),
-    h(PinHeader, { ref: 'J1', pins: 2, at: '5 5', fields: { MPN: 'PEC02SAAN', 'MPN:US': 'S1011EC-02-ND' } })))
+  const b = compileBoard(
+    h(PCB, { name: 'Plain', sourcing: ['US'] }, edge(), h(PinHeader, { ref: 'J1', pins: 2, at: '5 5', fields: { MPN: 'PEC02SAAN', 'MPN:US': 'S1011EC-02-ND' } })),
+  )
   assert.deepEqual(bomRows(b)[0].sourcing, { mpn: 'S1011EC-02-ND', tag: 'US', all: { MPN: 'PEC02SAAN', 'MPN:US': 'S1011EC-02-ND' } })
 })

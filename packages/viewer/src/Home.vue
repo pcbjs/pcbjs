@@ -8,7 +8,14 @@ import { unsourcedCount, type BomRow } from './sourcing'
 import Menu from './Menu.vue'
 
 const { asset, boardHref, cards, workspaceHome, scopeCards } = useStore()
-const scopePill = (s: { status: string; stale: boolean }) => (s.status === 'unloaded' ? { cls: 'dim', text: 'not loaded' } : s.status === 'error' ? { cls: 'err', text: 'error' } : s.status === 'incomplete' ? { cls: 'warn', text: 'DRC errors' } : { cls: 'ok', text: 'ok' })
+const scopePill = (s: { status: string; stale: boolean }) =>
+  s.status === 'unloaded'
+    ? { cls: 'dim', text: 'not loaded' }
+    : s.status === 'error'
+      ? { cls: 'err', text: 'error' }
+      : s.status === 'incomplete'
+        ? { cls: 'warn', text: 'DRC errors' }
+        : { cls: 'ok', text: 'ok' }
 const boardLink = (route: string, name: string) => `${route}board/${encodeURIComponent(name)}`
 const THUMB_LAYERS = ['F.Cu', 'F.SilkS', 'Edge.Cuts']
 const thumbLayers = (b: SiteData) => THUMB_LAYERS.map(id => b.layers.find(l => l.id === id)).filter(l => !!l && l.svg)
@@ -16,21 +23,26 @@ const substrate = (b: SiteData) => b.outline.map(r => 'M' + r.map(p => p.join(' 
 const mm = (v: number) => +v.toFixed(2)
 // the first error line, joined with the next when it only introduces it; absolute paths shrink to the file name
 function firstLine(e: string) {
-  const ls = e.split('\n').map(l => l.trim()).filter(Boolean)
-  const line = ls[0]?.endsWith(':') && ls[1] ? `${ls[0]} ${ls[1]}` : ls[0] ?? e
+  const ls = e
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+  const line = ls[0]?.endsWith(':') && ls[1] ? `${ls[0]} ${ls[1]}` : (ls[0] ?? e)
   return line.replace(/(?:\/[^\s/:]+)+\/([^\s/:]+(?::\d+)+)/g, '$1')
 }
 // a board with several targets shows the worst target's DRC in its pill and every target as a chip
-const list = computed(() => cards.value.map(c => {
-  const multi = c.targets.length > 1
-  const shown = multi ? worstTarget(c.targets) : c.board
-  const targets = multi ? c.targets.map(t => ({ name: targetName(t) ?? t.name, board: t, drc: checkSummary(t) })) : []
-  const drc = shown ? checkSummary(shown) : null
-  const title = multi ? targets.map(t => `${t.name}: ${t.drc.text}`).join('\n') : drc?.title ?? ''
-  // old data without sourcing falls back to the MPN field
-  const unsourced = shown ? unsourcedCount(shown.bom as BomRow[]) : 0
-  return { ...c, drc, targets, title, unsourced }
-}))
+const list = computed(() =>
+  cards.value.map(c => {
+    const multi = c.targets.length > 1
+    const shown = multi ? worstTarget(c.targets) : c.board
+    const targets = multi ? c.targets.map(t => ({ name: targetName(t) ?? t.name, board: t, drc: checkSummary(t) })) : []
+    const drc = shown ? checkSummary(shown) : null
+    const title = multi ? targets.map(t => `${t.name}: ${t.drc.text}`).join('\n') : (drc?.title ?? '')
+    // old data without sourcing falls back to the MPN field
+    const unsourced = shown ? unsourcedCount(shown.bom as BomRow[]) : 0
+    return { ...c, drc, targets, title, unsourced }
+  }),
+)
 </script>
 
 <template>
@@ -44,12 +56,19 @@ const list = computed(() => cards.value.map(c => {
             <span v-if="s.stale" class="pill sm dim" title="a file changed; it recompiles when shown">stale</span>
             <span class="pill sm" :class="scopePill(s).cls">{{ scopePill(s).text }}</span>
           </div>
-          <div class="card-meta"><span>{{ s.dir }}</span><span v-if="s.displayed">shown</span></div>
+          <div class="card-meta">
+            <span>{{ s.dir }}</span
+            ><span v-if="s.displayed">shown</span>
+          </div>
           <div v-if="s.boards.length" class="card-targets" aria-label="Boards">
-            <a v-for="b in s.boards" :key="b.name" class="chip target" :href="boardLink(s.route, b.name)"><span class="dot" :class="b.status === 'ok' ? 'ok' : 'err'"></span>{{ b.title || b.name }}</a>
+            <a v-for="b in s.boards" :key="b.name" class="chip target" :href="boardLink(s.route, b.name)"
+              ><span class="dot" :class="b.status === 'ok' ? 'ok' : 'err'"></span>{{ b.title || b.name }}</a
+            >
           </div>
           <div v-if="s.error" class="card-error" :title="s.error">{{ firstLine(s.error) }}</div>
-          <div class="card-foot"><code class="entry">{{ s.route }}</code></div>
+          <div class="card-foot">
+            <code class="entry">{{ s.route }}</code>
+          </div>
         </div>
       </li>
     </ul>
@@ -82,14 +101,23 @@ const list = computed(() => cards.value.map(c => {
             <span v-if="c.unsourced" class="unsourced" title="BOM rows without a part number">{{ c.unsourced }} unsourced</span>
           </div>
           <div v-if="c.targets.length" class="card-targets" aria-label="Fab targets">
-            <a v-for="t in c.targets" :key="t.name" class="chip target" :href="boardHref(c.board!.name, t.name)" :title="`${t.name}: ${t.drc.text}`"><span class="dot" :class="t.drc.state"></span>{{ t.name }}</a>
+            <a v-for="t in c.targets" :key="t.name" class="chip target" :href="boardHref(c.board!.name, t.name)" :title="`${t.name}: ${t.drc.text}`"
+              ><span class="dot" :class="t.drc.state"></span>{{ t.name }}</a
+            >
           </div>
           <div v-if="c.error" class="card-error" :title="c.error">{{ firstLine(c.error) }}</div>
           <div class="card-foot">
             <code class="entry" :title="c.entry">{{ c.entry }}</code>
             <Menu v-if="c.targets.length" class="fab-menu" align="right" label="Fab zips">
-              <template #button><span class="btn primary"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M4.5 6.5L8 10l3.5-3.5M3 13h10" /></svg>Fab zips<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5L8 10l3.5-3.5" /></svg></span></template>
-              <a v-for="t in c.targets" :key="t.name" role="menuitem" :href="asset(t.board.fab.url)" :title="t.board.fab.files.join('\n')" download><span class="dot" :class="t.drc.state"></span><span class="name">{{ t.name }}</span><span class="dim">{{ t.board.fab.name }}</span></a>
+              <template #button
+                ><span class="btn primary"
+                  ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M4.5 6.5L8 10l3.5-3.5M3 13h10" /></svg>Fab zips<svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M4.5 6.5L8 10l3.5-3.5" /></svg></span
+              ></template>
+              <a v-for="t in c.targets" :key="t.name" role="menuitem" :href="asset(t.board.fab.url)" :title="t.board.fab.files.join('\n')" download
+                ><span class="dot" :class="t.drc.state"></span><span class="name">{{ t.name }}</span
+                ><span class="dim">{{ t.board.fab.name }}</span></a
+              >
             </Menu>
             <a v-else-if="c.board" class="btn primary" :href="asset(c.board.fab.url)" :title="c.board.fab.files.join('\n')" download>
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M4.5 6.5L8 10l3.5-3.5M3 13h10" /></svg>Fab zip

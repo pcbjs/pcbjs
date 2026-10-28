@@ -22,18 +22,44 @@ const WRAPPED = Symbol.for('pcbjs.ts-plugin')
 const CANNOT_FIND = new Set([2304, 2552])
 const SCOPE_ERROR = 99001
 
-const AT_POS = ['getCompletionEntrySymbol', 'getQuickInfoAtPosition',
-  'getTypeDefinitionAtPosition', 'getImplementationAtPosition', 'getDocumentHighlights', 'getRenameInfo', 'getSignatureHelpItems',
-  'getSmartSelectionRange', 'getBraceMatchingAtPosition', 'getIndentationAtPosition', 'getFormattingEditsAfterKeystroke',
-  'isValidBraceCompletionAtPosition', 'getJsxClosingTagAtPosition', 'getLinkedEditingRangeAtPosition', 'getSpanOfEnclosingComment',
-  'getDocCommentTemplateAtPosition', 'prepareCallHierarchy', 'provideCallHierarchyIncomingCalls', 'provideCallHierarchyOutgoingCalls',
-  'getBreakpointStatementAtPosition'] as const
+const AT_POS = [
+  'getCompletionEntrySymbol',
+  'getQuickInfoAtPosition',
+  'getTypeDefinitionAtPosition',
+  'getImplementationAtPosition',
+  'getDocumentHighlights',
+  'getRenameInfo',
+  'getSignatureHelpItems',
+  'getSmartSelectionRange',
+  'getBraceMatchingAtPosition',
+  'getIndentationAtPosition',
+  'getFormattingEditsAfterKeystroke',
+  'isValidBraceCompletionAtPosition',
+  'getJsxClosingTagAtPosition',
+  'getLinkedEditingRangeAtPosition',
+  'getSpanOfEnclosingComment',
+  'getDocCommentTemplateAtPosition',
+  'prepareCallHierarchy',
+  'provideCallHierarchyIncomingCalls',
+  'provideCallHierarchyOutgoingCalls',
+  'getBreakpointStatementAtPosition',
+] as const
 const AT_RANGE = ['getNameOrDottedNameSpan', 'getCodeFixesAtPosition', 'getFormattingEditsForRange'] as const
 const AT_SPAN = ['provideInlayHints', 'getSemanticClassifications', 'getSyntacticClassifications'] as const
 const AT_TEXT_RANGE = ['toggleLineComment', 'toggleMultilineComment', 'commentSelection', 'uncommentSelection'] as const
 const ENCODED = ['getEncodedSemanticClassifications', 'getEncodedSyntacticClassifications'] as const
-const RESULT_ONLY = ['getOutliningSpans', 'getNavigationBarItems', 'getNavigationTree', 'getFormattingEditsForDocument', 'organizeImports',
-  'getEditsForFileRename', 'getCombinedCodeFix', 'getNavigateToItems', 'getFileReferences', 'getTodoComments'] as const
+const RESULT_ONLY = [
+  'getOutliningSpans',
+  'getNavigationBarItems',
+  'getNavigationTree',
+  'getFormattingEditsForDocument',
+  'organizeImports',
+  'getEditsForFileRename',
+  'getCombinedCodeFix',
+  'getNavigateToItems',
+  'getFileReferences',
+  'getTodoComments',
+] as const
 const DIAGNOSTICS = ['getSyntacticDiagnostics', 'getSemanticDiagnostics', 'getSuggestionDiagnostics'] as const
 
 function init({ typescript: ts }: { typescript: typeof TS }) {
@@ -51,7 +77,7 @@ function init({ typescript: ts }: { typescript: typeof TS }) {
     const exists = (f: string) => host.fileExists?.(f) ?? ts.sys.fileExists(f)
     const read = (f: string) => {
       const s = snap0(f)
-      return s ? s.getText(0, s.getLength()) : host.readFile?.(f) ?? ts.sys.readFile(f)
+      return s ? s.getText(0, s.getLength()) : (host.readFile?.(f) ?? ts.sys.readFile(f))
     }
     const modHost: TS.ModuleResolutionHost = {
       fileExists: exists,
@@ -73,15 +99,17 @@ function init({ typescript: ts }: { typescript: typeof TS }) {
     }
     const wanted = (f: string) => f.endsWith('.tsx') && inProject(f.replace(/\/[^/]*$/, ''))
 
-    const resolver = (deps: string[], seen?: (spec: string, from: string) => void): ResolveModule => (s, from) => {
-      seen?.(s, from)
-      const r = ts.resolveModuleName(s, from, host.getCompilationSettings(), modHost, host.getModuleResolutionCache?.()).resolvedModule
-      if (!r || r.isExternalLibraryImport) return null
-      const text = read(r.resolvedFileName)
-      if (text === undefined) return null
-      deps.push(r.resolvedFileName)
-      return { file: r.resolvedFileName, source: text }
-    }
+    const resolver =
+      (deps: string[], seen?: (spec: string, from: string) => void): ResolveModule =>
+      (s, from) => {
+        seen?.(s, from)
+        const r = ts.resolveModuleName(s, from, host.getCompilationSettings(), modHost, host.getModuleResolutionCache?.()).resolvedModule
+        if (!r || r.isExternalLibraryImport) return null
+        const text = read(r.resolvedFileName)
+        if (text === undefined) return null
+        deps.push(r.resolvedFileName)
+        return { file: r.resolvedFileName, source: text }
+      }
 
     const cache = new Map<string, Entry>()
     const fresh = (e: Entry | undefined, version: string) => e && e.version === version && e.deps.every(([d, v]) => ver0(d) === v)
@@ -95,9 +123,13 @@ function init({ typescript: ts }: { typescript: typeof TS }) {
       if (source === undefined) return undefined
       const deps: string[] = []
       let spec: string | undefined
-      const resolveModule = resolver(deps, (s, from) => { if (from === file) spec ??= s })
+      const resolveModule = resolver(deps, (s, from) => {
+        if (from === file) spec ??= s
+      })
       const e: Entry = { key: '', version, deps: [], inj: null, source }
-      try { e.inj = scopeInject(source, resolveModule, file) } catch (err) {
+      try {
+        e.inj = scopeInject(source, resolveModule, file)
+      } catch (err) {
         if (err instanceof ScopeError) e.error = err
         else log(`scope of ${file}: ${(err as Error).message}`)
       }
@@ -122,7 +154,7 @@ function init({ typescript: ts }: { typescript: typeof TS }) {
 
     /** Definitions on an injected binding become those of the module's export. */
     const viaExport = <T extends TS.DefinitionInfo>(defs: readonly T[] | undefined) =>
-      defs?.flatMap(d => (insideOf(d) ? (ls.getDefinitionAtPosition(d.fileName, d.textSpan.start) ?? []).filter(x => !insideOf(x)) as T[] : [d]))
+      defs?.flatMap(d => (insideOf(d) ? ((ls.getDefinitionAtPosition(d.fileName, d.textSpan.start) ?? []).filter(x => !insideOf(x)) as T[]) : [d]))
 
     /** Every use of a scoped name: the module's export and its uses, and the uses of each file that binds it. */
     function scopedUses<T extends { fileName: string; textSpan: TS.TextSpan }>(first: readonly T[], at: (f: string, p: number) => readonly T[] | undefined): T[] | undefined {
@@ -206,36 +238,42 @@ function init({ typescript: ts }: { typescript: typeof TS }) {
     const fn = ls as any
 
     for (const k of AT_POS) p[k] = (file: string, pos: number, ...rest: unknown[]) => result(fn[k](file, into(injOf(file), pos), ...rest), file)
-    for (const k of AT_RANGE) p[k] = (file: string, start: number, end: number, ...rest: unknown[]) => {
-      const inj = injOf(file)
-      return result(fn[k](file, into(inj, start), intoEnd(inj, end), ...rest), file)
-    }
-    for (const k of AT_SPAN) p[k] = (file: string, span: TS.TextSpan, ...rest: unknown[]) => result(fn[k](file, intoSpan(injOf(file), span), ...rest), file)
-    for (const k of AT_TEXT_RANGE) p[k] = (file: string, r: TS.TextRange, ...rest: unknown[]) => {
-      const inj = injOf(file)
-      return result(fn[k](file, { pos: into(inj, r.pos), end: intoEnd(inj, r.end) }, ...rest), file)
-    }
-    for (const k of RESULT_ONLY) p[k] = (...a: unknown[]) => result(fn[k](...a), typeof a[0] === 'string' ? a[0] : undefined)
-    for (const k of ENCODED) p[k] = (file: string, span: TS.TextSpan, ...rest: unknown[]) => {
-      const inj = injOf(file)
-      const c: TS.Classifications = fn[k](file, intoSpan(inj, span), ...rest)
-      if (!inj) return c
-      const spans: number[] = []
-      for (let i = 0; i < c.spans.length; i += 3) {
-        const s = outSpan(inj, { start: c.spans[i], length: c.spans[i + 1] })
-        if (s) spans.push(s.start, s.length, c.spans[i + 2])
+    for (const k of AT_RANGE)
+      p[k] = (file: string, start: number, end: number, ...rest: unknown[]) => {
+        const inj = injOf(file)
+        return result(fn[k](file, into(inj, start), intoEnd(inj, end), ...rest), file)
       }
-      return { ...c, spans }
-    }
-    for (const k of DIAGNOSTICS) p[k] = (file: string) => {
-      const ds = (fn[k](file) as TS.Diagnostic[]).map(outDiag).filter(d => !!d)
-      return k === 'getSemanticDiagnostics' ? [...scopeError(file), ...ds] : ds
-    }
+    for (const k of AT_SPAN) p[k] = (file: string, span: TS.TextSpan, ...rest: unknown[]) => result(fn[k](file, intoSpan(injOf(file), span), ...rest), file)
+    for (const k of AT_TEXT_RANGE)
+      p[k] = (file: string, r: TS.TextRange, ...rest: unknown[]) => {
+        const inj = injOf(file)
+        return result(fn[k](file, { pos: into(inj, r.pos), end: intoEnd(inj, r.end) }, ...rest), file)
+      }
+    for (const k of RESULT_ONLY) p[k] = (...a: unknown[]) => result(fn[k](...a), typeof a[0] === 'string' ? a[0] : undefined)
+    for (const k of ENCODED)
+      p[k] = (file: string, span: TS.TextSpan, ...rest: unknown[]) => {
+        const inj = injOf(file)
+        const c: TS.Classifications = fn[k](file, intoSpan(inj, span), ...rest)
+        if (!inj) return c
+        const spans: number[] = []
+        for (let i = 0; i < c.spans.length; i += 3) {
+          const s = outSpan(inj, { start: c.spans[i], length: c.spans[i + 1] })
+          if (s) spans.push(s.start, s.length, c.spans[i + 2])
+        }
+        return { ...c, spans }
+      }
+    for (const k of DIAGNOSTICS)
+      p[k] = (file: string) => {
+        const ds = (fn[k](file) as TS.Diagnostic[]).map(outDiag).filter(d => !!d)
+        return k === 'getSemanticDiagnostics' ? [...scopeError(file), ...ds] : ds
+      }
 
     const posOrRange = (inj: Inj, r: number | TS.TextRange) => (typeof r === 'number' ? into(inj, r) : { pos: into(inj, r.pos), end: intoEnd(inj, r.end) })
     p.getApplicableRefactors = (file: string, r: number | TS.TextRange, ...rest: unknown[]) => result(fn.getApplicableRefactors(file, posOrRange(injOf(file), r), ...rest), file)
-    p.getMoveToRefactoringFileSuggestions = (file: string, r: number | TS.TextRange, ...rest: unknown[]) => result(fn.getMoveToRefactoringFileSuggestions(file, posOrRange(injOf(file), r), ...rest), file)
-    p.getEditsForRefactor = (file: string, fmt: unknown, r: number | TS.TextRange, ...rest: unknown[]) => result(fn.getEditsForRefactor(file, fmt, posOrRange(injOf(file), r), ...rest), file)
+    p.getMoveToRefactoringFileSuggestions = (file: string, r: number | TS.TextRange, ...rest: unknown[]) =>
+      result(fn.getMoveToRefactoringFileSuggestions(file, posOrRange(injOf(file), r), ...rest), file)
+    p.getEditsForRefactor = (file: string, fmt: unknown, r: number | TS.TextRange, ...rest: unknown[]) =>
+      result(fn.getEditsForRefactor(file, fmt, posOrRange(injOf(file), r), ...rest), file)
 
     const exportsOf = (file: string, e: Entry) => {
       if (e.exports) return e.exports
@@ -267,7 +305,9 @@ function init({ typescript: ts }: { typescript: typeof TS }) {
       const e = entry(file)
       if (!r || !e?.spec || !r.isGlobalCompletion) return r
       const have = new Set(r.entries.map(x => x.name))
-      const more = exportsOf(file, e).filter(n => !have.has(n)).map(name => ({ name, kind: ts.ScriptElementKind.constElement, kindModifiers: '', sortText: '11' }))
+      const more = exportsOf(file, e)
+        .filter(n => !have.has(n))
+        .map(name => ({ name, kind: ts.ScriptElementKind.constElement, kindModifiers: '', sortText: '11' }))
       return { ...r, entries: [...r.entries, ...more] }
     }
     p.getCompletionEntryDetails = (file: string, pos: number, name: string, ...rest: unknown[]) => {
@@ -303,7 +343,10 @@ function init({ typescript: ts }: { typescript: typeof TS }) {
       const first = at(file, into(injOf(file), pos))
       const uses = first && scopedUses(first, at)
       if (!uses) return result(first, file)
-      return result(uses.map(({ prefixText, suffixText, ...l }) => (injOf(l.fileName) ? l : { ...l, prefixText, suffixText })), file)
+      return result(
+        uses.map(({ prefixText, suffixText, ...l }) => (injOf(l.fileName) ? l : { ...l, prefixText, suffixText })),
+        file,
+      )
     }
 
     log(`schematic scope on for ${info.project?.getProjectName?.() ?? 'a project'}`)

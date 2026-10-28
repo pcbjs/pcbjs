@@ -10,11 +10,14 @@ export function outlineSegs(rings: readonly Ring[]): number[] {
 
 /** The crossings of the line `axis` = v with the rings' edges, sorted along the line. */
 function crossings(rings: readonly Ring[], axis: 0 | 1, v: number): number[] {
-  const o = 1 - axis, out: number[] = []
-  for (const r of rings) for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
-    const a = r[j], b = r[i]
-    if ((a[axis] > v) !== (b[axis] > v)) out.push(a[o] + ((v - a[axis]) * (b[o] - a[o])) / (b[axis] - a[axis]))
-  }
+  const o = 1 - axis,
+    out: number[] = []
+  for (const r of rings)
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+      const a = r[j],
+        b = r[i]
+      if (a[axis] > v !== b[axis] > v) out.push(a[o] + ((v - a[axis]) * (b[o] - a[o])) / (b[axis] - a[axis]))
+    }
   return out.sort((p, q) => p - q)
 }
 
@@ -24,9 +27,11 @@ export function gridSegs(rings: readonly Ring[], step: number): number[] {
   if (!pts.length || !(step > 0)) return []
   const out: number[] = []
   for (const axis of [0, 1] as const) {
-    const lo = Math.min(...pts.map(p => p[axis])), hi = Math.max(...pts.map(p => p[axis]))
+    const lo = Math.min(...pts.map(p => p[axis])),
+      hi = Math.max(...pts.map(p => p[axis]))
     for (let k = Math.floor(lo / step + 1e-9) + 1; k * step < hi - 1e-9; k++) {
-      const v = k * step, c = crossings(rings, axis, v)
+      const v = k * step,
+        c = crossings(rings, axis, v)
       for (let i = 0; i + 1 < c.length; i += 2) out.push(...(axis === 0 ? [v, c[i], v, c[i + 1]] : [c[i], v, c[i + 1], v]))
     }
   }

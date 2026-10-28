@@ -31,11 +31,12 @@ export const sourceUrl = (source: string): string => (/^kicad:/i.test(source) ? 
 export function licenceOf(source: string): string {
   if (/^kicad:/i.test(source) || /gitlab\.com\/kicad\//.test(source)) return `KiCad 3D library ${KICAD_3D_TAG}, ${KICAD_LICENCE}`
   if (/github(usercontent)?\.com\/espressif\/kicad-libraries/.test(source)) return `Espressif KiCad library, ${KICAD_LICENCE}`
-  if (/^lcsc:/i.test(source)) return 'EasyEDA library model for the LCSC part, no licence stated: for the 3D view, check the maker\'s terms before you share the file'
+  if (/^lcsc:/i.test(source)) return "EasyEDA library model for the LCSC part, no licence stated: for the 3D view, check the maker's terms before you share the file"
   return 'licence not known: check the source before you share the file'
 }
 
-const LICENSES_HEAD = '# Model sources\n\nWhere each model file in this folder came from and when it was added. Check the licence of each source before you share or sell a design with the model: manufacturer models usually allow use in designs but not redistribution, and KiCad\'s packages3D models are CC-BY-SA 4.0 with an exception that lets designs and generated files use them freely.\n\n'
+const LICENSES_HEAD =
+  "# Model sources\n\nWhere each model file in this folder came from and when it was added. Check the licence of each source before you share or sell a design with the model: manufacturer models usually allow use in designs but not redistribution, and KiCad's packages3D models are CC-BY-SA 4.0 with an exception that lets designs and generated files use them freely.\n\n"
 
 /** Append the source line of a model to <dir>/LICENSES.md, creating the file with its header. */
 export function noteSource(dir: string, file: string, source: string, date = new Date().toISOString().slice(0, 10)): string {
@@ -56,26 +57,48 @@ export async function lcscModel(code: string, fetcher: typeof fetch = fetch): Pr
   const j: any = r.ok ? await r.json().catch(() => null) : null
   if (!j?.success || !j.result) throw new Error(`${c}: not in EasyEDA's library (${api}: ${j?.message ?? `HTTP ${r.status}`})`)
   let ds = j.result.packageDetail?.dataStr
-  if (typeof ds === 'string') { try { ds = JSON.parse(ds) } catch { ds = null } }
+  if (typeof ds === 'string') {
+    try {
+      ds = JSON.parse(ds)
+    } catch {
+      ds = null
+    }
+  }
   let model: { uuid: string; title: string } | null = null
   for (const sh of ds?.shape ?? []) {
     if (typeof sh !== 'string' || !sh.startsWith('SVGNODE~')) continue
-    try { const a = JSON.parse(sh.slice(8)).attrs; if (a?.c_etype === 'outline3D' && /^[0-9a-f]{32}$/.test(a.uuid)) { model = { uuid: a.uuid, title: String(a.title ?? c) }; break } } catch { /* not a node */ }
+    try {
+      const a = JSON.parse(sh.slice(8)).attrs
+      if (a?.c_etype === 'outline3D' && /^[0-9a-f]{32}$/.test(a.uuid)) {
+        model = { uuid: a.uuid, title: String(a.title ?? c) }
+        break
+      }
+    } catch {
+      /* not a node */
+    }
   }
   const pkg = String(j.result.packageDetail?.title ?? '')
   if (!model) throw new Error(`${c}: EasyEDA's footprint ${pkg || 'for it'} has no 3D model`)
   const url = EASYEDA_MODELS + model.uuid
   const m = await fetcher(url)
   if (!m.ok) throw new Error(`${c}: ${url}: HTTP ${m.status}`)
-  return { data: new Uint8Array(await m.arrayBuffer()), name: `${model.title}.step`, url, note: `LCSC ${c} ${j.result.title ?? ''}, EasyEDA library model ${model.title}`.replace(/\s+/g, ' ') }
+  return {
+    data: new Uint8Array(await m.arrayBuffer()),
+    name: `${model.title}.step`,
+    url,
+    note: `LCSC ${c} ${j.result.title ?? ''}, EasyEDA library model ${model.title}`.replace(/\s+/g, ' '),
+  }
 }
 
 /** Download a source into the project's cache, the file written whole or not at all, and note its licence. */
 export async function download(root: string, source: string): Promise<string> {
   const dest = fetchedPath(root, source)
   let data: Uint8Array, from: string
-  if (/^lcsc:/i.test(source)) { const m = await lcscModel(source.slice(5).trim()); data = m.data; from = `${m.note}, ${m.url}` }
-  else {
+  if (/^lcsc:/i.test(source)) {
+    const m = await lcscModel(source.slice(5).trim())
+    data = m.data
+    from = `${m.note}, ${m.url}`
+  } else {
     const url = sourceUrl(source)
     const r = await fetch(url, { redirect: 'follow' })
     if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`)
@@ -85,7 +108,12 @@ export async function download(root: string, source: string): Promise<string> {
   }
   mkdirSync(dirname(dest), { recursive: true })
   const tmp = `${dest}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`
-  try { writeFileSync(tmp, data); renameSync(tmp, dest) } finally { rmSync(tmp, { force: true }) }
+  try {
+    writeFileSync(tmp, data)
+    renameSync(tmp, dest)
+  } finally {
+    rmSync(tmp, { force: true })
+  }
   const dir = fetchedDir(root)
   noteSource(dir, relative(dir, dest).split(sep).join('/'), `${from}; ${licenceOf(source)}`)
   return dest
@@ -102,10 +130,16 @@ const CHILD = fileURLToPath(new URL('./fetch-model-child.js', import.meta.url))
 // sources that did not download in this process, and whether the network is down, so a compile tries each once
 const STATE = Symbol.for('pcbjs.cli.fetchModel')
 const envOffline = () => (process.env.PCBJS_OFFLINE ? 'PCBJS_OFFLINE is set' : null)
-const state = (): { failed: Map<string, string>; offline: string | null; told: Set<string> } => ((globalThis as any)[STATE] ??= { failed: new Map(), offline: envOffline(), told: new Set() })
+const state = (): { failed: Map<string, string>; offline: string | null; told: Set<string> } =>
+  ((globalThis as any)[STATE] ??= { failed: new Map(), offline: envOffline(), told: new Set() })
 
 /** Forget the failures of this process, for `model fetch`. */
-export function retryFetches(): void { const s = state(); s.failed.clear(); s.told.clear(); s.offline = envOffline() }
+export function retryFetches(): void {
+  const s = state()
+  s.failed.clear()
+  s.told.clear()
+  s.offline = envOffline()
+}
 
 /** The resolver the compile calls for each fetched model: the installed KiCad library, the cache, or a download in a child process. */
 export function remoteResolver(root: string): RemoteModelResolver {
@@ -131,7 +165,8 @@ export function remoteResolver(root: string): RemoteModelResolver {
 /** One line for the parts of a board whose models did not download, once per process for the same parts. */
 export function fetchNotice(board: string, waiting: { ref: string; source: string }[]): string | null {
   if (!waiting.length) return null
-  const s = state(), refs = waiting.map(w => w.ref)
+  const s = state(),
+    refs = waiting.map(w => w.ref)
   const key = `${board}:${refs.join(',')}`
   if (s.told.has(key)) return null
   s.told.add(key)

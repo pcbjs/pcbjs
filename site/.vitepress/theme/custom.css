@@ -14,9 +14,38 @@
   --vp-home-hero-name-background: linear-gradient(120deg, #4cc38a 20%, #e3c25a);
 }
 /* the board SVGs of scripts/boards.mjs: the canvas follows the page, the board sits on a dark substrate in both themes so the layer colours keep their contrast; config.mts sets the --sch-* colours */
-:root { --pcb-canvas: var(--vp-c-bg-alt); --pcb-substrate: #1b2129; }
-.board-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 24px 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--vp-c-divider); background: var(--vp-c-divider); }
-.board-pair > * { background: var(--pcb-canvas); }
-@media (max-width: 640px) { .board-pair { grid-template-columns: 1fr; } }
-.VPHero .hero-board { --pcb-canvas: transparent; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 320px; }
-@media (min-width: 960px) { .VPHero .hero-board { width: 400px; } }
+:root {
+  --pcb-canvas: var(--vp-c-bg-alt);
+  --pcb-substrate: #1b2129;
+}
+.board-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin: 24px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-divider);
+}
+.board-pair > * {
+  background: var(--pcb-canvas);
+}
+@media (max-width: 640px) {
+  .board-pair {
+    grid-template-columns: 1fr;
+  }
+}
+.VPHero .hero-board {
+  --pcb-canvas: transparent;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 320px;
+}
+@media (min-width: 960px) {
+  .VPHero .hero-board {
+    width: 400px;
+  }
+}

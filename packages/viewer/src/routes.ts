@@ -2,8 +2,18 @@
 import type { RouteInfo } from '@pcbjs/core/site-data'
 
 /** The part of a site item these functions read. */
-export interface TrackLike { id: number; kind: string; net?: string; pair?: string; role?: 'P' | 'N'; width?: number }
-interface BoardLike { routes?: RouteInfo[]; items?: TrackLike[] }
+export interface TrackLike {
+  id: number
+  kind: string
+  net?: string
+  pair?: string
+  role?: 'P' | 'N'
+  width?: number
+}
+interface BoardLike {
+  routes?: RouteInfo[]
+  items?: TrackLike[]
+}
 
 /** Lengths within this of a bound count as on it: the router's own resolution. */
 const EPS = 1e-6
@@ -30,7 +40,10 @@ export function pairGroups(board: BoardLike): Map<string, string[]> {
   let out = groupCache.get(board)
   if (out) return out
   const up = new Map<string, string>()
-  const find = (x: string): string => { while (up.get(x) !== x) x = up.get(x)!; return x }
+  const find = (x: string): string => {
+    while (up.get(x) !== x) x = up.get(x)!
+    return x
+  }
   for (const r of board.routes ?? []) {
     if (!r.pair) continue
     const nets = r.nets ?? [r.net, ...pairNets(board, r.pair)]
@@ -38,7 +51,10 @@ export function pairGroups(board: BoardLike): Map<string, string[]> {
     for (const x of nets) up.set(find(x), find(nets[0]))
   }
   const by = new Map<string, string[]>()
-  for (const x of up.keys()) { const k = find(x); by.set(k, [...(by.get(k) ?? []), x]) }
+  for (const x of up.keys()) {
+    const k = find(x)
+    by.set(k, [...(by.get(k) ?? []), x])
+  }
   out = new Map([...up.keys()].map(x => [x, by.get(find(x))!]))
   groupCache.set(board, out)
   return out
@@ -62,8 +78,8 @@ export function lengthStatus(r: Pick<RouteInfo, 'length' | 'target'>): 'ok' | 's
 }
 
 /** A target range as text: one number when min and max agree; a max of 1e6 or more is no maximum, a min of 0 no minimum. */
-export const targetText = (t: { min: number; max: number }): string => (Math.abs(t.max - t.min) < EPS ? mm(t.min)
-  : t.max >= 1e6 ? `at least ${mm(t.min)}` : t.min <= 0 ? `at most ${mm(t.max)}` : `${+t.min.toFixed(2)} to ${mm(t.max)}`)
+export const targetText = (t: { min: number; max: number }): string =>
+  Math.abs(t.max - t.min) < EPS ? mm(t.min) : t.max >= 1e6 ? `at least ${mm(t.min)}` : t.min <= 0 ? `at most ${mm(t.max)}` : `${+t.min.toFixed(2)} to ${mm(t.max)}`
 
 /** The routes of an item: the route of its pair for a pair track, else every route of its net. */
 export function routesOf(board: BoardLike, it: TrackLike | null | undefined): RouteInfo[] {
@@ -93,7 +109,14 @@ export function routeHover(board: BoardLike, it: TrackLike | null | undefined): 
 }
 
 /** What the Nets list shows beside a net with a route: the length, the target and whether the length is outside it. */
-export interface NetLength { length: number; routes: number; target: { min: number; max: number } | null; bad: boolean; skew?: number; title: string }
+export interface NetLength {
+  length: number
+  routes: number
+  target: { min: number; max: number } | null
+  bad: boolean
+  skew?: number
+  title: string
+}
 
 /** The route length of every net with a route, the N net of a pair included; several routes of one net add up. */
 export function netLengths(board: BoardLike): Map<string, NetLength> {
@@ -102,8 +125,12 @@ export function netLengths(board: BoardLike): Map<string, NetLength> {
     const st = lengthStatus(r)
     const line = `${r.pair ? `pair ${r.pair}` : `route ${r.id}`}: ${mm(r.length)}${r.target ? `, target ${targetText(r.target)}` : ''}${st === 'short' ? ', too short' : st === 'long' ? ', too long' : ''}${r.skew !== undefined ? `, skew ${mm(r.skew)}` : ''}${r.group ? `, group ${r.group}` : ''}`
     const e = out.get(net)
-    if (!e) { out.set(net, { length: r.length, routes: 1, target: r.target ?? null, bad: st === 'short' || st === 'long', ...(r.skew !== undefined ? { skew: r.skew } : {}), title: line }); return }
-    e.length += r.length; e.routes++
+    if (!e) {
+      out.set(net, { length: r.length, routes: 1, target: r.target ?? null, bad: st === 'short' || st === 'long', ...(r.skew !== undefined ? { skew: r.skew } : {}), title: line })
+      return
+    }
+    e.length += r.length
+    e.routes++
     e.target = e.target ?? r.target ?? null
     e.bad ||= st === 'short' || st === 'long'
     e.title += `\n${line}`

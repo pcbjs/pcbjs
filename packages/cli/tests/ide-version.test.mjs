@@ -5,10 +5,25 @@ import assert from 'node:assert/strict'
 import { compareExtensions, compareVersions, marketVersion } from '../dist/ide.js'
 
 test('compareVersions: semver order, pre-releases before their release, numeric identifiers by number', () => {
-  const order = ['0.0.1', '0.1.0-alpha', '0.1.0-alpha.1', '0.1.0-alpha.beta', '0.1.0-beta', '0.1.0-beta.1', '0.1.0-beta.2', '0.1.0-beta.11', '0.1.0-rc.1', '0.1.0', '0.1.1', '0.2.0', '1.0.0']
-  for (let i = 0; i < order.length; i++) for (let j = 0; j < order.length; j++) {
-    assert.equal(compareVersions(order[i], order[j]), Math.sign(i - j), `${order[i]} vs ${order[j]}`)
-  }
+  const order = [
+    '0.0.1',
+    '0.1.0-alpha',
+    '0.1.0-alpha.1',
+    '0.1.0-alpha.beta',
+    '0.1.0-beta',
+    '0.1.0-beta.1',
+    '0.1.0-beta.2',
+    '0.1.0-beta.11',
+    '0.1.0-rc.1',
+    '0.1.0',
+    '0.1.1',
+    '0.2.0',
+    '1.0.0',
+  ]
+  for (let i = 0; i < order.length; i++)
+    for (let j = 0; j < order.length; j++) {
+      assert.equal(compareVersions(order[i], order[j]), Math.sign(i - j), `${order[i]} vs ${order[j]}`)
+    }
   assert.equal(compareVersions('0.1.0+build.5', '0.1.0'), 0)
 })
 

@@ -3,7 +3,10 @@ export type SExpr = string | SList
 export interface SList extends Array<SExpr> {}
 
 export class SExprError extends Error {
-  constructor(message: string) { super(message); this.name = 'SExprError' }
+  constructor(message: string) {
+    super(message)
+    this.name = 'SExprError'
+  }
 }
 
 /** Parse one s-expression, the whole file. */
@@ -80,7 +83,13 @@ export function num(l: SList | undefined, i = 1, fallback = NaN): number {
 /** The numbers of a child list such as (at 1 2 90): [1, 2, 90]. */
 export function nums(l: SList | undefined, name: string): number[] {
   const c = child(l, name)
-  return c ? c.slice(1).filter((v): v is string => typeof v === 'string').map(Number).filter(Number.isFinite) : []
+  return c
+    ? c
+        .slice(1)
+        .filter((v): v is string => typeof v === 'string')
+        .map(Number)
+        .filter(Number.isFinite)
+    : []
 }
 /** A yes/no flag: `(hide yes)`, a bare `hide` symbol among the atoms, or `(hide)`. */
 export function flag(l: SList | undefined, name: string): boolean {

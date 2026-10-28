@@ -28,7 +28,8 @@ function axes(dir: THREE.Vector3, up: THREE.Vector3) {
 
 /** The box's corners relative to its centre. */
 function corners(box: THREE.Box3): THREE.Vector3[] {
-  const c = box.getCenter(new THREE.Vector3()), out: THREE.Vector3[] = []
+  const c = box.getCenter(new THREE.Vector3()),
+    out: THREE.Vector3[] = []
   for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) out.push(new THREE.Vector3(x, y, z).sub(c))
   return out
 }
@@ -36,7 +37,8 @@ function corners(box: THREE.Box3): THREE.Vector3[] {
 /** How far along `dir` from the box's centre a camera stands so every corner is on screen, `margin` times that; `vfov` in radians. */
 export function fitDistance(box: THREE.Box3, dir: THREE.Vector3, up: THREE.Vector3, vfov: number, aspect: number, margin = 1.08): number {
   const { back, right, top } = axes(dir, up)
-  const tv = Math.tan(vfov / 2), th = tv * aspect
+  const tv = Math.tan(vfov / 2),
+    th = tv * aspect
   let d = 0
   for (const p of corners(box)) {
     const toward = p.dot(back)
@@ -46,9 +48,18 @@ export function fitDistance(box: THREE.Box3, dir: THREE.Vector3, up: THREE.Vecto
 }
 
 /** A fit that keeps the right `aside` of the screen width, a fraction, free: the distance along `dir` and the target's shift from the box's centre. */
-export function fitBeside(box: THREE.Box3, dir: THREE.Vector3, up: THREE.Vector3, vfov: number, aspect: number, aside: number, margin = 1.08): { dist: number; shift: THREE.Vector3 } {
+export function fitBeside(
+  box: THREE.Box3,
+  dir: THREE.Vector3,
+  up: THREE.Vector3,
+  vfov: number,
+  aspect: number,
+  aside: number,
+  margin = 1.08,
+): { dist: number; shift: THREE.Vector3 } {
   const { back, right, top } = axes(dir, up)
-  const tv = Math.tan(vfov / 2), th = tv * aspect
+  const tv = Math.tan(vfov / 2),
+    th = tv * aspect
   // the corners must land between -1 and u in normalised x
   const u = 1 - 2 * Math.max(0, Math.min(0.5, aside))
   const pts = corners(box).map(p => ({ r: p.dot(right), t: p.dot(back), y: p.dot(top) }))
@@ -56,12 +67,16 @@ export function fitBeside(box: THREE.Box3, dir: THREE.Vector3, up: THREE.Vector3
   for (const p of pts) d = Math.max(d, p.t + Math.abs(p.y) / tv)
   for (const p of pts) for (const q of pts) d = Math.max(d, (p.r - q.r + th * (u * p.t + q.t)) / (th * (1 + u)))
   d *= margin
-  const lo = Math.max(...pts.map(p => p.r - u * th * (d - p.t))), hi = Math.min(...pts.map(p => p.r + th * (d - p.t)))
+  const lo = Math.max(...pts.map(p => p.r - u * th * (d - p.t))),
+    hi = Math.min(...pts.map(p => p.r + th * (d - p.t)))
   return { dist: d, shift: right.multiplyScalar((lo + hi) / 2) }
 }
 
 /** The box of the board with each stack group at its offset in `off` (mm), overlay with F.SilkS; barrels and other children stay put. */
 export function stackBox(board: THREE.Object3D, off: Map<string, number>): THREE.Box3 {
   const at = (c: THREE.Object3D) => (c.name === 'overlay' ? off.get('F.SilkS') : c.name === 'barrels' ? undefined : off.get(c.name))
-  return fitBox(board, c => { const z = at(c); return z === undefined ? 0 : z - c.position.z })
+  return fitBox(board, c => {
+    const z = at(c)
+    return z === undefined ? 0 : z - c.position.z
+  })
 }

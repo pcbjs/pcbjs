@@ -17,12 +17,25 @@ const nodeDir = dirname(process.execPath)
 const env = { ...process.env, PATH: `${nodeDir}:${process.env.PATH}` }
 for (const k of Object.keys(env)) if (/^npm_(package|lifecycle)_|^INIT_CWD$/.test(k)) delete env[k]
 
-const problems = [], warnings = []
-const fail = what => { problems.push(what); console.log(`  FAIL  ${what}`) }
-const warn = what => { warnings.push(what); console.log(`  warn  ${what}`) }
+const problems = [],
+  warnings = []
+const fail = what => {
+  problems.push(what)
+  console.log(`  FAIL  ${what}`)
+}
+const warn = what => {
+  warnings.push(what)
+  console.log(`  warn  ${what}`)
+}
 const ok = what => console.log(`  ok    ${what}`)
 const section = title => console.log(`\n== ${title}`)
-const tail = (text, n) => text.trim().split('\n').slice(-n).map(l => `        ${l}`).join('\n')
+const tail = (text, n) =>
+  text
+    .trim()
+    .split('\n')
+    .slice(-n)
+    .map(l => `        ${l}`)
+    .join('\n')
 
 function npm(argv, cwd) {
   const npmCli = process.env.npm_execpath?.endsWith('.js') ? process.env.npm_execpath : null
@@ -35,18 +48,23 @@ function run(label, cmd, argv, cwd, timeout = 600000) {
   const r = spawnSync(cmd, argv, { cwd, env, encoding: 'utf8', maxBuffer: 64 << 20, timeout })
   const out = `${r.stdout ?? ''}${r.stderr ?? ''}`
   const secs = ((Date.now() - start) / 1000).toFixed(1)
-  if (r.status !== 0) { fail(`${label}: exit ${r.status ?? r.signal} after ${secs} s`); console.log(tail(out, 40)) }
-  else ok(`${label}  ${secs} s`)
+  if (r.status !== 0) {
+    fail(`${label}: exit ${r.status ?? r.signal} after ${secs} s`)
+    console.log(tail(out, 40))
+  } else ok(`${label}  ${secs} s`)
   return { status: r.status, out }
 }
 
 const work = mkdtempSync(join(tmpdir(), 'pcbjs-pack-smoke-'))
-const packs = join(work, 'packs'), host = join(work, 'host'), apps = join(work, 'apps')
+const packs = join(work, 'packs'),
+  host = join(work, 'host'),
+  apps = join(work, 'apps')
 for (const d of [packs, host, apps]) mkdirSync(d)
 console.log(`pack smoke in ${work}`)
 
 section('npm pack')
-const workspaces = readdirSync(join(ROOT, 'packages')).sort()
+const workspaces = readdirSync(join(ROOT, 'packages'))
+  .sort()
   .map(d => join(ROOT, 'packages', d))
   .filter(d => existsSync(join(d, 'package.json')))
   .map(dir => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')))
@@ -55,19 +73,30 @@ const tarballs = new Map()
 for (const { name } of workspaces) {
   const r = npm(['pack', '--json', '--pack-destination', packs, '-w', name], ROOT)
   let info
-  try { info = JSON.parse(r.stdout.slice(r.stdout.indexOf('[')))[0] } catch {}
-  if (r.status !== 0 || !info) { fail(`npm pack ${name}: ${tail(r.stderr || r.stdout, 5)}`); continue }
+  try {
+    info = JSON.parse(r.stdout.slice(r.stdout.indexOf('[')))[0]
+  } catch {}
+  if (r.status !== 0 || !info) {
+    fail(`npm pack ${name}: ${tail(r.stderr || r.stdout, 5)}`)
+    continue
+  }
   tarballs.set(name, join(packs, info.filename))
   ok(`${name}  ${info.entryCount} files  ${(info.size / 1024).toFixed(0)} kB`)
 }
 // the same spec in dependencies and overrides, so nested @pcbjs deps take the tarballs too
 const fileSpecs = Object.fromEntries([...tarballs].map(([n, f]) => [n, `file:${f}`]))
 const META = '@pcbjs/pcbjs'
-if (!tarballs.has(META)) { fail(`${META} was not packed`); finish() }
+if (!tarballs.has(META)) {
+  fail(`${META} was not packed`)
+  finish()
+}
 
 function install(dir, label) {
   const r = npm(['install', '--no-audit', '--no-fund', '--loglevel=error'], dir)
-  if (r.status !== 0) { fail(`npm install in ${label}:\n${tail(r.stderr || r.stdout, 15)}`); return false }
+  if (r.status !== 0) {
+    fail(`npm install in ${label}:\n${tail(r.stderr || r.stdout, 15)}`)
+    return false
+  }
   const lock = JSON.parse(readFileSync(join(dir, 'package-lock.json'), 'utf8'))
   const fromRegistry = Object.entries(lock.packages ?? {})
     .filter(([p, v]) => /node_modules\/@pcbjs\/[^/]+$/.test(p) && !v.resolved?.startsWith('file:') && !v.link)
@@ -90,12 +119,20 @@ if (!existsSync(join(app, 'pcb.tsx'))) {
 section('install the fresh project from the tarballs')
 const appPkgFile = join(app, 'package.json')
 const appPkg = JSON.parse(readFileSync(appPkgFile, 'utf8'))
-ok(`created with ${Object.entries({ ...appPkg.dependencies, ...appPkg.devDependencies }).map(([n, v]) => `${n}@${v}`).join(', ')}`)
-for (const field of ['dependencies', 'devDependencies']) for (const n of Object.keys(appPkg[field] ?? {})) {
-  if (!n.startsWith('@pcbjs/')) continue
-  if (tarballs.has(n)) appPkg[field][n] = fileSpecs[n]
-  else { fail(`the template depends on ${n}, which no workspace package packs`); delete appPkg[field][n] }
-}
+ok(
+  `created with ${Object.entries({ ...appPkg.dependencies, ...appPkg.devDependencies })
+    .map(([n, v]) => `${n}@${v}`)
+    .join(', ')}`,
+)
+for (const field of ['dependencies', 'devDependencies'])
+  for (const n of Object.keys(appPkg[field] ?? {})) {
+    if (!n.startsWith('@pcbjs/')) continue
+    if (tarballs.has(n)) appPkg[field][n] = fileSpecs[n]
+    else {
+      fail(`the template depends on ${n}, which no workspace package packs`)
+      delete appPkg[field][n]
+    }
+  }
 appPkg.overrides = fileSpecs
 writeFileSync(appPkgFile, JSON.stringify(appPkg, null, 2) + '\n')
 if (!install(app, 'the fresh project')) finish()
@@ -103,28 +140,38 @@ if (!install(app, 'the fresh project')) finish()
 section('static checks of the installed packages')
 const nodeModules = join(app, 'node_modules')
 const builtins = new Set([...builtinModules, ...builtinModules.map(m => `node:${m}`)])
-const packageOf = spec => spec.split('/').slice(0, spec.startsWith('@') ? 2 : 1).join('/')
-const filesUnder = dir => readdirSync(dir).flatMap(f => {
-  const p = join(dir, f)
-  return f === 'node_modules' ? [] : statSync(p).isDirectory() ? filesUnder(p) : [p]
-})
+const packageOf = spec =>
+  spec
+    .split('/')
+    .slice(0, spec.startsWith('@') ? 2 : 1)
+    .join('/')
+const filesUnder = dir =>
+  readdirSync(dir).flatMap(f => {
+    const p = join(dir, f)
+    return f === 'node_modules' ? [] : statSync(p).isDirectory() ? filesUnder(p) : [p]
+  })
 const importRe = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*|\bnew\s+URL\s*\(\s*)(['"`])([^'"`\n]+)\1/g
 
 for (const name of [...tarballs.keys()].sort()) {
   const dir = join(nodeModules, ...name.split('/'))
-  if (!existsSync(dir)) { ok(`${name}  not installed by the meta package`); continue }
+  if (!existsSync(dir)) {
+    ok(`${name}  not installed by the meta package`)
+    continue
+  }
   const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
   const declared = new Set([name, ...['dependencies', 'peerDependencies', 'optionalDependencies'].flatMap(f => Object.keys(pkg[f] ?? {}))])
   const before = problems.length
   const targets = []
-  const collect = v => typeof v === 'string' ? targets.push(v) : v && typeof v === 'object' && Object.values(v).forEach(collect)
+  const collect = v => (typeof v === 'string' ? targets.push(v) : v && typeof v === 'object' && Object.values(v).forEach(collect))
   collect(pkg.exports)
   for (const t of targets) if (!existsSync(join(dir, t.split('*')[0]))) fail(`${name}: exports target ${t} is missing`)
-  for (const b of Object.values(typeof pkg.bin === 'string' ? { b: pkg.bin } : pkg.bin ?? {})) if (!existsSync(join(dir, b))) fail(`${name}: bin ${b} is missing`)
+  for (const b of Object.values(typeof pkg.bin === 'string' ? { b: pkg.bin } : (pkg.bin ?? {}))) if (!existsSync(join(dir, b))) fail(`${name}: bin ${b} is missing`)
   if (pkg.main && !existsSync(join(dir, pkg.main))) fail(`${name}: main ${pkg.main} is missing`)
   const undeclared = new Map()
   for (const file of filesUnder(dir).filter(f => /\.(m?js|ts|vue)$/.test(f))) {
-    const text = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    const text = readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
     for (const [, , spec] of text.matchAll(importRe)) {
       if (spec.includes('${')) continue
       if (spec.startsWith('.')) {
@@ -167,16 +214,23 @@ if (missingDocs.length) fail(`@pcbjs/cli/docs lacks ${missingDocs.join(', ')}`)
 
 section('pcbjs in the fresh project')
 const bin = join(nodeModules, '.bin/pcbjs')
-if (!existsSync(bin)) { fail('the fresh project has no node_modules/.bin/pcbjs'); finish() }
+if (!existsSync(bin)) {
+  fail('the fresh project has no node_modules/.bin/pcbjs')
+  finish()
+}
 const pcbjs = (label, argv, timeout) => run(`pcbjs ${label}`, bin, argv, app, timeout)
-const expect = (r, re, what) => { if (r.status === 0 && !re.test(r.out)) fail(what) }
+const expect = (r, re, what) => {
+  if (r.status === 0 && !re.test(r.out)) fail(what)
+}
 
 expect(pcbjs('doctor', ['doctor']), /versions agree/, 'doctor: no `versions agree`')
 const check = pcbjs('check', ['check'])
 expect(check, /DRC ok\s+ERC ok/, 'check: the board line does not say DRC ok ERC ok')
 expect(check, /typecheck\s+ok/, 'check: no `typecheck ok` line')
 if (pcbjs('build -q', ['build', '-q']).status === 0) {
-  const readme = readdirSync(join(app, '.pcbjs/fab'), { recursive: true }).map(String).find(f => f.endsWith('README-fab.txt'))
+  const readme = readdirSync(join(app, '.pcbjs/fab'), { recursive: true })
+    .map(String)
+    .find(f => f.endsWith('README-fab.txt'))
   if (!readme || !readFileSync(join(app, '.pcbjs/fab', readme), 'utf8').includes('STATUS: ORDERABLE')) fail('build: no README-fab.txt with STATUS: ORDERABLE')
   if (!existsSync(join(app, '.pcbjs/dist/index.html'))) fail('build: no .pcbjs/dist/index.html')
 }
@@ -197,7 +251,11 @@ if (existsSync(stepFile)) {
 
 if (noShot) console.log('  skip  shot, --no-shot')
 else {
-  const chrome = spawnSync(process.execPath, ['--input-type=module', '-e', "console.log((await import('@pcbjs/cli/shot')).findChrome() ?? '')"], { cwd: app, env, encoding: 'utf8' })
+  const chrome = spawnSync(process.execPath, ['--input-type=module', '-e', "console.log((await import('@pcbjs/cli/shot')).findChrome() ?? '')"], {
+    cwd: app,
+    env,
+    encoding: 'utf8',
+  })
   if (chrome.status !== 0) fail(`@pcbjs/cli/shot does not load: ${tail(chrome.stderr, 1).trim()}`)
   else if (!chrome.stdout.trim()) console.log('  skip  shot, no Chrome found')
   else {

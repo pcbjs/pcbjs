@@ -22,8 +22,15 @@ before(() => {
   writeFileSync(join(top, 'synth.kicad_sch'), sch)
   res = importBoard(join(top, 'synth.kicad_pcb'), { outDir: join(top, 'out') })
 })
-after(() => { rmSync(top, { recursive: true, force: true }); setKicadConfig(process.cwd(), undefined) })
-const file = name => { const f = res.files.get(name); assert.ok(f, `${name} is written`); return f }
+after(() => {
+  rmSync(top, { recursive: true, force: true })
+  setKicadConfig(process.cwd(), undefined)
+})
+const file = name => {
+  const f = res.files.get(name)
+  assert.ok(f, `${name} is written`)
+  return f
+}
 
 test('import: every route chain keeps its width up to the pads, neck AS_DRAWN', () => {
   const copper = file('pcb.copper.tsx')
@@ -63,7 +70,11 @@ test('import: remove_unused_layers keeps a through-hole pad on the outer layers 
   const lib = file('lib/Hdr_Test.tsx')
   assert.match(lib, /<pad num="1" [^>]*layers=\{\['F\.Cu', 'In1\.Cu', 'B\.Cu'\]\}/, 'the zone layer of pad 1')
   assert.match(lib, /<pad num="2" [^>]*layers=\{\['F\.Cu', 'In2\.Cu', 'B\.Cu'\]\}/, 'the track layer of pad 2')
-  assert.doesNotMatch(lib.split('\n').find(l => l.includes('num="3"')), /layers=/, 'pad 3 without the flag keeps every layer')
+  assert.doesNotMatch(
+    lib.split('\n').find(l => l.includes('num="3"')),
+    /layers=/,
+    'pad 3 without the flag keeps every layer',
+  )
 })
 
 test('import: paste windows, a positive margin and a ratio reach the pads as paste', () => {
@@ -79,19 +90,27 @@ test('import: paste windows, a positive margin and a ratio reach the pads as pas
 test('import: a filled silk shape is written before the items inside it', () => {
   const b = readKicadPcb(join(top, 'synth.kicad_pcb'))
   const specs = graphicSpecs(b.graphics.filter(g => g.layer === 'F.SilkS'))
-  assert.deepEqual(specs.map(s => s.type), ['path', 'circle'], 'the square around the disc first')
+  assert.deepEqual(
+    specs.map(s => s.type),
+    ['path', 'circle'],
+    'the square around the disc first',
+  )
   const art = file('pcb.art.tsx')
   assert.ok(art.indexOf('<path') < art.indexOf('<circle'))
 })
 
 test('kicadFootprint: ${KIPRJMOD} is the project root, a model option is relative to the file that gives it', async () => {
-  const proj = join(top, 'proj'), lib = join(proj, 'lib', 'footprints', 'Mine.pretty')
+  const proj = join(top, 'proj'),
+    lib = join(proj, 'lib', 'footprints', 'Mine.pretty')
   mkdirSync(lib, { recursive: true })
   mkdirSync(join(proj, 'models'), { recursive: true })
   writeFileSync(join(proj, 'models', 'part.step'), 'ISO-10303-21;\n')
-  writeFileSync(join(lib, 'Part.kicad_mod'), `(footprint "Part" (version 20240108) (attr smd)
+  writeFileSync(
+    join(lib, 'Part.kicad_mod'),
+    `(footprint "Part" (version 20240108) (attr smd)
   (pad "1" smd rect (at 0 0) (size 1 1) (layers "F.Cu" "F.Paste" "F.Mask"))
-  (model "\${KIPRJMOD}/models/part.step" (offset (xyz 0 0 0)) (scale (xyz 1 1 1)) (rotate (xyz 0 0 0))))\n`)
+  (model "\${KIPRJMOD}/models/part.step" (offset (xyz 0 0 0)) (scale (xyz 1 1 1)) (rotate (xyz 0 0 0))))\n`,
+  )
   setKicadConfig(proj, { footprints: ['lib/footprints'] })
   const place = F => {
     const { A } = nets()
@@ -101,7 +120,10 @@ test('kicadFootprint: ${KIPRJMOD} is the project root, a model option is relativ
   const own = place(kicadFootprint('Mine:Part')).footprints[0].model
   assert.equal(own.path ?? own.step, join(proj, 'models', 'part.step'), 'not lib/footprints/models')
   // the factory made in one module and placed from another: its model is relative to the module that made it
-  writeFileSync(join(proj, 'footprints.mjs'), `import { kicadFootprint } from ${JSON.stringify(new URL('../dist/index.js', import.meta.url).href)}\nexport const Part = kicadFootprint('Mine:Part', { model: { file: './models/part.step' } })\n`)
+  writeFileSync(
+    join(proj, 'footprints.mjs'),
+    `import { kicadFootprint } from ${JSON.stringify(new URL('../dist/index.js', import.meta.url).href)}\nexport const Part = kicadFootprint('Mine:Part', { model: { file: './models/part.step' } })\n`,
+  )
   const { Part } = await import(pathToFileURL(join(proj, 'footprints.mjs')).href)
   const given = place(Part).footprints[0].model
   assert.equal(given.path ?? given.step, join(proj, 'models', 'part.step'), 'relative to footprints.mjs, not to this test file')

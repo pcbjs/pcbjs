@@ -14,9 +14,20 @@ export interface TypeError_ {
   detail?: string[]
 }
 
-interface Cache { key: string; files: Record<string, string>; errors: TypeError_[] }
+interface Cache {
+  key: string
+  files: Record<string, string>
+  errors: TypeError_[]
+}
 
-const stamp = (f: string): string => { try { const s = statSync(f); return `${s.size}:${s.mtimeMs}` } catch { return 'missing' } }
+const stamp = (f: string): string => {
+  try {
+    const s = statSync(f)
+    return `${s.size}:${s.mtimeMs}`
+  } catch {
+    return 'missing'
+  }
+}
 
 /** Type check the entries with the root's tsconfig.json, null without one; errors in project files only. */
 export function typecheck(root: string, entries: string[], cacheDir = join(root, '.pcbjs')): { errors: TypeError_[]; cached: boolean; ms: number } | null {
@@ -28,12 +39,18 @@ export function typecheck(root: string, entries: string[], cacheDir = join(root,
   try {
     const c = JSON.parse(readFileSync(cacheFile, 'utf8')) as Cache
     if (c.key === key && Object.entries(c.files).every(([f, s]) => stamp(f) === s)) return { errors: c.errors, cached: true, ms: performance.now() - t0 }
-  } catch { /* no cache yet */ }
+  } catch {
+    /* no cache yet */
+  }
 
   const parsed = ts.getParsedCommandLineOfConfigFile(config, {}, { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} })
   const options: ts.CompilerOptions = { ...(parsed?.options ?? {}), noEmit: true }
   const { host, injections, errors: scopeErrors } = scopeHost(options, root)
-  const program = ts.createProgram(entries.map(e => resolve(root, e)), options, host)
+  const program = ts.createProgram(
+    entries.map(e => resolve(root, e)),
+    options,
+    host,
+  )
   const inProject = (f: string) => f.startsWith(root + '/') && !f.includes('/node_modules/')
   const errors: TypeError_[] = []
   for (const [f, e] of scopeErrors) {
@@ -48,7 +65,11 @@ export function typecheck(root: string, entries: string[], cacheDir = join(root,
     const at = sourcePosition(d, injections)
     if (at) src = `${relative(root, at.file)}:${at.line}:${at.col}`
     // the head of the chain says what is wrong, the rest narrows it down to the innermost reason; nothing is cut
-    const [head, ...rest] = ts.flattenDiagnosticMessageText(d.messageText, '\n').split('\n').map(l => l.trim()).filter(Boolean)
+    const [head, ...rest] = ts
+      .flattenDiagnosticMessageText(d.messageText, '\n')
+      .split('\n')
+      .map(l => l.trim())
+      .filter(Boolean)
     errors.push({ src, code: d.code, message: head ?? '', ...(rest.length ? { detail: rest } : {}) })
   }
   const files: Record<string, string> = {}
@@ -56,12 +77,14 @@ export function typecheck(root: string, entries: string[], cacheDir = join(root,
   try {
     mkdirSync(dirname(cacheFile), { recursive: true })
     writeFileSync(cacheFile, JSON.stringify({ key, files, errors } satisfies Cache))
-  } catch { /* a read-only project still gets its answer */ }
+  } catch {
+    /* a read-only project still gets its answer */
+  }
   return { errors, cached: false, ms: performance.now() - t0 }
 }
 
 /** A type error as a findings line, never cut, then the innermost reason of its chain, or with `verbose` the whole chain. */
 export const typeErrorLine = (e: TypeError_, verbose = false): string => {
-  const more = verbose ? e.detail ?? [] : (e.detail ?? []).slice(-1)
+  const more = verbose ? (e.detail ?? []) : (e.detail ?? []).slice(-1)
   return [`error    typecheck  ${e.src}: ${e.code ? `TS${e.code} ` : ''}${e.message}`, ...more.map(l => `    ${l}`)].join('\n')
 }

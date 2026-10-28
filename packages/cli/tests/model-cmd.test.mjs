@@ -95,8 +95,13 @@ test('add copies a local file, notes it, fits it to a part and writes the model 
 test('add downloads a URL, takes the name from the URL, and notes the URL as the source', async () => {
   const body = readFileSync(join(KICAD, 'R_0603_1608Metric.step'))
   const server = createServer((req, res) => {
-    if (req.url === '/dl/R_0603.step') { res.setHeader('content-type', 'application/octet-stream'); res.end(body) }
-    else { res.statusCode = 404; res.end() }
+    if (req.url === '/dl/R_0603.step') {
+      res.setHeader('content-type', 'application/octet-stream')
+      res.end(body)
+    } else {
+      res.statusCode = 404
+      res.end()
+    }
   })
   await new Promise(r => server.listen(PORT, '127.0.0.1', r))
   try {
@@ -104,8 +109,14 @@ test('add downloads a URL, takes the name from the URL, and notes the URL as the
     const r = await new Promise(resolve => {
       // spawned, not spawnSync, so this process's server can answer the download
       const child = spawn(process.execPath, [BIN, 'model', 'add', url, '--ref', 'R1', '--as', 'r0603'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } })
-      let out = '', err = ''
-      child.stdout.on('data', d => { out += d }); child.stderr.on('data', d => { err += d })
+      let out = '',
+        err = ''
+      child.stdout.on('data', d => {
+        out += d
+      })
+      child.stderr.on('data', d => {
+        err += d
+      })
       child.on('close', code => resolve({ code, out, err }))
     })
     assert.equal(r.code, 0, r.err)
@@ -117,12 +128,16 @@ test('add downloads a URL, takes the name from the URL, and notes the URL as the
     const miss = await new Promise(resolve => {
       const child = spawn(process.execPath, [BIN, 'model', 'add', `http://127.0.0.1:${PORT}/nothing.step`], { cwd: root })
       let err = ''
-      child.stderr.on('data', d => { err += d })
+      child.stderr.on('data', d => {
+        err += d
+      })
       child.on('close', code => resolve({ code, err }))
     })
     assert.equal(miss.code, 1)
     assert.match(miss.err, /HTTP 404/)
-  } finally { server.close() }
+  } finally {
+    server.close()
+  }
 })
 
 test('--write edits: a value becomes { value, model }, an options object gets or replaces the key, an element gets the attribute', () => {
@@ -144,42 +159,86 @@ test('--write edits: a value becomes { value, model }, an options object gets or
 
 const zipOf = files => {
   const entry = (name, data, local) => {
-    const n = Buffer.from(name), d = deflateRawSync(data)
-    const lh = Buffer.alloc(30); lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(8, 8); lh.writeUInt32LE(d.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(n.length, 26)
-    const ch = Buffer.alloc(46); ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(8, 10); ch.writeUInt32LE(d.length, 20); ch.writeUInt32LE(data.length, 24); ch.writeUInt16LE(n.length, 28); ch.writeUInt32LE(local, 42)
+    const n = Buffer.from(name),
+      d = deflateRawSync(data)
+    const lh = Buffer.alloc(30)
+    lh.writeUInt32LE(0x04034b50, 0)
+    lh.writeUInt16LE(8, 8)
+    lh.writeUInt32LE(d.length, 18)
+    lh.writeUInt32LE(data.length, 22)
+    lh.writeUInt16LE(n.length, 26)
+    const ch = Buffer.alloc(46)
+    ch.writeUInt32LE(0x02014b50, 0)
+    ch.writeUInt16LE(8, 10)
+    ch.writeUInt32LE(d.length, 20)
+    ch.writeUInt32LE(data.length, 24)
+    ch.writeUInt16LE(n.length, 28)
+    ch.writeUInt32LE(local, 42)
     return { local: Buffer.concat([lh, n, d]), central: Buffer.concat([ch, n]) }
   }
   let off = 0
-  const parts = files.map(([n, d]) => { const e = entry(n, d, off); off += e.local.length; return e })
+  const parts = files.map(([n, d]) => {
+    const e = entry(n, d, off)
+    off += e.local.length
+    return e
+  })
   const cd = Buffer.concat(parts.map(p => p.central))
-  const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(files.length, 10); end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(off, 16)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(files.length, 10)
+  end.writeUInt32LE(cd.length, 12)
+  end.writeUInt32LE(off, 16)
   return new Uint8Array(Buffer.concat([...parts.map(p => p.local), cd, end]))
 }
 
 test('a zip is unpacked to its first model file, STEP before WRL, with its licence files', () => {
-  const got = unzipModel(zipOf([['readme.txt', Buffer.from('hi')], ['3D/part.wrl', Buffer.from('#VRML V2.0 utf8\n')], ['3D/part.stp', Buffer.from('ISO-10303-21;')], ['3D/drawing.pdf', Buffer.from('%PDF')]]))
+  const got = unzipModel(
+    zipOf([
+      ['readme.txt', Buffer.from('hi')],
+      ['3D/part.wrl', Buffer.from('#VRML V2.0 utf8\n')],
+      ['3D/part.stp', Buffer.from('ISO-10303-21;')],
+      ['3D/drawing.pdf', Buffer.from('%PDF')],
+    ]),
+  )
   assert.equal(got.name, 'part.stp')
   assert.equal(Buffer.from(got.data).toString(), 'ISO-10303-21;')
-  assert.deepEqual(got.terms.map(t => t.name), ['readme.txt'])
+  assert.deepEqual(
+    got.terms.map(t => t.name),
+    ['readme.txt'],
+  )
 })
 
 test('add of a zipped download saves the licence file it ships and names it in LICENSES.md', async () => {
-  const zip = zipOf([['Read me.pdf', Buffer.from('%PDF no redistribution')], ['HR10.stp', readFileSync(join(KICAD, 'R_0603_1608Metric.step'))]])
-  const server = createServer((req, res) => { res.setHeader('content-disposition', 'attachment; filename="hr10.zip"'); res.end(zip) })
+  const zip = zipOf([
+    ['Read me.pdf', Buffer.from('%PDF no redistribution')],
+    ['HR10.stp', readFileSync(join(KICAD, 'R_0603_1608Metric.step'))],
+  ])
+  const server = createServer((req, res) => {
+    res.setHeader('content-disposition', 'attachment; filename="hr10.zip"')
+    res.end(zip)
+  })
   await new Promise(r => server.listen(PORT, '127.0.0.1', r))
   try {
     const url = `http://127.0.0.1:${PORT}/documents?path=%2Fmodel`
     const r = await new Promise(resolve => {
       const child = spawn(process.execPath, [BIN, 'model', 'add', url], { cwd: root, env: { ...process.env, NO_COLOR: '1' } })
-      let out = '', err = ''
-      child.stdout.on('data', d => { out += d }); child.stderr.on('data', d => { err += d })
+      let out = '',
+        err = ''
+      child.stdout.on('data', d => {
+        out += d
+      })
+      child.stderr.on('data', d => {
+        err += d
+      })
       child.on('close', code => resolve({ code, out, err }))
     })
     assert.equal(r.code, 0, r.err)
     assert.match(r.out, /licence  Read me\.pdf came in the zip, saved as models\/HR10-Read_me\.pdf/)
     assert.equal(readFileSync(join(root, 'models', 'HR10-Read_me.pdf'), 'utf8'), '%PDF no redistribution')
     assert.match(readFileSync(join(root, 'models', 'LICENSES.md'), 'utf8'), /`HR10\.stp`: .*; the zip's Read me\.pdf is HR10-Read_me\.pdf, added/)
-  } finally { server.close() }
+  } finally {
+    server.close()
+  }
 })
 
 test('LICENSES.md gets a header once and one line per file and source', () => {
@@ -192,5 +251,7 @@ test('LICENSES.md gets a header once and one line per file and source', () => {
     assert.match(md, /^# Model sources\n/)
     assert.equal(md.match(/^- /gm).length, 2)
     assert.match(md, /- `a\.step`: https:\/\/x\/a\.step, added 2026-01-02\n- `b\.wrl`: local file \/tmp\/b\.wrl, added 2026-01-03\n$/)
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

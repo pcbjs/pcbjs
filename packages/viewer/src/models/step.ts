@@ -56,17 +56,34 @@ export function warnMissing(ref: string, step: SiteStep, why = 'not found') {
 /** The box of a group's meshes in the group's own frame. */
 function localBox(g: THREE.Group): { min: [number, number, number]; max: [number, number, number] } {
   const box = new THREE.Box3()
-  for (const m of g.children) if ((m as THREE.Mesh).isMesh) { const geo = (m as THREE.Mesh).geometry; geo.computeBoundingBox(); box.union(geo.boundingBox!) }
+  for (const m of g.children)
+    if ((m as THREE.Mesh).isMesh) {
+      const geo = (m as THREE.Mesh).geometry
+      geo.computeBoundingBox()
+      box.union(geo.boundingBox!)
+    }
   return { min: box.min.toArray() as [number, number, number], max: box.max.toArray() as [number, number, number] }
 }
 
 /** A clone of the cached meshes placed by footprint and model transform; null with one warning per file when it fails. */
 export async function stepModel(ref: string, step: SiteStep, fp: StepPlacement, face: number, dev: boolean): Promise<THREE.Group | null> {
-  if (!step.mesh) { warnMissing(ref, step); return null }
+  if (!step.mesh) {
+    warnMissing(ref, step)
+    return null
+  }
   let p = protos.get(step.mesh)
-  if (!p) { p = load(step.mesh, dev); protos.set(step.mesh, p); p.catch(() => protos.delete(step.mesh!)) }
+  if (!p) {
+    p = load(step.mesh, dev)
+    protos.set(step.mesh, p)
+    p.catch(() => protos.delete(step.mesh!))
+  }
   let proto: THREE.Group
-  try { proto = await p } catch (e) { warnMissing(ref, step, `did not load: ${(e as Error).message}`); return null }
+  try {
+    proto = await p
+  } catch (e) {
+    warnMissing(ref, step, `did not load: ${(e as Error).message}`)
+    return null
+  }
   const g = proto.clone()
   if (step.issue) g.add(issueOutline(step.bounds ?? localBox(proto)))
   g.matrixAutoUpdate = false

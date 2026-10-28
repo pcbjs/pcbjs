@@ -4,11 +4,12 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:net'
 import { freePort } from '../dist/server.js'
 
-const canListen = (port, host) => new Promise(done => {
-  const s = createServer()
-  s.once('error', () => done(false))
-  s.listen(port, host, () => s.close(() => done(true)))
-})
+const canListen = (port, host) =>
+  new Promise(done => {
+    const s = createServer()
+    s.once('error', () => done(false))
+    s.listen(port, host, () => s.close(() => done(true)))
+  })
 
 test('free port: two probes give unprivileged ports that are free to listen on', async () => {
   const a = await freePort('127.0.0.1')
@@ -25,5 +26,7 @@ test('free port: a port held by another server is never handed out', async () =>
   const taken = held.address().port
   try {
     for (let i = 0; i < 5; i++) assert.notEqual(await freePort('127.0.0.1'), taken)
-  } finally { held.close() }
+  } finally {
+    held.close()
+  }
 })

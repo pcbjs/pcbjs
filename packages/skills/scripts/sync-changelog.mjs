@@ -16,7 +16,10 @@ export function migrations(text) {
   let version = null
   for (let i = 0; i < lines.length; i++) {
     const v = /^##\s+v?(\d+\.\d+\.\d+\S*)/.exec(lines[i])
-    if (v) { version = v[1]; continue }
+    if (v) {
+      version = v[1]
+      continue
+    }
     const h = heading.exec(lines[i])
     if (!version || !h || !/^migration\b/i.test(h[3])) continue
     const [indent, level] = [h[1].length, h[2].length]
@@ -41,12 +44,14 @@ const byVersion = (a, b) => b.localeCompare(a, 'en', { numeric: true })
 /** The reference file for the sections of `logs`, `[{ name, text }]`: one heading per minor, one per version under it. */
 export function render(logs) {
   const seen = new Map()
-  for (const { name, text } of logs) for (const { version, body } of migrations(text)) {
-    const key = `${version}\n${body}`
-    if (seen.has(key)) seen.get(key).names.add(name)
-    else seen.set(key, { version, body, names: new Set([name]) })
-  }
-  const head = '# Migrations from the changelog\n\nGenerated from the Migration sections of CHANGELOG.md by `scripts/sync-changelog.mjs` when the package is packed. The notes from before the changelog are in pre-0.1.md.\n'
+  for (const { name, text } of logs)
+    for (const { version, body } of migrations(text)) {
+      const key = `${version}\n${body}`
+      if (seen.has(key)) seen.get(key).names.add(name)
+      else seen.set(key, { version, body, names: new Set([name]) })
+    }
+  const head =
+    '# Migrations from the changelog\n\nGenerated from the Migration sections of CHANGELOG.md by `scripts/sync-changelog.mjs` when the package is packed. The notes from before the changelog are in pre-0.1.md.\n'
   if (!seen.size) return `${head}\nNo release has a Migration section yet.\n`
   const minors = new Map()
   for (const s of [...seen.values()].sort((a, b) => byVersion(a.version, b.version))) {
@@ -54,10 +59,7 @@ export function render(logs) {
     if (!minors.has(m)) minors.set(m, [])
     minors.get(m).push(s)
   }
-  const parts = [...minors].map(([m, list]) => [
-    `## ${m}`,
-    ...list.map(s => `### ${s.version}, ${[...s.names].join(', ')}\n\n${s.body}`),
-  ].join('\n\n'))
+  const parts = [...minors].map(([m, list]) => [`## ${m}`, ...list.map(s => `### ${s.version}, ${[...s.names].join(', ')}\n\n${s.body}`)].join('\n\n'))
   return `${head}\n${parts.join('\n\n')}\n`
 }
 

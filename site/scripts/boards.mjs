@@ -36,12 +36,13 @@ function packagesHash() {
   for (const f of readdirSync(here).sort()) h.update(f).update(readFileSync(join(here, f)))
   const entries = d => readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
   const add = p => h.update(relative(repo, p)).update(readFileSync(p))
-  const walk = d => { for (const e of entries(d)) e.isDirectory() ? walk(join(d, e.name)) : e.isFile() && add(join(d, e.name)) }
+  const walk = d => {
+    for (const e of entries(d)) e.isDirectory() ? walk(join(d, e.name)) : e.isFile() && add(join(d, e.name))
+  }
   const unversioned = p => {
     const pkg = JSON.parse(readFileSync(p, 'utf8'))
     delete pkg.version
-    for (const deps of [pkg.dependencies, pkg.peerDependencies, pkg.devDependencies])
-      for (const name of Object.keys(deps ?? {})) if (name.startsWith('@pcbjs/')) deps[name] = ''
+    for (const deps of [pkg.dependencies, pkg.peerDependencies, pkg.devDependencies]) for (const name of Object.keys(deps ?? {})) if (name.startsWith('@pcbjs/')) deps[name] = ''
     return JSON.stringify(pkg)
   }
   for (const pkg of entries(join(repo, 'packages')).filter(e => e.isDirectory())) {
@@ -69,11 +70,18 @@ function projects() {
   return out.filter(p => !only.length || only.includes(relative(root, p)))
 }
 
-const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+const slug = s =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
 const compile = (cwd, dir) => spawnSync(process.execPath, [join(here, 'compile.mjs'), dir], { cwd, encoding: 'utf8', maxBuffer: 1 << 26, timeout: 600_000 })
 
 /** Width over height of an SVG's viewBox, so the site can size a board before its SVG loads. */
-const aspect = file => { const [, , w, h] = /viewBox="([^"]+)"/.exec(readFileSync(file, 'utf8'))[1].split(' ').map(Number); return Math.round(w / h * 1000) / 1000 }
+const aspect = file => {
+  const [, , w, h] = /viewBox="([^"]+)"/.exec(readFileSync(file, 'utf8'))[1].split(' ').map(Number)
+  return Math.round((w / h) * 1000) / 1000
+}
 
 mkdirSync(out, { recursive: true })
 const dataFile = join(out, 'boards.json')
@@ -96,7 +104,10 @@ for (const dir of projects()) {
   const work = join(tmp, slug(project))
   const r = compile(dir, work)
   const report = join(work, 'report.json')
-  if (!existsSync(report)) { console.error(`boards: ${project}: no report\n${(r.stderr || r.stdout).trim().split('\n').slice(-3).join('\n')}`); continue }
+  if (!existsSync(report)) {
+    console.error(`boards: ${project}: no report\n${(r.stderr || r.stdout).trim().split('\n').slice(-3).join('\n')}`)
+    continue
+  }
   const seen = new Set()
   for (const b of JSON.parse(readFileSync(report, 'utf8')).boards) {
     if (seen.has(b.name)) continue
@@ -108,8 +119,18 @@ for (const dir of projects()) {
       aspects[view] = aspect(join(work, file))
     }
     boards.push({
-      project, name: b.name, entry: b.entry, id, hash: top, packages, aspect: aspects,
-      stats: b.stats, routing: b.routing, counts: b.counts, models: b.models, ms: b.ms,
+      project,
+      name: b.name,
+      entry: b.entry,
+      id,
+      hash: top,
+      packages,
+      aspect: aspects,
+      stats: b.stats,
+      routing: b.routing,
+      counts: b.counts,
+      models: b.models,
+      ms: b.ms,
     })
   }
   console.log(`boards: ${project}  ${seen.size} board${seen.size === 1 ? '' : 's'}  ${((Date.now() - started) / 1000).toFixed(1)} s`)

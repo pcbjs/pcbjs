@@ -13,15 +13,25 @@ import { shotCombos, shotJobs } from '../dist/shot.js'
 import { makeStack, stackBoard } from './fixtures/workspace.mjs'
 
 const BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'pcbjs', 'bin', 'pcbjs.js')
-const run = (cwd, ...args) => new Promise(done => {
-  const p = spawn(process.execPath, [BIN, ...args], { cwd, env: { ...process.env, NO_COLOR: '1' } })
-  let stdout = '', stderr = ''
-  p.stdout.on('data', d => { stdout += d }); p.stderr.on('data', d => { stderr += d })
-  p.on('close', code => done({ code, stdout, stderr }))
-})
+const run = (cwd, ...args) =>
+  new Promise(done => {
+    const p = spawn(process.execPath, [BIN, ...args], { cwd, env: { ...process.env, NO_COLOR: '1' } })
+    let stdout = '',
+      stderr = ''
+    p.stdout.on('data', d => {
+      stdout += d
+    })
+    p.stderr.on('data', d => {
+      stderr += d
+    })
+    p.on('close', code => done({ code, stdout, stderr }))
+  })
 
 test('inspect: the first argument is the entry when it names a module, every other one a query; --lengths adds tables', () => {
-  assert.deepEqual(inspectRequests(['pcb.tsx', 'U1', 'GND', 'J1.3'], 'DATA'), { entry: 'pcb.tsx', requests: [{ query: 'U1' }, { query: 'GND' }, { query: 'J1.3' }, { query: 'DATA', lengths: true }] })
+  assert.deepEqual(inspectRequests(['pcb.tsx', 'U1', 'GND', 'J1.3'], 'DATA'), {
+    entry: 'pcb.tsx',
+    requests: [{ query: 'U1' }, { query: 'GND' }, { query: 'J1.3' }, { query: 'DATA', lengths: true }],
+  })
   assert.deepEqual(inspectRequests(['U1'], ['A', 'B']), { entry: undefined, requests: [{ query: 'U1' }, { query: 'A', lengths: true }, { query: 'B', lengths: true }] })
   // as before: a bare --lengths makes the query its filter, or prints every route
   assert.deepEqual(inspectRequests(['pcb.tsx', 'DATA'], true), { entry: 'pcb.tsx', requests: [{ query: 'DATA', lengths: true }] })
@@ -32,18 +42,45 @@ test('inspect: the first argument is the entry when it names a module, every oth
 test('inspect: one answer prints as before, several share the frame lines under == headings, and JSON lists them', () => {
   const r = (q, found = true) => ({ text: ['board', 'outline', `answer ${q}`], json: { frame: { board: 'b' }, q }, found })
   assert.deepEqual(inspectOutput([r('U1')], [{ query: 'U1' }], false), ['board', 'outline', 'answer U1'])
-  assert.deepEqual(inspectOutput([r('U1'), r('D', false)], [{ query: 'U1' }, { query: 'D', lengths: true }], false), ['board', 'outline', '', '== U1', 'answer U1', '', '== --lengths D', 'answer D'])
+  assert.deepEqual(inspectOutput([r('U1'), r('D', false)], [{ query: 'U1' }, { query: 'D', lengths: true }], false), [
+    'board',
+    'outline',
+    '',
+    '== U1',
+    'answer U1',
+    '',
+    '== --lengths D',
+    'answer D',
+  ])
   const j = JSON.parse(inspectOutput([r('U1'), r('D', false)], [{ query: 'U1' }, { query: 'D', lengths: true }], true)[0])
-  assert.deepEqual(j, { frame: { board: 'b' }, results: [{ query: 'U1', found: true, q: 'U1' }, { query: 'D', lengths: true, found: false, q: 'D' }] })
+  assert.deepEqual(j, {
+    frame: { board: 'b' },
+    results: [
+      { query: 'U1', found: true, q: 'U1' },
+      { query: 'D', lengths: true, found: false, q: 'D' },
+    ],
+  })
 })
 
 test('shot: every --select with every --layer, --layer for 2D only once there are several', () => {
-  assert.deepEqual(shotCombos('2d', ['U1', 'Q1'], ['F.Cu', 'B.Cu']), [{ select: 'U1', layer: 'F.Cu' }, { select: 'U1', layer: 'B.Cu' }, { select: 'Q1', layer: 'F.Cu' }, { select: 'Q1', layer: 'B.Cu' }])
+  assert.deepEqual(shotCombos('2d', ['U1', 'Q1'], ['F.Cu', 'B.Cu']), [
+    { select: 'U1', layer: 'F.Cu' },
+    { select: 'U1', layer: 'B.Cu' },
+    { select: 'Q1', layer: 'F.Cu' },
+    { select: 'Q1', layer: 'B.Cu' },
+  ])
   assert.deepEqual(shotCombos('3d', ['U1', 'Q1'], ['F.Cu', 'B.Cu']), [{ select: 'U1' }, { select: 'Q1' }])
   assert.deepEqual(shotCombos('3d', [], ['F.Cu']), [{ layer: 'F.Cu' }], 'one layer keeps its old file name')
   assert.deepEqual(shotCombos('2d', [], []), [{}])
   const files = shotJobs([{ name: 'B', targets: [null] }], ['2d', '3d'], '/o', { select: ['U1', 'Q1'], layer: ['F.Cu', 'B.Cu'] }).map(j => j.file)
-  assert.deepEqual(files, ['/o/B-2d-select-U1-F.Cu.png', '/o/B-2d-select-U1-B.Cu.png', '/o/B-2d-select-Q1-F.Cu.png', '/o/B-2d-select-Q1-B.Cu.png', '/o/B-3d-select-U1.png', '/o/B-3d-select-Q1.png'])
+  assert.deepEqual(files, [
+    '/o/B-2d-select-U1-F.Cu.png',
+    '/o/B-2d-select-U1-B.Cu.png',
+    '/o/B-2d-select-Q1-F.Cu.png',
+    '/o/B-2d-select-Q1-B.Cu.png',
+    '/o/B-3d-select-U1.png',
+    '/o/B-3d-select-Q1.png',
+  ])
 })
 
 // ---- a dev server of the project answers ----

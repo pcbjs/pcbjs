@@ -2,7 +2,12 @@
 import type { Pt, Ring } from '@pcbjs/core/model'
 import { bbox, bboxOverlap, contactPoint, overlaps } from './geom.js'
 
-export interface Box { x: number; y: number; w: number; h: number }
+export interface Box {
+  x: number
+  y: number
+  w: number
+  h: number
+}
 
 /** A box that no query returns, for an item without geometry. */
 export const EMPTY: Box = Object.freeze({ x: 0, y: 0, w: -1, h: -1 })
@@ -27,35 +32,60 @@ export class Grid {
   constructor(boxes: Box[], cell?: number) {
     this.boxes = boxes
     this.stamp = new Uint32Array(boxes.length)
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, sum = 0, n = 0
+    let x0 = Infinity,
+      y0 = Infinity,
+      x1 = -Infinity,
+      y1 = -Infinity,
+      sum = 0,
+      n = 0
     for (const b of boxes) {
       if (!valid(b)) continue
-      if (b.x < x0) x0 = b.x; if (b.y < y0) y0 = b.y
-      if (b.x + b.w > x1) x1 = b.x + b.w; if (b.y + b.h > y1) y1 = b.y + b.h
-      sum += Math.max(b.w, b.h); n++
+      if (b.x < x0) x0 = b.x
+      if (b.y < y0) y0 = b.y
+      if (b.x + b.w > x1) x1 = b.x + b.w
+      if (b.y + b.h > y1) y1 = b.y + b.h
+      sum += Math.max(b.w, b.h)
+      n++
     }
-    if (!n) { x0 = y0 = 0; x1 = y1 = 1 }
+    if (!n) {
+      x0 = y0 = 0
+      x1 = y1 = 1
+    }
     const span = Math.max(x1 - x0, y1 - y0, 1e-6)
     this.cell = cell && cell > 0 ? cell : Math.max(n ? (2 * sum) / n : span, span / 1024, 1e-6)
-    this.x0 = x0; this.y0 = y0
+    this.x0 = x0
+    this.y0 = y0
     this.cols = Math.max(1, Math.floor((x1 - x0) / this.cell) + 1)
     this.rows = Math.max(1, Math.floor((y1 - y0) / this.cell) + 1)
     this.cells = Array.from({ length: this.cols * this.rows }, () => [])
     boxes.forEach((b, i) => {
       if (!valid(b)) return
-      const c0 = this.col(b.x), c1 = this.col(b.x + b.w), r0 = this.row(b.y), r1 = this.row(b.y + b.h)
-      if (c1 - c0 > BIG || r1 - r0 > BIG) { this.big.push(i); return }
+      const c0 = this.col(b.x),
+        c1 = this.col(b.x + b.w),
+        r0 = this.row(b.y),
+        r1 = this.row(b.y + b.h)
+      if (c1 - c0 > BIG || r1 - r0 > BIG) {
+        this.big.push(i)
+        return
+      }
       for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) this.cells[r * this.cols + c].push(i)
     })
   }
 
-  private col(x: number) { return Math.min(this.cols - 1, Math.max(0, Math.floor((x - this.x0) / this.cell))) }
-  private row(y: number) { return Math.min(this.rows - 1, Math.max(0, Math.floor((y - this.y0) / this.cell))) }
+  private col(x: number) {
+    return Math.min(this.cols - 1, Math.max(0, Math.floor((x - this.x0) / this.cell)))
+  }
+  private row(y: number) {
+    return Math.min(this.rows - 1, Math.max(0, Math.floor((y - this.y0) / this.cell)))
+  }
 
   /** Indices of the boxes that overlap `q` grown by `pad`, touching included, ascending; empty boxes never match. */
   query(q: Box, pad = 0): number[] {
     const out: number[] = []
-    if (++this.tick === 0xffffffff) { this.stamp.fill(0); this.tick = 1 }
+    if (++this.tick === 0xffffffff) {
+      this.stamp.fill(0)
+      this.tick = 1
+    }
     const t = this.tick
     const test = (i: number) => {
       if (this.stamp[i] === t) return
@@ -64,7 +94,10 @@ export class Grid {
     }
     for (const i of this.big) test(i)
     if (q.x - pad <= this.x0 + this.cols * this.cell && q.x + q.w + pad >= this.x0 && q.y - pad <= this.y0 + this.rows * this.cell && q.y + q.h + pad >= this.y0) {
-      const c0 = this.col(q.x - pad), c1 = this.col(q.x + q.w + pad), r0 = this.row(q.y - pad), r1 = this.row(q.y + q.h + pad)
+      const c0 = this.col(q.x - pad),
+        c1 = this.col(q.x + q.w + pad),
+        r0 = this.row(q.y - pad),
+        r1 = this.row(q.y + q.h + pad)
       for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) for (const i of this.cells[r * this.cols + c]) test(i)
     }
     return out.sort((a, b) => a - b)

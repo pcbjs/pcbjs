@@ -29,9 +29,21 @@ test('group: names every part of the object, passes other fields through and ret
   assert.deepEqual([P2.n, P2.x, P2.label], [2, 20, 'port 2'])
   const b = compileBoard(board({}, ...ports.flatMap(p => [h(p.R, { at: `${p.x} 5` }), h(p.D, { at: `${p.x} 10` })])))
   // refs stay flat, numbered in declaration order
-  assert.deepEqual(['R1', 'R2', 'D1', 'D2'].map(r => part(b, r)?.path.join('/') + ':' + part(b, r)?.local), ['P1:R', 'P2:R', 'P1:D', 'P2:D'])
-  assert.deepEqual(b.schematic.circuits.map(c => [c.path.join('/'), c.circuit, c.parts.join(',')]), [['P1', 'group', 'R1,D1'], ['P2', 'group', 'R2,D2']])
-  assert.deepEqual(b.erc.filter(d => d.severity === 'error'), [])
+  assert.deepEqual(
+    ['R1', 'R2', 'D1', 'D2'].map(r => part(b, r)?.path.join('/') + ':' + part(b, r)?.local),
+    ['P1:R', 'P2:R', 'P1:D', 'P2:D'],
+  )
+  assert.deepEqual(
+    b.schematic.circuits.map(c => [c.path.join('/'), c.circuit, c.parts.join(',')]),
+    [
+      ['P1', 'group', 'R1,D1'],
+      ['P2', 'group', 'R2,D2'],
+    ],
+  )
+  assert.deepEqual(
+    b.erc.filter(d => d.severity === 'error'),
+    [],
+  )
 })
 
 test('group: arrays of parts and nested groups take paths, and hierarchical refs read them', () => {
@@ -43,7 +55,10 @@ test('group: arrays of parts and nested groups take paths, and hierarchical refs
   assert.equal(G.inner, inner)
   const parts = [h(G.LEDS[0], { at: '5 5' }), h(G.LEDS[1], { at: '10 5' }), h(G.inner.R, { at: '15 5' })]
   const b = compileBoard(board({}, ...parts))
-  assert.deepEqual(['D1', 'D2', 'R1'].map(r => [...part(b, r).path, part(b, r).local].join('/')), ['Bank/LEDS[0]', 'Bank/LEDS[1]', 'Bank/Sense/R'])
+  assert.deepEqual(
+    ['D1', 'D2', 'R1'].map(r => [...part(b, r).path, part(b, r).local].join('/')),
+    ['Bank/LEDS[0]', 'Bank/LEDS[1]', 'Bank/Sense/R'],
+  )
   const hier = compileBoard(board({ refStyle: 'hierarchical' }, ...parts))
   assert.deepEqual(hier.footprints.map(f => f.ref).sort(), ['BANK_LEDS_0', 'BANK_LEDS_1', 'BANK_SENSE_R'])
 })
@@ -68,8 +83,14 @@ test('group: the same name twice, a reserved key or a part in two groups is a Sc
   const { A, B } = nets()
   const R = R0603('1k').connect(A, B)
   group('Twice', { R })
-  assert.throws(() => group('Twice', { R: R0603('1k').connect(A, B) }), e => e instanceof SchematicError && /the name Twice is already taken by the group/.test(e.message))
-  assert.throws(() => group('Other', { R }), e => e instanceof SchematicError && /already belongs to Twice/.test(e.message))
+  assert.throws(
+    () => group('Twice', { R: R0603('1k').connect(A, B) }),
+    e => e instanceof SchematicError && /the name Twice is already taken by the group/.test(e.message),
+  )
+  assert.throws(
+    () => group('Other', { R }),
+    e => e instanceof SchematicError && /already belongs to Twice/.test(e.message),
+  )
   assert.throws(() => group('Named', { name: 'x', R: R0603('1k').connect(A, B) }), /the key "name" is reserved/)
   assert.throws(() => group('bad name', {}), /must be an identifier/)
   assert.throws(() => group('Arr', [R]), /takes an object of parts by key/)

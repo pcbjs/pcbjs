@@ -45,12 +45,16 @@ test('bound refs: two parts bound to one name are a SchematicError naming both s
   const { A, B } = nets()
   const x = bindRef(R0603('1').connect(A, B), 'R1', { file: 'a.ts', line: 3, col: 7 })
   const y = bindRef(R0603('2').connect(A, B), 'R1', { file: 'b.ts', line: 8, col: 14 })
-  assert.throws(() => compileBoard(board(h(x, { at: '5 5' }), h(y, { at: '10 5' }))),
-    e => e instanceof SchematicError && /two parts are bound to the ref R1/.test(e.message) && e.message.includes('a.ts:3:7') && e.message.includes('b.ts:8:14'))
+  assert.throws(
+    () => compileBoard(board(h(x, { at: '5 5' }), h(y, { at: '10 5' }))),
+    e => e instanceof SchematicError && /two parts are bound to the ref R1/.test(e.message) && e.message.includes('a.ts:3:7') && e.message.includes('b.ts:8:14'),
+  )
   // a written footprint with the same ref
   const z = bindRef(R0603('3').connect(A, B), 'R2', site(5))
-  assert.throws(() => compileBoard(board(h(z, { at: '5 5' }), h(R0603, { ref: 'R2', at: '20 10', nets: { 1: A, 2: B } }))),
-    e => e instanceof CompileError && /duplicate ref R2/.test(e.message) && /bound to the variable R2 at sch\.ts:5:7/.test(e.message))
+  assert.throws(
+    () => compileBoard(board(h(z, { at: '5 5' }), h(R0603, { ref: 'R2', at: '20 10', nets: { 1: A, 2: B } }))),
+    e => e instanceof CompileError && /duplicate ref R2/.test(e.message) && /bound to the variable R2 at sch\.ts:5:7/.test(e.message),
+  )
 })
 
 test('bound refs: the transform wraps module-level const and let named like a ref, nothing else', () => {
@@ -90,5 +94,7 @@ test('bound refs: a transformed module gives its parts the names of their variab
     assert.equal(refOf(b, [5, 5]), 'J5')
     assert.equal(refOf(b, [15, 5]), 'J4')
     assert.equal(refOf(b, [25, 5]), 'J1')
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

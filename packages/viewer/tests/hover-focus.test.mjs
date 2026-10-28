@@ -6,7 +6,16 @@ import * as THREE from 'three'
 import { GHOST_FILL, hoverFill, hoverScope, inScope } from '../src/scene/focus.ts'
 
 // the client imports its modules without an extension, as Vite resolves them
-registerHooks({ resolve: (spec, ctx, next) => { try { return next(spec, ctx) } catch (e) { if (spec.startsWith('.') && !spec.endsWith('.ts')) return next(spec + '.ts', ctx); throw e } } })
+registerHooks({
+  resolve: (spec, ctx, next) => {
+    try {
+      return next(spec, ctx)
+    } catch (e) {
+      if (spec.startsWith('.') && !spec.endsWith('.ts')) return next(spec + '.ts', ctx)
+      throw e
+    }
+  },
+})
 const { FADE_OPACITY, Variants, setState } = await import('../src/scene/highlight.ts')
 
 const board = {

@@ -54,19 +54,21 @@ test('sourcing: the header line from the target tags', () => {
 
 test('sourcing: every key in the tooltip and the part table, in the order given', () => {
   assert.equal(sourcingTitle(lcsc), 'MPN: RC0603FR-0710KL\nMPN:LCSC: C25804')
-  assert.deepEqual(sourcingEntries(lcsc), [['MPN', 'RC0603FR-0710KL'], ['MPN:LCSC', 'C25804']])
+  assert.deepEqual(sourcingEntries(lcsc), [
+    ['MPN', 'RC0603FR-0710KL'],
+    ['MPN:LCSC', 'C25804'],
+  ])
   assert.equal(bomRowOf(bom, 'R2'), bom[0])
   assert.equal(bomRowOf(bom, 'Q9'), null)
   assert.equal(bomRowOf(undefined, 'R1'), null)
 })
 
 test('sourcing: the BOM as TSV with a header, refs joined, tabs and newlines flattened, empty mpn when unsourced', () => {
-  assert.equal(bomTsv(bom), [
-    'refs\tvalue\tfootprint\tqty\tmpn',
-    'R1,R2\t10k\tR:R_0603\t2\tC25804',
-    'D1\tred\tLED:LED_0603\t1\tLTST-C191KRKT',
-    'J1\tUSB C\tConn:USB_C\t1\t',
-    'TP1\tTP\tTP:Pad\t1\t',
-  ].join('\n') + '\n')
+  assert.equal(
+    bomTsv(bom),
+    ['refs\tvalue\tfootprint\tqty\tmpn', 'R1,R2\t10k\tR:R_0603\t2\tC25804', 'D1\tred\tLED:LED_0603\t1\tLTST-C191KRKT', 'J1\tUSB C\tConn:USB_C\t1\t', 'TP1\tTP\tTP:Pad\t1\t'].join(
+      '\n',
+    ) + '\n',
+  )
   assert.equal(bomTsv(undefined), 'refs\tvalue\tfootprint\tqty\tmpn\n')
 })

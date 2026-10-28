@@ -27,7 +27,9 @@ function registered(): { root: string; config: KicadConfig } {
 /** The installed KiCad share folders, newest version first. */
 export function kicadShareDirs(): string[] {
   const out: string[] = []
-  const add = (d: string) => { if (existsSync(d) && !out.includes(d)) out.push(d) }
+  const add = (d: string) => {
+    if (existsSync(d) && !out.includes(d)) out.push(d)
+  }
   add('/Applications/KiCad/KiCad.app/Contents/SharedSupport')
   add('/usr/share/kicad')
   add('/usr/local/share/kicad')
@@ -63,7 +65,10 @@ export function footprintRoots(o: { root?: string; footprints?: string[] } = {})
   const reg = registered()
   const root = o.root ?? reg.root
   const out: string[] = []
-  const add = (d: string) => { const a = resolve(root, d); if (existsSync(a) && !out.includes(a)) out.push(a) }
+  const add = (d: string) => {
+    const a = resolve(root, d)
+    if (existsSync(a) && !out.includes(a)) out.push(a)
+  }
   for (const d of ['.', 'lib', 'footprints', 'lib/footprints']) {
     const dir = resolve(root, d)
     if (!existsSync(dir)) continue
@@ -78,14 +83,24 @@ export function footprintRoots(o: { root?: string; footprints?: string[] } = {})
 
 function prettyDirs(root: string): string[] {
   if (root.endsWith('.pretty')) return [root]
-  try { return readdirSync(root).filter(f => f.endsWith('.pretty')).map(f => join(root, f)) } catch { return [] }
+  try {
+    return readdirSync(root)
+      .filter(f => f.endsWith('.pretty'))
+      .map(f => join(root, f))
+  } catch {
+    return []
+  }
 }
 
 /** The `.kicad_mod` file of a `Lib:Name`, a bare `Name` searched in every library, or a path. */
 export function findFootprint(ref: string, o: { root?: string; footprints?: string[] } = {}): string | null {
-  if (ref.endsWith('.kicad_mod')) { const f = resolve(o.root ?? registered().root, ref); return existsSync(f) ? f : null }
+  if (ref.endsWith('.kicad_mod')) {
+    const f = resolve(o.root ?? registered().root, ref)
+    return existsSync(f) ? f : null
+  }
   const colon = ref.indexOf(':')
-  const lib = colon >= 0 ? ref.slice(0, colon) : null, name = colon >= 0 ? ref.slice(colon + 1) : ref
+  const lib = colon >= 0 ? ref.slice(0, colon) : null,
+    name = colon >= 0 ? ref.slice(colon + 1) : ref
   for (const r of footprintRoots(o)) {
     for (const p of prettyDirs(r)) {
       if (lib !== null && !p.endsWith(`/${lib}.pretty`) && !p.endsWith(`\\${lib}.pretty`)) continue
@@ -111,14 +126,21 @@ export function isInstalled(file: string): boolean {
 export function kicadModel(path: string, projectDir?: string): string {
   let out = path.replace(/\$\{([A-Za-z0-9_]+)\}|\$\(([A-Za-z0-9_]+)\)/g, (m, a, b) => {
     const v = a ?? b
-    if (MODEL_VARS.includes(v)) return process.env[v] && existsSync(process.env[v]!) ? process.env[v]! : installedModels() ?? m
+    if (MODEL_VARS.includes(v)) return process.env[v] && existsSync(process.env[v]!) ? process.env[v]! : (installedModels() ?? m)
     if (v === 'KIPRJMOD') return projectDir ?? registered().root
     return process.env[v] ?? m
   })
   if (!existsSync(out)) {
-    for (const [a, b] of [[/\.wrl$/i, '.step'], [/\.step$/i, '.wrl'], [/\.stp$/i, '.step']] as const) {
+    for (const [a, b] of [
+      [/\.wrl$/i, '.step'],
+      [/\.step$/i, '.wrl'],
+      [/\.stp$/i, '.step'],
+    ] as const) {
       const alt = out.replace(a, b)
-      if (alt !== out && existsSync(alt)) { out = alt; break }
+      if (alt !== out && existsSync(alt)) {
+        out = alt
+        break
+      }
     }
   }
   return out
@@ -146,11 +168,22 @@ export function modelSpec(fp: KFootprint, projectDir?: string): ModelSpec | unde
 }
 
 const PREFIX: [RegExp, string][] = [
-  [/^(R|Resistor)[_-]|^R_Array|Resistor/i, 'R'], [/^(C|CP|Capacitor)[_-]|Capacitor/i, 'C'], [/^(L|Inductor)[_-]|Inductor/i, 'L'],
-  [/^LED|^D_|Diode/i, 'D'], [/Crystal|Oscillator|^Resonator/i, 'Y'], [/^Fuse/i, 'F'], [/^(SW|Button|Switch)/i, 'SW'],
-  [/MountingHole|^Hole/i, 'H'], [/Fiducial/i, 'FID'], [/TestPoint|^TP/i, 'TP'], [/Jumper|SolderJumper/i, 'JP'],
+  [/^(R|Resistor)[_-]|^R_Array|Resistor/i, 'R'],
+  [/^(C|CP|Capacitor)[_-]|Capacitor/i, 'C'],
+  [/^(L|Inductor)[_-]|Inductor/i, 'L'],
+  [/^LED|^D_|Diode/i, 'D'],
+  [/Crystal|Oscillator|^Resonator/i, 'Y'],
+  [/^Fuse/i, 'F'],
+  [/^(SW|Button|Switch)/i, 'SW'],
+  [/MountingHole|^Hole/i, 'H'],
+  [/Fiducial/i, 'FID'],
+  [/TestPoint|^TP/i, 'TP'],
+  [/Jumper|SolderJumper/i, 'JP'],
   [/^(Connector|Conn|USB|PinHeader|PinSocket|JST|Molex|IDC|Terminal|BarrelJack|FFC|FPC|Header)/i, 'J'],
-  [/^(Transistor|Package_TO_SOT|SOT-23$|SOT-323$|TO-)/i, 'Q'], [/^Relay/i, 'K'], [/^Buzzer|^Speaker/i, 'LS'], [/^Battery/i, 'BT'],
+  [/^(Transistor|Package_TO_SOT|SOT-23$|SOT-323$|TO-)/i, 'Q'],
+  [/^Relay/i, 'K'],
+  [/^Buzzer|^Speaker/i, 'LS'],
+  [/^Battery/i, 'BT'],
 ]
 
 export function prefixOf(lib: string | undefined, name: string): string {
@@ -187,14 +220,18 @@ export function specNodes(specs: ElementSpec[], names?: Map<string, string>): Pc
 export function renamePins(name: string, pins: string[], pinNames: KicadPinNames | undefined): { names: Map<string, string>; pins: string[]; nc: string[] } {
   const names = new Map<string, string>()
   if (pinNames !== undefined) {
-    if (pinNames === null || typeof pinNames !== 'object') throw new TypeError(`${name}: pinNames must be a list of names in pad order or an object keyed by pad number, got ${JSON.stringify(pinNames)}`)
+    if (pinNames === null || typeof pinNames !== 'object')
+      throw new TypeError(`${name}: pinNames must be a list of names in pad order or an object keyed by pad number, got ${JSON.stringify(pinNames)}`)
     if (Array.isArray(pinNames)) {
       if (pinNames.length > pins.length) throw new SchematicError(`${name}: ${pinNames.length} pin names for ${pins.length} pads`)
-      pinNames.forEach((n, i) => { if (n) names.set(pins[i], String(n)) })
-    } else for (const [k, v] of Object.entries(pinNames)) {
-      if (!pins.includes(k)) throw new SchematicError(`${name}: pinNames names pad ${JSON.stringify(k)}, which it does not have; its pads are ${pins.join(', ')}`)
-      names.set(k, String(v))
-    }
+      pinNames.forEach((n, i) => {
+        if (n) names.set(pins[i], String(n))
+      })
+    } else
+      for (const [k, v] of Object.entries(pinNames)) {
+        if (!pins.includes(k)) throw new SchematicError(`${name}: pinNames names pad ${JSON.stringify(k)}, which it does not have; its pads are ${pins.join(', ')}`)
+        names.set(k, String(v))
+      }
   }
   const out: string[] = []
   const nc: string[] = []
@@ -208,12 +245,13 @@ export function renamePins(name: string, pins: string[], pinNames: KicadPinNames
 
 /** A footprint factory from a read footprint; its pins are the pad numbers in pad order, renamed by `pinNames`. */
 export function footprintFactory(fp: KFootprint, o: KicadFootprintOptions = {}): FootprintFactory<string, FootprintProps> {
-  if (o.silk !== undefined && !KICAD_SILK_MODES.includes(o.silk)) throw new TypeError(`${fp.name}: silk must be ${KICAD_SILK_MODES.map(m => `'${m}'`).join(', ')}, got ${JSON.stringify(o.silk)}`)
+  if (o.silk !== undefined && !KICAD_SILK_MODES.includes(o.silk))
+    throw new TypeError(`${fp.name}: silk must be ${KICAD_SILK_MODES.map(m => `'${m}'`).join(', ')}, got ${JSON.stringify(o.silk)}`)
   // without its silk it is another footprint, as KiCad's NoSilkScreen variants are
   const id = `${fp.lib ?? libraryOf(fp.file ?? '') ?? 'kicad'}:${fp.name}${o.silk === 'none' ? '_NoSilkScreen' : ''}`
   const { names, pins, nc } = renamePins(fp.name, padPins(fp), o.pinNames)
   const kids = specNodes(footprintSpecs(fp, ['F.Cu', 'B.Cu'], { silk: o.silk }), names)
-  const model = o.model === false ? undefined : o.model ?? modelSpec(fp)
+  const model = o.model === false ? undefined : (o.model ?? modelSpec(fp))
   const base: Record<string, unknown> = { id, value: o.value ?? fp.name }
   if (model) base.model = model
   if (!fp.attrs.bom) base.bom = false
@@ -225,7 +263,14 @@ export function footprintFactory(fp: KFootprint, o: KicadFootprintOptions = {}):
     return h('footprint', { ...base, ...rest }, ...kids, more)
   }
   Object.defineProperty(render, 'name', { value: fp.name })
-  return defineFootprint<string, FootprintProps>(render, { pins, nc, prefix: o.prefix ?? prefixOf(fp.lib, fp.name), id, name: fp.name, ...(fp.netTie ? { netTie: fp.netTie } : {}) })
+  return defineFootprint<string, FootprintProps>(render, {
+    pins,
+    nc,
+    prefix: o.prefix ?? prefixOf(fp.lib, fp.name),
+    id,
+    name: fp.name,
+    ...(fp.netTie ? { netTie: fp.netTie } : {}),
+  })
 }
 
 const CACHE = Symbol.for('pcbjs.kicad.cache')
@@ -241,7 +286,10 @@ export function loadFootprint(file: string): KFootprint {
   if (hit && hit.hash === hash) return hit.fp
   const fp = readKicadMod(text)
   fp.file = file
-  if (!fp.lib) { const lib = libraryOf(file); if (lib) fp.lib = lib }
+  if (!fp.lib) {
+    const lib = libraryOf(file)
+    if (lib) fp.lib = lib
+  }
   cache().set(file, { hash, fp })
   return fp
 }
@@ -252,7 +300,9 @@ export function kicadFootprint(ref: string, o: KicadFootprintOptions = {}): Foot
   const file = findFootprint(ref, { footprints: o.footprints ? [...o.footprints, ...(registered().config.footprints ?? [])] : undefined })
   if (!file) {
     const roots = footprintRoots()
-    throw new SchematicError(`kicadFootprint: no footprint ${JSON.stringify(ref)} in ${roots.length ? roots.join(', ') : 'any library: install KiCad, set KICAD_FOOTPRINTS or list folders in kicad.footprints of pcb.config.ts'}`)
+    throw new SchematicError(
+      `kicadFootprint: no footprint ${JSON.stringify(ref)} in ${roots.length ? roots.join(', ') : 'any library: install KiCad, set KICAD_FOOTPRINTS or list folders in kicad.footprints of pcb.config.ts'}`,
+    )
   }
   let fp = loadFootprint(file)
   const colon = ref.indexOf(':')
@@ -262,4 +312,10 @@ export function kicadFootprint(ref: string, o: KicadFootprintOptions = {}): Foot
   return footprintFactory(fp, model === o.model ? o : { ...o, model })
 }
 
-export const isDir = (p: string): boolean => { try { return statSync(p).isDirectory() } catch { return false } }
+export const isDir = (p: string): boolean => {
+  try {
+    return statSync(p).isDirectory()
+  } catch {
+    return false
+  }
+}

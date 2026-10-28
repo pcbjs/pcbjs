@@ -6,9 +6,11 @@ const S = 1e5
 
 // Clipper 6 inserts local minima and scanbeams by walking a list, O(n^2) for a pour with a hole per pad; these sort once in the same order, results unchanged.
 function patchClipper(proto: any) {
-  if (Object.prototype.hasOwnProperty.call(proto, "__pcbjsLm")) return
+  if (Object.prototype.hasOwnProperty.call(proto, '__pcbjsLm')) return
   proto.__pcbjsLm = true
-  proto.InsertLocalMinima = function (this: any, lm: any) { (this.__lmQueue ??= []).push(lm) }
+  proto.InsertLocalMinima = function (this: any, lm: any) {
+    ;(this.__lmQueue ??= []).push(lm)
+  }
   const settle = (self: any) => {
     const q: any[] | undefined = self.__lmQueue
     if (!q || !q.length) return
@@ -21,7 +23,10 @@ function patchClipper(proto: any) {
     self.__lmQueue = []
   }
   const dispose = proto.DisposeLocalMinimaList
-  proto.DisposeLocalMinimaList = function (this: any) { this.__lmQueue = []; return dispose.call(this) }
+  proto.DisposeLocalMinimaList = function (this: any) {
+    this.__lmQueue = []
+    return dispose.call(this)
+  }
   proto.Reset = function (this: any) {
     settle(this)
     this.m_CurrentLM = this.m_MinimaList
@@ -31,7 +36,8 @@ function patchClipper(proto: any) {
     for (let lm = this.m_MinimaList; lm !== null; lm = lm.Next) {
       if (tail === null || lm.Y !== tail.Y) {
         const sb = new ClipperLib.Scanbeam()
-        sb.Y = lm.Y; sb.Next = null
+        sb.Y = lm.Y
+        sb.Next = null
         if (tail === null) this.m_Scanbeam = sb
         else tail.Next = sb
         tail = sb
@@ -55,8 +61,12 @@ type CPath = CPt[]
 const toC = (r: Ring): CPath => r.map(([x, y]) => ({ X: Math.round(x * S), Y: Math.round(y * S) }))
 const fromC = (p: CPath): Ring => p.map(({ X, Y }) => [X / S, Y / S])
 
-export function polyToRings(p: Poly): Ring[] { return [p.outer, ...p.holes] }
-export function polysToRings(ps: Poly[]): Ring[] { return ps.flatMap(polyToRings) }
+export function polyToRings(p: Poly): Ring[] {
+  return [p.outer, ...p.holes]
+}
+export function polysToRings(ps: Poly[]): Ring[] {
+  return ps.flatMap(polyToRings)
+}
 
 function treeToPolys(tree: any): Poly[] {
   const ex = ClipperLib.JS.PolyTreeToExPolygons(tree)
@@ -157,8 +167,9 @@ export function overlaps(a: Ring[], b: Ring[]): boolean {
 export function pointInRing(p: Pt, r: Ring): boolean {
   let inside = false
   for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
-    const [xi, yi] = r[i], [xj, yj] = r[j]
-    if ((yi > p[1]) !== (yj > p[1]) && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside
+    const [xi, yi] = r[i],
+      [xj, yj] = r[j]
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside
   }
   return inside
 }
@@ -185,8 +196,17 @@ export function orientRings(rings: Ring[]): Ring[] {
 }
 
 export function bbox(rings: Ring[]): { x: number; y: number; w: number; h: number } {
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
-  for (const r of rings) for (const [x, y] of r) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y }
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity
+  for (const r of rings)
+    for (const [x, y] of r) {
+      if (x < x0) x0 = x
+      if (y < y0) y0 = y
+      if (x > x1) x1 = x
+      if (y > y1) y1 = y
+    }
   if (x0 === Infinity) return { x: 0, y: 0, w: 0, h: 0 }
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
 }
@@ -195,8 +215,15 @@ export function bboxOverlap(a: { x: number; y: number; w: number; h: number }, b
 }
 
 export function centroid(rings: Ring[]): Pt {
-  let n = 0, sx = 0, sy = 0
-  for (const r of rings) for (const [x, y] of r) { sx += x; sy += y; n++ }
+  let n = 0,
+    sx = 0,
+    sy = 0
+  for (const r of rings)
+    for (const [x, y] of r) {
+      sx += x
+      sy += y
+      n++
+    }
   return n ? [sx / n, sy / n] : [0, 0]
 }
 
@@ -211,12 +238,20 @@ export function contactPoint(a: Ring[], b: Ring[]): Pt {
 export type { Mat }
 export const IDENTITY: Mat = [1, 0, 0, 1, 0, 0]
 export function mul(m: Mat, n: Mat): Mat {
-  return [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3],
-          m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]]
+  return [
+    m[0] * n[0] + m[2] * n[1],
+    m[1] * n[0] + m[3] * n[1],
+    m[0] * n[2] + m[2] * n[3],
+    m[1] * n[2] + m[3] * n[3],
+    m[0] * n[4] + m[2] * n[5] + m[4],
+    m[1] * n[4] + m[3] * n[5] + m[5],
+  ]
 }
 /** translate(x, y) · rotate(deg, counter-clockwise on screen) · mirror-x(if flip) */
 export function placement(x: number, y: number, rotDeg: number, flip: boolean): Mat {
-  const a = (rotDeg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a)
+  const a = (rotDeg * Math.PI) / 180,
+    c = Math.cos(a),
+    s = Math.sin(a)
   // screen is y-down, so counter-clockwise on screen is a negative mathematical angle
   const rot: Mat = [c, -s, s, c, 0, 0]
   const t: Mat = [1, 0, 0, 1, x, y]
@@ -226,16 +261,24 @@ export function placement(x: number, y: number, rotDeg: number, flip: boolean): 
 export function apply(m: Mat, p: Pt): Pt {
   return [m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p[0] + m[3] * p[1] + m[5]]
 }
-export function applyRing(m: Mat, r: Ring): Ring { return r.map(p => apply(m, p)) }
-export function isMirrored(m: Mat): boolean { return m[0] * m[3] - m[1] * m[2] < 0 }
+export function applyRing(m: Mat, r: Ring): Ring {
+  return r.map(p => apply(m, p))
+}
+export function isMirrored(m: Mat): boolean {
+  return m[0] * m[3] - m[1] * m[2] < 0
+}
 export function rotationOf(m: Mat): number {
   // rotation of the x axis, counter-clockwise on screen, in degrees
   const mir = isMirrored(m)
-  const ax = mir ? -m[0] : m[0], ay = mir ? -m[1] : m[1]
+  const ax = mir ? -m[0] : m[0],
+    ay = mir ? -m[1] : m[1]
   return ((-Math.atan2(ay, ax) * 180) / Math.PI + 360) % 360
 }
 export function invert(m: Mat): Mat {
   const det = m[0] * m[3] - m[1] * m[2]
-  const a = m[3] / det, b = -m[1] / det, c = -m[2] / det, d = m[0] / det
+  const a = m[3] / det,
+    b = -m[1] / det,
+    c = -m[2] / det,
+    d = m[0] / det
   return [a, b, c, d, -(a * m[4] + c * m[5]), -(b * m[4] + d * m[5])]
 }

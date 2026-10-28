@@ -12,7 +12,8 @@ const WIDE = { w: 1.6, reach: 1.4 }
 
 /** A gull-wing lead leaving the body side at x = x0 and ending at x = x1 on the board, extruded across its width. */
 function leadGeometry(x0: number, x1: number, zExit: number, width: number, t = 0.12): THREE.BufferGeometry {
-  const bend = x0 + 0.18, foot = x0 + 0.32
+  const bend = x0 + 0.18,
+    foot = x0 + 0.32
   const s = new THREE.Shape()
   // the lead's centreline: out of the body, down, then flat on the board; the outline is the line thickened
   s.moveTo(x0 - 0.15, zExit + t / 2)
@@ -38,8 +39,14 @@ export function sot23Model(spec: SotSpec, height: number): THREE.Object3D {
   g.add(mesh(chamferedBox(w, BODY.l, top - BODY.standoff, 0.12, BODY.standoff), M.mould))
   const exit = BODY.standoff + (top - BODY.standoff) * 0.4
   const lead = leadGeometry(w / 2, n === 3 ? 1.25 : WIDE.reach, exit, 0.4)
-  const pins: [number, number][] = n === 3 ? [[-1, 0.95], [-1, -0.95], [1, 0]]
-    : [[-1, 0.95], [-1, 0], [-1, -0.95], [1, -0.95], ...(n === 6 ? [[1, 0] as [number, number]] : []), [1, 0.95]]
+  const pins: [number, number][] =
+    n === 3
+      ? [
+          [-1, 0.95],
+          [-1, -0.95],
+          [1, 0],
+        ]
+      : [[-1, 0.95], [-1, 0], [-1, -0.95], [1, -0.95], ...(n === 6 ? [[1, 0] as [number, number]] : []), [1, 0.95]]
   for (const [side, y] of pins) {
     const m = mesh(lead, M.tin, 0, y)
     if (side < 0) m.rotation.z = Math.PI

@@ -4,7 +4,11 @@ import { renderToString } from 'vue/server-renderer'
 import App from './App.vue'
 import { createStore, STORE, type SiteState } from './state'
 
-export interface Rendered { html: string; title: string; head: string }
+export interface Rendered {
+  html: string
+  title: string
+  head: string
+}
 
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 
@@ -17,10 +21,15 @@ export async function render(path: string, data: SiteState): Promise<Rendered> {
   try {
     const html = await renderToString(app)
     const b = store.current.value
-    const description = store.route.value.page === 'home'
-      ? `${store.cards.value.length} boards`
-      : b ? `${b.title || b.name}${b.revision ? ` rev ${b.revision}` : ''}: ${b.copper} layers, ${+b.bbox.w.toFixed(2)} × ${+b.bbox.h.toFixed(2)} mm` : ''
+    const description =
+      store.route.value.page === 'home'
+        ? `${store.cards.value.length} boards`
+        : b
+          ? `${b.title || b.name}${b.revision ? ` rev ${b.revision}` : ''}: ${b.copper} layers, ${+b.bbox.w.toFixed(2)} × ${+b.bbox.h.toFixed(2)} mm`
+          : ''
     const head = description ? `<meta name="description" content="${esc(description)}">` : ''
     return { html, title: store.pageTitle.value, head }
-  } finally { store.stop() }
+  } finally {
+    store.stop()
+  }
 }

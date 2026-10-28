@@ -22,10 +22,9 @@ const strictBoard = (...children) => h(PCB, { name: 'Route', strict: true }, edg
 const failedOf = b => b.drc.filter(d => d.rule === 'route-failed')
 
 test('autoroute: maze goes around a pad of another net', () => {
-  const b = compileBoard(board(
-    smd('J1', 5, 5, 'A'), smd('J2', 15, 5, 'A'), smd('X1', 10, 5, 'B', 3),
-    h('track', { net: 'A', layer: 'F.Cu', width: 0.25, d: { start: 'J1.1', end: 'J2.1' } }),
-  ))
+  const b = compileBoard(
+    board(smd('J1', 5, 5, 'A'), smd('J2', 15, 5, 'A'), smd('X1', 10, 5, 'B', 3), h('track', { net: 'A', layer: 'F.Cu', width: 0.25, d: { start: 'J1.1', end: 'J2.1' } })),
+  )
   const [t] = tracks(b, 'A')
   assert.equal(tracks(b, 'A').length, 1)
   assert.ok(t.pts.length > 2, 'the route bends around the obstacle')
@@ -37,11 +36,14 @@ test('autoroute: maze goes around a pad of another net', () => {
 })
 
 test('autoroute: maze changes layer with two vias when F.Cu is walled off', () => {
-  const b = compileBoard(board(
-    smd('J1', 5, 5, 'A'), smd('J2', 15, 5, 'A'),
-    h('track', { net: 'B', layer: 'F.Cu', width: 0.4, d: 'M10 0.7 L10 9.3' }),
-    h('track', { net: 'A', layer: 'F.Cu', width: 0.25, d: { start: 'J1.1', end: 'J2.1', layers: ['F.Cu', 'B.Cu'] } }),
-  ))
+  const b = compileBoard(
+    board(
+      smd('J1', 5, 5, 'A'),
+      smd('J2', 15, 5, 'A'),
+      h('track', { net: 'B', layer: 'F.Cu', width: 0.4, d: 'M10 0.7 L10 9.3' }),
+      h('track', { net: 'A', layer: 'F.Cu', width: 0.25, d: { start: 'J1.1', end: 'J2.1', layers: ['F.Cu', 'B.Cu'] } }),
+    ),
+  )
   assert.equal(vias(b).length, 2)
   for (const v of vias(b)) assert.deepEqual(v.layers, ['F.Cu', 'B.Cu'])
   assert.ok(tracks(b, 'A').some(t => t.layer === 'B.Cu'))
@@ -50,38 +52,43 @@ test('autoroute: maze changes layer with two vias when F.Cu is walled off', () =
 })
 
 test('autoroute: a track without d connects every pad of its net', () => {
-  const b = compileBoard(board(
-    smd('J1', 3, 3, 'A'), smd('J2', 15, 3, 'A'), smd('J3', 9, 8, 'A'), smd('X1', 9, 3, 'B', 2),
-    h('track', { net: 'A', layer: 'F.Cu', width: 0.25 }),
-  ))
+  const b = compileBoard(board(smd('J1', 3, 3, 'A'), smd('J2', 15, 3, 'A'), smd('J3', 9, 8, 'A'), smd('X1', 9, 3, 'B', 2), h('track', { net: 'A', layer: 'F.Cu', width: 0.25 })))
   assert.ok(tracks(b, 'A').length >= 2)
   assert.equal(b.unconnected, 0)
   assert.deepEqual(errors(b), [])
 })
 
 test('autoroute: the straight router draws one segment', () => {
-  const b = compileBoard(board(
-    smd('J1', 5, 5, 'A'), smd('J2', 15, 5, 'A'),
-    h('track', { net: 'A', layer: 'F.Cu', width: 0.25, d: { start: 'J1.1', end: 'J2.1', algorithm: 'straight' } }),
-  ))
+  const b = compileBoard(
+    board(smd('J1', 5, 5, 'A'), smd('J2', 15, 5, 'A'), h('track', { net: 'A', layer: 'F.Cu', width: 0.25, d: { start: 'J1.1', end: 'J2.1', algorithm: 'straight' } })),
+  )
   const ts = tracks(b, 'A')
   assert.equal(ts.length, 1)
-  assert.deepEqual(ts[0].pts, [[5, 5], [15, 5]])
+  assert.deepEqual(ts[0].pts, [
+    [5, 5],
+    [15, 5],
+  ])
   assert.deepEqual(errors(b), [])
   assert.equal(b.unconnected, 0)
 })
 
 test('autoroute: an enclosed pad is a route-failed finding naming the net, and a CompileError with strict', () => {
-  const kids = [smd('J1', 5, 5, 'SIG'), smd('J2', 15, 5, 'SIG'),
+  const kids = [
+    smd('J1', 5, 5, 'SIG'),
+    smd('J2', 15, 5, 'SIG'),
     h('track', { net: 'B', layer: 'F.Cu', width: 0.5, d: 'M3 3 L7 3 L7 7 L3 7 Z' }),
-    h('track', { net: 'SIG', layer: 'F.Cu', width: 0.25, d: { start: 'J1.1', end: 'J2.1', layers: ['F.Cu'] } })]
+    h('track', { net: 'SIG', layer: 'F.Cu', width: 0.25, d: { start: 'J1.1', end: 'J2.1', layers: ['F.Cu'] } }),
+  ]
   const b = compileBoard(board(...kids))
   const [f] = failedOf(b)
   assert.equal(failedOf(b).length, 1)
   assert.match(f.message, /SIG/)
   assert.match(f.message, /F\.Cu/)
   assert.equal(b.unconnected, 1, 'the ratsnest keeps the connection')
-  assert.throws(() => compileBoard(strictBoard(...kids)), e => e instanceof CompileError && /SIG/.test(e.message) && /F\.Cu/.test(e.message))
+  assert.throws(
+    () => compileBoard(strictBoard(...kids)),
+    e => e instanceof CompileError && /SIG/.test(e.message) && /F\.Cu/.test(e.message),
+  )
 })
 
 test('autoroute: resolvePos finds the pad centre', () => {
@@ -98,20 +105,48 @@ test('autoroute: resolvePos finds the pad centre', () => {
 test('autoroute: a custom RouteFn gets a Layout and its geometry is placed', () => {
   let seen
   const fn = (req, layout) => {
-    seen = { req, layout, obs: layout.obstacles('F.Cu', req.net, req.width), free: layout.isFree('F.Cu', 10, 2, req.net, req.width), blocked: layout.isFree('F.Cu', 10, 5, req.net, req.width) }
-    return { tracks: [{ layer: 'F.Cu', pts: [[req.start.x, req.start.y], [7, 2], [13, 2], [req.end.x, req.end.y]] }], vias: [] }
+    seen = {
+      req,
+      layout,
+      obs: layout.obstacles('F.Cu', req.net, req.width),
+      free: layout.isFree('F.Cu', 10, 2, req.net, req.width),
+      blocked: layout.isFree('F.Cu', 10, 5, req.net, req.width),
+    }
+    return {
+      tracks: [
+        {
+          layer: 'F.Cu',
+          pts: [
+            [req.start.x, req.start.y],
+            [7, 2],
+            [13, 2],
+            [req.end.x, req.end.y],
+          ],
+        },
+      ],
+      vias: [],
+    }
   }
-  const b = compileBoard(board(
-    smd('J1', 5, 5, 'A'), smd('J2', 15, 5, 'A'), smd('X1', 10, 5, 'B', 3),
-    h('track', { net: 'A', layer: 'F.Cu', width: 0.25, d: { start: 'J1.1', end: 'J2.1', algorithm: fn } }),
-  ))
+  const b = compileBoard(
+    board(
+      smd('J1', 5, 5, 'A'),
+      smd('J2', 15, 5, 'A'),
+      smd('X1', 10, 5, 'B', 3),
+      h('track', { net: 'A', layer: 'F.Cu', width: 0.25, d: { start: 'J1.1', end: 'J2.1', algorithm: fn } }),
+    ),
+  )
   assert.equal(typeof seen.layout.obstacles, 'function')
   assert.equal(typeof seen.layout.isFree, 'function')
   assert.ok(seen.obs.length >= 1)
   assert.equal(seen.free, true)
   assert.equal(seen.blocked, false)
   assert.deepEqual(seen.req.layers, ['F.Cu'])
-  assert.deepEqual(tracks(b, 'A')[0].pts, [[5, 5], [7, 2], [13, 2], [15, 5]])
+  assert.deepEqual(tracks(b, 'A')[0].pts, [
+    [5, 5],
+    [7, 2],
+    [13, 2],
+    [15, 5],
+  ])
   assert.deepEqual(errors(b), [])
   assert.equal(b.unconnected, 0)
 })
@@ -123,7 +158,10 @@ const segs = t => t.pts.slice(1).map((p, i) => [t.pts[i], p])
 const axisOnly = ts => ts.every(t => segs(t).every(([a, b]) => Math.abs(a[0] - b[0]) < 1e-9 || Math.abs(a[1] - b[1]) < 1e-9))
 const hasDiagonal = ts => ts.some(t => segs(t).some(([a, b]) => Math.abs(a[0] - b[0]) > 0.05 && Math.abs(a[1] - b[1]) > 0.05))
 const near = (a, b, tol = 1e-6) => Math.abs(a[0] - b[0]) <= tol && Math.abs(a[1] - b[1]) <= tol
-const clean = b => { assert.deepEqual(errors(b), []); assert.equal(b.unconnected, 0) }
+const clean = b => {
+  assert.deepEqual(errors(b), [])
+  assert.equal(b.unconnected, 0)
+}
 
 test('route(a, b): omitted path autoroutes all the way, the net comes from the pads, the width from minTrackWidth', () => {
   const b = compileBoard(board(smd('J1', 5, 5, 'A'), smd('J2', 15, 5, 'A'), smd('X1', 10, 5, 'B', 3), route('J1.1', 'J2.1')))
@@ -140,9 +178,13 @@ test('route(a, b, path): @ places a via at the cursor and the route goes on on t
   assert.deepEqual(v.at, [8, 5])
   assert.deepEqual(v.layers, ['F.Cu', 'B.Cu'])
   const ts = tracks(b, 'A')
-  assert.deepEqual(ts.find(t => t.layer === 'F.Cu').pts, [[3, 5], [8, 5]])
+  assert.deepEqual(ts.find(t => t.layer === 'F.Cu').pts, [
+    [3, 5],
+    [8, 5],
+  ])
   const back = ts.find(t => t.layer === 'B.Cu')
-  nearPt(back.pts[0], [8, 5]); nearPt(back.pts[back.pts.length - 1], [15, 5])
+  nearPt(back.pts[0], [8, 5])
+  nearPt(back.pts[back.pts.length - 1], [15, 5])
   assert.deepEqual(errors(b), [])
 })
 
@@ -155,19 +197,23 @@ test('route(a, b, path): @bottom and U B.Cu place the same via as @B.Cu', () => 
 })
 
 test('route(a, b, path): three automatic legs through two control points, 0 DRC errors', () => {
-  const b = compileBoard(board(smd('J1', 3, 5, 'A'), smd('J2', 17, 5, 'A'), smd('X1', 10, 5, 'B', 2),
-    route('J1.1', 'J2.1', 'X 7 2 X 13 8 XZ').width(0.25)))
+  const b = compileBoard(board(smd('J1', 3, 5, 'A'), smd('J2', 17, 5, 'A'), smd('X1', 10, 5, 'B', 2), route('J1.1', 'J2.1', 'X 7 2 X 13 8 XZ').width(0.25)))
   const pts = tracks(b, 'A').flatMap(t => t.pts)
   assert.ok(pts.some(p => near(p, [7, 2])) && pts.some(p => near(p, [13, 8])), 'passes through both control points')
   clean(b)
 })
 
 test('route(a, b, path): manual legs mix with automatic ones and are placed as drawn', () => {
-  const b = compileBoard(board(smd('J1', 3, 5, 'A'), smd('J2', 17, 5, 'A'), smd('X1', 10, 3, 'B', 2),
-    route('J1.1', 'J2.1', 'L 6 3 X 14 3 Z').width(0.25)))
+  const b = compileBoard(board(smd('J1', 3, 5, 'A'), smd('J2', 17, 5, 'A'), smd('X1', 10, 3, 'B', 2), route('J1.1', 'J2.1', 'L 6 3 X 14 3 Z').width(0.25)))
   const ts = tracks(b, 'A')
-  assert.ok(ts.some(t => t.pts.length === 2 && near(t.pts[0], [3, 5]) && near(t.pts[1], [6, 3])), 'the L leg')
-  assert.ok(ts.some(t => t.pts.length === 2 && near(t.pts[0], [14, 3]) && near(t.pts[1], [17, 5])), 'the Z leg')
+  assert.ok(
+    ts.some(t => t.pts.length === 2 && near(t.pts[0], [3, 5]) && near(t.pts[1], [6, 3])),
+    'the L leg',
+  )
+  assert.ok(
+    ts.some(t => t.pts.length === 2 && near(t.pts[0], [14, 3]) && near(t.pts[1], [17, 5])),
+    'the Z leg',
+  )
   assert.ok(ts.length >= 3)
   clean(b)
 })
@@ -185,15 +231,25 @@ test('route(a, b, path): relative commands work in the frame of a rotated group'
 })
 
 test('route(a, b, path): Z onto a pad on another layer is an error that says to change layer', () => {
-  assert.throws(() => compileBoard(board(smd('J1', 3, 5, 'A'), smd('J2', 15, 5, 'A'), route('J1.1', 'J2.1', 'H 8 @B.Cu Z'))),
-    e => e instanceof CompileError && /Z draws on B\.Cu, but J2\.1 is on F\.Cu/.test(e.message))
+  assert.throws(
+    () => compileBoard(board(smd('J1', 3, 5, 'A'), smd('J2', 15, 5, 'A'), route('J1.1', 'J2.1', 'H 8 @B.Cu Z'))),
+    e => e instanceof CompileError && /Z draws on B\.Cu, but J2\.1 is on F\.Cu/.test(e.message),
+  )
 })
 
 test('route(a, b): net inference, two nets and no net are errors', () => {
-  assert.throws(() => compileBoard(board(smd('J1', 3, 5, 'A'), smd('J2', 15, 5, 'B'), route('J1.1', 'J2.1'))),
-    e => e instanceof CompileError && /joins two nets, A and B/.test(e.message))
-  assert.throws(() => compileBoard(board(route('2 2', '8 2'))), e => e instanceof CompileError && /no pad at either end, give its net with \.net\(n\)/.test(e.message))
-  assert.throws(() => compileBoard(board(smd('J1', 3, 5, 'A'), route('J1.1', '8 5').net('B'))), e => e instanceof CompileError && /given the net B, but J1\.1 is on A/.test(e.message))
+  assert.throws(
+    () => compileBoard(board(smd('J1', 3, 5, 'A'), smd('J2', 15, 5, 'B'), route('J1.1', 'J2.1'))),
+    e => e instanceof CompileError && /joins two nets, A and B/.test(e.message),
+  )
+  assert.throws(
+    () => compileBoard(board(route('2 2', '8 2'))),
+    e => e instanceof CompileError && /no pad at either end, give its net with \.net\(n\)/.test(e.message),
+  )
+  assert.throws(
+    () => compileBoard(board(smd('J1', 3, 5, 'A'), route('J1.1', '8 5').net('B'))),
+    e => e instanceof CompileError && /given the net B, but J1\.1 is on A/.test(e.message),
+  )
   const b = compileBoard(board(route('2 2', '8 2').net('A')))
   assert.equal(tracks(b, 'A').length, 1)
   const one = compileBoard(board(smd('J1', 3, 5, 'A'), route('J1.1', '8 5')))
@@ -204,7 +260,17 @@ test('route(a, b): the builder methods change the pending route and return it', 
   const r = route('J1.1', 'J2.1', 'XZ')
   assert.equal(r.type, 'track')
   assert.equal(r.width(0.3).layer('B.Cu').layers(['B.Cu', 'F.Cu']).vias({ drill: 0.3, size: 0.6 }).rules({ bend: '90' }).priority(2).net('A'), r)
-  assert.deepEqual(r.props, { from: 'J1.1', to: 'J2.1', path: 'XZ', width: 0.3, layer: 'B.Cu', layers: ['B.Cu', 'F.Cu'], via: { drill: 0.3, size: 0.6 }, auto: { bend: '90', priority: 2 }, net: 'A' })
+  assert.deepEqual(r.props, {
+    from: 'J1.1',
+    to: 'J2.1',
+    path: 'XZ',
+    width: 0.3,
+    layer: 'B.Cu',
+    layers: ['B.Cu', 'F.Cu'],
+    via: { drill: 0.3, size: 0.6 },
+    auto: { bend: '90', priority: 2 },
+    net: 'A',
+  })
   r.vias(false)
   assert.equal(r.props.auto.maxVias, 0)
   r.vias(true)
@@ -232,8 +298,17 @@ test('autoroute: bend 90 makes only horizontal and vertical segments', () => {
 })
 
 test('autoroute: prefer sends a long vertical run to the layer that prefers v', () => {
-  const run = auto => compileBoard(board(smd('J1', 5, 1.5, 'A'), smd('J2', 5, 8.5, 'A'),
-    route('J1.1', 'J2.1').width(0.25).layers(['F.Cu', 'B.Cu']).rules({ viaCost: 1, ...auto })))
+  const run = auto =>
+    compileBoard(
+      board(
+        smd('J1', 5, 1.5, 'A'),
+        smd('J2', 5, 8.5, 'A'),
+        route('J1.1', 'J2.1')
+          .width(0.25)
+          .layers(['F.Cu', 'B.Cu'])
+          .rules({ viaCost: 1, ...auto }),
+      ),
+    )
   assert.equal(vias(run({})).length, 0, 'without prefer it stays on F.Cu')
   const b = run({ prefer: { 'F.Cu': 'h', 'B.Cu': 'v' } })
   assert.equal(vias(b).length, 2)
@@ -241,19 +316,26 @@ test('autoroute: prefer sends a long vertical run to the layer that prefers v', 
 })
 
 test('autoroute: vias(false), maxVias 0, makes a change of layer unroutable with a clear error', () => {
-  assert.throws(() => compileBoard(strictBoard(smd('J1', 3, 5, 'A'), route('J1.1', '15 5 B.Cu').vias(false))),
-    e => e instanceof CompileError && /changes layer from F\.Cu to B\.Cu, but vias are off for this route, maxVias is 0/.test(e.message))
+  assert.throws(
+    () => compileBoard(strictBoard(smd('J1', 3, 5, 'A'), route('J1.1', '15 5 B.Cu').vias(false))),
+    e => e instanceof CompileError && /changes layer from F\.Cu to B\.Cu, but vias are off for this route, maxVias is 0/.test(e.message),
+  )
   assert.match(failedOf(compileBoard(board(smd('J1', 3, 5, 'A'), route('J1.1', '15 5 B.Cu').rules({ maxVias: 0 }))))[0].message, /maxVias is 0/)
   const ok = compileBoard(board(smd('J1', 3, 5, 'A'), route('J1.1', '15 5 B.Cu').rules({ maxVias: 1 })))
   assert.equal(vias(ok).length, 1)
 })
 
 test('autoroute: a failed leg names its index and its ends', () => {
-  const kids = [smd('J1', 3, 5, 'A'), smd('J2', 17, 5, 'A'),
+  const kids = [
+    smd('J1', 3, 5, 'A'),
+    smd('J2', 17, 5, 'A'),
     h('track', { net: 'B', layer: 'F.Cu', width: 0.5, d: 'M8 3 L12 3 L12 7 L8 7 Z' }),
-    route('J1.1', 'J2.1', 'X 10 5 XZ').layers(['F.Cu'])]
-  assert.throws(() => compileBoard(strictBoard(...kids)),
-    e => e instanceof CompileError && /automatic leg 1 of 2, net A from \(3, 5\) on F\.Cu to \(10, 5\) on F\.Cu/.test(e.message))
+    route('J1.1', 'J2.1', 'X 10 5 XZ').layers(['F.Cu']),
+  ]
+  assert.throws(
+    () => compileBoard(strictBoard(...kids)),
+    e => e instanceof CompileError && /automatic leg 1 of 2, net A from \(3, 5\) on F\.Cu to \(10, 5\) on F\.Cu/.test(e.message),
+  )
   const [f] = failedOf(compileBoard(board(...kids)))
   assert.match(f.message, /leg 1 of 2 of net A from \(3, 5\) on F\.Cu to \(10, 5\) on F\.Cu/)
   assert.deepEqual([f.route.leg, f.route.legs], [1, 2])
@@ -275,7 +357,7 @@ test('autoroute: a route declared before the parts it connects and the parts in 
   clean(b)
 })
 
-test('autoroute: board-wide defaults flow from defineDefaultBoard, a preset and a variant target; the route\'s own wins', () => {
+test("autoroute: board-wide defaults flow from defineDefaultBoard, a preset and a variant target; the route's own wins", () => {
   const pads = [smd('J1', 3, 2, 'A'), smd('J2', 15, 8, 'A')]
   assert.equal(BASE_BOARD.autoroute.bend, '45')
   assert.equal(BASE_BOARD.autoroute.viaCost, 5)
@@ -287,11 +369,17 @@ test('autoroute: board-wide defaults flow from defineDefaultBoard, a preset and 
   assert.deepEqual(Fab.preset.autoroute, { bend: '90' })
   const viaFab = (...kids) => h(Fab, { name: 'P' }, edge(), ...kids)
   assert.ok(axisOnly(tracks(compileBoard(viaFab(...pads, route('J1.1', 'J2.1').width(0.25))), 'A')), 'from the preset')
-  assert.ok(hasDiagonal(tracks(compileBoard(h(Fab, { name: 'P', autoroute: { bend: '45' } }, edge(), ...pads, route('J1.1', 'J2.1').width(0.25))), 'A')), '<PCB autoroute> over the preset')
+  assert.ok(
+    hasDiagonal(tracks(compileBoard(h(Fab, { name: 'P', autoroute: { bend: '45' } }, edge(), ...pads, route('J1.1', 'J2.1').width(0.25))), 'A')),
+    '<PCB autoroute> over the preset',
+  )
   const V = variants({ name: 'Ortho', board: { autoroute: { bend: '90' } } }, { name: 'Free' })
   const [o, f] = compileBoards(h(V, { name: 'V' }, edge(), ...pads, route('J1.1', 'J2.1').width(0.25)))
   assert.ok(axisOnly(tracks(o, 'A')) && hasDiagonal(tracks(f, 'A')), 'per variant target')
-  assert.throws(() => compileBoard(h(PCB, { name: 'X', autoroute: { bend: '30' } }, edge())), e => e instanceof CompileError && /bend must be '45' or '90'/.test(e.message))
+  assert.throws(
+    () => compileBoard(h(PCB, { name: 'X', autoroute: { bend: '30' } }, edge())),
+    e => e instanceof CompileError && /bend must be '45' or '90'/.test(e.message),
+  )
   assert.throws(() => compileBoard(h(PCB, { name: 'X', autoroute: { pich: 1 } }, edge())), /unknown parameter "pich"/)
 })
 
@@ -308,7 +396,16 @@ test('autoroute: avoid keeps a route out of a soft keepout when there is room', 
 
 const shorts = b => b.drc.filter(d => d.rule === 'short' || d.rule === 'clearance')
 const holeErrors = b => b.drc.filter(d => d.rule === 'hole-to-hole' || d.rule === 'hole-to-copper')
-const inPad = (pad, [x, y]) => { const r = pad.poly; let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c } return c }
+const inPad = (pad, [x, y]) => {
+  const r = pad.poly
+  let c = false
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    const [xi, yi] = r[i],
+      [xj, yj] = r[j]
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c
+  }
+  return c
+}
 const holeGap = (a, b) => Math.hypot(a.at[0] - b.at[0], a.at[1] - b.at[1]) - a.drill / 2 - b.drill / 2
 
 test('autoroute: a back-side pad stays an obstacle when another ring on its layer lies lower (the badge and stm32 short)', () => {
@@ -320,8 +417,13 @@ test('autoroute: a back-side pad stays an obstacle when another ring on its laye
   assert.deepEqual(shorts(b), [])
   assert.ok(tracks(b, 'A').flatMap(t => t.pts).length > 2, 'the route bends around the coin cell contact')
   // the stm32 case: 0603 capacitors on the back, turned 180 degrees, under a straight back-side route
-  const cap = (ref, x) => h('footprint', { ref, at: [x, 5, 180], side: 'B', nets: { 1: 'V', 2: 'G' } },
-    h('pad', { num: 1, at: [-0.8, 0], size: [0.9, 0.95], shape: 'rect', type: 'smd' }), h('pad', { num: 2, at: [0.8, 0], size: [0.9, 0.95], shape: 'rect', type: 'smd' }))
+  const cap = (ref, x) =>
+    h(
+      'footprint',
+      { ref, at: [x, 5, 180], side: 'B', nets: { 1: 'V', 2: 'G' } },
+      h('pad', { num: 1, at: [-0.8, 0], size: [0.9, 0.95], shape: 'rect', type: 'smd' }),
+      h('pad', { num: 2, at: [0.8, 0], size: [0.9, 0.95], shape: 'rect', type: 'smd' }),
+    )
   const s = compileBoard(board(cap('C1', 8), cap('C2', 12), low, route('2 5 B.Cu', '18 5 B.Cu').net('A').width(0.2).layers(['B.Cu'])))
   assert.deepEqual(shorts(s), [])
 })
@@ -402,15 +504,22 @@ test('autoroute: an SMD to SMD leg that one layer cannot carry widens to the out
 test('variants: the targets route once under the strictest rules and share the copper, unless a target routes separately', async () => {
   const { routers } = await import('@pcbjs/compile')
   let calls = 0
-  const counted = (req, ctx) => { calls++; return routers.maze(req, ctx) }
+  const counted = (req, ctx) => {
+    calls++
+    return routers.maze(req, ctx)
+  }
   const parts = [smd('J1', 3, 5, 'A'), smd('J2', 17, 5, 'A'), smd('X1', 10, 5, 'B', 3), route('J1.1', 'J2.1').width(0.2).rules({ algorithm: counted })]
   const V = variants({ name: 'Tight', rules: { clearance: 0.15 } }, { name: 'Loose', rules: { clearance: 0.3 } })
   const [t, l] = compileBoards(h(V, { name: 'V' }, edge(), ...parts))
   assert.equal(calls, 1, 'one routing for both targets')
-  assert.deepEqual(tracks(t, 'A').map(x => x.pts), tracks(l, 'A').map(x => x.pts))
+  assert.deepEqual(
+    tracks(t, 'A').map(x => x.pts),
+    tracks(l, 'A').map(x => x.pts),
+  )
   assert.equal(t.routing.shared.rules.clearance, 0.3)
   assert.deepEqual(t.routing.shared.targets, ['Tight', 'Loose'])
-  clean(t); clean(l)
+  clean(t)
+  clean(l)
   assert.equal(t.rules.clearance, 0.15, 'each target keeps its own rules for DRC')
   calls = 0
   const S = variants({ name: 'Tight', rules: { clearance: 0.15 } }, { name: 'Loose', rules: { clearance: 0.3 }, routeSeparately: true })
@@ -434,7 +543,10 @@ test('route cache: an unrelated edit reuses every leg, an edit near a leg rerout
   assert.equal(silk.routing.cached, legs, 'a silk edit keeps the route')
   const far = compileBoard(wide('Cache', ...cacheParts(), smd('K1', 35, 17, 'C')))
   assert.equal(far.routing.cached, legs, 'a part far away keeps the route')
-  assert.deepEqual(tracks(far, 'A').map(t => t.pts), tracks(first, 'A').map(t => t.pts))
+  assert.deepEqual(
+    tracks(far, 'A').map(t => t.pts),
+    tracks(first, 'A').map(t => t.pts),
+  )
   const close = compileBoard(wide('Cache', ...cacheParts(), smd('K1', 10, 2.2, 'C', 1)))
   assert.equal(close.routing.cached, 0, 'a part in the corridor reroutes')
   clean(close)
@@ -460,7 +572,10 @@ test('route lock: a locked route keeps its legs until its ends or its path chang
     // X1 is gone: an unlocked route would now run straight, the locked one keeps its bend, read back from the file
     const kept = compileBoard(wide('Lock', ...ends(), route('J1.1', 'J2.1').width(0.25).lock()), opts)
     assert.equal(kept.routing.locked, 1)
-    assert.deepEqual(tracks(kept, 'A').map(t => t.pts), pts)
+    assert.deepEqual(
+      tracks(kept, 'A').map(t => t.pts),
+      pts,
+    )
     // moving an end releases it
     const moved = compileBoard(wide('Lock', ...ends(smd('J2', 17, 6, 'A')), route('J1.1', 'J2.1').width(0.25).lock()), opts)
     assert.equal(moved.routing.locked, 0)
@@ -472,7 +587,9 @@ test('route lock: a locked route keeps its legs until its ends or its path chang
     assert.equal(r.props.lock, true)
     r.lock(false)
     assert.equal(r.props.lock, undefined)
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 // ---- negotiation ----
@@ -481,25 +598,39 @@ test('route lock: a locked route keeps its legs until its ends or its path chang
 // can only route through A; A can go round B1 once B is there.
 const ripParts = (lock = false) => {
   const a = route('A1.1', 'A2.1').width(0.25).layers(['F.Cu'])
-  return [smd('A1', 0.9, 5, 'A'), smd('A2', 19.1, 5, 'A'), smd('B1', 10, 1.6, 'B'), smd('B2', 10, 8.4, 'B'),
-    lock ? a.lock() : a, route('B1.1', 'B2.1').width(0.25).layers(['F.Cu'])]
+  return [
+    smd('A1', 0.9, 5, 'A'),
+    smd('A2', 19.1, 5, 'A'),
+    smd('B1', 10, 1.6, 'B'),
+    smd('B2', 10, 8.4, 'B'),
+    lock ? a.lock() : a,
+    route('B1.1', 'B2.1').width(0.25).layers(['F.Cu']),
+  ]
 }
 const ripBoard = (autoroute, lock) => h(PCB, { name: 'Rip', ...(autoroute ? { autoroute } : {}) }, edge(), ...ripParts(lock))
 const geometry = b => b.items.filter(i => i.kind === 'track' || i.kind === 'via').map(i => [i.kind, i.net, i.layer, i.pts ?? i.at])
 /** Every pair of tracks and vias of different nets keeps the clearance, measured here rather than trusted to DRC. */
 const segDist = (a, b, c, d) => {
-  const ps = (p, u, v) => { const dx = v[0] - u[0], dy = v[1] - u[1], l = dx * dx + dy * dy, t = l ? Math.max(0, Math.min(1, ((p[0] - u[0]) * dx + (p[1] - u[1]) * dy) / l)) : 0; return Math.hypot(p[0] - u[0] - t * dx, p[1] - u[1] - t * dy) }
+  const ps = (p, u, v) => {
+    const dx = v[0] - u[0],
+      dy = v[1] - u[1],
+      l = dx * dx + dy * dy,
+      t = l ? Math.max(0, Math.min(1, ((p[0] - u[0]) * dx + (p[1] - u[1]) * dy) / l)) : 0
+    return Math.hypot(p[0] - u[0] - t * dx, p[1] - u[1] - t * dy)
+  }
   const o = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
   if (o(c, d, a) * o(c, d, b) < 0 && o(a, b, c) * o(a, b, d) < 0) return 0
   return Math.min(ps(a, c, d), ps(b, c, d), ps(c, a, b), ps(d, a, b))
 }
 const copperClear = (b, gap = BASE.clearance) => {
   const ts = tracks(b)
-  for (const x of ts) for (const y of ts) {
-    if (x.id >= y.id || x.net === y.net || x.layer !== y.layer) continue
-    for (let i = 1; i < x.pts.length; i++) for (let j = 1; j < y.pts.length; j++)
-      assert.ok(segDist(x.pts[i - 1], x.pts[i], y.pts[j - 1], y.pts[j]) >= gap + (x.width + y.width) / 2 - 1e-6, `${x.net} and ${y.net} keep the clearance on ${x.layer}`)
-  }
+  for (const x of ts)
+    for (const y of ts) {
+      if (x.id >= y.id || x.net === y.net || x.layer !== y.layer) continue
+      for (let i = 1; i < x.pts.length; i++)
+        for (let j = 1; j < y.pts.length; j++)
+          assert.ok(segDist(x.pts[i - 1], x.pts[i], y.pts[j - 1], y.pts[j]) >= gap + (x.width + y.width) / 2 - 1e-6, `${x.net} and ${y.net} keep the clearance on ${x.layer}`)
+    }
 }
 
 test('negotiation: two routes that block each other in declaration order both route, and ripup 0 brings the failure back', async () => {
@@ -522,16 +653,35 @@ test('negotiation: two routes that block each other in declaration order both ro
   assert.equal(b.routing.routed, 2)
   assert.equal(b.routing.failed, 0)
   // B runs straight, A goes round one of B's pads
-  assert.deepEqual(tracks(b, 'B').map(t => t.pts), [[[10, 1.6], [10, 8.4]]])
+  assert.deepEqual(
+    tracks(b, 'B').map(t => t.pts),
+    [
+      [
+        [10, 1.6],
+        [10, 8.4],
+      ],
+    ],
+  )
   assert.ok(tracks(b, 'A').some(t => t.pts.length > 2))
 })
 
 // Two routes across the board and three down it, every one between pads at the edges, on one layer: routed in order the two
 // across wall off the three down, which only fit once the two across go round the ends of the others.
-const tangle = (autoroute, name = 'Tangle') => h(PCB, { name, ...(autoroute ? { autoroute } : {}) }, edge(),
-  smd('A1', 0.9, 4.5, 'A'), smd('A2', 19.1, 4.5, 'A'), smd('E1', 0.9, 6, 'E'), smd('E2', 19.1, 6, 'E'),
-  ...[5, 10, 15].flatMap((x, i) => { const n = 'BCD'[i]; return [smd(`${n}1`, x, 1.6, n), smd(`${n}2`, x, 8.4, n)] }),
-  ...['A', 'E', 'B', 'C', 'D'].map(n => route(`${n}1.1`, `${n}2.1`).width(0.25).layers(['F.Cu'])))
+const tangle = (autoroute, name = 'Tangle') =>
+  h(
+    PCB,
+    { name, ...(autoroute ? { autoroute } : {}) },
+    edge(),
+    smd('A1', 0.9, 4.5, 'A'),
+    smd('A2', 19.1, 4.5, 'A'),
+    smd('E1', 0.9, 6, 'E'),
+    smd('E2', 19.1, 6, 'E'),
+    ...[5, 10, 15].flatMap((x, i) => {
+      const n = 'BCD'[i]
+      return [smd(`${n}1`, x, 1.6, n), smd(`${n}2`, x, 8.4, n)]
+    }),
+    ...['A', 'E', 'B', 'C', 'D'].map(n => route(`${n}1.1`, `${n}2.1`).width(0.25).layers(['F.Cu'])),
+  )
 
 test('negotiation: a tangle that no order routes on one layer routes clean, with the copper of every net clear of the others', () => {
   const plain = compileBoard(tangle({ ripup: 0 }), { routeCache: false })
@@ -576,9 +726,27 @@ test('negotiation: deterministic, and the next compile takes every leg from the 
     const high = compileBoard(pri(1), opts)
     assert.ok(high.routing.cached < 2, 'the edited route routes again')
     assert.equal(high.routing.ripped, 0, 'B routes first now, A goes round it in order')
-    assert.deepEqual(tracks(high, 'B').map(t => t.pts), [[[10, 1.6], [10, 8.4]]])
-    assert.deepEqual(tracks(low, 'B').map(t => t.pts), [[[10, 1.6], [10, 8.4]]])
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+    assert.deepEqual(
+      tracks(high, 'B').map(t => t.pts),
+      [
+        [
+          [10, 1.6],
+          [10, 8.4],
+        ],
+      ],
+    )
+    assert.deepEqual(
+      tracks(low, 'B').map(t => t.pts),
+      [
+        [
+          [10, 1.6],
+          [10, 8.4],
+        ],
+      ],
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('negotiation: a failed leg is cached as failed and not tried again until the board changes', async () => {
@@ -592,12 +760,17 @@ test('negotiation: a failed leg is cached as failed and not tried again until th
     const warm = compileBoard(ripBoard({ ripup: 0 }), opts)
     assert.equal(warm.routing.cached, 1)
     assert.equal(warm.routing.failed, 1)
-    assert.deepEqual(failedOf(warm).map(f => f.message), failedOf(cold).map(f => f.message))
+    assert.deepEqual(
+      failedOf(warm).map(f => f.message),
+      failedOf(cold).map(f => f.message),
+    )
     assert.deepEqual(warm.items, cold.items)
     // another ripup bound tries it again
     const neg = compileBoard(ripBoard(), opts)
     assert.deepEqual(failedOf(neg), [])
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('negotiation: a lock pins a stored result only; a locked route with none negotiates like any other', async () => {
@@ -614,7 +787,9 @@ test('negotiation: a lock pins a stored result only; a locked route with none ne
     const again = compileBoard(ripBoard(undefined, true), opts)
     assert.equal(again.routing.locked, 1)
     assert.deepEqual(geometry(again), geometry(fresh))
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
   const dir2 = mkdtempSync(join(tmpdir(), 'pcbjs-lock-'))
   try {
     const opts = { routeCache: { dir: dir2 } }
@@ -622,10 +797,15 @@ test('negotiation: a lock pins a stored result only; a locked route with none ne
     const plain = compileBoard(ripBoard({ ripup: 0 }, true), opts)
     const b = compileBoard(ripBoard(undefined, true), opts)
     assert.equal(b.routing.locked, 1)
-    assert.deepEqual(tracks(b, 'A').map(t => t.pts), tracks(plain, 'A').map(t => t.pts))
+    assert.deepEqual(
+      tracks(b, 'A').map(t => t.pts),
+      tracks(plain, 'A').map(t => t.pts),
+    )
     assert.equal(failedOf(b).length, 1)
     assert.equal(failedOf(b)[0].route.net, 'B')
-  } finally { rmSync(dir2, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir2, { recursive: true, force: true })
+  }
 })
 
 test('negotiation: ripup must be a whole number, maxDetour a ratio or { ratio, floor }', () => {
@@ -637,8 +817,14 @@ test('negotiation: ripup must be a whole number, maxDetour a ratio or { ratio, f
 
 test('negotiation: two routes that cannot both exist stop at the ripup bound, and the failure names the route it collides with', () => {
   // B's pads sit at the edges too, so neither route can go round the other
-  const kids = [smd('A1', 0.9, 5, 'A'), smd('A2', 19.1, 5, 'A'), smd('B1', 10, 0.9, 'B'), smd('B2', 10, 9.1, 'B'),
-    route('A1.1', 'A2.1').width(0.25).layers(['F.Cu']), route('B1.1', 'B2.1').width(0.25).layers(['F.Cu'])]
+  const kids = [
+    smd('A1', 0.9, 5, 'A'),
+    smd('A2', 19.1, 5, 'A'),
+    smd('B1', 10, 0.9, 'B'),
+    smd('B2', 10, 9.1, 'B'),
+    route('A1.1', 'A2.1').width(0.25).layers(['F.Cu']),
+    route('B1.1', 'B2.1').width(0.25).layers(['F.Cu']),
+  ]
   const b = compileBoard(h(PCB, { name: 'Stuck', autoroute: { ripup: 3 } }, edge(), ...kids), { routeCache: false })
   assert.equal(b.routing.rounds, 3)
   assert.equal(b.routing.legs, 2)
@@ -659,8 +845,20 @@ test('autoroute: a waypoint end may not sit inside the clearance of other copper
   const [f] = failedOf(b)
   assert.match(f.message, /leg 1 of 2 .*the end at \(10, 5\.2\) is inside the clearance of other copper/)
   // an autorouted track over the waypoint moves for it
-  const over = compileBoard(h(PCB, { name: 'Way' }, edge(), smd('B1', 10, 1.6, 'B'), smd('B2', 10, 8.4, 'B'), smd('J1', 3, 8, 'A'), smd('J2', 17, 8, 'A'),
-    route('B1.1', 'B2.1').width(0.25).layers(['F.Cu']), route('J1.1', 'J2.1', 'X 10 5 XZ').width(0.25)), { routeCache: false })
+  const over = compileBoard(
+    h(
+      PCB,
+      { name: 'Way' },
+      edge(),
+      smd('B1', 10, 1.6, 'B'),
+      smd('B2', 10, 8.4, 'B'),
+      smd('J1', 3, 8, 'A'),
+      smd('J2', 17, 8, 'A'),
+      route('B1.1', 'B2.1').width(0.25).layers(['F.Cu']),
+      route('J1.1', 'J2.1', 'X 10 5 XZ').width(0.25),
+    ),
+    { routeCache: false },
+  )
   assert.deepEqual(failedOf(over), [])
   clean(over)
   copperClear(over)
@@ -680,10 +878,17 @@ test('autoroute: maxDetour bounds how far a leg may wander, and says so when it 
 })
 
 test('autoroute: a pair whose centre line routes but whose pair cannot be laid out counts its legs as failed, not routed', () => {
-  const two = (ref, x, y, a, b) => h('footprint', { ref, at: [x, y], nets: { 1: a, 2: b } },
-    h('pad', { num: 1, at: [-0.25, 0], size: [0.3, 1], type: 'smd' }), h('pad', { num: 2, at: [0.25, 0], size: [0.3, 1], type: 'smd' }))
-  const b = compileBoard(h(PCB, { name: 'Pair' }, edge(20, 20), two('J1', 10, 3, 'DP', 'DN'), two('J2', 10, 17, 'DN', 'DP'),
-    route(['J1.1', 'J1.2'], ['J2.2', 'J2.1'], 'XZ').width(0.2).gap(0.2)), { routeCache: false })
+  const two = (ref, x, y, a, b) =>
+    h(
+      'footprint',
+      { ref, at: [x, y], nets: { 1: a, 2: b } },
+      h('pad', { num: 1, at: [-0.25, 0], size: [0.3, 1], type: 'smd' }),
+      h('pad', { num: 2, at: [0.25, 0], size: [0.3, 1], type: 'smd' }),
+    )
+  const b = compileBoard(
+    h(PCB, { name: 'Pair' }, edge(20, 20), two('J1', 10, 3, 'DP', 'DN'), two('J2', 10, 17, 'DN', 'DP'), route(['J1.1', 'J1.2'], ['J2.2', 'J2.1'], 'XZ').width(0.2).gap(0.2)),
+    { routeCache: false },
+  )
   assert.equal(failedOf(b).length, 1)
   assert.equal(b.routing.legs, 1)
   assert.equal(b.routing.routed, 0)

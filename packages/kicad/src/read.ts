@@ -24,7 +24,7 @@ export function readFootprint(source: string, o: { pinNames?: KicadPinNames; pre
   const { names, pins, nc } = renamePins(fp.name, padPins(fp), o.pinNames)
   const elements = footprintSpecs(fp)
   const kids = specNodes(elements, names)
-  const model = o.model === false ? undefined : o.model ?? modelSpec(fp)
+  const model = o.model === false ? undefined : (o.model ?? modelSpec(fp))
   const props: Record<string, unknown> = { id, value: fp.name }
   if (model) props.model = model
   if (!fp.attrs.bom) props.bom = false

@@ -6,7 +6,11 @@ import type { RepoOption } from '@pcbjs/core/config'
 export type GitRunner = (args: string[], cwd: string) => string | null
 
 export const runGit: GitRunner = (args, cwd) => {
-  try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000 }).trim() } catch { return null }
+  try {
+    return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000 }).trim()
+  } catch {
+    return null
+  }
 }
 
 /** An https base URL from what people paste: scp-style ssh, ssh://, a trailing .git or slash, a GitLab /-/ page. */
@@ -22,8 +26,15 @@ export function normalizeRepoUrl(raw: string): string {
 
 /** The host flavour, which decides the URL pattern the viewer builds. */
 export function repoKind(url: string): RepoLink['kind'] {
-  let host = '', path = ''
-  try { const p = new URL(url); host = p.hostname.toLowerCase(); path = p.pathname } catch { return 'generic' }
+  let host = '',
+    path = ''
+  try {
+    const p = new URL(url)
+    host = p.hostname.toLowerCase()
+    path = p.pathname
+  } catch {
+    return 'generic'
+  }
   if (host === 'github.com' || host.endsWith('.github.com')) return 'github'
   if (host === 'gitlab.com' || host.startsWith('gitlab.') || path.includes('/-/')) return 'gitlab'
   if (host.includes('gitea') || host === 'codeberg.org') return 'gitea'
@@ -33,7 +44,11 @@ export function repoKind(url: string): RepoLink['kind'] {
 
 /** '' or a path ending in '/', without a leading './' or '/'. */
 const normDir = (d: string) => {
-  const t = d.replace(/\\/g, '/').replace(/^(\.\/)+/, '').replace(/^\/+/, '').replace(/\/+$/, '')
+  const t = d
+    .replace(/\\/g, '/')
+    .replace(/^(\.\/)+/, '')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
   return t && t !== '.' ? t + '/' : ''
 }
 

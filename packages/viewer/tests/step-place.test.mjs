@@ -9,7 +9,9 @@ const near = (a, b, msg) => a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1
 
 // compile/geom placement(): translate · rotate counter-clockwise on the y-down screen · mirror x when on the back
 function boardPoint(at, rot, back, [lx, ly]) {
-  const a = (rot * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a)
+  const a = (rot * Math.PI) / 180,
+    c = Math.cos(a),
+    s = Math.sin(a)
   const x = back ? -lx : lx
   return [at[0] + c * x + s * ly, at[1] - s * x + c * ly]
 }
@@ -17,7 +19,12 @@ function boardPoint(at, rot, back, [lx, ly]) {
 test('the model frame maps to the footprint frame: x along x, y along -y, z up from the face', () => {
   for (const rot of [0, 30, 90, 180, 270, 333])
     for (const side of ['F', 'B'])
-      for (const p of [[1, 0], [0, 1], [2.5, -1.25], [-3, 4]]) {
+      for (const p of [
+        [1, 0],
+        [0, 1],
+        [2.5, -1.25],
+        [-3, 4],
+      ]) {
         const fp = { at: [10, 5], rot, side }
         const [bx, by] = boardPoint(fp.at, rot, side === 'B', p)
         // a footprint point (x, y) is the model point (x, -y)
@@ -48,7 +55,8 @@ test('the whole placement is the footprint placement times the model transform',
   const t = { offset: [0.5, -0.25, 0.1], rotate: [0, 0, 180], scale: [1, 1, 1] }
   const fp = { at: [12, 3.4], rot: 180, side: 'F' }
   // turned twice by 180 degrees, the model x axis is the board x axis again
-  const o = apply(stepMatrix(fp, t, 1.6), [0, 0, 0]), x = apply(stepMatrix(fp, t, 1.6), [1, 0, 0])
+  const o = apply(stepMatrix(fp, t, 1.6), [0, 0, 0]),
+    x = apply(stepMatrix(fp, t, 1.6), [1, 0, 0])
   near([x[0] - o[0], x[1] - o[1], x[2] - o[2]], [1, 0, 0])
   // the offset turns with the footprint: -0.5 in x, +0.25 in scene y
   near(o, [11.5, -3.4 + 0.25, 1.7])

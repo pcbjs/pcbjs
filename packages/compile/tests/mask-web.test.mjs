@@ -16,7 +16,10 @@ const find = (b, rule) => b.drc.filter(d => d.rule === rule)
 const pads = () => [0, 1, 2, 3].map(k => h('pad', { num: k + 1, at: `${(k - 1.5) * 0.5} 0`, size: [0.25, 1], shape: 'rect' }))
 const Row = defineFootprint(props => h('footprint', props, ...pads()), { pins: ['1', '2', '3', '4'], prefix: 'U' })
 /** the same row with a gang opening drawn on F.Mask over it */
-const Ganged = defineFootprint(props => h('footprint', props, ...pads(), h('rect', { layer: 'F.Mask', x: -1, y: -0.6, w: 2, h: 1.2, fill: true })), { pins: ['1', '2', '3', '4'], prefix: 'U' })
+const Ganged = defineFootprint(props => h('footprint', props, ...pads(), h('rect', { layer: 'F.Mask', x: -1, y: -0.6, w: 2, h: 1.2, fill: true })), {
+  pins: ['1', '2', '3', '4'],
+  prefix: 'U',
+})
 
 test('mask-web: pads of one part are one finding naming the narrowest pair, the web and the count', () => {
   const { A, B, C, D } = nets()
@@ -37,7 +40,10 @@ test('mask-web: pads of two parts are one finding per pair', () => {
   const b = mk({ maskWeb: 0.2 }, h(Row().connect(A, B, C, D), { at: '10 10', ref: false }), h(Row().connect(E, F, G, H), { at: '12 10', ref: false }))
   const msgs = find(b, 'mask-web').map(d => d.message)
   assert.equal(msgs.length, 3)
-  assert.ok(msgs.some(m => /^mask web between pad U1\.4 and pad U2\.1 on F\.Mask is 0\.15 mm, narrower than 0\.2 mm; the fab merges the openings$/.test(m)), msgs.join('\n'))
+  assert.ok(
+    msgs.some(m => /^mask web between pad U1\.4 and pad U2\.1 on F\.Mask is 0\.15 mm, narrower than 0\.2 mm; the fab merges the openings$/.test(m)),
+    msgs.join('\n'),
+  )
 })
 
 test('mask-web: openings that merge, and pads a mask drawing gangs, pass', () => {
@@ -53,7 +59,10 @@ test('mask-web: DRC measures the openings the mask Gerber draws', () => {
   const { A, B, C, D } = nets()
   const b = mk({ maskWeb: 0.2 }, h(Row().connect(A, B, C, D), { at: '10 10', ref: false }))
   const pads = b.items.filter(it => it.kind === 'pad')
-  assert.deepEqual(maskOpenings(b, 'F'), pads.flatMap(p => padMask(p, 'F', b.rules) ?? []))
+  assert.deepEqual(
+    maskOpenings(b, 'F'),
+    pads.flatMap(p => padMask(p, 'F', b.rules) ?? []),
+  )
   assert.deepEqual(maskOpenings(b, 'B'), [])
 })
 
@@ -62,8 +71,10 @@ test('mask-web: the rule is checked like the others', () => {
 })
 
 /** a 2 by 2 mm courtyard about the origin and one pad */
-const Box = defineFootprint(props => h('footprint', props, h('pad', { num: 1, at: '0 0', size: 0.5 }),
-  h('rect', { layer: 'F.CrtYd', x: -1, y: -1, w: 2, h: 2, width: 0.05 })), { pins: ['1'], prefix: 'C' })
+const Box = defineFootprint(props => h('footprint', props, h('pad', { num: 1, at: '0 0', size: 0.5 }), h('rect', { layer: 'F.CrtYd', x: -1, y: -1, w: 2, h: 2, width: 0.05 })), {
+  pins: ['1'],
+  prefix: 'C',
+})
 
 test('courtyard: an overlap under 10 µm passes, a deeper one is a warning', () => {
   const { A, B } = nets()

@@ -21,10 +21,18 @@ export const groups: [string, string[]][] = [
   ['Background', ['workspace', 'stackup-and-rules', 'fonts', 'ide-bridge', 'design', 'development']],
 ]
 
-export interface Topic { topic: string; title: string; description: string; body: string }
+export interface Topic {
+  topic: string
+  title: string
+  description: string
+  body: string
+}
 
 export function topicNames(): string[] {
-  return readdirSync(docsDir).filter(f => f.endsWith('.md')).map(f => f.slice(0, -3)).sort()
+  return readdirSync(docsDir)
+    .filter(f => f.endsWith('.md'))
+    .map(f => f.slice(0, -3))
+    .sort()
 }
 
 /** Title from the H1, description from the paragraph under it. */
@@ -35,7 +43,10 @@ export function readTopic(topic: string): Topic {
   const title = h1 < 0 ? topic : lines[h1].slice(2).trim()
   const summary: string[] = []
   for (const l of lines.slice(h1 + 1)) {
-    if (l.trim() === '') { if (summary.length) break; continue }
+    if (l.trim() === '') {
+      if (summary.length) break
+      continue
+    }
     if (l.startsWith('#') || l.startsWith('```')) break
     summary.push(l.trim())
   }
@@ -44,19 +55,33 @@ export function readTopic(topic: string): Topic {
 
 /** `see board.md` in prose becomes a link to that page; code spans and fences are left alone. */
 function linkTopics(text: string, topics: Set<string>): string {
-  return text.split(/(^```[\s\S]*?^```)/m).map((part, i) => i % 2 ? part : part.split(/(`[^`\n]*`)/).map((s, j) => j % 2 ? s :
-    s.replace(/(?<![\w/.[-])([a-z0-9-]+)\.md\b(?!\])/g, (m, t) => topics.has(t) ? `[${m}](./${t})` : m)).join('')).join('')
+  return text
+    .split(/(^```[\s\S]*?^```)/m)
+    .map((part, i) =>
+      i % 2
+        ? part
+        : part
+            .split(/(`[^`\n]*`)/)
+            .map((s, j) => (j % 2 ? s : s.replace(/(?<![\w/.[-])([a-z0-9-]+)\.md\b(?!\])/g, (m, t) => (topics.has(t) ? `[${m}](./${t})` : m))))
+            .join(''),
+    )
+    .join('')
 }
 
 export function sidebar() {
   const names = topicNames()
   const listed = new Set(groups.flatMap(([, t]) => t))
   const extra = names.filter(t => !listed.has(t))
-  return groups.map(([text, topics], i) => ({
-    text,
-    collapsed: false,
-    items: topics.concat(i === groups.length - 1 ? extra : []).filter(t => names.includes(t)).map(t => ({ text: readTopic(t).title, link: `/docs/${t}` })),
-  })).filter(g => g.items.length)
+  return groups
+    .map(([text, topics], i) => ({
+      text,
+      collapsed: false,
+      items: topics
+        .concat(i === groups.length - 1 ? extra : [])
+        .filter(t => names.includes(t))
+        .map(t => ({ text: readTopic(t).title, link: `/docs/${t}` })),
+    }))
+    .filter(g => g.items.length)
 }
 
 /** The README's `## For agents` section, its heading kept. */
@@ -72,7 +97,10 @@ export function readmeSection(heading: string): string {
 export function changelog(): string | null {
   for (const f of ['CHANGELOG.md', 'packages/pcbjs/CHANGELOG.md']) {
     const p = join(repo, f)
-    if (existsSync(p)) return readFileSync(p, 'utf8').replace(/^# .*\n/, '').trim()
+    if (existsSync(p))
+      return readFileSync(p, 'utf8')
+        .replace(/^# .*\n/, '')
+        .trim()
   }
   return null
 }
@@ -82,7 +110,9 @@ export function agentsPage(): string {
 
 pcbjs is built to be driven by a coding agent as much as by a person: one command checks a board, every finding names the source line to change, and every topic file prints in the terminal. This page is the For agents section of the README, which an agent reads first. The package \`@pcbjs/skills\` carries the same guidance as agent skills.
 
-${readmeSection('For agents').replace(/^## For agents\n+/, '').replace(/^### /gm, '## ')}
+${readmeSection('For agents')
+  .replace(/^## For agents\n+/, '')
+  .replace(/^### /gm, '## ')}
 `
 }
 
@@ -103,9 +133,22 @@ export function dynamicPage(rel: string): string | undefined {
   if (rel === 'changelog.md') return changelogPage()
 }
 
-const slugify = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036F]/g, '').replace(/[\u0000-\u001f]/g, '')
-  .replace(/[\s~`!@#$%^&*()\-_+=[\]{}|\\;:"'“”‘’<>,.?/]+/g, '-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '').replace(/^(\d)/, '_$1').toLowerCase()
-const plain = (s: string) => s.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[`*|]/g, ' ').replace(/\s+/g, ' ').trim()
+const slugify = (s: string) =>
+  s
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036F]/g, '')
+    .replace(/[\u0000-\u001f]/g, '')
+    .replace(/[\s~`!@#$%^&*()\-_+=[\]{}|\\;:"'“”‘’<>,.?/]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/^(\d)/, '_$1')
+    .toLowerCase()
+const plain = (s: string) =>
+  s
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[`*|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 
 /** Search sections of a dynamic page, which local search cannot read from disk: one per heading, as VitePress splits a page. */
 export function searchSections(markdown: string) {

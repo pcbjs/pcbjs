@@ -7,8 +7,7 @@ function n(v: number): string {
 }
 
 function check(name: string, values: Record<string, number>): void {
-  for (const [k, v] of Object.entries(values))
-    if (!Number.isFinite(v)) throw new TypeError(`${name}: ${k} must be a finite number in mm, got ${String(v)}`)
+  for (const [k, v] of Object.entries(values)) if (!Number.isFinite(v)) throw new TypeError(`${name}: ${k} must be a finite number in mm, got ${String(v)}`)
 }
 
 /** A w by h rectangle with its top-left corner at (x, y), clockwise from that corner. */
@@ -40,7 +39,8 @@ export function slot(x1: number, y1: number, x2: number, y2: number, w: number):
   if (len === 0) return circle(w, x1, y1)
   const r = w / 2
   // the normal to the centre line, half the width long
-  const nx = (-(y2 - y1) / len) * r, ny = ((x2 - x1) / len) * r
+  const nx = (-(y2 - y1) / len) * r,
+    ny = ((x2 - x1) / len) * r
   const a = `A ${n(r)} ${n(r)} 0 0 0`
   return `M ${n(x1 + nx)} ${n(y1 + ny)} L ${n(x2 + nx)} ${n(y2 + ny)} ${a} ${n(x2 - nx)} ${n(y2 - ny)} L ${n(x1 - nx)} ${n(y1 - ny)} ${a} ${n(x1 + nx)} ${n(y1 + ny)} Z`
 }

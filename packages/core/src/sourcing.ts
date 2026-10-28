@@ -27,14 +27,23 @@ export function resolveSourcing(fields: Record<string, string>, tags: readonly s
     if (t === '') catchAll ??= v
     else if (!tagged.has(t.toLowerCase())) tagged.set(t.toLowerCase(), v)
   }
-  let mpn: string | null = null, tag: string | null = null
+  let mpn: string | null = null,
+    tag: string | null = null
   for (const t of tags) {
     const v = tagged.get(t.toLowerCase())
-    if (v !== undefined) { mpn = v; tag = t; break }
+    if (v !== undefined) {
+      mpn = v
+      tag = t
+      break
+    }
   }
-  if (mpn === null && catchAll !== undefined) { mpn = catchAll; tag = '' }
+  if (mpn === null && catchAll !== undefined) {
+    mpn = catchAll
+    tag = ''
+  }
   const out: Sourcing = { mpn, tag, all }
-  const manufacturer = field(fields, 'Manufacturer'), datasheet = field(fields, 'Datasheet')
+  const manufacturer = field(fields, 'Manufacturer'),
+    datasheet = field(fields, 'Datasheet')
   if (manufacturer) out.manufacturer = manufacturer
   if (datasheet) out.datasheet = datasheet
   return out

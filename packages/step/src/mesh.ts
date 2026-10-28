@@ -26,10 +26,15 @@ export const DEFAULT_OPTIONS: Required<StepOptions> = Object.freeze({ linearDefl
 export const DEFAULT_COLOR: [number, number, number] = [0.5, 0.5, 0.52]
 
 export function bounds(model: StepModel): { min: [number, number, number]; max: [number, number, number] } {
-  const min: [number, number, number] = [Infinity, Infinity, Infinity], max: [number, number, number] = [-Infinity, -Infinity, -Infinity]
+  const min: [number, number, number] = [Infinity, Infinity, Infinity],
+    max: [number, number, number] = [-Infinity, -Infinity, -Infinity]
   for (const m of model.meshes) {
     const p = m.positions
-    for (let i = 0; i < p.length; i += 3) for (let k = 0; k < 3; k++) { if (p[i + k] < min[k]) min[k] = p[i + k]; if (p[i + k] > max[k]) max[k] = p[i + k] }
+    for (let i = 0; i < p.length; i += 3)
+      for (let k = 0; k < 3; k++) {
+        if (p[i + k] < min[k]) min[k] = p[i + k]
+        if (p[i + k] > max[k]) max[k] = p[i + k]
+      }
   }
   return { min, max }
 }

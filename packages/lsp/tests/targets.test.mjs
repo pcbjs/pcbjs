@@ -33,11 +33,16 @@ after(async () => {
 
 /** The target at the n-th `needle` plus `delta` characters, as kind and the name per board. */
 function at(file, needle, delta, n = 0) {
-  const path = join(root, file), text = readFileSync(path, 'utf8')
+  const path = join(root, file),
+    text = readFileSync(path, 'utf8')
   const p = posOf(text, needle, delta, n)
-  const offset = text.split('\n').slice(0, p.line).reduce((s, l) => s + l.length + 1, 0) + p.character
+  const offset =
+    text
+      .split('\n')
+      .slice(0, p.line)
+      .reduce((s, l) => s + l.length + 1, 0) + p.character
   const t = targetAt(code.program(path), path, offset, boards)
-  return t ? { kind: t.kind, names: Object.fromEntries(t.boards.map((b) => [b.board, b.name])), text: text.slice(t.start, t.end), boards: t.boards } : null
+  return t ? { kind: t.kind, names: Object.fromEntries(t.boards.map(b => [b.board, b.name])), text: text.slice(t.start, t.end), boards: t.boards } : null
 }
 
 const CASES = [
@@ -97,9 +102,17 @@ test('pour( names no target: as for a route, its source range answers with the z
   const text = readFileSync(join(root, 'main.tsx'), 'utf8')
   const p = posOf(text, 'pour(GND', 0)
   const site = boards[0].site
-  const r = site.sources['main.tsx'].find((r) => r.start[0] === p.line + 1 && r.start[1] === p.character + 1)
-  assert.ok(text.split('\n')[p.line].slice(p.character, r.end[1]).match(/^pour\(GND, .*\)$/))
-  assert.deepEqual(r.ids.map((id) => site.items.find((i) => i.id === id).kind), ['zone'])
+  const r = site.sources['main.tsx'].find(r => r.start[0] === p.line + 1 && r.start[1] === p.character + 1)
+  assert.ok(
+    text
+      .split('\n')
+      [p.line].slice(p.character, r.end[1])
+      .match(/^pour\(GND, .*\)$/),
+  )
+  assert.deepEqual(
+    r.ids.map(id => site.items.find(i => i.id === id).kind),
+    ['zone'],
+  )
 })
 
 test('ids: a pad is one pad item, a net all its copper, a part and a group their refs', () => {
@@ -107,21 +120,25 @@ test('ids: a pad is one pad item, a net all its copper, a part and a group their
   const pad = at('main.tsx', 'D1.K', 2).boards[0]
   assert.equal(pad.ids.length, 1)
   assert.deepEqual(pad.refs, [])
-  assert.equal(site.items.find((i) => i.id === pad.ids[0]).ref, 'D1')
+  assert.equal(site.items.find(i => i.id === pad.ids[0]).ref, 'D1')
   const net = at('main.tsx', 'pour(GND', 6).boards[0]
-  assert.ok(net.ids.length > 1 && net.ids.every((id) => site.items.find((i) => i.id === id).net === 'GND'))
+  assert.ok(net.ids.length > 1 && net.ids.every(id => site.items.find(i => i.id === id).net === 'GND'))
   assert.deepEqual(at('main.tsx', '<CH1.R', 3).boards[0].refs.sort(), ['C1', 'R2'])
   assert.deepEqual(at('main.tsx', '<D1 ', 2).boards[0].refs, ['D1'])
   assert.deepEqual(at('main.tsx', '"5 15"', 2).boards[0].points, [[5, 15]])
 })
 
-test('a schematic namespace brought into scope by the compiler\'s injection: bare names resolve through it', () => {
-  const file = join(root, 'bare.tsx'), text = readFileSync(file, 'utf8')
-  const inj = projects({ get: () => undefined }, (f, t) => { const r = scopeInject(t, resolveFile, f); return r && { text: r.code, at: r.at, length: r.text.length } })
+test("a schematic namespace brought into scope by the compiler's injection: bare names resolve through it", () => {
+  const file = join(root, 'bare.tsx'),
+    text = readFileSync(file, 'utf8')
+  const inj = projects({ get: () => undefined }, (f, t) => {
+    const r = scopeInject(t, resolveFile, f)
+    return r && { text: r.code, at: r.at, length: r.text.length }
+  })
   try {
     const find = (needle, delta) => {
       const t = targetAt(inj.program(file), file, inj.toService(file, text.indexOf(needle) + delta), boards)
-      return t && { kind: t.kind, name: t.boards.map((b) => b.name).join(), text: text.slice(inj.fromService(file, t.start), inj.fromService(file, t.end)) }
+      return t && { kind: t.kind, name: t.boards.map(b => b.name).join(), text: text.slice(inj.fromService(file, t.start), inj.fromService(file, t.end)) }
     }
     assert.deepEqual(find('<D2', 2), { kind: 'part', name: 'D2', text: 'D2' })
     assert.deepEqual(find('D2.A', 3), { kind: 'pad', name: 'D2.2', text: 'D2.A' })
@@ -130,13 +147,16 @@ test('a schematic namespace brought into scope by the compiler\'s injection: bar
   }
 })
 
-test('the tag of a part element inside <Schematic> names no target: hover and highlight are its symbol\'s', () => {
+test("the tag of a part element inside <Schematic> names no target: hover and highlight are its symbol's", () => {
   assert.equal(at('main.tsx', '<D1 at="4', 2), null)
   assert.equal(at('main.tsx', '<D1 at="4', 6), null)
 })
 
-test('padSource: the key of a pad in its part\'s connect call', () => {
-  const key = (ref, num) => { const s = padSource((f) => code.service(f), boards[0], ref, num); return s && readFileSync(s.file, 'utf8').slice(s.start, s.end) }
+test("padSource: the key of a pad in its part's connect call", () => {
+  const key = (ref, num) => {
+    const s = padSource(f => code.service(f), boards[0], ref, num)
+    return s && readFileSync(s.file, 'utf8').slice(s.start, s.end)
+  }
   assert.equal(key('D1', '1'), 'K')
   assert.equal(key('J1', '2'), 'VCC')
 })
@@ -144,11 +164,14 @@ test('padSource: the key of a pad in its part\'s connect call', () => {
 test('through the dev server: hover images, the cursor target and a pad click', async () => {
   const client = await viteClient(PORT)
   try {
-    const file = join(root, 'main.tsx'), uri = pathToFileURL(file).href, text = readFileSync(file, 'utf8')
+    const file = join(root, 'main.tsx'),
+      uri = pathToFileURL(file).href,
+      text = readFileSync(file, 'utf8')
     await client.conn.sendRequest('initialize', initParams(root))
     await client.conn.sendNotification('initialized', {})
     await client.conn.sendNotification('textDocument/didOpen', { textDocument: { uri, languageId: 'typescriptreact', version: 1, text } })
-    const hover = async (needle, delta) => (await client.conn.sendRequest('textDocument/hover', { textDocument: { uri }, position: posOf(text, needle, delta) }))?.contents.value ?? ''
+    const hover = async (needle, delta) =>
+      (await client.conn.sendRequest('textDocument/hover', { textDocument: { uri }, position: posOf(text, needle, delta) }))?.contents.value ?? ''
     assert.match(await hover('D1.K', 1), /^!\[footprint on Targets\]/)
     assert.match(await hover('D1.K', 2), /^!\[pad on Targets\][^]*pad \*\*D1\.1\*\* K/)
     assert.match(await hover("'24.375", 3), /^!\[point on Targets\][^]*point 24\.375, 17\.6 mm/)
@@ -156,20 +179,32 @@ test('through the dev server: hover images, the cursor target and a pad click', 
     assert.match(await hover('pour(GND', 6), /^!\[net on Targets\]/)
     assert.match(await hover("reference('./", 3), /^!\[reference on Targets\]/)
     assert.match(await hover('<D1 at="4', 2), /^!\[schematic on Targets\][^]*symbol \*\*D1\*\*/)
-    const bare = join(root, 'bare.tsx'), bareText = readFileSync(bare, 'utf8'), bareUri = pathToFileURL(bare).href
+    const bare = join(root, 'bare.tsx'),
+      bareText = readFileSync(bare, 'utf8'),
+      bareUri = pathToFileURL(bare).href
     await client.conn.sendNotification('textDocument/didOpen', { textDocument: { uri: bareUri, languageId: 'typescriptreact', version: 1, text: bareText } })
     const h = await client.conn.sendRequest('textDocument/hover', { textDocument: { uri: bareUri }, position: posOf(bareText, 'D2.A', 3) })
     assert.match(h.contents.value, /^!\[pad on Ns\][^]*pad \*\*D2\.2\*\* A/)
     assert.equal(bareText.split('\n')[h.range.start.line].slice(h.range.start.character, h.range.end.character), 'D2.A')
 
     const cursors = []
-    client.ws.on('message', (raw) => { const m = JSON.parse(raw.toString()); if (m.event === 'pcbjs:cursor') cursors.push(m.data) })
+    client.ws.on('message', raw => {
+      const m = JSON.parse(raw.toString())
+      if (m.event === 'pcbjs:cursor') cursors.push(m.data)
+    })
     await client.conn.sendNotification('pcbjs/focus', { textDocument: { uri }, position: posOf(text, 'D1.K', 2) })
-    const c = await waitFor((h) => { const t = setInterval(() => { if (cursors.length) { clearInterval(t); h(cursors[0]) } }, 20) })
+    const c = await waitFor(h => {
+      const t = setInterval(() => {
+        if (cursors.length) {
+          clearInterval(t)
+          h(cursors[0])
+        }
+      }, 20)
+    })
     assert.equal(c.target.kind, 'pad')
     assert.equal(c.target.boards[0].name, 'D1.1')
 
-    const select = waitFor((h) => client.conn.onNotification('pcbjs/select', h))
+    const select = waitFor(h => client.conn.onNotification('pcbjs/select', h))
     await fetch(`http://127.0.0.1:${PORT}/__pcbjs/open?file=main.tsx&line=8&col=5&pad=D1.1&board=Targets`)
     const sel = await select
     const sch = readFileSync(join(root, 'board.sch.ts'), 'utf8').split('\n')

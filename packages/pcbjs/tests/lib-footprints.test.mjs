@@ -21,9 +21,7 @@ const RULES = { clearance: 0.2, minTrackWidth: 0.2 }
 /** Compile a 40 mm board with one footprint placed at AT, every pin left open or tied to `tie`. */
 function place(f, tie = {}) {
   const pins = typeof f.pins === 'function' ? f.pins({}) : f.pins
-  const node = pins.length
-    ? h(f().connect(Object.fromEntries(pins.map(p => [p, tie[p] ?? NC]))), { at: `${AT[0]} ${AT[1]}` })
-    : h(f, { ref: 'H1', at: `${AT[0]} ${AT[1]}` })
+  const node = pins.length ? h(f().connect(Object.fromEntries(pins.map(p => [p, tie[p] ?? NC]))), { at: `${AT[0]} ${AT[1]}` }) : h(f, { ref: 'H1', at: `${AT[0]} ${AT[1]}` })
   return compileBoard(h(PCB, { name: 'Lib', rules: RULES }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 40, h: 40 }), node))
 }
 const padsOf = b => b.items.filter(i => i.kind === 'pad')
@@ -94,7 +92,10 @@ for (const [label, f, count, pins, prefix] of FAMILIES) {
     else {
       // an IC: pins 1 to n in order, then the exposed pad
       const nums = declared.filter(p => p !== 'EP')
-      assert.deepEqual(nums, nums.map((_, i) => String(i + 1)))
+      assert.deepEqual(
+        nums,
+        nums.map((_, i) => String(i + 1)),
+      )
     }
     assert.equal(f.prefix, prefix)
     const ep = declared.includes('EP')
@@ -115,7 +116,18 @@ for (const [label, f, count, pins, prefix] of FAMILIES) {
 }
 
 test('lib footprints: every footprint with pins has a pin 1 mark or polarity on silk, or is a two-terminal part or pad', () => {
-  for (const f of [L.SOT23(5), L.SOIC(8), L.TSSOP(14), L.QFN(16, 3, 0.5), L.LQFP(48, 7, 0.5), L.JST_PH.footprint(2), L.PinSocket.footprint(2), L.WS2812B('2020'), L.Crystal3225, L.ESP32C3Mini1]) {
+  for (const f of [
+    L.SOT23(5),
+    L.SOIC(8),
+    L.TSSOP(14),
+    L.QFN(16, 3, 0.5),
+    L.LQFP(48, 7, 0.5),
+    L.JST_PH.footprint(2),
+    L.PinSocket.footprint(2),
+    L.WS2812B('2020'),
+    L.Crystal3225,
+    L.ESP32C3Mini1,
+  ]) {
     const b = place(f)
     const dot = b.items.find(i => i.kind === 'graphic' && i.layer === 'F.SilkS' && i.fill)
     assert.ok(dot, `${f.name}: a filled pin 1 dot on F.SilkS`)
@@ -124,29 +136,49 @@ test('lib footprints: every footprint with pins has a pin 1 mark or polarity on 
 
 test('lib footprints: SOT-23, SOIC, TSSOP, QFN and LQFP pads sit where KiCad puts them, numbered as JEDEC does', () => {
   let b = place(L.SOT23(3))
-  at(b, 1, -0.9375, -0.95); at(b, 2, -0.9375, 0.95); at(b, 3, 0.9375, 0)
+  at(b, 1, -0.9375, -0.95)
+  at(b, 2, -0.9375, 0.95)
+  at(b, 3, 0.9375, 0)
   b = place(L.SOT23(5))
-  at(b, 1, -1.1375, -0.95); at(b, 3, -1.1375, 0.95); at(b, 4, 1.1375, 0.95); at(b, 5, 1.1375, -0.95)
+  at(b, 1, -1.1375, -0.95)
+  at(b, 3, -1.1375, 0.95)
+  at(b, 4, 1.1375, 0.95)
+  at(b, 5, 1.1375, -0.95)
   b = place(L.SOT23(6))
-  at(b, 5, 1.1375, 0); at(b, 6, 1.1375, -0.95)
+  at(b, 5, 1.1375, 0)
+  at(b, 6, 1.1375, -0.95)
   b = place(L.SOT223)
-  at(b, 1, -3.15, -2.3); at(b, 4, 3.15, 0)
+  at(b, 1, -3.15, -2.3)
+  at(b, 4, 3.15, 0)
   assert.equal(pad(b, 4).name, '2', 'the tab is pin 2')
   b = place(L.SOIC(8))
-  at(b, 1, -2.475, -1.905); at(b, 4, -2.475, 1.905); at(b, 5, 2.475, 1.905); at(b, 8, 2.475, -1.905)
+  at(b, 1, -2.475, -1.905)
+  at(b, 4, -2.475, 1.905)
+  at(b, 5, 2.475, 1.905)
+  at(b, 8, 2.475, -1.905)
   assert.deepEqual([pad(b, 1).w, pad(b, 1).h], [1.95, 0.6])
   b = place(L.SOIC(16, 'W'))
-  at(b, 1, -4.65, -4.445); at(b, 16, 4.65, -4.445)
+  at(b, 1, -4.65, -4.445)
+  at(b, 16, 4.65, -4.445)
   b = place(L.TSSOP(20))
-  at(b, 1, -2.8625, -2.925); at(b, 11, 2.8625, 2.925)
+  at(b, 1, -2.8625, -2.925)
+  at(b, 11, 2.8625, 2.925)
   b = place(L.QFN(32, 5, 0.5, 3.45))
-  at(b, 1, -2.4375, -1.75); at(b, 9, -1.75, 2.4375); at(b, 17, 2.4375, 1.75); at(b, 25, 1.75, -2.4375); at(b, 33, 0, 0)
+  at(b, 1, -2.4375, -1.75)
+  at(b, 9, -1.75, 2.4375)
+  at(b, 17, 2.4375, 1.75)
+  at(b, 25, 1.75, -2.4375)
+  at(b, 33, 0, 0)
   assert.deepEqual([pad(b, 1).w, pad(b, 1).h, pad(b, 9).w, pad(b, 9).h], [0.875, 0.25, 0.25, 0.875])
   assert.equal(pad(b, 33).name, 'EP')
   b = place(L.QFN(16, 3, 0.5, 1.75))
-  at(b, 1, -1.4625, -0.75); at(b, 9, 1.4625, 0.75)
+  at(b, 1, -1.4625, -0.75)
+  at(b, 9, 1.4625, 0.75)
   b = place(L.LQFP(48, 7, 0.5))
-  at(b, 1, -4.1625, -2.75); at(b, 13, -2.75, 4.1625); at(b, 25, 4.1625, 2.75); at(b, 37, 2.75, -4.1625)
+  at(b, 1, -4.1625, -2.75)
+  at(b, 13, -2.75, 4.1625)
+  at(b, 25, 4.1625, 2.75)
+  at(b, 37, 2.75, -4.1625)
   b = place(L.LQFP(64, 10, 0.5))
   at(b, 1, -5.675, -3.75)
   b = place(L.LQFP(32, 7, 0.8))
@@ -155,44 +187,82 @@ test('lib footprints: SOT-23, SOIC, TSSOP, QFN and LQFP pads sit where KiCad put
 
 test('lib footprints: connectors, switches, LEDs, crystals, the holder and the module follow their KiCad and Espressif patterns', () => {
   let b = place(L.USBC.footprint('full16'))
-  at(b, 'A1', -3.25, -4.045); at(b, 'B1', 3.25, -4.045); at(b, 'A5', -1.25, -4.045); at(b, 'B5', 1.75, -4.045)
-  at(b, 'S1', -4.32, -3.13); at(b, 'S3', -4.32, 1.05)
-  const holes = local(b).filter(p => p.type === 'npth').map(p => [p.x, p.y])
-  assert.deepEqual(holes, [[-2.89, -2.6], [2.89, -2.6]])
+  at(b, 'A1', -3.25, -4.045)
+  at(b, 'B1', 3.25, -4.045)
+  at(b, 'A5', -1.25, -4.045)
+  at(b, 'B5', 1.75, -4.045)
+  at(b, 'S1', -4.32, -3.13)
+  at(b, 'S3', -4.32, 1.05)
+  const holes = local(b)
+    .filter(p => p.type === 'npth')
+    .map(p => [p.x, p.y])
+  assert.deepEqual(holes, [
+    [-2.89, -2.6],
+    [2.89, -2.6],
+  ])
   b = place(L.USBC.footprint('power6'))
-  at(b, 'B12', -2.75, -3.18); at(b, 'A9', 1.52, -3.18); at(b, 'S2', 4.32, -3.0); at(b, 'S4', 4.32, 0.8)
+  at(b, 'B12', -2.75, -3.18)
+  at(b, 'A9', 1.52, -3.18)
+  at(b, 'S2', 4.32, -3.0)
+  at(b, 'S4', 4.32, 0.8)
   b = place(L.JST_PH.footprint(4))
-  at(b, 1, -3, 0); at(b, 4, 3, 0)
+  at(b, 1, -3, 0)
+  at(b, 4, 3, 0)
   assert.deepEqual([pad(b, 1).w, pad(b, 1).h], [1.2, 1.75])
   b = place(L.JST_XH.footprint(4))
   at(b, 1, -3.75, 0)
   b = place(L.PinSocket.footprint(3))
-  at(b, 1, 0, 0); at(b, 3, 0, 5.08)
+  at(b, 1, 0, 0)
+  at(b, 3, 0, 5.08)
   b = place(L.TactSwitch('6x6'))
-  at(b, 1, -4, -2.25); at(b, 4, 4, 2.25)
+  at(b, 1, -4, -2.25)
+  at(b, 4, 4, 2.25)
   b = place(L.TactSwitch('3x4'))
-  at(b, 1, -2.225, 0); at(b, 2, 2.225, 0)
+  at(b, 1, -2.225, 0)
+  at(b, 2, 2.225, 0)
   b = place(L.SlideSwitch(3))
-  at(b, 1, -2.5, -2.75); at(b, 3, 2.5, -2.75)
+  at(b, 1, -2.5, -2.75)
+  at(b, 3, 2.5, -2.75)
   b = place(L.WS2812B('2020'))
-  at(b, 1, -0.915, -0.55); at(b, 3, 0.915, 0.55)
-  assert.deepEqual(['1', '2', '3', '4'].map(n => pad(b, n).name), ['DOUT', 'GND', 'DIN', 'VDD'])
+  at(b, 1, -0.915, -0.55)
+  at(b, 3, 0.915, 0.55)
+  assert.deepEqual(
+    ['1', '2', '3', '4'].map(n => pad(b, n).name),
+    ['DOUT', 'GND', 'DIN', 'VDD'],
+  )
   b = place(L.WS2812B('5050'))
   at(b, 1, -2.45, -1.65)
-  assert.deepEqual(['1', '2', '3', '4'].map(n => pad(b, n).name), ['VDD', 'DOUT', 'GND', 'DIN'])
+  assert.deepEqual(
+    ['1', '2', '3', '4'].map(n => pad(b, n).name),
+    ['VDD', 'DOUT', 'GND', 'DIN'],
+  )
   b = place(L.Crystal3225)
-  at(b, 1, -1.1, 0.85); at(b, 3, 1.1, -0.85)
+  at(b, 1, -1.1, 0.85)
+  at(b, 3, 1.1, -0.85)
   b = place(L.Crystal5032)
   at(b, 1, -1.85, 0)
   b = place(L.Crystal49S)
-  at(b, 1, -2.44, 0); at(b, 2, 2.44, 0)
+  at(b, 1, -2.44, 0)
+  at(b, 2, 2.44, 0)
   b = place(L.CR2032Holder)
-  at(b, 1, -10.985, 0); at(b, 3, 10.985, 0); at(b, 2, 0, 0)
+  at(b, 1, -10.985, 0)
+  at(b, 3, 10.985, 0)
+  at(b, 2, 0, 0)
   assert.equal(pad(b, 2).w, 17.8)
   b = place(L.ESP32C3Mini1)
-  at(b, 1, -5.9, -1.3); at(b, 11, -5.9, 6.7); at(b, 12, -4.8, 7.6); at(b, 24, 4.8, 7.6); at(b, 25, 5.9, 6.7); at(b, 36, 4.8, -2.2); at(b, 48, -4.8, -2.2); at(b, 50, 5.95, -2.25)
+  at(b, 1, -5.9, -1.3)
+  at(b, 11, -5.9, 6.7)
+  at(b, 12, -4.8, 7.6)
+  at(b, 24, 4.8, 7.6)
+  at(b, 25, 5.9, 6.7)
+  at(b, 36, 4.8, -2.2)
+  at(b, 48, -4.8, -2.2)
+  at(b, 50, 5.95, -2.25)
   assert.equal(local(b).filter(p => p.num === '49').length, 9)
-  assert.deepEqual(['1', '3', '8', '12', '26', '30', '31'].map(n => pad(b, n).name), ['GND', '3V3', 'EN', 'IO0', 'IO18', 'RXD0', 'TXD0'])
+  assert.deepEqual(
+    ['1', '3', '8', '12', '26', '30', '31'].map(n => pad(b, n).name),
+    ['GND', '3V3', 'EN', 'IO0', 'IO18', 'RXD0', 'TXD0'],
+  )
 })
 
 test('lib footprints: the ESP32-C3-MINI-1 lists its NC pads, needs no connection for them, and keeps copper out of the antenna area', () => {
@@ -206,7 +276,10 @@ test('lib footprints: the ESP32-C3-MINI-1 lists its NC pads, needs no connection
 
 test('lib footprints: pinNames names pins by a list or by pad number and pin name, merges and splits pins, and U1.PA9 works', () => {
   const names = Array.from({ length: 48 }, (_, i) => `P${i + 1}`)
-  names[29] = 'PA9'; names[22] = 'VSS'; names[34] = 'VSS'; names[46] = 'VSS'
+  names[29] = 'PA9'
+  names[22] = 'VSS'
+  names[34] = 'VSS'
+  names[46] = 'VSS'
   const MCU = L.LQFP(48, 7, 0.5, { pinNames: names })
   assert.equal(MCU.pins.length, 46, 'three VSS pads are one pin')
   const { TX, GND } = nets()
@@ -214,7 +287,12 @@ test('lib footprints: pinNames names pins by a list or by pad number and pin nam
   assert.equal(U.PA9.pin, 'PA9')
   const b = compileBoard(h(PCB, { name: 'P', rules: RULES }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 40, h: 40 }), h(U, { at: '20 20' })))
   assert.equal(padsOf(b).find(p => p.num === '30').net, 'TX')
-  assert.deepEqual(padsOf(b).filter(p => p.net === 'GND').map(p => p.num), ['23', '35', '47'])
+  assert.deepEqual(
+    padsOf(b)
+      .filter(p => p.net === 'GND')
+      .map(p => p.num),
+    ['23', '35', '47'],
+  )
 
   const LDO = L.SOT23(5, { pinNames: ['VIN', 'GND', 'EN', 'NC', 'VOUT'] })
   assert.deepEqual([...LDO.pins], ['VIN', 'GND', 'EN', 'VOUT'])
@@ -259,9 +337,24 @@ test('lib footprints: courtyard centres anywhere and keeps the old layer form', 
   const b = L.courtyard(4, 2, 'B.CrtYd')
   assert.deepEqual({ x: b.props.x, y: b.props.y, layer: b.props.layer }, { x: -2, y: -1, layer: 'B.CrtYd' })
   const row = L.padRow(3, 1.27, { size: [0.6, 1.5], at: [0, 2] })
-  assert.deepEqual(row.map(p => p.props.at), [[-1.27, 2], [0, 2], [1.27, 2]])
+  assert.deepEqual(
+    row.map(p => p.props.at),
+    [
+      [-1.27, 2],
+      [0, 2],
+      [1.27, 2],
+    ],
+  )
   const grid = L.padGrid(2, 2, 2.54, { size: 1.7, drill: 1, order: 'columns' })
-  assert.deepEqual(grid.map(p => [p.props.num, ...p.props.at]), [['1', -1.27, -1.27], ['2', -1.27, 1.27], ['3', 1.27, -1.27], ['4', 1.27, 1.27]])
+  assert.deepEqual(
+    grid.map(p => [p.props.num, ...p.props.at]),
+    [
+      ['1', -1.27, -1.27],
+      ['2', -1.27, 1.27],
+      ['3', 1.27, -1.27],
+      ['4', 1.27, 1.27],
+    ],
+  )
   const silk = L.silkOutline(2, 2, { pads: [{ num: '1', name: '1', x: -1, y: 0, w: 0.6, h: 0.6 }] })
   assert.match(silk.props.d, /^M -1.1 -1.1 H 1.1 M -1.1 1.1 H 1.1 M -1.1 -1.1 V -0.575 M -1.1 0.575 V 1.1 M 1.1 -1.1 V 1.1$/)
 })
@@ -270,8 +363,11 @@ test('lib footprints: courtyard centres anywhere and keeps the old layer form', 
 
 /** The pad centres of examples/stm32-dev/lib/lqfp.tsx for LQFP48_7x7, its own formula. */
 function reviewerLqfp48(n) {
-  const side = 12, i = (n - 1) % side, s = Math.floor((n - 1) / side)
-  const off = -((side - 1) / 2) * 0.5 + i * 0.5, e = 8.325 / 2
+  const side = 12,
+    i = (n - 1) % side,
+    s = Math.floor((n - 1) / side)
+  const off = -((side - 1) / 2) * 0.5 + i * 0.5,
+    e = 8.325 / 2
   return s === 0 ? [-e, off] : s === 1 ? [off, e] : s === 2 ? [e, -off] : [-off, -e]
 }
 
@@ -284,7 +380,11 @@ const ACCURATE = [
   ['stm32-dev Crystal3225', L.Crystal3225, { 1: [-1.1, 0.8], 2: [1.1, 0.8], 3: [1.1, -0.8], 4: [-1.1, -0.8] }],
   ['stm32-dev Crystal3215', L.Crystal3215, { 1: [-1.25, 0], 2: [1.25, 0] }],
   ['badge Tact, PTS810', L.TactSwitch('4.2x3.2'), { 1: [-2.075, -1.075], 2: [2.075, -1.075], 3: [-2.075, 1.075], 4: [2.075, 1.075] }],
-  ['badge Pogo, ISP-6', L.PogoPad(1.5, { cols: 3, rows: 2 }), Object.fromEntries([1, 2, 3, 4, 5, 6].map(n => [n, [(Math.floor((n - 1) / 2) - 1) * 2.54, ((n - 1) % 2 - 0.5) * 2.54]]))],
+  [
+    'badge Pogo, ISP-6',
+    L.PogoPad(1.5, { cols: 3, rows: 2 }),
+    Object.fromEntries([1, 2, 3, 4, 5, 6].map(n => [n, [(Math.floor((n - 1) / 2) - 1) * 2.54, (((n - 1) % 2) - 0.5) * 2.54]])),
+  ],
   ['usbc-led MountingHole, M2', L.MountingHole(2.2), { '': [0, 0] }],
 ]
 
@@ -324,13 +424,27 @@ test('lib: the exposed pad of QFN and LQFP and its thermal vias join a pour soli
   const ep = padsOf(b).filter(p => p.num === '33')
   assert.equal(ep.length, 10)
   assert.ok(ep.every(p => p.thermal === 'solid'))
-  assert.ok(padsOf(b).filter(p => p.num !== '33').every(p => p.thermal === undefined))
-  assert.ok(padsOf(place(L.LQFP(48, 7, 0.5, { ep: 5 }))).filter(p => p.name === 'EP').every(p => p.thermal === 'solid'))
-  assert.ok(padsOf(place(L.ESP32C3Mini1)).filter(p => p.num === '49').every(p => p.thermal === 'solid'))
+  assert.ok(
+    padsOf(b)
+      .filter(p => p.num !== '33')
+      .every(p => p.thermal === undefined),
+  )
+  assert.ok(
+    padsOf(place(L.LQFP(48, 7, 0.5, { ep: 5 })))
+      .filter(p => p.name === 'EP')
+      .every(p => p.thermal === 'solid'),
+  )
+  assert.ok(
+    padsOf(place(L.ESP32C3Mini1))
+      .filter(p => p.num === '49')
+      .every(p => p.thermal === 'solid'),
+  )
   // a placed part's thermal map overrides its footprint's pads by number or name
   const { GND } = nets()
   const U = L.QFN(16, 3, 0.5, 1.75)().connect({ EP: GND })
-  const p = compileBoard(h(PCB, { name: 'Lib', rules: RULES }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 40, h: 40 }), h(U, { at: '20 20', thermal: { EP: 'thermal', 1: 'none' } })))
+  const p = compileBoard(
+    h(PCB, { name: 'Lib', rules: RULES }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 40, h: 40 }), h(U, { at: '20 20', thermal: { EP: 'thermal', 1: 'none' } })),
+  )
   assert.equal(padsOf(p).find(q => q.name === 'EP').thermal, 'thermal')
   assert.equal(padsOf(p).find(q => q.num === '1').thermal, 'none')
 })

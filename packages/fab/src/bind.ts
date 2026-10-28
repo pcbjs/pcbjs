@@ -11,11 +11,14 @@ export { isBoundPCB, paletteName, type BoundPCB, type PresetBoardProps, type Pre
 
 function recolor(s: Stackup, mask?: string, silk?: string, finish?: Finish): Stackup {
   if (mask === undefined && silk === undefined && finish === undefined) return s
-  const out: Stackup = { ...s, layers: s.layers.map(l => {
-    if (mask !== undefined && l.type === 'mask') return { ...l, color: mask }
-    if (silk !== undefined && l.type === 'silk') return { ...l, color: silk }
-    return l
-  }) }
+  const out: Stackup = {
+    ...s,
+    layers: s.layers.map(l => {
+      if (mask !== undefined && l.type === 'mask') return { ...l, color: mask }
+      if (silk !== undefined && l.type === 'silk') return { ...l, color: silk }
+      return l
+    }),
+  }
   if (mask !== undefined) out.maskColor = mask
   if (silk !== undefined) out.silkColor = silk
   if (finish !== undefined) out.finish = finish
@@ -24,7 +27,8 @@ function recolor(s: Stackup, mask?: string, silk?: string, finish?: Finish): Sta
 
 /** A <PCB> component bound to a fab preset: `color`, `silk`, `finish` and `rules` apply over the preset. */
 export function bindPCB(preset: PresetInput): BoundPCB {
-  const colors = { ...(preset.colors ?? {}) }, silkColors = { ...(preset.silkColors ?? { White: '#ececec' }) }
+  const colors = { ...(preset.colors ?? {}) },
+    silkColors = { ...(preset.silkColors ?? { White: '#ececec' }) }
   const fab = preset.fab ?? preset.name?.split(' ').slice(0, -1).join(' ') ?? ''
   const spec: PresetSpec = deepFreeze({
     name: preset.name ?? fab,
@@ -46,15 +50,32 @@ export function bindPCB(preset: PresetInput): BoundPCB {
     const mask = color === undefined || color === null ? undefined : paletteName(colors, String(color))
     const legend = silk === undefined || silk === null ? undefined : paletteName(silkColors, String(silk))
     const base = stackup ?? (spec.stackup as Stackup)
-    return h('board', { ...rest, stackup: recolor(base, mask, legend, finish), rules: mergeRules(spec.rules as Rules, rules), ...(tags ? { sourcing: [...tags] } : {}),
-      ...(cpl || spec.cpl ? { cpl: { ...(spec.cpl ?? {}), ...(cpl ?? {}) } } : {}),
-      // the preset's notes first; a value that is no list goes on as it is, for the board's check to name
-      ...(fabNotes !== undefined && fabNotes !== null && !Array.isArray(fabNotes) ? { fabNotes } : spec.fabNotes || fabNotes ? { fabNotes: [...(spec.fabNotes ?? []), ...(fabNotes ?? [])] } : {}),
-      ...(spec.autoroute || autoroute ? { autoroute: mergeAutoroute({}, spec.autoroute, autoroute) } : {}),
-      ...(spec.classes || classes ? { classes: spec.classes && classes && typeof classes === 'object' ? mergeClasses(spec.classes as Record<string, NetClass>, classes) : classes ?? cloneData(spec.classes) } : {}) }, children as any)
+    return h(
+      'board',
+      {
+        ...rest,
+        stackup: recolor(base, mask, legend, finish),
+        rules: mergeRules(spec.rules as Rules, rules),
+        ...(tags ? { sourcing: [...tags] } : {}),
+        ...(cpl || spec.cpl ? { cpl: { ...(spec.cpl ?? {}), ...(cpl ?? {}) } } : {}),
+        // the preset's notes first; a value that is no list goes on as it is, for the board's check to name
+        ...(fabNotes !== undefined && fabNotes !== null && !Array.isArray(fabNotes)
+          ? { fabNotes }
+          : spec.fabNotes || fabNotes
+            ? { fabNotes: [...(spec.fabNotes ?? []), ...(fabNotes ?? [])] }
+            : {}),
+        ...(spec.autoroute || autoroute ? { autoroute: mergeAutoroute({}, spec.autoroute, autoroute) } : {}),
+        ...(spec.classes || classes
+          ? {
+              classes:
+                spec.classes && classes && typeof classes === 'object' ? mergeClasses(spec.classes as Record<string, NetClass>, classes) : (classes ?? cloneData(spec.classes)),
+            }
+          : {}),
+      },
+      children as any,
+    )
   } as BoundPCB
   Object.defineProperty(Board, 'preset', { value: spec, enumerable: true })
   Object.defineProperty(Board, 'name', { value: spec.name.replace(/\W+/g, '') || 'PCB' })
   return Board
 }
-

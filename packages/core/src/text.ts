@@ -4,7 +4,12 @@ import { NEWSTROKE, NEWSTROKE_ALIAS, NEWSTROKE_CAP, NEWSTROKE_EXTRA } from './fo
 
 /** The stroke fonts: Hershey Simplex, the default, and NewStroke, KiCad's own. */
 export type StrokeFontName = 'hershey' | 'newstroke'
-interface StrokeFont { cap: number; ascii: readonly (readonly number[])[]; extra: Readonly<Record<string, readonly number[]>>; alias: Readonly<Record<string, string>> }
+interface StrokeFont {
+  cap: number
+  ascii: readonly (readonly number[])[]
+  extra: Readonly<Record<string, readonly number[]>>
+  alias: Readonly<Record<string, string>>
+}
 const FONTS: Record<StrokeFontName, StrokeFont> = {
   hershey: { cap: SIMPLEX_CAP, ascii: SIMPLEX, extra: SIMPLEX_EXTRA, alias: SIMPLEX_ALIAS },
   newstroke: { cap: NEWSTROKE_CAP, ascii: NEWSTROKE, extra: NEWSTROKE_EXTRA, alias: NEWSTROKE_ALIAS },
@@ -82,7 +87,11 @@ export function strokeText(text: string, opts: StrokeTextOptions): StrokeText {
     for (const g of glyphs) {
       let cur: Ring = []
       for (let i = 1; i + 1 < g.length; i += 2) {
-        if (g[i] === -1 && g[i + 1] === -1) { if (cur.length) strokes.push(cur); cur = []; continue }
+        if (g[i] === -1 && g[i + 1] === -1) {
+          if (cur.length) strokes.push(cur)
+          cur = []
+          continue
+        }
         cur.push([nm(x + g[i] * scaleX), nm(y0 - g[i + 1] * scaleY)])
       }
       if (cur.length) strokes.push(cur)

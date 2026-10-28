@@ -10,7 +10,57 @@ export class Code {
 export const code = (s: string) => new Code(s)
 
 const IDENT = /^[A-Za-z_$][\w$]*$/
-const RESERVED = new Set(['break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do', 'else', 'enum', 'export', 'extends', 'false', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof', 'new', 'null', 'return', 'super', 'switch', 'this', 'throw', 'true', 'try', 'typeof', 'var', 'void', 'while', 'with', 'yield', 'let', 'static', 'implements', 'interface', 'package', 'private', 'protected', 'public', 'await', 'NaN', 'Infinity', 'undefined'])
+const RESERVED = new Set([
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'function',
+  'if',
+  'import',
+  'in',
+  'instanceof',
+  'new',
+  'null',
+  'return',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'with',
+  'yield',
+  'let',
+  'static',
+  'implements',
+  'interface',
+  'package',
+  'private',
+  'protected',
+  'public',
+  'await',
+  'NaN',
+  'Infinity',
+  'undefined',
+])
 
 export function str(s: string): string {
   return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')}'`
@@ -43,16 +93,21 @@ export function atString(v: unknown): unknown {
 }
 
 export function jsx(e: ElementSpec | { type: string; props: Record<string, unknown>; children?: (string | number | Code)[] }): string {
-  const props = Object.entries(e.props).filter(([, v]) => v !== undefined).map(([k, v]) => attr(k, k === 'at' ? atString(v) : v))
+  const props = Object.entries(e.props)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => attr(k, k === 'at' ? atString(v) : v))
   const open = `<${e.type}${props.length ? ' ' + props.join(' ') : ''}`
   if (!e.children?.length) return `${open} />`
-  const inner = e.children.map(c => c instanceof Code ? `{${c.code}}` : typeof c === 'string' && !/[{}<>\n]/.test(c) && c.trim() === c && c !== '' ? c : `{${lit(c)}}`).join('')
+  const inner = e.children.map(c => (c instanceof Code ? `{${c.code}}` : typeof c === 'string' && !/[{}<>\n]/.test(c) && c.trim() === c && c !== '' ? c : `{${lit(c)}}`)).join('')
   return `${open}>${inner}</${e.type}>`
 }
 
 /** An identifier from any name: KiCad footprint names such as SOIC-8_3.9x4.9mm_P1.27mm become SOIC_8_3_9x4_9mm_P1_27mm. */
 export function ident(name: string, fallback = 'X'): string {
-  let s = name.replace(/[^A-Za-z0-9_$]+/g, '_').replace(/^_+|_+$/g, '').replace(/__+/g, '_')
+  let s = name
+    .replace(/[^A-Za-z0-9_$]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .replace(/__+/g, '_')
   if (!s) s = fallback
   if (/^\d/.test(s)) s = '_' + s
   if (RESERVED.has(s)) s += '_'
@@ -111,7 +166,8 @@ export function footprintModule(fp: KFootprint, o: FootprintFileOptions = {}): {
   const id = o.id ?? `${lib ?? 'kicad'}:${fp.name}`
   const pins = padPins(fp)
   const specs = footprintSpecs(fp, o.copper ?? ['F.Cu', 'B.Cu'])
-  if (o.pinNames) for (const s of specs) if (s.type === 'pad' && o.pinNames.has(String(s.props.num))) s.props = { num: s.props.num, name: o.pinNames.get(String(s.props.num)), ...s.props }
+  if (o.pinNames)
+    for (const s of specs) if (s.type === 'pad' && o.pinNames.has(String(s.props.num))) s.props = { num: s.props.num, name: o.pinNames.get(String(s.props.num)), ...s.props }
   let modelFile = o.modelFile
   const shown = fp.models.find(x => !x.hidden && x.path)
   if (!modelFile && shown && o.kicadProject && o.fileDir) modelFile = projectModelPath(shown.path, o.kicadProject, o.fileDir) ?? undefined
@@ -119,14 +175,18 @@ export function footprintModule(fp: KFootprint, o: FootprintFileOptions = {}): {
   const head: string[] = [...sourceComment(fp, o.source ?? fp.file ?? fp.name)]
   head.push(`import { defineFootprint, type FootprintProps } from '@pcbjs/core'`)
   if (model?.usesKicad) head.push(`import { kicadModel } from '@pcbjs/kicad'`)
-  const fpProps: Record<string, unknown> = { id, value: fp.properties.Value && !/\$\{/.test(fp.properties.Value) && fp.properties.Value !== fp.name ? fp.properties.Value : fp.name }
+  const fpProps: Record<string, unknown> = {
+    id,
+    value: fp.properties.Value && !/\$\{/.test(fp.properties.Value) && fp.properties.Value !== fp.name ? fp.properties.Value : fp.name,
+  }
   if (fp.descr) fpProps.description = fp.descr.replace(/\s+/g, ' ')
   if (o.attrs !== false && !fp.attrs.bom) fpProps.bom = false
   if (o.attrs !== false && !fp.attrs.pos) fpProps.pos = false
   if (model) fpProps.model = model.code
   const fnName = `${name}Footprint`
   const lines = [
-    ...head, '',
+    ...head,
+    '',
     `function ${fnName}(props: FootprintProps) {`,
     '  const { children, ...rest } = props',
     '  return (',

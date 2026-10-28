@@ -8,7 +8,13 @@ export type Box = [number, number, number, number]
 /** The page: null free, a PAPERS index to start from, or a fixed paper in mm. */
 export type Sheet = null | number | [number, number]
 /** name, width and height in mm, landscape */
-export const PAPERS: [string, number, number][] = [['A4', 297, 210], ['A3', 420, 297], ['A2', 594, 420], ['A1', 841, 594], ['A0', 1189, 841]]
+export const PAPERS: [string, number, number][] = [
+  ['A4', 297, 210],
+  ['A3', 420, 297],
+  ['A2', 594, 420],
+  ['A1', 841, 594],
+  ['A0', 1189, 841],
+]
 /** Paper border and the least gap between blocks, grid units. */
 export const MARGIN = 4
 export const GAP = 3
@@ -27,12 +33,17 @@ export const boxOf = (pts: Pt[]): Box => [Math.min(...pts.map(p => p[0])), Math.
 
 /** Rotate counterclockwise on the y-down sheet, after an optional mirror in x. */
 export function symMatrix(at: Pt, rot: number, flip: boolean, scale = 1): Mat {
-  const t = (rot * Math.PI) / 180, c = Math.round(Math.cos(t)), s = Math.round(Math.sin(t)), f = flip ? -1 : 1
+  const t = (rot * Math.PI) / 180,
+    c = Math.round(Math.cos(t)),
+    s = Math.round(Math.sin(t)),
+    f = flip ? -1 : 1
   return [c * f * scale, -s * f * scale, s * scale, c * scale, at[0] * scale, at[1] * scale]
 }
 export const apply = (m: Mat, p: Pt): Pt => [r6(m[0] * p[0] + m[2] * p[1] + m[4]), r6(m[1] * p[0] + m[3] * p[1] + m[5])]
 export function sideOf(m: Mat, side: PinSide): PinSide {
-  const v = SIDE_V[side], x = m[0] * v[0] + m[2] * v[1], y = m[1] * v[0] + m[3] * v[1]
+  const v = SIDE_V[side],
+    x = m[0] * v[0] + m[2] * v[1],
+    y = m[1] * v[0] + m[3] * v[1]
   return Math.abs(x) > Math.abs(y) ? (x > 0 ? 'right' : 'left') : y > 0 ? 'bottom' : 'top'
 }
 /** The body and pin ends of a symbol, one unit around. */
@@ -56,7 +67,11 @@ export interface PlaceItem {
   /** declaration order */
   order: number
 }
-export interface Placement { at: Pt; rot: number; flip: boolean }
+export interface Placement {
+  at: Pt
+  rot: number
+  flip: boolean
+}
 /** How blocks are ordered before packing: by pin count, by nets shared with what is placed, or as declared. */
 export type PlaceOrder = 'pins' | 'link' | 'source'
 export interface PlaceInput {
@@ -71,29 +86,81 @@ export interface PlaceInput {
   grid: number
   order: PlaceOrder
 }
-export interface PlaceResult { at: Map<string, Placement>; paper: string | null }
+export interface PlaceResult {
+  at: Map<string, Placement>
+  paper: string | null
+}
 
 /** `wired`: the pin joined to the chain before it, which needs no room for a label */
-interface Member { it: PlaceItem; at: Pt; rot: number; flip: boolean; wired?: string }
-interface Block { members: Member[]; ext: Box; nets: Set<string>; pins: number; order: number; top: string; conn: boolean; mirror?: () => Block }
-interface Unit { blocks: Block[]; offs: Pt[]; w: number; h: number; nets: Set<string>; pins: number; order: number }
-interface Link { anchor: PlaceItem; pin: string; decap: boolean }
+interface Member {
+  it: PlaceItem
+  at: Pt
+  rot: number
+  flip: boolean
+  wired?: string
+}
+interface Block {
+  members: Member[]
+  ext: Box
+  nets: Set<string>
+  pins: number
+  order: number
+  top: string
+  conn: boolean
+  mirror?: () => Block
+}
+interface Unit {
+  blocks: Block[]
+  offs: Pt[]
+  w: number
+  h: number
+  nets: Set<string>
+  pins: number
+  order: number
+}
+interface Link {
+  anchor: PlaceItem
+  pin: string
+  decap: boolean
+}
 
-const ORIENTS: [number, boolean][] = [[0, false], [0, true], [90, false], [270, false], [180, false], [90, true], [270, true], [180, true]]
+const ORIENTS: [number, boolean][] = [
+  [0, false],
+  [0, true],
+  [90, false],
+  [270, false],
+  [180, false],
+  [90, true],
+  [270, true],
+  [180, true],
+]
 const OPPOSITE: Record<PinSide, PinSide> = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' }
 const isConn = (it: PlaceItem) => it.sym.kind === 'connector' || /^(J|P|CN|USB)$/i.test(it.prefix)
-const shared = (a: Set<string>, b: Set<string>) => { let n = 0; for (const x of a) if (b.has(x)) n++; return n }
-const common = (a: string[], b: string[]) => { let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++; return i }
+const shared = (a: Set<string>, b: Set<string>) => {
+  let n = 0
+  for (const x of a) if (b.has(x)) n++
+  return n
+}
+const common = (a: string[], b: string[]) => {
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i++
+  return i
+}
 
 /** A symbol's extent at an orientation with its ref, value and room for a label at each connected pin but `wired`. */
 export function symExtent(it: Pick<PlaceItem, 'ref' | 'value' | 'sym' | 'pins'>, rot: number, flip: boolean, power: (net: string) => boolean, wired?: string): Box {
-  const m = symMatrix([0, 0], rot, flip), sym = it.sym
+  const m = symMatrix([0, 0], rot, flip),
+    sym = it.sym
   const e = extentOf(sym, m)
   const b = boxOf([apply(m, [sym.box[0], sym.box[1]]), apply(m, [sym.box[2], sym.box[3]])])
   const pins = sym.pins.map(p => ({ name: p.name, end: apply(m, p.end), side: sideOf(m, p.side) }))
   const len = Math.max(textUnits(it.ref), textUnits(it.value))
   if (textMode(sym, pins) === 'beside') e[2] = Math.max(e[2], b[2] + 1 + len)
-  else { e[1] -= 1; e[3] += 1; e[2] = Math.max(e[2], e[0] + 1 + len) }
+  else {
+    e[1] -= 1
+    e[3] += 1
+    e[2] = Math.max(e[2], e[0] + 1 + len)
+  }
   for (const p of pins) {
     const net = it.pins.find(q => q.name === p.name)?.net
     if (!net || p.name === wired) continue
@@ -127,7 +194,10 @@ function linkSmalls(items: PlaceItem[], anchors: PlaceItem[], power: (n: string)
   const load = new Map<PlaceItem, number>()
   const size = new Map<string, number>()
   for (const it of items) for (const q of it.pins) if (q.net) size.set(q.net, (size.get(q.net) ?? 0) + 1)
-  const better = (x: number[], y: number[]) => { for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i]; return false }
+  const better = (x: number[], y: number[]) => {
+    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i]
+    return false
+  }
   for (const s of items) {
     if (anchors.includes(s)) continue
     const mates = anchors.filter(a => (a.path[0] ?? '') === (s.path[0] ?? ''))
@@ -155,12 +225,20 @@ function linkSmalls(items: PlaceItem[], anchors: PlaceItem[], power: (n: string)
       const key = [-common(s.path, a.path), ((load.get(a) ?? 0) + 1) / hits.length, ...rank(s, a).slice(1)]
       if (!best || better(key, best.key)) best = { a, pin: hit.name, key }
     }
-    if (best) { out.set(s, { anchor: best.a, pin: best.pin, decap: true }); load.set(best.a, (load.get(best.a) ?? 0) + 1) }
+    if (best) {
+      out.set(s, { anchor: best.a, pin: best.pin, decap: true })
+      load.set(best.a, (load.get(best.a) ?? 0) + 1)
+    }
   }
   return out
 }
 
-interface ChainPart { it: PlaceItem; entry: string | null; pred: PlaceItem | null; net: string | null }
+interface ChainPart {
+  it: PlaceItem
+  entry: string | null
+  pred: PlaceItem | null
+  net: string | null
+}
 /** Small parts reached from `head` through signal nets of at most three pins, in breadth-first order. */
 function chainFrom(head: ChainPart, free: Set<PlaceItem>, byNet: Map<string, PlaceItem[]>, power: (n: string) => boolean): ChainPart[] {
   const out = [head]
@@ -170,10 +248,11 @@ function chainFrom(head: ChainPart, free: Set<PlaceItem>, byNet: Map<string, Pla
       if (!q.net || power(q.net) || q.name === c.entry) continue
       const on = byNet.get(q.net) ?? []
       if (on.length > 3) continue
-      for (const n of on) if (free.has(n) && (n.path[0] ?? '') === (c.it.path[0] ?? '')) {
-        free.delete(n)
-        out.push({ it: n, entry: n.pins.find(z => z.net === q.net)!.name, pred: c.it, net: q.net })
-      }
+      for (const n of on)
+        if (free.has(n) && (n.path[0] ?? '') === (c.it.path[0] ?? '')) {
+          free.delete(n)
+          out.push({ it: n, entry: n.pins.find(z => z.net === q.net)!.name, pred: c.it, net: q.net })
+        }
     }
   }
   return out
@@ -196,10 +275,19 @@ function layChain(chain: ChainPart[], dir: PinSide, start: number, lane: number,
     const l = pe ? (horiz ? prev!.at[1] + pe.end[1] : prev!.at[0] + pe.end[0]) : lane
     const off = pin ? (horiz ? pin.end[1] : pin.end[0]) : 0
     let at: Pt
-    if (dir === 'right') { at = [Math.ceil(cur - e[0]), l - off]; cur = at[0] + e[2] + GAP }
-    else if (dir === 'left') { at = [Math.floor(cur - e[2]), l - off]; cur = at[0] + e[0] - GAP }
-    else if (dir === 'bottom') { at = [l - off, Math.ceil(cur - e[1])]; cur = at[1] + e[3] + GAP }
-    else { at = [l - off, Math.floor(cur - e[3])]; cur = at[1] + e[1] - GAP }
+    if (dir === 'right') {
+      at = [Math.ceil(cur - e[0]), l - off]
+      cur = at[0] + e[2] + GAP
+    } else if (dir === 'left') {
+      at = [Math.floor(cur - e[2]), l - off]
+      cur = at[0] + e[0] - GAP
+    } else if (dir === 'bottom') {
+      at = [l - off, Math.ceil(cur - e[1])]
+      cur = at[1] + e[3] + GAP
+    } else {
+      at = [l - off, Math.floor(cur - e[3])]
+      cur = at[1] + e[1] - GAP
+    }
     out.push({ it: c.it, at, rot, flip, ...(bare ? { wired: bare } : {}) })
   }
   return out
@@ -210,16 +298,27 @@ const memberBox = (m: Member, power: (n: string) => boolean): Box => {
   return [m.at[0] + e[0], m.at[1] + e[1], m.at[0] + e[2], m.at[1] + e[3]]
 }
 const unionBox = (bs: Box[]): Box => [Math.min(...bs.map(b => b[0])), Math.min(...bs.map(b => b[1])), Math.max(...bs.map(b => b[2])), Math.max(...bs.map(b => b[3]))]
-const shift = (ms: Member[], d: Pt) => { for (const m of ms) m.at = [m.at[0] + d[0], m.at[1] + d[1]] }
+const shift = (ms: Member[], d: Pt) => {
+  for (const m of ms) m.at = [m.at[0] + d[0], m.at[1] + d[1]]
+}
 
 /** An anchor with its chains on the sides of the pins they meet and its decoupling capacitors in a grid above or beside it. */
-function anchorBlock(a: PlaceItem, flip: boolean, chains: { chain: ChainPart[]; pin: string; decap: boolean }[], power: (n: string) => boolean, wired: (n: string) => boolean): Block {
+function anchorBlock(
+  a: PlaceItem,
+  flip: boolean,
+  chains: { chain: ChainPart[]; pin: string; decap: boolean }[],
+  power: (n: string) => boolean,
+  wired: (n: string) => boolean,
+): Block {
   const members: Member[] = [{ it: a, at: [0, 0], rot: 0, flip }]
   const ax = symExtent(a, 0, flip, power)
   const sides: Record<PinSide, { chain: ChainPart[]; end: Pt }[]> = { left: [], right: [], top: [], bottom: [] }
   const decaps: ChainPart[][] = []
   for (const c of chains) {
-    if (c.decap) { decaps.push(c.chain); continue }
+    if (c.decap) {
+      decaps.push(c.chain)
+      continue
+    }
     const p = pinAt(a, c.pin, 0, flip)!
     sides[p.side].push({ chain: c.chain, end: p.end })
   }
@@ -229,9 +328,14 @@ function anchorBlock(a: PlaceItem, flip: boolean, chains: { chain: ChainPart[]; 
     const out = side === 'left' || side === 'top' ? -1 : 1
     const limit = horiz ? ax[3] : ax[2]
     let start = side === 'left' ? ax[0] - GAP : side === 'right' ? ax[2] + GAP : side === 'top' ? ax[1] - GAP : ax[3] + GAP
-    const along = (ms: Member[]) => { const b = unionBox(ms.map(m => memberBox(m, power))); return horiz ? [b[1], b[3]] : [b[0], b[2]] }
+    const along = (ms: Member[]) => {
+      const b = unionBox(ms.map(m => memberBox(m, power)))
+      return horiz ? [b[1], b[3]] : [b[0], b[2]]
+    }
     const move = (ms: Member[], d: number) => shift(ms, horiz ? [0, d] : [d, 0])
-    let next = -Infinity, far = start, col: Member[] = []
+    let next = -Infinity,
+      far = start,
+      col: Member[] = []
     for (const { chain, end } of list) {
       const lane = horiz ? end[1] : end[0]
       let ms = layChain(chain, side, start, lane, power, wired)
@@ -241,8 +345,14 @@ function anchorBlock(a: PlaceItem, flip: boolean, chains: { chain: ChainPart[]; 
       if (col.length && over > 0) {
         // past the anchor: lift the column toward its start, else begin a new column further out
         const lift = Math.min(over, Math.floor(along(col)[0] - (horiz ? ax[1] : ax[0])))
-        if (lift >= over) { move(col, -over); move(ms, -over) }
-        else { start = far + out * GAP; col = []; ms = layChain(chain, side, start, lane, power, wired) }
+        if (lift >= over) {
+          move(col, -over)
+          move(ms, -over)
+        } else {
+          start = far + out * GAP
+          col = []
+          ms = layChain(chain, side, start, lane, power, wired)
+        }
       }
       col.push(...ms)
       members.push(...ms)
@@ -252,8 +362,12 @@ function anchorBlock(a: PlaceItem, flip: boolean, chains: { chain: ChainPart[]; 
     }
   }
   if (decaps.length) {
-    const caps = decaps.map(chain => { const [rot, flip] = orientFor(chain[0].it, chain[0].entry, 'top'); return { it: chain[0].it, rot, flip, e: symExtent(chain[0].it, rot, flip, power) } })
-    const cw = Math.ceil(Math.max(...caps.map(d => d.e[2] - d.e[0]))) + 1, ch = Math.ceil(Math.max(...caps.map(d => d.e[3] - d.e[1]))) + 1
+    const caps = decaps.map(chain => {
+      const [rot, flip] = orientFor(chain[0].it, chain[0].entry, 'top')
+      return { it: chain[0].it, rot, flip, e: symExtent(chain[0].it, rot, flip, power) }
+    })
+    const cw = Math.ceil(Math.max(...caps.map(d => d.e[2] - d.e[0]))) + 1,
+      ch = Math.ceil(Math.max(...caps.map(d => d.e[3] - d.e[1]))) + 1
     const all = unionBox(members.map(m => memberBox(m, power)))
     const [w, h] = [ax[2] - ax[0], ax[3] - ax[1]]
     // above a wide anchor in rows, beside a tall one in columns on its emptier side
@@ -262,7 +376,8 @@ function anchorBlock(a: PlaceItem, flip: boolean, chains: { chain: ChainPart[]; 
     const right = sides.right.length <= sides.left.length
     const x0 = !tall ? ax[0] : right ? Math.ceil(all[2]) + GAP : Math.floor(all[0]) - GAP - across * cw
     caps.forEach(({ it, rot, flip, e }, i) => {
-      const x = x0 + (i % across) * cw, r = Math.floor(i / across)
+      const x = x0 + (i % across) * cw,
+        r = Math.floor(i / across)
       const at: Pt = tall ? [Math.ceil(x - e[0]), Math.ceil(ax[1] + r * ch - e[1])] : [Math.ceil(x - e[0]), Math.floor(all[1] - 1 - r * ch - e[3])]
       members.push({ it, at, rot, flip })
     })
@@ -300,7 +415,7 @@ export function clusters(items: PlaceItem[], power: (n: string) => boolean, grou
     free.delete(it)
     const chain = chainFrom({ it, entry: null, pred: null, net: null }, free, byNet, power)
     const sig = it.pins.some(q => q.net && !power(q.net))
-    const supply = sig ? null : it.pins.find(q => q.net && !ground(q.net))?.name ?? null
+    const supply = sig ? null : (it.pins.find(q => q.net && !ground(q.net))?.name ?? null)
     if (supply && chain.length === 1) {
       const [rot, flip] = orientFor(it, supply, 'top')
       blocks.push(toBlock([{ it, at: [0, 0], rot, flip }], it, power, wired))
@@ -309,7 +424,11 @@ export function clusters(items: PlaceItem[], power: (n: string) => boolean, grou
   return blocks.sort((a, b) => a.order - b.order)
 }
 
-interface Rect { w: number; h: number; nets: Set<string> }
+interface Rect {
+  w: number
+  h: number
+  nets: Set<string>
+}
 const gapOf = (a: Rect, b: Rect) => GAP + Math.min(CHANNEL_MAX, CHANNEL * shared(a.nets, b.nets))
 
 /** Bottom-left packing in reading order: each rect at the topmost, then leftmost, free spot within `width`. */
@@ -323,7 +442,11 @@ export function pack(rects: Rect[], width: number, fixed: Box[] = []): Pt[] {
     const free = (x: number, y: number) => walls.every(({ b, g }) => x >= b[2] + g || x + r.w <= b[0] - g || y >= b[3] + g || y + r.h <= b[1] - g)
     let at: Pt | null = null
     for (const y of ys) {
-      for (const x of xs) if ((x === 0 || x + r.w <= width) && free(x, y)) { at = [x, y]; break }
+      for (const x of xs)
+        if ((x === 0 || x + r.w <= width) && free(x, y)) {
+          at = [x, y]
+          break
+        }
       if (at) break
     }
     at ??= [0, Math.max(0, ...walls.map(w => w.b[3] + w.g))]
@@ -336,11 +459,19 @@ export function pack(rects: Rect[], width: number, fixed: Box[] = []): Pt[] {
 const pinsFirst = <T extends { pins: number; order: number }>(xs: T[]) => [...xs].sort((a, b) => b.pins - a.pins || a.order - b.order)
 /** Greedy: the most pins first, then whatever shares the most nets with what is already placed. */
 function linked<T extends { pins: number; order: number; nets: Set<string> }>(xs: T[]): T[] {
-  const left = pinsFirst(xs), out: T[] = []
+  const left = pinsFirst(xs),
+    out: T[] = []
   const seen = new Set<string>()
   while (left.length) {
-    let bi = 0, bn = -1
-    left.forEach((x, i) => { const n = shared(x.nets, seen); if (n > bn) { bn = n; bi = i } })
+    let bi = 0,
+      bn = -1
+    left.forEach((x, i) => {
+      const n = shared(x.nets, seen)
+      if (n > bn) {
+        bn = n
+        bi = i
+      }
+    })
     const [x] = left.splice(bi, 1)
     out.push(x)
     for (const n of x.nets) seen.add(n)
@@ -360,14 +491,20 @@ function groupUnit(blocks: Block[], how: PlaceOrder, pad: boolean): Unit {
   let best: { offs: Pt[]; w: number; h: number; cost: number } | null = null
   for (const width of widths) {
     const offs = pack(rects, width)
-    const w = Math.max(...offs.map((o, i) => o[0] + rects[i].w)), h = Math.max(...offs.map((o, i) => o[1] + rects[i].h))
+    const w = Math.max(...offs.map((o, i) => o[0] + rects[i].w)),
+      h = Math.max(...offs.map((o, i) => o[1] + rects[i].h))
     const cost = w * h * (1 + 0.5 * Math.abs(Math.log(w / h / 1.41)))
     if (!best || cost < best.cost) best = { offs, w, h, cost }
   }
   const [px, py] = pad ? [PAD, PAD_TOP] : [0, 0]
   return {
-    blocks: list, offs: best!.offs.map(o => [o[0] + px, o[1] + py] as Pt), w: best!.w + 2 * px, h: best!.h + py + px,
-    nets: new Set(list.flatMap(b => [...b.nets])), pins: Math.max(...list.map(b => b.pins)), order: Math.min(...list.map(b => b.order)),
+    blocks: list,
+    offs: best!.offs.map(o => [o[0] + px, o[1] + py] as Pt),
+    w: best!.w + 2 * px,
+    h: best!.h + py + px,
+    nets: new Set(list.flatMap(b => [...b.nets])),
+    pins: Math.max(...list.map(b => b.pins)),
+    order: Math.min(...list.map(b => b.order)),
   }
 }
 
@@ -387,16 +524,26 @@ export function place(input: PlaceInput): PlaceResult {
   }
   const list = ordered(units, order)
   const fixed = input.fixed.map(b => [b[0] - MARGIN, b[1] - MARGIN, b[2] - MARGIN, b[3] - MARGIN] as Box)
-  let offs: Pt[] | null = null, paper: string | null = sheet === null ? null : 'custom', width = 0
+  let offs: Pt[] | null = null,
+    paper: string | null = sheet === null ? null : 'custom',
+    width = 0
   const papers: [string, number, number][] = typeof sheet === 'number' ? PAPERS.slice(sheet) : sheet ? [['custom', ...sheet]] : []
   for (const [name, w, h] of papers) {
-    const W = Math.floor(w / grid) - 2 * MARGIN - 2, H = Math.floor((h - TITLE) / grid) - 2 * MARGIN - 2
+    const W = Math.floor(w / grid) - 2 * MARGIN - 2,
+      H = Math.floor((h - TITLE) / grid) - 2 * MARGIN - 2
     const o = pack(list, W, fixed)
-    if (list.every((u, i) => u.w <= W && o[i][1] + u.h <= H)) { offs = o; paper = name; width = W; break }
+    if (list.every((u, i) => u.w <= W && o[i][1] + u.h <= H)) {
+      offs = o
+      paper = name
+      width = W
+      break
+    }
   }
   if (!offs) {
     const area = list.reduce((t, u) => t + (u.w + GAP) * (u.h + GAP), 0)
-    width = Array.isArray(sheet) ? Math.max(...list.map(u => u.w), Math.floor(sheet[0] / grid) - 2 * MARGIN - 2) : Math.max(...list.map(u => u.w), Math.round(Math.sqrt(area * 1.41)))
+    width = Array.isArray(sheet)
+      ? Math.max(...list.map(u => u.w), Math.floor(sheet[0] / grid) - 2 * MARGIN - 2)
+      : Math.max(...list.map(u => u.w), Math.round(Math.sqrt(area * 1.41)))
     offs = pack(list, width, fixed)
   }
   const placed: { b: Block; o: Pt }[] = []
@@ -422,8 +569,18 @@ function faceEdges(placed: { b: Block; o: Pt }[], mid: number, input: PlaceInput
     const nb = p.b.mirror()
     const o: Pt = inward === 'left' ? [box[2] - nb.ext[2], p.o[1]] : [box[0] - nb.ext[0], p.o[1]]
     const b2 = abs(nb, o)
-    const clear = placed.every(q => q === p || (() => { const c = abs(q.b, q.o); return b2[0] >= c[2] + 1 || b2[2] <= c[0] - 1 || b2[1] >= c[3] + 1 || b2[3] <= c[1] - 1 })())
-      && input.fixed.every(c => b2[0] >= c[2] + 1 || b2[2] <= c[0] - 1 || b2[1] >= c[3] + 1 || b2[3] <= c[1] - 1)
-    if (clear) { p.b = nb; p.o = o }
+    const clear =
+      placed.every(
+        q =>
+          q === p ||
+          (() => {
+            const c = abs(q.b, q.o)
+            return b2[0] >= c[2] + 1 || b2[2] <= c[0] - 1 || b2[1] >= c[3] + 1 || b2[3] <= c[1] - 1
+          })(),
+      ) && input.fixed.every(c => b2[0] >= c[2] + 1 || b2[2] <= c[0] - 1 || b2[1] >= c[3] + 1 || b2[3] <= c[1] - 1)
+    if (clear) {
+      p.b = nb
+      p.o = o
+    }
   }
 }

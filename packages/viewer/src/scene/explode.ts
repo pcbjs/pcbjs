@@ -5,13 +5,17 @@ import { copperIds, type Slice } from './stack'
 export function stackOrder(b: SiteData): string[] {
   const cu = copperIds(b.copper)
   const mid: string[] = []
-  for (let i = cu.length - 1; i >= 0; i--) { mid.push(cu[i]); if (i > 0) mid.push(`diel:${i - 1}`) }
+  for (let i = cu.length - 1; i >= 0; i--) {
+    mid.push(cu[i])
+    if (i > 0) mid.push(`diel:${i - 1}`)
+  }
   return ['bodies:B', 'B.SilkS', 'B.Mask', ...mid, 'F.Mask', 'F.SilkS', 'bodies:F']
 }
 
 /** The z offset of each group: one separation per step away from the middle of the copper stack. */
 export function offsets(order: string[], sep: number): Map<string, number> {
-  const lo = order.indexOf('B.Cu'), hi = order.indexOf('F.Cu')
+  const lo = order.indexOf('B.Cu'),
+    hi = order.indexOf('F.Cu')
   const c = (lo + hi) / 2
   return new Map(order.map((name, i) => [name, (i - c) * sep]))
 }
@@ -21,7 +25,8 @@ export function dielectrics(b: SiteData, slices: Map<string, Slice>): { name: st
   const cu = copperIds(b.copper)
   const diel = (b.stackup?.layers ?? []).filter(l => l.type === 'core' || l.type === 'prepreg')
   return cu.slice(0, -1).map((id, i) => {
-    const z1 = slices.get(id)!.z0, z0 = slices.get(cu[i + 1])!.z1
+    const z1 = slices.get(id)!.z0,
+      z0 = slices.get(cu[i + 1])!.z1
     const d = diel[i] as { type: string; material?: string; thickness: number } | undefined
     const known = d && diel.length === cu.length - 1
     const kind = known ? d.type : cu.length === 2 ? 'core' : 'dielectric'

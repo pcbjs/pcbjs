@@ -3,7 +3,12 @@ import assert from 'node:assert/strict'
 import { union, difference, offset, strokeOpen, area, overlaps, polysToRings, placement, apply, rotationOf, isMirrored } from '../dist/geom.js'
 import { near, nearPt } from './helpers.mjs'
 
-const sq = (x, y, s) => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]]
+const sq = (x, y, s) => [
+  [x, y],
+  [x + s, y],
+  [x + s, y + s],
+  [x, y + s],
+]
 const polyArea = p => Math.abs(area([p.outer])) - p.holes.reduce((s, h) => s + Math.abs(area([h])), 0)
 
 test('union of two overlapping 2x2 squares offset by 1 has area 7', () => {
@@ -24,7 +29,8 @@ test('offset of a 2x2 square by 0.5 with round joins', () => {
   const o = offset([sq(0, 0, 2)], 0.5)
   assert.equal(o.length, 1)
   // round joins are polygons inscribed within Clipper's 0.005 mm arc tolerance, so slightly under the exact area
-  const a = Math.abs(area(polysToRings(o))), exact = 4 + 4 * 1 + Math.PI * 0.25
+  const a = Math.abs(area(polysToRings(o))),
+    exact = 4 + 4 * 1 + Math.PI * 0.25
   assert.ok(a <= exact + 1e-9, `${a} should not exceed ${exact}`)
   near(a, exact, 0.02)
 })
@@ -35,9 +41,16 @@ test('negative offset shrinks', () => {
 })
 
 test('strokeOpen of a 10 mm line, width 1, round caps', () => {
-  const s = strokeOpen([[0, 0], [10, 0]], 1)
+  const s = strokeOpen(
+    [
+      [0, 0],
+      [10, 0],
+    ],
+    1,
+  )
   assert.equal(s.length, 1)
-  const a = Math.abs(area(polysToRings(s))), exact = 10 + Math.PI * 0.25
+  const a = Math.abs(area(polysToRings(s))),
+    exact = 10 + Math.PI * 0.25
   assert.ok(a <= exact + 1e-9, `${a} should not exceed ${exact}`)
   near(a, exact, 0.02)
 })

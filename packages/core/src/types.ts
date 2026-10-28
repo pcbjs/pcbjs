@@ -37,7 +37,11 @@ export type NetClearance = Length | Omit<KindClearance, 'self'>
 
 /** A 1-based source position; the end is set only when the source-range transform ran. */
 export interface Src {
-  file: string; line: number; col: number; endLine?: number; endCol?: number
+  file: string
+  line: number
+  col: number
+  endLine?: number
+  endCol?: number
   /** the command of a path string the range covers, such as "H 9" */
   seg?: string
   /** a call site read off the stack: where the helper that called route() was called from */
@@ -159,7 +163,9 @@ export interface Stackup {
 }
 
 /** Where `cpl.csv` places a part: its courtyard centre, as JLCPCB wants, or its footprint origin. */
-export interface CplOptions { origin?: 'footprint' | 'center' }
+export interface CplOptions {
+  origin?: 'footprint' | 'center'
+}
 
 export interface BoardProps {
   name: string
@@ -198,7 +204,11 @@ export interface BoardProps {
   children?: Child
 }
 
-export interface GroupProps { at?: At; side?: Side; children?: Child }
+export interface GroupProps {
+  at?: At
+  side?: Side
+  children?: Child
+}
 
 /** A part for the 3D view, generated on demand from this descriptor. Sizes are millimetres. */
 export type ModelSpec =
@@ -301,26 +311,46 @@ export interface PadProps {
 }
 
 /** A grid of paste windows over a pad, for an exposed pad: `coverage` is the paste area over the pad's (default 0.5). */
-export interface PasteWindows { rows: number; cols: number; coverage?: number }
+export interface PasteWindows {
+  rows: number
+  cols: number
+  coverage?: number
+}
 
 /** A coordinate string, "x y" or "x y layer", numbers in mm, such as "5 16" or "5 16 B.Cu". */
 export type PosString = `${number} ${number}` | `${number} ${number} ${string}`
 /** A board position: `{ at, layer }`, a tuple, "x y [layer]", "REF.PAD", or a pin handle resolved after placement. */
 export type Pos = { at: At; layer?: string } | [Length, Length, string?] | PosString | `${string}.${string}` | PinRef | ViaNode
 /** What `via()` returns: a node to place and a route end, positioned in the frame of the route's group. */
-export interface ViaNode extends PcbNode { readonly type: 'via' }
+export interface ViaNode extends PcbNode {
+  readonly type: 'via'
+}
 /** One end of `route(a, b)`, the type to give a helper's end parameter: the same as `Pos`. A pair end is `[RouteEnd, RouteEnd]`. */
 export type RouteEnd = Pos
 /** What `.Z()` and `.X()` of a route chain take: an end, a pair end `[P, N]`, or a position with units such as '100mil 200mil'. */
 export type RouteTarget = Pos | readonly [Pos, Pos] | `${string} ${string}`
 /** Neck-down at pads: `width` near the pad, `length` at most from it (default 2 mm, 0 turns it off). */
-export interface NeckSpec { width?: Length; length?: Length }
+export interface NeckSpec {
+  width?: Length
+  length?: Length
+}
 /** Teardrops at pads: `pads` 'tht', 'smd' or 'all'; `length` and `width` a fraction of the pad's smaller side or a length. */
-export interface TeardropSpec { pads?: 'tht' | 'smd' | 'all'; length?: Length; width?: Length }
+export interface TeardropSpec {
+  pads?: 'tht' | 'smd' | 'all'
+  length?: Length
+  width?: Length
+}
 /** Corner `radius` on the centre line, or 'none'; default the pitch for a pair, 'none' for a single route. */
-export interface CornerSpec { radius?: Length | 'none' }
+export interface CornerSpec {
+  radius?: Length | 'none'
+}
 /** A route end in board mm; `layers` lists every layer it may be reached on. */
-export interface ResolvedPos { x: number; y: number; layer: string; layers?: string[] }
+export interface ResolvedPos {
+  x: number
+  y: number
+  layer: string
+  layers?: string[]
+}
 /** A soft router keepout: a point avoided within 0.5 mm, or a rectangle from its top-left corner. */
 export type Avoid = Pos | { x: Length; y: Length; w: Length; h: Length; layer?: string }
 /** Autorouter parameters; a route overrides the board's with `auto`. */
@@ -357,7 +387,12 @@ export interface AutoRouteParams {
   tune?: { amplitude?: Length; spacing?: Length; maxAmplitude?: Length }
 }
 /** A length target in mm: `min` and `max`, or `target` plus or minus `tolerance`. */
-export interface LengthSpec { min?: Length; max?: Length; target?: Length; tolerance?: Length }
+export interface LengthSpec {
+  min?: Length
+  max?: Length
+  target?: Length
+  tolerance?: Length
+}
 /** A net class: route defaults for its nets and limits DRC checks. */
 export interface NetClass {
   /** default track width of routes on this class */
@@ -442,9 +477,17 @@ export interface AutoRoute extends Partial<AutoRouteParams> {
 }
 /** A track: `d` is an SVG path, an AutoRoute, a RouteFn, or omitted to connect every item of `net`; `from`, `to` and `path` come from `route()`. */
 export interface TrackProps {
-  net?: NetLike; layer: string; width: Length; d?: string | AutoRoute | RouteFn; points?: At[]; layers?: string[]
-  via?: { drill?: Length; size?: Length }; auto?: Partial<AutoRouteParams>
-  from?: Pos | [Pos, Pos]; to?: Pos | [Pos, Pos]; path?: string
+  net?: NetLike
+  layer: string
+  width: Length
+  d?: string | AutoRoute | RouteFn
+  points?: At[]
+  layers?: string[]
+  via?: { drill?: Length; size?: Length }
+  auto?: Partial<AutoRouteParams>
+  from?: Pos | [Pos, Pos]
+  to?: Pos | [Pos, Pos]
+  path?: string
   /** pin the automatic legs to their stored result, see `RouteBuilder.lock` */
   lock?: boolean
   /** reach the end pads without joining other copper of the net, see `RouteBuilder.direct` */
@@ -533,10 +576,18 @@ export interface RouteBuilder extends PcbNode {
   /** an automatic leg to the target; the last `.Z` or `.X` ends the route, an earlier one is a waypoint */
   X(target: RouteTarget): RouteBuilder
 }
-export interface ViaProps { net?: NetLike; at: At; drill?: Length; size?: Length; layers?: [string, string] }
+export interface ViaProps {
+  net?: NetLike
+  at: At
+  drill?: Length
+  size?: Length
+  layers?: [string, string]
+}
 /** A hard keepout: closed areas of `d` on the named copper layers, default all, that the named kinds of copper may not enter. */
 export interface KeepoutProps {
-  layer?: string; layers?: string[] | 'all'; d: string
+  layer?: string
+  layers?: string[] | 'all'
+  d: string
   /** no tracks inside (default true) */
   tracks?: boolean
   /** no vias inside (default true) */
@@ -547,7 +598,12 @@ export interface KeepoutProps {
   except?: NetLike[]
 }
 export interface ZoneProps {
-  net?: NetLike; layer: string; d: string; clearance?: Length; priority?: number; minWidth?: Length
+  net?: NetLike
+  layer: string
+  d: string
+  clearance?: Length
+  priority?: number
+  minWidth?: Length
   /** how same-net pads join the fill: 'thermal' spokes (default), 'solid', or 'none'; vias are always solid */
   connect?: ThermalConnection
   /** fill pieces that touch no pad, via or track of the net: removed by default, see IslandMode */
@@ -573,18 +629,53 @@ export interface StitchProps {
   /** an SVG path: the vias go only inside its closed areas */
   area?: string
 }
-export interface PathProps { layer: string; d: string; width?: Length; fill?: boolean; net?: NetLike }
-export interface LineProps { layer: string; x1: Length; y1: Length; x2: Length; y2: Length; width?: Length }
-export interface CircleProps { layer: string; cx?: Length; cy?: Length; r: Length; width?: Length; fill?: boolean }
-export interface RectProps { layer: string; x: Length; y: Length; w: Length; h: Length; rx?: Length; width?: Length; fill?: boolean }
+export interface PathProps {
+  layer: string
+  d: string
+  width?: Length
+  fill?: boolean
+  net?: NetLike
+}
+export interface LineProps {
+  layer: string
+  x1: Length
+  y1: Length
+  x2: Length
+  y2: Length
+  width?: Length
+}
+export interface CircleProps {
+  layer: string
+  cx?: Length
+  cy?: Length
+  r: Length
+  width?: Length
+  fill?: boolean
+}
+export interface RectProps {
+  layer: string
+  x: Length
+  y: Length
+  w: Length
+  h: Length
+  rx?: Length
+  width?: Length
+  fill?: boolean
+}
 /** Text in a stroke font or an outline font: `size` is the cap height, `thickness` the stroke, `width` the glyph width (default `size`). */
 export interface TextProps {
-  layer: string; at?: At; size?: Length; thickness?: Length; width?: Length; anchor?: 'start' | 'middle' | 'end'
+  layer: string
+  at?: At
+  size?: Length
+  thickness?: Length
+  width?: Length
+  anchor?: 'start' | 'middle' | 'end'
   /** "hershey" (default), "newstroke", a name of `fonts`, or `{ file, weight? }` relative to this file */
   font?: string | FontSpec
   /** outline fonts on silk: grow ink thinner than silkMinWidth instead of the silk-width warning */
   thicken?: boolean
-  net?: NetLike; children?: string | number | (string | number)[]
+  net?: NetLike
+  children?: string | number | (string | number)[]
 }
 
 export interface IntrinsicElements {
@@ -606,12 +697,17 @@ export interface IntrinsicElements {
 
 /** A net as a value. Made by `nets()`, `bus()` or `local()`; two nets with the same name and scope are the same net. */
 export interface Net {
-  readonly $$: 'net'; readonly name: string; readonly class?: string; readonly local?: boolean
+  readonly $$: 'net'
+  readonly name: string
+  readonly class?: string
+  readonly local?: boolean
   /** an anonymous net class of this net alone, over its own class; returns the same net */
   rules(r: NetRules): Net
 }
 /** The rules of `net.rules()`: the fields of an anonymous class that holds only this net. */
-export interface NetRules { clearance?: NetClearance }
+export interface NetRules {
+  clearance?: NetClearance
+}
 /** Rule overrides for every pad of a part: a pad's own setting wins, and they win over the class and the rules. */
 export interface PartRules {
   /** copper clearance of the part's pads to other nets, one length or one per kind of the other item, `{ track: 0.4, self: 0.2 }` */
@@ -626,14 +722,17 @@ export interface PartRules {
   thermal?: { angle?: 90 | 45 }
 }
 /** The sentinel for a pin left open on purpose: `NC`. */
-export interface NoConnect { readonly $$: 'nc' }
+export interface NoConnect {
+  readonly $$: 'nc'
+}
 /** What a net prop takes: a Net, or a net name as a string, the escape hatch. */
 export type NetLike = string | Net
 /** What a pin connects to. */
 export type Connection = Net | NoConnect
 /** A handle on a pin, `D1.A`, or a pad, `J1[3]`; as a route end, the pad nearest the other end. */
 export interface PinRef {
-  readonly $$: 'pin'; readonly part: Part<any>
+  readonly $$: 'pin'
+  readonly part: Part<any>
   /** the pin name, or the pad key for a pad handle */
   readonly pin: string
   /** set on a pad handle: the pad number or name it addresses */
@@ -730,16 +829,21 @@ export interface PartBase<P extends string, D extends string = never> {
 /** A part: pins are keys, `D1.A`, and so are pads that are not pins, `J1['B6']`; a number is a pad number, never a pin position. */
 export type Part<P extends string = string, D extends string = never> = PartBase<P, D> & PinKeys<P> & PadKeys<P, D> & NumberKeys<P, D>
 /** The pin keys of a part; names widened to `string` give none, so declare footprint pins inline or `as const`. */
-export type PinKeys<P extends string> = 0 extends 1 & P ? { readonly [k: string]: PinRef }
-  : string extends P ? { readonly 'pin names are untyped: declare the pins of defineFootprint inline or as const'?: never }
-  : { readonly [K in P]: PinRef }
+export type PinKeys<P extends string> = 0 extends 1 & P
+  ? { readonly [k: string]: PinRef }
+  : string extends P
+    ? { readonly 'pin names are untyped: declare the pins of defineFootprint inline or as const'?: never }
+    : { readonly [K in P]: PinRef }
 /** One pad key per literal pad id that is not a pin name. */
-export type PadKeys<P extends string, D extends string> = [D] extends [never] ? {} : string extends D ? {} : 0 extends 1 & P ? {}
-  : { readonly [K in Exclude<D, P>]: PadRef<K> }
+export type PadKeys<P extends string, D extends string> = [D] extends [never] ? {} : string extends D ? {} : 0 extends 1 & P ? {} : { readonly [K in Exclude<D, P>]: PadRef<K> }
 /** Any number key when the pads are untyped or list no numbers, so `J1[3]` type-checks on a header. */
-export type NumberKeys<P extends string, D extends string> = 0 extends 1 & P ? { readonly [n: number]: PinRef }
-  : string extends D ? { readonly [n: number]: PinRef }
-  : [Extract<D, `${number}`>] extends [never] ? { readonly [n: number]: PinRef } : {}
+export type NumberKeys<P extends string, D extends string> = 0 extends 1 & P
+  ? { readonly [n: number]: PinRef }
+  : string extends D
+    ? { readonly [n: number]: PinRef }
+    : [Extract<D, `${number}`>] extends [never]
+      ? { readonly [n: number]: PinRef }
+      : {}
 /** Pin metadata a footprint component declares: names in pin order, or a function of the footprint's props. */
 export type PinList = readonly string[] | ((props: any) => readonly string[])
 /** A footprint component with its schematic metadata: `R0603('330')` makes a part, `<R0603 ref="R1" />` renders. */

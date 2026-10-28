@@ -6,9 +6,21 @@ export const IDE_PROTOCOL = 2
 /** Bumped only by a change an older peer cannot survive. */
 export const IDE_MAJOR = 1
 
-export interface HostHello { name: string; version: string; protocol: number; major: number; capabilities: string[] | null }
-export interface HostCursor { file: string; line: number; col: number }
-export interface HostFocus { file: string }
+export interface HostHello {
+  name: string
+  version: string
+  protocol: number
+  major: number
+  capabilities: string[] | null
+}
+export interface HostCursor {
+  file: string
+  line: number
+  col: number
+}
+export interface HostFocus {
+  file: string
+}
 
 export interface HostClientOptions {
   /** `ws://127.0.0.1:<port>/<token>`, already checked with parseIdeUrl */
@@ -42,14 +54,25 @@ const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
 /** Throws a message for the CLI unless ws or wss and loopback, or allowRemote. */
 export function parseIdeUrl(url: string, allowRemote = false): URL {
   let u: URL
-  try { u = new URL(url) } catch { throw new Error(`--ide needs a WebSocket URL such as ws://127.0.0.1:<port>/<token>, got ${JSON.stringify(url)}`) }
+  try {
+    u = new URL(url)
+  } catch {
+    throw new Error(`--ide needs a WebSocket URL such as ws://127.0.0.1:<port>/<token>, got ${JSON.stringify(url)}`)
+  }
   if (u.protocol !== 'ws:' && u.protocol !== 'wss:') throw new Error(`--ide needs a ws:// or wss:// URL, got ${u.protocol}`)
   if (!allowRemote && !LOOPBACK.has(u.hostname)) throw new Error(`--ide only dials 127.0.0.1, localhost or [::1], got ${u.hostname}; pass --ide-allow-remote to dial another host`)
   return u
 }
 
 /** Without path and query, so the token never reaches the terminal. */
-export const redactUrl = (url: string): string => { try { const u = new URL(url); return `${u.protocol}//${u.host}` } catch { return 'the ide host' } }
+export const redactUrl = (url: string): string => {
+  try {
+    const u = new URL(url)
+    return `${u.protocol}//${u.host}`
+  } catch {
+    return 'the ide host'
+  }
+}
 
 const str = (v: unknown, d = '') => (typeof v === 'string' ? v : d)
 const int = (v: unknown, d: number) => (Number.isInteger(v) ? (v as number) : d)
@@ -57,7 +80,10 @@ const int = (v: unknown, d: number) => (Number.isInteger(v) ? (v as number) : d)
 /** What `ready` offers: the events it takes, and `lsp` when @pcbjs/lsp resolves. */
 export function serverCapabilities(): string[] {
   const caps = ['cursor', 'focus', 'close', 'bye']
-  try { import.meta.resolve('@pcbjs/lsp'); caps.push('lsp') } catch {}
+  try {
+    import.meta.resolve('@pcbjs/lsp')
+    caps.push('lsp')
+  } catch {}
   return caps
 }
 
@@ -65,7 +91,13 @@ export const readyProtocol = () => ({ protocol: IDE_PROTOCOL, major: IDE_MAJOR, 
 
 /** A hello without `protocol` comes from a protocol 1 editor. */
 export function parseHello(d: any): HostHello {
-  return { name: str(d?.name, 'ide'), version: str(d?.version), protocol: int(d?.protocol, 1), major: int(d?.major, 1), capabilities: Array.isArray(d?.capabilities) ? d.capabilities.filter((c: unknown) => typeof c === 'string') : null }
+  return {
+    name: str(d?.name, 'ide'),
+    version: str(d?.version),
+    protocol: int(d?.protocol, 1),
+    major: int(d?.major, 1),
+    capabilities: Array.isArray(d?.capabilities) ? d.capabilities.filter((c: unknown) => typeof c === 'string') : null,
+  }
 }
 
 /** Null unless the editor's protocol major is older than this server's. */
@@ -76,7 +108,8 @@ export function helloWarning(h: HostHello): string | null {
 
 /** Keeps dialling with a backoff until close(). */
 export function connectHost(opts: HostClientOptions): HostClient {
-  const minDelay = opts.minDelay ?? 500, maxDelay = opts.maxDelay ?? 10_000
+  const minDelay = opts.minDelay ?? 500,
+    maxDelay = opts.maxDelay ?? 10_000
   const sticky = new Map<string, string>()
   let ws: WebSocket | null = null
   let open = false
@@ -90,8 +123,15 @@ export function connectHost(opts: HostClientOptions): HostClient {
 
   const onMessage = (raw: WebSocket.RawData) => {
     let msg: any
-    try { msg = JSON.parse(raw.toString()) } catch { return }
-    if (msg?.jsonrpc === '2.0') { opts.onRpc?.(msg); return }
+    try {
+      msg = JSON.parse(raw.toString())
+    } catch {
+      return
+    }
+    if (msg?.jsonrpc === '2.0') {
+      opts.onRpc?.(msg)
+      return
+    }
     const d = msg?.data
     switch (msg?.event) {
       case 'pcbjs:ide:hello':
@@ -116,7 +156,10 @@ export function connectHost(opts: HostClientOptions): HostClient {
 
   const schedule = () => {
     if (closed || timer) return
-    timer = setTimeout(() => { timer = null; dial() }, delay)
+    timer = setTimeout(() => {
+      timer = null
+      dial()
+    }, delay)
     timer.unref?.()
     delay = Math.min(delay * 2, maxDelay)
   }
@@ -131,7 +174,10 @@ export function connectHost(opts: HostClientOptions): HostClient {
       failing = false
       delay = minDelay
       opts.onStatus?.('connected')
-      for (const e of STICKY) { const f = sticky.get(e); if (f) sock.send(f) }
+      for (const e of STICKY) {
+        const f = sticky.get(e)
+        if (f) sock.send(f)
+      }
     })
     sock.on('message', onMessage)
     sock.on('error', (e: Error) => {
@@ -169,7 +215,10 @@ export function connectHost(opts: HostClientOptions): HostClient {
     hello: () => hello,
     close() {
       closed = true
-      if (timer) { clearTimeout(timer); timer = null }
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
       const s = ws
       ws = null
       open = false

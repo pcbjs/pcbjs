@@ -5,7 +5,8 @@ import { route, pour, via } from '@pcbjs/core'
 import { Brand, rect } from '@pcbjs/lib'
 import * as sch from './quad.sch'
 
-const W = 30, H = 15
+const W = 30,
+  H = 15
 
 export default (
   <PCB name="Quad" revision="0.1.0" schematic={sch} color="black">
@@ -33,7 +34,9 @@ export default (
     {pour(GND, 'In2.Cu', rect(W, H))}
 
     {/* silk */}
-    <text layer="F.SilkS" at="16 12.5" size={1}>Quad · 4 layers</text>
+    <text layer="F.SilkS" at="16 12.5" size={1}>
+      Quad · 4 layers
+    </text>
     <Brand at="20.5 2.7" height={4} />
   </PCB>
 )

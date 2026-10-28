@@ -31,26 +31,48 @@ function mockHost() {
   const wss = new WebSocketServer({ host: '127.0.0.1', port: HOST_PORT })
   const events = []
   const waiters = []
-  const connected = new Promise(ok => wss.on('connection', (sock, req) => {
-    if (req.url !== '/tok') { sock.close(); return }
-    const ch = messageChannel(m => sock.send(JSON.stringify(m)))
-    sock.on('message', raw => {
-      const m = JSON.parse(raw.toString())
-      if (m.jsonrpc === '2.0') { ch.push(m); return }
-      events.push(m)
-      for (const w of waiters.slice()) if (w.pred(m)) { waiters.splice(waiters.indexOf(w), 1); w.ok(m) }
+  const connected = new Promise(ok =>
+    wss.on('connection', (sock, req) => {
+      if (req.url !== '/tok') {
+        sock.close()
+        return
+      }
+      const ch = messageChannel(m => sock.send(JSON.stringify(m)))
+      sock.on('message', raw => {
+        const m = JSON.parse(raw.toString())
+        if (m.jsonrpc === '2.0') {
+          ch.push(m)
+          return
+        }
+        events.push(m)
+        for (const w of waiters.slice())
+          if (w.pred(m)) {
+            waiters.splice(waiters.indexOf(w), 1)
+            w.ok(m)
+          }
+      })
+      sock.send(JSON.stringify({ event: 'pcbjs:ide:hello', data: { name: 'mock', version: '0', protocol: 2, major: 1, capabilities: ['boards', 'lsp'] } }))
+      const conn = createMessageConnection(ch.reader, ch.writer)
+      conn.listen()
+      ok(conn)
+    }),
+  )
+  const next = (pred, ms = 30000) =>
+    new Promise((ok, fail) => {
+      const hit = events.find(pred)
+      if (hit) {
+        events.splice(events.indexOf(hit), 1)
+        return ok(hit)
+      }
+      const t = setTimeout(() => fail(new Error('timed out')), ms)
+      waiters.push({
+        pred,
+        ok: m => {
+          clearTimeout(t)
+          ok(m)
+        },
+      })
     })
-    sock.send(JSON.stringify({ event: 'pcbjs:ide:hello', data: { name: 'mock', version: '0', protocol: 2, major: 1, capabilities: ['boards', 'lsp'] } }))
-    const conn = createMessageConnection(ch.reader, ch.writer)
-    conn.listen()
-    ok(conn)
-  }))
-  const next = (pred, ms = 30000) => new Promise((ok, fail) => {
-    const hit = events.find(pred)
-    if (hit) { events.splice(events.indexOf(hit), 1); return ok(hit) }
-    const t = setTimeout(() => fail(new Error('timed out')), ms)
-    waiters.push({ pred, ok: m => { clearTimeout(t); ok(m) } })
-  })
   return { wss, connected, next, events }
 }
 
@@ -70,7 +92,12 @@ test('drafts: broken unsaved text previews repaired, marked draft, its skipped s
   const diags = []
   conn.onNotification('textDocument/publishDiagnostics', p => diags.push(p))
   await boards(d => draftBoard(d)?.status === 'ok')
-  const init = await conn.sendRequest('initialize', { processId: null, rootUri: null, capabilities: {}, initializationOptions: { pcbjs: { protocol: 2, major: 1, capabilities: ['widget'] } } })
+  const init = await conn.sendRequest('initialize', {
+    processId: null,
+    rootUri: null,
+    capabilities: {},
+    initializationOptions: { pcbjs: { protocol: 2, major: 1, capabilities: ['widget'] } },
+  })
   assert.deepEqual(init.capabilities.textDocumentSync, { openClose: true, change: 1, save: { includeText: false } })
   await conn.sendNotification('initialized', {})
   await conn.sendNotification('textDocument/didOpen', { textDocument: { uri, languageId: 'typescriptreact', version: 1, text: saved } })
@@ -83,7 +110,11 @@ test('drafts: broken unsaved text previews repaired, marked draft, its skipped s
   assert.equal(draftBoard(d1).status, 'ok')
   assert.equal(draftBoard(d1).skipped, 1)
   const line = broken.split('\n').findIndex(l => l.startsWith(typing))
-  const hint = () => diags.filter(p => p.uri === uri).flatMap(p => p.diagnostics).find(x => x.source === 'pcbjs draft')
+  const hint = () =>
+    diags
+      .filter(p => p.uri === uri)
+      .flatMap(p => p.diagnostics)
+      .find(x => x.source === 'pcbjs draft')
   for (let i = 0; i < 100 && !hint(); i++) await new Promise(r => setTimeout(r, 50))
   assert.equal(hint().severity, 4)
   assert.deepEqual(hint().tags, [1])

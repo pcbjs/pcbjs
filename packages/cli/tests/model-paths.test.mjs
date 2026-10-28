@@ -49,8 +49,10 @@ export default (
 `
 
 const top = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-paths-')))
-const root = join(top, 'board'), shared = join(top, 'shared')
-for (const d of [root, join(root, 'lib'), join(root, 'models'), join(root, 'node_modules'), shared, join(shared, 'models'), join(top, 'node_modules')]) mkdirSync(d, { recursive: true })
+const root = join(top, 'board'),
+  shared = join(top, 'shared')
+for (const d of [root, join(root, 'lib'), join(root, 'models'), join(root, 'node_modules'), shared, join(shared, 'models'), join(top, 'node_modules')])
+  mkdirSync(d, { recursive: true })
 symlinkSync(join(REPO, 'node_modules', '@pcbjs'), join(root, 'node_modules', '@pcbjs'), 'dir')
 symlinkSync(join(REPO, 'node_modules', '@pcbjs'), join(top, 'node_modules', '@pcbjs'), 'dir')
 writeFileSync(join(root, 'pcb.config.ts'), "import { defineConfig } from '@pcbjs/core'\nexport default defineConfig({ entries: ['pcb.tsx'], vite: { logLevel: 'silent' } })\n")
@@ -79,7 +81,10 @@ test('a model path is relative to the file that holds the literal: a part call, 
 test('--ref writes the options form into the part call, the sourcing spec under source, the path relative to that file', () => {
   const r = run('add', 'models/R.step', '--ref', 'R1', '--write')
   assert.equal(r.code, 0, r.out + r.err)
-  assert.match(readFileSync(join(root, 'pcb.tsx'), 'utf8'), /const R1 = CHIP\(\{ value: '10k', source: \{ MPN: 'RC0603', 'MPN:LCSC': 'C22775' \}, model: \{ file: '\.\/models\/R\.step' \} \}\)/)
+  assert.match(
+    readFileSync(join(root, 'pcb.tsx'), 'utf8'),
+    /const R1 = CHIP\(\{ value: '10k', source: \{ MPN: 'RC0603', 'MPN:LCSC': 'C22775' \}, model: \{ file: '\.\/models\/R\.step' \} \}\)/,
+  )
   assert.match(r.out, /fit  the file's own frame/)
   // the board compiles with it and the shared footprint's other part is named for --footprint
   assert.match(r.out, /note  R2 uses the same footprint: pcbjs model add models\/R\.step --footprint t:CHIP --write/)
@@ -110,7 +115,7 @@ test('the write forms: a value and a sourcing spec, shape arguments, a count fir
     ["F('val', { MPN: 'y' })", 'val', "F({ value: 'val', source: { MPN: 'y' }, model: { file: 'x.step' } })"],
     ["PinHeader(2)('x', { MPN: 'y' })", 'x', "PinHeader(2)({ value: 'x', source: { MPN: 'y' }, model: { file: 'x.step' } })"],
     ["PinHeader(4, 'J')", 'J', "PinHeader(4, { value: 'J', model: { file: 'x.step' } })"],
-    ["PinHeader(4, { rows: 2 })", '', "PinHeader(4, { rows: 2, model: { file: 'x.step' } })"],
+    ['PinHeader(4, { rows: 2 })', '', "PinHeader(4, { rows: 2, model: { file: 'x.step' } })"],
     ['PinHeader(4)', '', "PinHeader(4, { model: { file: 'x.step' } })"],
     ["USBC('power6', { value: 'T', source: { MPN: 'T' } })", 'T', "USBC('power6', { value: 'T', source: { MPN: 'T' }, model: { file: 'x.step' } })"],
     ["USBC('power6')", '', "USBC('power6', { model: { file: 'x.step' } })"],
@@ -123,12 +128,20 @@ test('the write forms: a value and a sourcing spec, shape arguments, a count fir
 })
 
 test("lcsc:<C-number> fetches the model EasyEDA's footprint names, and says why when there is none", async () => {
-  const shape = 'SVGNODE~' + JSON.stringify({ gId: 'g1_outline', nodeName: 'g', attrs: { c_etype: 'outline3D', uuid: 'caa88715b11f4aa189b02e52bbb84e4f', title: 'LED-SMD_4P-L2.0-W2.0-H0.8-TL_WS2812B-2020' } })
+  const shape =
+    'SVGNODE~' +
+    JSON.stringify({
+      gId: 'g1_outline',
+      nodeName: 'g',
+      attrs: { c_etype: 'outline3D', uuid: 'caa88715b11f4aa189b02e52bbb84e4f', title: 'LED-SMD_4P-L2.0-W2.0-H0.8-TL_WS2812B-2020' },
+    })
   const seen = []
-  const fake = async (url) => {
+  const fake = async url => {
     seen.push(url)
-    if (url === 'https://easyeda.com/api/products/C965555/components') return new Response(JSON.stringify({ success: true, result: { title: 'WS2812B-2020', packageDetail: { title: 'LED-SMD_4P', dataStr: { shape: ['TRACK~1', shape] } } } }))
-    if (url === 'https://easyeda.com/api/products/C1/components') return new Response(JSON.stringify({ success: true, result: { title: 'X', packageDetail: { title: 'R0603', dataStr: { shape: [] } } } }))
+    if (url === 'https://easyeda.com/api/products/C965555/components')
+      return new Response(JSON.stringify({ success: true, result: { title: 'WS2812B-2020', packageDetail: { title: 'LED-SMD_4P', dataStr: { shape: ['TRACK~1', shape] } } } }))
+    if (url === 'https://easyeda.com/api/products/C1/components')
+      return new Response(JSON.stringify({ success: true, result: { title: 'X', packageDetail: { title: 'R0603', dataStr: { shape: [] } } } }))
     if (url.startsWith('https://modules.easyeda.com/')) return new Response('ISO-10303-21;')
     return new Response(JSON.stringify({ success: false, code: 404, message: 'Component not found' }), { status: 200 })
   }

@@ -13,7 +13,7 @@ const DATE = '2026-01-01T00:00:00Z'
 const outline = () => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 })
 const board = (props = {}, ...kids) => compileBoard(h(PCB, { name: 'S', ...props }, outline(), ...kids))
 const coppers = s => s.layers.filter(l => l.type === 'copper').map(l => l.name)
-const sum = s => s.layers.reduce((t, l) => t + (['copper', 'core', 'prepreg', 'mask'].includes(l.type) ? l.thickness ?? 0 : 0), 0)
+const sum = s => s.layers.reduce((t, l) => t + (['copper', 'core', 'prepreg', 'mask'].includes(l.type) ? (l.thickness ?? 0) : 0), 0)
 
 beforeEach(() => resetDefaults())
 
@@ -26,7 +26,10 @@ test('stackup: defaults are materialised for copper 2, 4 and 8', () => {
     assert.equal(b.thickness, 1.6)
   }
   const b4 = board({ copper: 4 })
-  assert.deepEqual(b4.stackup.layers.filter(l => l.type === 'core' || l.type === 'prepreg').map(l => l.type), ['prepreg', 'core', 'prepreg'])
+  assert.deepEqual(
+    b4.stackup.layers.filter(l => l.type === 'core' || l.type === 'prepreg').map(l => l.type),
+    ['prepreg', 'core', 'prepreg'],
+  )
   assert.equal(b4.stackup.layers.find(l => l.name === 'F.Cu').weight, 1)
   assert.equal(b4.stackup.layers.find(l => l.name === 'In1.Cu').weight, 0.5)
 })
@@ -42,9 +45,18 @@ test('stackup: a given stackup wins and sets the thickness', () => {
   assert.equal(b.copper, 4)
   assert.equal(b.thickness, 1.6)
   assert.equal(b.stackup.finish, 'HASL')
-  assert.deepEqual(b.layers.filter(l => l.kind === 'copper').map(l => l.id), ['In2.Cu', 'In1.Cu', 'B.Cu', 'F.Cu'].sort((a, c) => b.layers.findIndex(l => l.id === a) - b.layers.findIndex(l => l.id === c)))
+  assert.deepEqual(
+    b.layers.filter(l => l.kind === 'copper').map(l => l.id),
+    ['In2.Cu', 'In1.Cu', 'B.Cu', 'F.Cu'].sort((a, c) => b.layers.findIndex(l => l.id === a) - b.layers.findIndex(l => l.id === c)),
+  )
   // without a nominal thickness the layers are added up
-  const s = { layers: [{ type: 'copper', name: 'F.Cu', thickness: 0.035 }, { type: 'core', thickness: 1.0 }, { type: 'copper', name: 'B.Cu', thickness: 0.035 }] }
+  const s = {
+    layers: [
+      { type: 'copper', name: 'F.Cu', thickness: 0.035 },
+      { type: 'core', thickness: 1.0 },
+      { type: 'copper', name: 'B.Cu', thickness: 0.035 },
+    ],
+  }
   assert.equal(board({ stackup: s }).thickness, 1.07)
   // copper and stackup that agree are fine
   assert.equal(board({ copper: 4, stackup: fourLayer() }).copper, 4)
@@ -83,7 +95,12 @@ test('stackup: layerTable for 8 layers has In1 to In6 with distinct colours', ()
 })
 
 test('stackup: builders are symmetric and add up to their thickness', () => {
-  for (const [fn, n] of [[twoLayer, 2], [fourLayer, 4], [sixLayer, 6], [eightLayer, 8]]) {
+  for (const [fn, n] of [
+    [twoLayer, 2],
+    [fourLayer, 4],
+    [sixLayer, 6],
+    [eightLayer, 8],
+  ]) {
     const s = fn()
     assert.equal(coppers(s).length, n)
     near(sum(s), 1.6, 1e-3)
@@ -104,11 +121,23 @@ test('job file: MaterialStackup of the JLC04161H-7628 preset', () => {
   assert.equal(job.GeneralSpecs.LayerNumber, 4)
   assert.equal(job.GeneralSpecs.BoardThickness, 1.6)
   assert.equal(job.GeneralSpecs.Finish, 'HAL SnPb')
-  const seq = job.MaterialStackup.map(m => m.Type === 'Dielectric' ? `${m.Notes.split(':')[0]} ${m.Material} ${m.Thickness}` : m.Type === 'Copper' ? `${m.Name} ${m.Thickness}` : m.Name)
+  const seq = job.MaterialStackup.map(m =>
+    m.Type === 'Dielectric' ? `${m.Notes.split(':')[0]} ${m.Material} ${m.Thickness}` : m.Type === 'Copper' ? `${m.Name} ${m.Thickness}` : m.Name,
+  )
   assert.deepEqual(seq, [
-    'Top Silk Screen', 'Top Solder Paste', 'Top Solder Mask',
-    'F.Cu 0.035', 'Prepreg 7628 0.2104', 'In1.Cu 0.0152', 'Core FR4 1.065', 'In2.Cu 0.0152', 'Prepreg 7628 0.2104', 'B.Cu 0.035',
-    'Bottom Solder Mask', 'Bottom Solder Paste', 'Bottom Silk Screen',
+    'Top Silk Screen',
+    'Top Solder Paste',
+    'Top Solder Mask',
+    'F.Cu 0.035',
+    'Prepreg 7628 0.2104',
+    'In1.Cu 0.0152',
+    'Core FR4 1.065',
+    'In2.Cu 0.0152',
+    'Prepreg 7628 0.2104',
+    'B.Cu 0.035',
+    'Bottom Solder Mask',
+    'Bottom Solder Paste',
+    'Bottom Silk Screen',
   ])
   assert.equal(job.MaterialStackup.find(m => m.Name === 'Top Solder Mask').Color, 'Green')
   const readme = buildFab(b, DATE).readme
@@ -123,10 +152,30 @@ test('job file: MaterialStackup of the JLC04161H-7628 preset', () => {
 })
 
 test('rules: BASE is at least as strict as every fab preset', () => {
-  const minimums = ['clearance', 'minTrackWidth', 'edgeClearance', 'holeClearance', 'minViaDrill', 'minViaDiameter', 'minAnnularRing', 'minPadAnnularRing', 'minDrill', 'minHoleToHole', 'silkMinWidth', 'silkMinHeight', 'silkToPad']
+  const minimums = [
+    'clearance',
+    'minTrackWidth',
+    'edgeClearance',
+    'holeClearance',
+    'minViaDrill',
+    'minViaDiameter',
+    'minAnnularRing',
+    'minPadAnnularRing',
+    'minDrill',
+    'minHoleToHole',
+    'silkMinWidth',
+    'silkMinHeight',
+    'silkToPad',
+  ]
   for (const [name, set] of Object.entries({ JLCPCB, PCBWAY, OSHPARK, EUROCIRCUITS, ADVANCEDPCB })) {
     // maskWeb is optional: a set carries it only where its fab states one
-    assert.deepEqual(Object.keys(set).filter(k => k !== 'maskWeb' && k !== 'maskWebByColor').sort(), Object.keys(BASE).sort(), `${name} is a full rule set`)
+    assert.deepEqual(
+      Object.keys(set)
+        .filter(k => k !== 'maskWeb' && k !== 'maskWebByColor')
+        .sort(),
+      Object.keys(BASE).sort(),
+      `${name} is a full rule set`,
+    )
     const r = resolveRules(set)
     for (const k of minimums) assert.ok(BASE[k] >= r[k], `BASE.${k} ${BASE[k]} < ${name}.${k} ${r[k]}`)
   }
@@ -194,16 +243,32 @@ test('defaults: rules merge key by key through base, default and props', () => {
 })
 
 test('defaults: the bases and returned values are frozen, mutation throws and does not reach the next compile', () => {
-  assert.throws(() => { BASE_RULES.clearance = 9 }, TypeError)
-  assert.throws(() => { BASE_BOARD.stackup.layers[3].thickness = 9 }, TypeError)
-  assert.throws(() => { BASE_BOARD.stackup.layers.push({}) }, TypeError)
-  assert.throws(() => { JLCPCB.clearance = 9 }, TypeError)
-  assert.throws(() => { JLCPCB_4L_7628.layers[4].thickness = 9 }, TypeError)
+  assert.throws(() => {
+    BASE_RULES.clearance = 9
+  }, TypeError)
+  assert.throws(() => {
+    BASE_BOARD.stackup.layers[3].thickness = 9
+  }, TypeError)
+  assert.throws(() => {
+    BASE_BOARD.stackup.layers.push({})
+  }, TypeError)
+  assert.throws(() => {
+    JLCPCB.clearance = 9
+  }, TypeError)
+  assert.throws(() => {
+    JLCPCB_4L_7628.layers[4].thickness = 9
+  }, TypeError)
   const r = defineDefaultRules({ clearance: 0.3 })
-  assert.throws(() => { r.clearance = 9 }, TypeError)
+  assert.throws(() => {
+    r.clearance = 9
+  }, TypeError)
   const b = defineDefaultBoard({ copper: 4 })
-  assert.throws(() => { b.rules.clearance = 9 }, TypeError)
-  assert.throws(() => { b.stackup.layers[3].thickness = 9 }, TypeError)
+  assert.throws(() => {
+    b.rules.clearance = 9
+  }, TypeError)
+  assert.throws(() => {
+    b.stackup.layers[3].thickness = 9
+  }, TypeError)
   // the input objects are copied: changing them after the call has no effect
   const partial = { clearance: 0.31 }
   defineDefaultRules(partial)

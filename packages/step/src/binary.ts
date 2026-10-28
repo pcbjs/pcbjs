@@ -11,17 +11,26 @@ const pad4 = (n: number) => (n + 3) & ~3
 export function meshToBinary(model: StepModel): Uint8Array {
   let size = 12
   for (const m of model.meshes) {
-    const n = m.positions.length / 3, wide = n > 0xffff
+    const n = m.positions.length / 3,
+      wide = n > 0xffff
     size += 24 + n * 12 + pad4(n * 3) + pad4(m.indices.length * (wide ? 4 : 2))
   }
   const buf = new ArrayBuffer(size)
   const dv = new DataView(buf)
-  dv.setUint32(0, MAGIC, true); dv.setUint16(4, VERSION, true); dv.setUint16(6, 0, true); dv.setUint32(8, model.meshes.length, true)
+  dv.setUint32(0, MAGIC, true)
+  dv.setUint16(4, VERSION, true)
+  dv.setUint16(6, 0, true)
+  dv.setUint32(8, model.meshes.length, true)
   let off = 12
   for (const m of model.meshes) {
-    const n = m.positions.length / 3, wide = n > 0xffff
-    dv.setFloat32(off, m.color[0], true); dv.setFloat32(off + 4, m.color[1], true); dv.setFloat32(off + 8, m.color[2], true)
-    dv.setUint32(off + 12, n, true); dv.setUint32(off + 16, m.indices.length, true); dv.setUint32(off + 20, wide ? 4 : 2, true)
+    const n = m.positions.length / 3,
+      wide = n > 0xffff
+    dv.setFloat32(off, m.color[0], true)
+    dv.setFloat32(off + 4, m.color[1], true)
+    dv.setFloat32(off + 8, m.color[2], true)
+    dv.setUint32(off + 12, n, true)
+    dv.setUint32(off + 16, m.indices.length, true)
+    dv.setUint32(off + 20, wide ? 4 : 2, true)
     off += 24
     for (let i = 0; i < n * 3; i++) dv.setFloat32(off + i * 4, m.positions[i], true)
     off += n * 12
@@ -43,11 +52,15 @@ export function meshFromBinary(data: ArrayBuffer | ArrayBufferView): StepModel {
   const count = view.getUint32(8, true)
   const meshes: StepMesh[] = []
   let off = 12
-  const need = (n: number) => { if (off + n > view.byteLength) throw new Error('pcbjs mesh is truncated') }
+  const need = (n: number) => {
+    if (off + n > view.byteLength) throw new Error('pcbjs mesh is truncated')
+  }
   for (let k = 0; k < count; k++) {
     need(24)
     const color: [number, number, number] = [view.getFloat32(off, true), view.getFloat32(off + 4, true), view.getFloat32(off + 8, true)]
-    const n = view.getUint32(off + 12, true), ni = view.getUint32(off + 16, true), indexSize = view.getUint32(off + 20, true)
+    const n = view.getUint32(off + 12, true),
+      ni = view.getUint32(off + 16, true),
+      indexSize = view.getUint32(off + 20, true)
     if (indexSize !== 2 && indexSize !== 4) throw new Error(`pcbjs mesh has an index size of ${indexSize}`)
     off += 24
     need(n * 12 + pad4(n * 3) + pad4(ni * indexSize))
@@ -56,9 +69,13 @@ export function meshFromBinary(data: ArrayBuffer | ArrayBufferView): StepModel {
     off += n * 12
     const normals = new Float32Array(n * 3)
     for (let i = 0; i < n; i++) {
-      const x = view.getInt8(off + i * 3), y = view.getInt8(off + i * 3 + 1), z = view.getInt8(off + i * 3 + 2)
+      const x = view.getInt8(off + i * 3),
+        y = view.getInt8(off + i * 3 + 1),
+        z = view.getInt8(off + i * 3 + 2)
       const l = Math.hypot(x, y, z) || 1
-      normals[i * 3] = x / l; normals[i * 3 + 1] = y / l; normals[i * 3 + 2] = z / l
+      normals[i * 3] = x / l
+      normals[i * 3 + 1] = y / l
+      normals[i * 3 + 2] = z / l
     }
     off += pad4(n * 3)
     const indices = new Uint32Array(ni)

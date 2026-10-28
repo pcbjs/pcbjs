@@ -30,6 +30,8 @@ export default (
     {route(D1.K).X(J1[1]).width(0.3)}
 
     {/* silk */}
-    <text layer="F.SilkS" at="10 12" size={1}>Hello</text>
+    <text layer="F.SilkS" at="10 12" size={1}>
+      Hello
+    </text>
   </PCB>
 )

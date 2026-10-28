@@ -48,14 +48,35 @@ export interface BoundVariants {
   readonly targets: readonly VariantSpec[]
 }
 
-interface Target { spec: VariantSpec; colors: Record<string, string> | null; silkColors: Record<string, string> | null }
+interface Target {
+  spec: VariantSpec
+  colors: Record<string, string> | null
+  silkColors: Record<string, string> | null
+}
 
 function resolveTarget(t: VariantTarget, i: number): Target {
   if (isBoundPCB(t)) {
     const p = t.preset
     return {
-      spec: { name: p.name || `Target ${i + 1}`, ...(p.fab ? { fab: p.fab } : {}), stackup: structuredClone(p.stackup) as Stackup, rules: { ...p.rules }, ...(p.sourcing ? { sourcing: [...p.sourcing] } : {}), ...(p.autoroute || p.classes || p.cpl || p.fabNotes ? { board: { ...(p.autoroute ? { autoroute: cloneData(p.autoroute) as any } : {}), ...(p.classes ? { classes: cloneData(p.classes) as any } : {}), ...(p.cpl ? { cpl: { ...p.cpl } } : {}), ...(p.fabNotes ? { fabNotes: [...p.fabNotes] } : {}) } } : {}) },
-      colors: { ...p.colors }, silkColors: { ...p.silkColors },
+      spec: {
+        name: p.name || `Target ${i + 1}`,
+        ...(p.fab ? { fab: p.fab } : {}),
+        stackup: structuredClone(p.stackup) as Stackup,
+        rules: { ...p.rules },
+        ...(p.sourcing ? { sourcing: [...p.sourcing] } : {}),
+        ...(p.autoroute || p.classes || p.cpl || p.fabNotes
+          ? {
+              board: {
+                ...(p.autoroute ? { autoroute: cloneData(p.autoroute) as any } : {}),
+                ...(p.classes ? { classes: cloneData(p.classes) as any } : {}),
+                ...(p.cpl ? { cpl: { ...p.cpl } } : {}),
+                ...(p.fabNotes ? { fabNotes: [...p.fabNotes] } : {}),
+              },
+            }
+          : {}),
+      },
+      colors: { ...p.colors },
+      silkColors: { ...p.silkColors },
     }
   }
   if (typeof t === 'function') {
@@ -87,19 +108,25 @@ function resolveTarget(t: VariantTarget, i: number): Target {
   return { spec, colors: null, silkColors: null }
 }
 
-const named = (palette: Record<string, string> | null, c: string | undefined) =>
-  c === undefined || c === null ? undefined : palette ? paletteName(palette, String(c)) : String(c)
+const named = (palette: Record<string, string> | null, c: string | undefined) => (c === undefined || c === null ? undefined : palette ? paletteName(palette, String(c)) : String(c))
 
 /** A <PCB> compiling the design once per target; names default to the preset's, else `Target N`, and must be unique. */
 export function variants(...targets: VariantTarget[]): BoundVariants {
   if (!targets.length) throw new TypeError('variants() needs at least one target')
   const resolved = targets.map(resolveTarget)
-  const specs = deepFreeze(resolved.map(r => ({ ...r.spec, ...(r.spec.color !== undefined ? { color: named(r.colors, r.spec.color) } : {}), ...(r.spec.silk !== undefined ? { silk: named(r.silkColors, r.spec.silk) } : {}) })))
+  const specs = deepFreeze(
+    resolved.map(r => ({
+      ...r.spec,
+      ...(r.spec.color !== undefined ? { color: named(r.colors, r.spec.color) } : {}),
+      ...(r.spec.silk !== undefined ? { silk: named(r.silkColors, r.spec.silk) } : {}),
+    })),
+  )
   const Board = function (props: PresetBoardProps): PcbNode {
     const { children, color, silk, finish, ...rest } = props
     const list: VariantSpec[] = resolved.map(r => {
       const s: VariantSpec = cloneData(r.spec)
-      const mask = named(r.colors, color ?? r.spec.color), legend = named(r.silkColors, silk ?? r.spec.silk)
+      const mask = named(r.colors, color ?? r.spec.color),
+        legend = named(r.silkColors, silk ?? r.spec.silk)
       if (mask !== undefined) s.color = mask
       if (legend !== undefined) s.silk = legend
       if ((finish ?? r.spec.finish) !== undefined) s.finish = finish ?? r.spec.finish
@@ -119,17 +146,23 @@ export function isVariants(fn: unknown): fn is BoundVariants {
 
 /** A target name in lowercase with every other run of characters a `-`. */
 export function variantSlug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 /** The stackup with its mask and legend colours and finish replaced. */
 export function recolor(s: Stackup, mask?: string, silk?: string, finish?: Finish): Stackup {
   if (mask === undefined && silk === undefined && finish === undefined) return s
-  const out: Stackup = { ...s, layers: s.layers.map(l => {
-    if (mask !== undefined && l.type === 'mask') return { ...l, color: mask }
-    if (silk !== undefined && l.type === 'silk') return { ...l, color: silk }
-    return l
-  }) }
+  const out: Stackup = {
+    ...s,
+    layers: s.layers.map(l => {
+      if (mask !== undefined && l.type === 'mask') return { ...l, color: mask }
+      if (silk !== undefined && l.type === 'silk') return { ...l, color: silk }
+      return l
+    }),
+  }
   if (mask !== undefined) out.maskColor = mask
   if (silk !== undefined) out.silkColor = silk
   if (finish !== undefined) out.finish = finish

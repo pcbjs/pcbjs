@@ -9,7 +9,9 @@ import { buildPayload } from '../dist/build.js'
 
 const entry = rel => ({ file: `/p/${rel}`, rel })
 const target = (rel, name, variant, status = 'ok') => ({
-  entry: entry(rel), board: { name, title: `${name} board`, revision: '1', ...(variant ? { variant: { name: variant } } : {}) }, site: { name, fab: { status } },
+  entry: entry(rel),
+  board: { name, title: `${name} board`, revision: '1', ...(variant ? { variant: { name: variant } } : {}) },
+  site: { name, fab: { status } },
 })
 
 /** A module graph as Vite's moduleGraph answers it: modules by file, each with the modules that import it. */
@@ -22,9 +24,13 @@ function graph(edges) {
 
 // main.tsx imports lib/MyGroup.tsx, which imports lib/MyPart.tsx; coin.tsx and multi.tsx import lib/MyPart.tsx; multi.tsx also imports lib/shared.ts
 const g = graph([
-  ['main.tsx', 'lib/MyGroup.tsx'], ['lib/MyGroup.tsx', 'lib/MyPart.tsx'],
-  ['coin.tsx', 'lib/MyPart.tsx'], ['multi.tsx', 'lib/MyPart.tsx'], ['multi.tsx', 'lib/shared.ts'],
-  ['quad.pcb.tsx', 'pcb.config.ts'], ['main.tsx', 'pcb.config.ts'],
+  ['main.tsx', 'lib/MyGroup.tsx'],
+  ['lib/MyGroup.tsx', 'lib/MyPart.tsx'],
+  ['coin.tsx', 'lib/MyPart.tsx'],
+  ['multi.tsx', 'lib/MyPart.tsx'],
+  ['multi.tsx', 'lib/shared.ts'],
+  ['quad.pcb.tsx', 'pcb.config.ts'],
+  ['main.tsx', 'pcb.config.ts'],
 ])
 
 function demoSlots() {
@@ -55,7 +61,7 @@ test('focus: a file outside every graph, or no graph yet, points at nothing, exc
 })
 
 // the four rules, with the board the viewer shows
-test('focus rule 1: a file in exactly one board\'s tree goes to that board, whatever the viewer shows', () => {
+test("focus rule 1: a file in exactly one board's tree goes to that board, whatever the viewer shows", () => {
   for (const cur of [null, 'Blinky', 'Coin', 'Quad', 'Multi', 'preview:scratch.tsx']) {
     assert.deepEqual(focusTarget(g, demoSlots(), '/p/lib/MyGroup.tsx', cur), { board: 'Blinky', entry: 'main.tsx', boards: ['Blinky'] })
     assert.deepEqual(focusTarget(g, demoSlots(), '/p/coin.tsx', cur), { board: 'Coin', entry: 'coin.tsx', boards: ['Coin'] })
@@ -78,17 +84,20 @@ test('focus rule 4: a file in no tree gives no board and no entry, the cue for t
   assert.deepEqual(focusTarget(g, demoSlots(), '/p/scratch.tsx', 'Coin'), { board: null, entry: null, boards: [] })
   // a file only a failed entry reaches is in a tree: entry set, no board, and no preview
   const slots = demoSlots()
-  slots[0].compiled = null; slots[0].error = 'boom'
+  slots[0].compiled = null
+  slots[0].error = 'boom'
   assert.deepEqual(focusTarget(g, slots, '/p/lib/MyGroup.tsx', 'Coin'), { board: null, entry: 'main.tsx', boards: [] })
 })
 
 test('focus: an entry without a board of its own gives the entry but no board, a later live one gives the board', () => {
   const slots = demoSlots()
-  slots[0].compiled = null; slots[0].error = 'boom'
+  slots[0].compiled = null
+  slots[0].error = 'boom'
   assert.deepEqual(focusTarget(g, slots, '/p/lib/MyGroup.tsx'), { board: null, entry: 'main.tsx', boards: [] })
   assert.deepEqual(focusTarget(g, slots, '/p/lib/MyPart.tsx'), { board: 'Coin', entry: 'coin.tsx', boards: ['Coin', 'Multi'] })
   // a board whose name another entry took is not live either
-  slots[1].compiled = [target('coin.tsx', 'Multi')]; slots[3].compiled = [target('multi.tsx', 'Multi')]
+  slots[1].compiled = [target('coin.tsx', 'Multi')]
+  slots[3].compiled = [target('multi.tsx', 'Multi')]
   markConflicts(slots)
   assert.deepEqual(focusTarget(g, slots, '/p/lib/MyPart.tsx'), { board: 'Multi', entry: 'coin.tsx', boards: ['Multi'] })
 })
@@ -107,8 +116,12 @@ test('ide boards: one per entry with a board, target names, and ok, incomplete o
   assert.equal(p.single, false)
   assert.deepEqual(p.errors, { 'main.tsx': null, 'coin.tsx': 'SyntaxError', 'quad.pcb.tsx': null, 'multi.tsx': null })
   // an entry that never compiled is only in errors
-  slots[0].compiled = null; slots[0].error = 'boom'
-  assert.deepEqual(ideBoards(slots).boards.map(b => b.name), ['Coin', 'Quad', 'Multi'])
+  slots[0].compiled = null
+  slots[0].error = 'boom'
+  assert.deepEqual(
+    ideBoards(slots).boards.map(b => b.name),
+    ['Coin', 'Quad', 'Multi'],
+  )
   assert.equal(ideBoards(slots).errors['main.tsx'], 'boom')
 })
 
@@ -134,7 +147,10 @@ test('transient: dev carries the preview last, flagged transient, and the build 
   const slots = demoSlots()
   const preview = target('scratch.tsx', 'preview:scratch.tsx')
   const dev = boardsPayload(slots, preview)
-  assert.deepEqual(dev.boards.map(b => b.name), ['Blinky', 'Coin', 'Quad', 'Multi', 'Multi', 'Multi', 'preview:scratch.tsx'])
+  assert.deepEqual(
+    dev.boards.map(b => b.name),
+    ['Blinky', 'Coin', 'Quad', 'Multi', 'Multi', 'Multi', 'preview:scratch.tsx'],
+  )
   assert.equal(dev.boards.at(-1).transient, true)
   assert.equal(dev.entries['preview:scratch.tsx'], undefined)
   assert.equal(dev.errors['scratch.tsx'], undefined)

@@ -10,12 +10,18 @@ import * as sch from './blinky.sch'
 import './blinky.sourcing'
 import { LedChannelRow } from './lib/led-channel.layout'
 
-const W = 30, H = 20
+const W = 30,
+  H = 20
 
 export default (
-  <PCB name="Blinky" revision="0.1.0" copper={2} schematic={sch}
+  <PCB
+    name="Blinky"
+    revision="0.1.0"
+    copper={2}
+    schematic={sch}
     rules={{ clearance: 0.2, minTrackWidth: 0.2, strictNets: true, requireSourcing: true }}
-    autoroute={{ bend: '45', viaCost: 4 }}>
+    autoroute={{ bend: '45', viaCost: 4 }}
+  >
     <path layer="Edge.Cuts" d={roundedRect(W, H, 2)} />
 
     {/* J1, Q1 and C1 by hand, each channel by its circuit's row layout */}
@@ -25,7 +31,9 @@ export default (
     <LedChannelRow g={CH2} at="0 10" label="LED2" />
     <LedChannelRow g={CH3} at="0 15" label="LED3" />
     <C1 at="15 10" side="B" />
-    <text layer="B.SilkS" at="15 8.3" size={0.8}>C1</text>
+    <text layer="B.SilkS" at="15 8.3" size={0.8}>
+      C1
+    </text>
 
     {/* tracks as path strings, a via, and a chain whose last hop .X() leaves to the autorouter */}
     {route(VCC, { width: 0.3, d: 'M 3 10 H 9 M 9 5 V 15 M 9 11.6 H 15.8' })}
@@ -38,8 +46,12 @@ export default (
     {route(Q1[2]).X('25 12.5 B.Cu').width(0.3)}
     {pour(GND, 'B.Cu', rect(W, H))}
 
-    <text layer="F.SilkS" at="3 4.3" size={0.8}>GND</text>
-    <text layer="F.SilkS" at="15 18.5" size={1}>Blinky · pcbjs</text>
+    <text layer="F.SilkS" at="3 4.3" size={0.8}>
+      GND
+    </text>
+    <text layer="F.SilkS" at="15 18.5" size={1}>
+      Blinky · pcbjs
+    </text>
     <Brand at="15 4" height={5} layer="B.SilkS" />
   </PCB>
 )

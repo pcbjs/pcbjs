@@ -53,11 +53,14 @@ export interface OutlineText {
   missing: string[]
 }
 
-
 function nodeFs(): typeof import('node:fs') | null {
   const p = (globalThis as any).process
   if (!p || typeof p.getBuiltinModule !== 'function') return null
-  try { return p.getBuiltinModule('node:fs') } catch { return null }
+  try {
+    return p.getBuiltinModule('node:fs')
+  } catch {
+    return null
+  }
 }
 
 // parsed fonts by path, mtime and weight, shared by every copy of this module
@@ -68,13 +71,21 @@ export function loadOutlineFont(path: string, weight?: number): OutlineFont {
   const fs = nodeFs()
   if (!fs) throw new Error(`outline fonts are read in Node only, not ${path}`)
   let stat: import('node:fs').Stats
-  try { stat = fs.statSync(path) } catch { throw new Error(`font file not found: ${path}`) }
+  try {
+    stat = fs.statSync(path)
+  } catch {
+    throw new Error(`font file not found: ${path}`)
+  }
   const key = `${path}\0${stat.mtimeMs}\0${weight ?? ''}`
   const hit = CACHE.get(key)
   if (hit) return hit
   const buf = fs.readFileSync(path)
   let font: any
-  try { font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)) } catch (e) { throw new Error(`${path} is not a TrueType or OpenType font: ${(e as Error).message}`) }
+  try {
+    font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength))
+  } catch (e) {
+    throw new Error(`${path} is not a TrueType or OpenType font: ${(e as Error).message}`)
+  }
   const axes: any[] = font.tables.fvar?.axes ?? []
   let coords: Record<string, number> | undefined
   let style = name(font, 'fontSubfamily') ?? 'Regular'
@@ -89,10 +100,20 @@ export function loadOutlineFont(path: string, weight?: number): OutlineFont {
   } else if (axes.length) coords = Object.fromEntries(axes.map(a => [a.tag, a.defaultValue]))
   const H = font.charToGlyph('H')
   const capHeight = font.tables.os2?.sCapHeight || (H && H.index ? glyphPath(font, H, coords).bounds[3] : 0) || font.ascender * 0.7
-  const out: OutlineFont = { path, family: name(font, 'preferredFamily') ?? name(font, 'fontFamily') ?? path, style, ...(weight !== undefined ? { weight } : {}), unitsPerEm: font.unitsPerEm, capHeight, font, ...(coords ? { coords } : {}) }
+  const out: OutlineFont = {
+    path,
+    family: name(font, 'preferredFamily') ?? name(font, 'fontFamily') ?? path,
+    style,
+    ...(weight !== undefined ? { weight } : {}),
+    unitsPerEm: font.unitsPerEm,
+    capHeight,
+    font,
+    ...(coords ? { coords } : {}),
+  }
   const lic = name(font, 'license')
   if (lic) out.license = lic
-  const copy = name(font, 'copyright'), url = name(font, 'licenseURL')
+  const copy = name(font, 'copyright'),
+    url = name(font, 'licenseURL')
   if (copy) out.copyright = copy
   if (url) out.licenseURL = url
   CACHE.set(key, out)
@@ -102,50 +123,73 @@ export function loadOutlineFont(path: string, weight?: number): OutlineFont {
 function name(font: any, key: string): string | undefined {
   const rec = font.names?.[key] ?? font.names?.windows?.[key] ?? font.names?.macintosh?.[key] ?? font.names?.unicode?.[key]
   if (!rec) return undefined
-  return rec.en ?? Object.values(rec)[0] as string | undefined
+  return rec.en ?? (Object.values(rec)[0] as string | undefined)
 }
 
-
-interface GlyphShape { contours: [number, number][][]; advance: number; bounds: [number, number, number, number] }
+interface GlyphShape {
+  contours: [number, number][][]
+  advance: number
+  bounds: [number, number, number, number]
+}
 const SHAPES = new WeakMap<object, Map<number, GlyphShape>>()
 
 /** A glyph's contours in font units, y up, curves flattened to within 1/2000 em, and its advance with the font's variation applied. */
 function glyphPath(font: any, glyph: any, coords: Record<string, number> | undefined): GlyphShape {
   const tol = (font.unitsPerEm || 1000) / 2000
   let m = SHAPES.get(font)
-  if (!m) { m = new Map(); SHAPES.set(font, m) }
+  if (!m) {
+    m = new Map()
+    SHAPES.set(font, m)
+  }
   const hit = m.get(glyph.index)
   if (hit) return hit
   const g = coords && font.variation ? font.variation.getTransform(glyph, coords) : glyph
   const cmds: any[] = g.path?.commands ?? []
   const contours: [number, number][][] = []
   let cur: [number, number][] = []
-  let x = 0, y = 0
-  const close = () => { if (cur.length >= 3) contours.push(cur); cur = [] }
+  let x = 0,
+    y = 0
+  const close = () => {
+    if (cur.length >= 3) contours.push(cur)
+    cur = []
+  }
   for (const c of cmds) {
-    if (c.type === 'M') { close(); cur.push([c.x, c.y]); x = c.x; y = c.y }
-    else if (c.type === 'L') { cur.push([c.x, c.y]); x = c.x; y = c.y }
-    else if (c.type === 'Q') {
-      const dx = x - 2 * c.x1 + c.x, dy = y - 2 * c.y1 + c.y
+    if (c.type === 'M') {
+      close()
+      cur.push([c.x, c.y])
+      x = c.x
+      y = c.y
+    } else if (c.type === 'L') {
+      cur.push([c.x, c.y])
+      x = c.x
+      y = c.y
+    } else if (c.type === 'Q') {
+      const dx = x - 2 * c.x1 + c.x,
+        dy = y - 2 * c.y1 + c.y
       const n = Math.min(64, Math.max(1, Math.ceil(Math.sqrt(Math.hypot(dx, dy) / (4 * tol)))))
       for (let i = 1; i <= n; i++) {
-        const t = i / n, u = 1 - t
+        const t = i / n,
+          u = 1 - t
         cur.push([u * u * x + 2 * u * t * c.x1 + t * t * c.x, u * u * y + 2 * u * t * c.y1 + t * t * c.y])
       }
-      x = c.x; y = c.y
+      x = c.x
+      y = c.y
     } else if (c.type === 'C') {
       const d = Math.max(Math.hypot(x - 2 * c.x1 + c.x2, y - 2 * c.y1 + c.y2), Math.hypot(c.x1 - 2 * c.x2 + c.x, c.y1 - 2 * c.y2 + c.y))
       const n = Math.min(64, Math.max(1, Math.ceil(Math.sqrt((6 * d) / (8 * tol)))))
       for (let i = 1; i <= n; i++) {
-        const t = i / n, u = 1 - t
+        const t = i / n,
+          u = 1 - t
         cur.push([u * u * u * x + 3 * u * u * t * c.x1 + 3 * u * t * t * c.x2 + t * t * t * c.x, u * u * u * y + 3 * u * u * t * c.y1 + 3 * u * t * t * c.y2 + t * t * t * c.y])
       }
-      x = c.x; y = c.y
+      x = c.x
+      y = c.y
     } else if (c.type === 'Z') close()
   }
   close()
   for (const r of contours) {
-    const a = r[0], b = r[r.length - 1]
+    const a = r[0],
+      b = r[r.length - 1]
     if (a[0] === b[0] && a[1] === b[1]) r.pop()
   }
   const all = contours.flat()
@@ -167,32 +211,43 @@ function advanceDelta(font: any, glyph: any, coords: Record<string, number> | un
   const norm: number[] = proc.getNormalizedCoords(coords)
   const axisCount: number = font.tables.fvar.axes.length
   const n = glyph.isComposite ? glyph.components.length : (glyph.points?.length ?? 0)
-  let d0 = 0, d1 = 0
+  let d0 = 0,
+    d1 = 0
   for (const h of data.headers) {
     const peak: number[] = h.peakTuple ?? gvar.sharedTuples[h.sharedTupleRecordsIndex]
     let f = 1
     for (let a = 0; a < axisCount; a++) {
-      const p = peak[a], v = norm[a]
+      const p = peak[a],
+        v = norm[a]
       if (p === 0) continue
-      if (v === 0) { f = 0; break }
+      if (v === 0) {
+        f = 0
+        break
+      }
       if (!h.intermediateStartTuple) {
-        if (v < Math.min(0, p) || v > Math.max(0, p)) { f = 0; break }
+        if (v < Math.min(0, p) || v > Math.max(0, p)) {
+          f = 0
+          break
+        }
         f *= v / p
       } else {
-        const s = h.intermediateStartTuple[a], e = h.intermediateEndTuple[a]
-        if (v < s || v > e) { f = 0; break }
+        const s = h.intermediateStartTuple[a],
+          e = h.intermediateEndTuple[a]
+        if (v < s || v > e) {
+          f = 0
+          break
+        }
         f *= v < p ? (v - s) / (p - s) : (e - v) / (e - p)
       }
     }
     if (!f) continue
-    const pts: number[] = h.privatePoints?.length ? h.privatePoints : data.sharedPoints ?? []
-    const at = (i: number) => (pts.length ? (k => (k < 0 ? 0 : h.deltas[k]))(pts.indexOf(i)) : h.deltas[i] ?? 0)
+    const pts: number[] = h.privatePoints?.length ? h.privatePoints : (data.sharedPoints ?? [])
+    const at = (i: number) => (pts.length ? (k => (k < 0 ? 0 : h.deltas[k]))(pts.indexOf(i)) : (h.deltas[i] ?? 0))
     d0 += at(n) * f
     d1 += at(n + 1) * f
   }
   return Math.round(d1 - d0)
 }
-
 
 const S = 1e6
 const toC = (r: Ring) => r.map(([x, y]) => ({ X: Math.round(x * S), Y: Math.round(y * S) }))
@@ -238,7 +293,8 @@ export function thinPieces(ps: Poly[], w: number): Poly[] {
   c.Execute(ClipperLib.ClipType.ctDifference, t, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero)
   return tree(t).filter(p => {
     if (polyArea(p) <= w * w) return false
-    const xs = p.outer.map(q => q[0]), ys = p.outer.map(q => q[1])
+    const xs = p.outer.map(q => q[0]),
+      ys = p.outer.map(q => q[1])
     return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) > w
   })
 }
@@ -247,7 +303,8 @@ export function thinPieces(ps: Poly[], w: number): Poly[] {
 export function thinInk(ps: Poly[], w: number): { width: number; at: [number, number] } | null {
   const bad = thinPieces(ps, w)
   if (!bad.length) return null
-  let lo = 0, hi = w
+  let lo = 0,
+    hi = w
   while (hi - lo > 0.001) {
     const mid = (lo + hi) / 2
     if (thinPieces(ps, mid).length) hi = mid
@@ -256,7 +313,6 @@ export function thinInk(ps: Poly[], w: number): { width: number; at: [number, nu
   const at = (thinPieces(ps, hi)[0] ?? bad[0]).outer[0]
   return { width: Math.round(lo * 1000) / 1000, at: [at[0], at[1]] }
 }
-
 
 const nm = (v: number) => Math.round(v * 1e6) / 1e6 || 0
 
@@ -282,7 +338,9 @@ export function outlineText(text: string, f: OutlineFont, opts: OutlineTextOptio
   lines.forEach((line, row) => {
     const glyphs = [...line].map(ch => {
       const g = font.charToGlyph(ch)
-      if (!g || !g.index) { if (ch !== ' ' && ch !== '\t') missing.add(ch) }
+      if (!g || !g.index) {
+        if (ch !== ' ' && ch !== '\t') missing.add(ch)
+      }
       return g ?? font.glyphs.get(0)
     })
     const shapes = glyphs.map(g => glyphPath(font, g, f.coords))
@@ -297,14 +355,20 @@ export function outlineText(text: string, f: OutlineFont, opts: OutlineTextOptio
       x += s.advance * kx + spacing
     })
   })
-  const polys = unionNonZero(rings).map(p => ({ outer: p.outer.map(([a, b]) => [nm(a), nm(b)] as [number, number]), holes: p.holes.map(h => h.map(([a, b]) => [nm(a), nm(b)] as [number, number])) }))
+  const polys = unionNonZero(rings).map(p => ({
+    outer: p.outer.map(([a, b]) => [nm(a), nm(b)] as [number, number]),
+    holes: p.holes.map(h => h.map(([a, b]) => [nm(a), nm(b)] as [number, number])),
+  }))
   return { polys, width: nm(width), height: nm(opts.size + (lines.length - 1) * lineHeight), missing: [...missing] }
 }
 
 function kerning(font: any, a: any, b: any): number {
-  try { return font.getKerningValue(a, b) || 0 } catch { return 0 }
+  try {
+    return font.getKerningValue(a, b) || 0
+  } catch {
+    return 0
+  }
 }
-
 
 const CONFIG = Symbol.for('pcbjs.fonts.config')
 /** Register the `fonts` of pcb.config.ts, paths relative to `root`, the folder of the config. The cli calls it. */

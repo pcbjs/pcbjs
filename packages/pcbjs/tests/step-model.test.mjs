@@ -29,20 +29,35 @@ test('a STEP path resolves against the file of the <footprint> element, and the 
   const p = project()
   try {
     // the source-range transform records the file relative to the root; the compile finds it among the imported files
-    const fp = h('footprint', { ref: 'J1', at: '5 5', model: { step: './models/pin.step', rotate: [0, 0, 90] }, __src: { file: 'parts/pin.tsx', line: 3, col: 1, endLine: 3, endCol: 40 } }, pad())
+    const fp = h(
+      'footprint',
+      { ref: 'J1', at: '5 5', model: { step: './models/pin.step', rotate: [0, 0, 90] }, __src: { file: 'parts/pin.tsx', line: 3, col: 1, endLine: 3, endCol: 40 } },
+      pad(),
+    )
     const b = compileBoard(board(fp), { files: new Set([join(p.root, 'parts', 'pin.tsx')]) })
     const m = b.footprints[0].model
     assert.equal(m.kind, 'step')
     assert.equal(m.path, join(p.root, 'parts', 'models', 'pin.step'))
-    assert.deepEqual(b.erc.filter(d => d.rule === 'model-missing'), [])
+    assert.deepEqual(
+      b.erc.filter(d => d.rule === 'model-missing'),
+      [],
+    )
     const s = site(b, p.root).footprints[0]
     assert.equal(s.model, undefined)
-    assert.deepEqual(s.step, { file: 'parts/models/pin.step', mesh: meshKey(new Uint8Array(readFileSync(PIN))), transform: { offset: [0, 0, 0], rotate: [0, 0, 90], scale: [1, 1, 1] } })
-  } finally { p.done() }
+    assert.deepEqual(s.step, {
+      file: 'parts/models/pin.step',
+      mesh: meshKey(new Uint8Array(readFileSync(PIN))),
+      transform: { offset: [0, 0, 0], rotate: [0, 0, 90], scale: [1, 1, 1] },
+    })
+  } finally {
+    p.done()
+  }
 })
 
 test('a missing STEP file is a model-missing warning naming the path, and the site data has no mesh', () => {
-  const b = compileBoard(board(h('footprint', { ref: 'J1', at: '5 5', model: { kind: 'step', step: '/nowhere/part.step', fallback: { kind: 'box', w: 2, h: 2, height: 1 } } }, pad())))
+  const b = compileBoard(
+    board(h('footprint', { ref: 'J1', at: '5 5', model: { kind: 'step', step: '/nowhere/part.step', fallback: { kind: 'box', w: 2, h: 2, height: 1 } } }, pad())),
+  )
   const w = b.erc.filter(d => d.rule === 'model-missing')
   assert.equal(w.length, 1)
   assert.equal(w[0].severity, 'warning')
@@ -56,7 +71,10 @@ test('a missing STEP file is a model-missing warning naming the path, and the si
 test('a file: URL and an absolute path are taken as they are', () => {
   const url = pathToFileURL(PIN).href
   const b = compileBoard(board(h('footprint', { ref: 'J1', at: '5 5', model: { step: url } }, pad()), h('footprint', { ref: 'J2', at: '9 5', model: { step: PIN } }, pad())))
-  assert.deepEqual(b.footprints.map(f => f.model.path), [PIN, PIN])
+  assert.deepEqual(
+    b.footprints.map(f => f.model.path),
+    [PIN, PIN],
+  )
 })
 
 test('the standard library keeps its generated model as the fallback of a STEP model', () => {
@@ -71,7 +89,10 @@ test('the standard library keeps its generated model as the fallback of a STEP m
 })
 
 test('a bad STEP spec is a compile error at the footprint', () => {
-  assert.throws(() => compileBoard(board(h('footprint', { ref: 'J1', model: { step: PIN, rotate: [0, 90] } }, pad()))), e => e instanceof CompileError && /J1: model rotate needs three numbers/.test(e.message))
+  assert.throws(
+    () => compileBoard(board(h('footprint', { ref: 'J1', model: { step: PIN, rotate: [0, 90] } }, pad()))),
+    e => e instanceof CompileError && /J1: model rotate needs three numbers/.test(e.message),
+  )
   assert.throws(() => compileBoard(board(h('footprint', { ref: 'J1', model: { step: '' } }, pad()))), /needs step, the file/)
   assert.throws(() => compileBoard(board(h('footprint', { ref: 'J1', model: { step: PIN, fallback: { step: PIN } } }, pad()))), /fallback must be a generated model/)
 })

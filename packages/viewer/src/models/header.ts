@@ -13,7 +13,7 @@ function pinGeometry(s: number, z0: number, z1: number): THREE.BufferGeometry {
   const shaft = new THREE.BoxGeometry(s, s, z1 - z0 - 2 * tip).toNonIndexed()
   shaft.translate(0, 0, (z0 + z1) / 2)
   const end = (z: number, up: boolean) => {
-    const c = new THREE.CylinderGeometry(up ? s * 0.22 : (s / Math.SQRT2), up ? s / Math.SQRT2 : s * 0.22, tip, 4, 1).toNonIndexed()
+    const c = new THREE.CylinderGeometry(up ? s * 0.22 : s / Math.SQRT2, up ? s / Math.SQRT2 : s * 0.22, tip, 4, 1).toNonIndexed()
     c.rotateY(Math.PI / 4)
     c.rotateX(Math.PI / 2)
     c.translate(0, 0, z)
@@ -36,7 +36,8 @@ export function headerModel(spec: HeaderSpec, height: number, thickness: number)
   const pin = pinGeometry(s, -thickness - tail, plastic + above)
   for (let i = 0; i < pins; i++)
     for (let r = 0; r < rows; r++) {
-      const x = (r - (rows - 1) / 2) * pitch, y = ((pins - 1) / 2 - i) * pitch
+      const x = (r - (rows - 1) / 2) * pitch,
+        y = ((pins - 1) / 2 - i) * pitch
       g.add(mesh(block, M.plastic, x, y))
       g.add(mesh(pin, M.gold, x, y))
     }

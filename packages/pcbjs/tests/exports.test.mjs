@@ -38,7 +38,10 @@ test('gerber: Y is negated relative to the model (Gerber y is up)', () => {
 test('excellon: plated holes of the two headers', () => {
   const d = excellon(compiledBase(), true, DATE)
   assert.ok(d)
-  assert.deepEqual(d.tools.map(({ d, count, slots, vias }) => ({ d, count, slots, vias })), [{ d: 1, count: 4, slots: 0, vias: 0 }])
+  assert.deepEqual(
+    d.tools.map(({ d, count, slots, vias }) => ({ d, count, slots, vias })),
+    [{ d: 1, count: 4, slots: 0, vias: 0 }],
+  )
   assert.equal(d.tools[0].holes.length, 4)
   const lines = d.text.split('\n')
   assert.ok(lines.includes('T1C1.000'))
@@ -53,8 +56,14 @@ test('excellon: plated holes of the two headers', () => {
 test('bom: equal parts are grouped', () => {
   const b = bomBoard()
   const rows = bomRows(b)
-  assert.deepEqual(rows.map(r => [[...r.refs].sort().join(' '), r.value, r.footprint, r.qty]),
-    [['J1', 'Conn_01x02', 'pcbjs:PinHeader_1x02_P2.54mm_Vertical', 1], ['R1 R2', '10k', 'pcbjs:R_0603_1608Metric', 2], ['R3', '1k', 'pcbjs:R_0603_1608Metric', 1]])
+  assert.deepEqual(
+    rows.map(r => [[...r.refs].sort().join(' '), r.value, r.footprint, r.qty]),
+    [
+      ['J1', 'Conn_01x02', 'pcbjs:PinHeader_1x02_P2.54mm_Vertical', 1],
+      ['R1 R2', '10k', 'pcbjs:R_0603_1608Metric', 2],
+      ['R3', '1k', 'pcbjs:R_0603_1608Metric', 1],
+    ],
+  )
   const csv = bomCsv(b).trimEnd().split('\n')
   assert.equal(csv[0], 'Refs,Value,Footprint,Qty,MPN,Source,Manufacturer,Datasheet')
   assert.equal(csv.length, 4)
@@ -133,33 +142,39 @@ test('excellon: header declares METRIC,TZ', () => {
 
 test('gerber: two overlapping GND zones on B.Cu are written as one unioned region with a single clear block', () => {
   // the zones overlap on x 4..6; a via of net B in the overlap cuts a hole into both fills
-  const b = compileBoard(baseBoard([
-    h('zone', { net: 'GND', layer: 'B.Cu', d: 'M0 6 H6 V10 H0 Z', islands: 'keep' }),
-    h('zone', { net: 'GND', layer: 'B.Cu', d: 'M4 6 H10 V10 H4 Z', islands: 'keep' }),
-    h('via', { net: 'B', at: '5 8' }),
-  ]))
+  const b = compileBoard(
+    baseBoard([
+      h('zone', { net: 'GND', layer: 'B.Cu', d: 'M0 6 H6 V10 H0 Z', islands: 'keep' }),
+      h('zone', { net: 'GND', layer: 'B.Cu', d: 'M4 6 H10 V10 H4 Z', islands: 'keep' }),
+      h('via', { net: 'B', at: '5 8' }),
+    ]),
+  )
   const zones = b.items.filter(i => i.kind === 'zone')
   assert.equal(zones.length, 2)
   // written separately this would be two dark outers and two clear blocks
-  assert.deepEqual(zones.map(z => [z.fill.length, z.fill[0].holes.length]), [[1, 1], [1, 1]])
+  assert.deepEqual(
+    zones.map(z => [z.fill.length, z.fill[0].holes.length]),
+    [
+      [1, 1],
+      [1, 1],
+    ],
+  )
   const merged = union(zones.flatMap(z => polysToRings(z.fill)))
   assert.equal(merged.length, 1)
   assert.equal(merged[0].holes.length, 1)
   const lines = gerberLayer(b, 'B.Cu', DATE).text.split('\n')
   const body = lines.slice(lines.indexOf('G04 APERTURE END LIST*') + 1)
   assert.equal(body.filter(l => l === '%LPC*%').length, 1, 'one clear block')
-  const lpc = body.indexOf('%LPC*%'), back = body.indexOf('%LPD*%', lpc)
+  const lpc = body.indexOf('%LPC*%'),
+    back = body.indexOf('%LPD*%', lpc)
   assert.equal(body.slice(0, lpc).filter(l => l === 'G36*').length, 1, 'one dark zone outer before the clear block')
   assert.equal(body.slice(lpc, back).filter(l => l === 'G36*').length, 1, 'one hole in the clear block')
 })
 
 // ---------- stroke-font text ----------
 
-const textBoard = (extra = []) => compileBoard(baseBoard([
-  h('text', { layer: 'F.SilkS', at: '5 8', size: 1 }, 'HI'),
-  h('text', { layer: 'B.SilkS', at: '5 8', size: 1, anchor: 'start' }, 'C1'),
-  ...extra,
-]))
+const textBoard = (extra = []) =>
+  compileBoard(baseBoard([h('text', { layer: 'F.SilkS', at: '5 8', size: 1 }, 'HI'), h('text', { layer: 'B.SilkS', at: '5 8', size: 1, anchor: 'start' }, 'C1'), ...extra]))
 
 test('text: silk text is written to the legend Gerbers as D01 strokes of a round aperture', () => {
   const b = textBoard()
@@ -194,7 +209,8 @@ test('text: back text is mirrored, front text is not, and at is the vertical cen
   const k = b.items.find(i => i.kind === 'text' && i.layer === 'B.SilkS')
   assert.equal(f.mirrored, false)
   assert.equal(k.mirrored, true)
-  const xs = s => s.strokes.flat().map(p => p[0]), ys = s => s.strokes.flat().map(p => p[1])
+  const xs = s => s.strokes.flat().map(p => p[0]),
+    ys = s => s.strokes.flat().map(p => p[1])
   // front, anchor middle: centred on x = 5; caps from 7.5 to 8.5
   assert.ok(Math.abs((Math.min(...xs(f)) + Math.max(...xs(f))) / 2 - 5) < 0.05)
   assert.ok(Math.abs(Math.min(...ys(f)) - 7.5) < 1e-6 && Math.abs(Math.max(...ys(f)) - 8.5) < 1e-6)
@@ -203,7 +219,11 @@ test('text: back text is mirrored, front text is not, and at is the vertical cen
 })
 
 test('text: a thinner silk thickness is raised to silkMinWidth; other layers keep theirs', () => {
-  const b = textBoard([h('text', { layer: 'F.SilkS', at: '5 5', thickness: 0.05 }, 'T'), h('text', { layer: 'F.Fab', at: '5 5', thickness: 0.05 }, 'T'), h('text', { layer: 'F.Fab', at: '5 5' }, 'U')])
+  const b = textBoard([
+    h('text', { layer: 'F.SilkS', at: '5 5', thickness: 0.05 }, 'T'),
+    h('text', { layer: 'F.Fab', at: '5 5', thickness: 0.05 }, 'T'),
+    h('text', { layer: 'F.Fab', at: '5 5' }, 'U'),
+  ])
   const ts = b.items.filter(i => i.kind === 'text')
   assert.equal(ts.find(t => t.layer === 'F.SilkS' && t.text === 'T').thickness, b.rules.silkMinWidth)
   assert.equal(ts.find(t => t.layer === 'F.Fab' && t.text === 'T').thickness, 0.05)
@@ -221,7 +241,10 @@ test('text: silk-over-pad sees text strokes', () => {
 
 test('text: copper text is copper for clearance and the Gerber', () => {
   const b = compileBoard(baseBoard([h('text', { layer: 'F.Cu', at: '4.5 2', size: 1 }, 'X')]))
-  assert.ok(b.drc.some(d => (d.rule === 'short' || d.rule === 'clearance') && d.message.includes('text')), b.drc.map(d => d.rule).join(','))
+  assert.ok(
+    b.drc.some(d => (d.rule === 'short' || d.rule === 'clearance') && d.message.includes('text')),
+    b.drc.map(d => d.rule).join(','),
+  )
   assert.ok(gerberLayer(b, 'F.Cu', DATE).text.includes('C,0.1500'))
 })
 

@@ -14,7 +14,10 @@ export function clearanceValue(v: unknown, where: string, self: boolean): number
     for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
       if (x === undefined || k === '__src') continue
       if (!keys.includes(k)) throw new Error(`${where}: clearance has an unknown kind ${JSON.stringify(k)}; it takes ${keys.join(', ')}`)
-      if (k === 'pad' && x && typeof x === 'object' && !Array.isArray(x)) { out.pad = padTypes(x as Record<string, unknown>, where); continue }
+      if (k === 'pad' && x && typeof x === 'object' && !Array.isArray(x)) {
+        out.pad = padTypes(x as Record<string, unknown>, where)
+        continue
+      }
       out[k as keyof KindClearanceMM] = length(x, `${where}: clearance ${k}`)
     }
     if (!Object.keys(out).length) throw new Error(`${where}: clearance must name a kind, such as { track: 0.4 }; it takes ${keys.join(', ')}`)
@@ -40,7 +43,11 @@ function padTypes(v: Record<string, unknown>, where: string): { tht?: number; sm
 
 function length(x: unknown, at: string): number {
   let n: number
-  try { n = mm(x as Length) } catch (e) { throw new Error(`${at}: ${(e as Error).message}`) }
+  try {
+    n = mm(x as Length)
+  } catch (e) {
+    throw new Error(`${at}: ${(e as Error).message}`)
+  }
   if (!(Number.isFinite(n) && n >= 0)) throw new Error(`${at} must be a non-negative length, got ${JSON.stringify(x)}`)
   return n
 }

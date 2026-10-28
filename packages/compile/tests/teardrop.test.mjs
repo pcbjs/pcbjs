@@ -37,7 +37,10 @@ test('teardrops: off by default, a straight teardrop at each end of a track on T
   near(Math.min(...xs.filter(x => x < 15)), 5, 1e-6)
   near(Math.max(...xs.filter(x => x < 15)), 6.7, 1e-6)
   assert.equal(b.unconnected, 0)
-  assert.deepEqual(b.drc.filter(d => d.severity !== 'info'), [])
+  assert.deepEqual(
+    b.drc.filter(d => d.severity !== 'info'),
+    [],
+  )
 })
 
 test('teardrops: pads filters by pad type, sizes take fractions or lengths, and bad specs throw', () => {
@@ -56,7 +59,7 @@ test('teardrops: pads filters by pad type, sizes take fractions or lengths, and 
 
 test('teardrops: a class turns them on for its nets, a route turns them off', () => {
   const { P } = nets({ P: { class: 'wire' } })
-  const kids = (r1) => [tht('J1', 5, 3, P), tht('J2', 25, 3, P), tht('J3', 5, 7, 'B'), tht('J4', 25, 7, 'B'), r1, route('J3.1', 'J4.1', 'Z').width(0.3)]
+  const kids = r1 => [tht('J1', 5, 3, P), tht('J2', 25, 3, P), tht('J3', 5, 7, 'B'), tht('J4', 25, 7, 'B'), r1, route('J3.1', 'J4.1', 'Z').width(0.3)]
   const b = board({ classes: { wire: { teardrops: true } } }, ...kids(route('J1.1', 'J2.1', 'Z').width(0.3)))
   assert.deepEqual([...new Set(drops(b).map(g => g.net))], ['P'])
   const off = board({ teardrops: true, classes: { wire: { teardrops: false } } }, ...kids(route('J1.1', 'J2.1', 'Z').width(0.3)))
@@ -64,7 +67,15 @@ test('teardrops: a class turns them on for its nets, a route turns them off', ()
   const route1 = board({ teardrops: true }, ...kids(route('J1.1', 'J2.1', 'Z').width(0.3).teardrops(false)))
   assert.deepEqual([...new Set(drops(route1).map(g => g.net))], ['B'])
   const narrow = board({ classes: { wire: { teardrops: { length: 0.2 } } } }, ...kids(route('J1.1', 'J2.1', 'Z').width(0.3)))
-  near(Math.max(...drops(narrow).flatMap(g => g.paths[0].map(p => p[0])).filter(x => x < 15)), 5.85 + 0.34, 1e-6)
+  near(
+    Math.max(
+      ...drops(narrow)
+        .flatMap(g => g.paths[0].map(p => p[0]))
+        .filter(x => x < 15),
+    ),
+    5.85 + 0.34,
+    1e-6,
+  )
   assert.throws(() => route('J1.1', 'J2.1').teardrops('yes'), /teardrops must be true, false or/)
 })
 
@@ -73,10 +84,21 @@ test('teardrops: one that would come too close to other copper shrinks, else dro
   const near1 = h('footprint', { ref: 'J9', at: [6.25, 5.72], nets: { 1: 'B' } }, h('pad', { num: 1, shape: 'rect', size: [0.4, 0.4], type: 'smd' }))
   const kids = [tht('J1', 5, 5, 'A'), tht('J2', 25, 5, 'A'), route('J1.1', 'J2.1', 'Z').width(0.3), near1]
   const b = board({ teardrops: { pads: 'tht' } }, ...kids)
-  assert.deepEqual(b.drc.filter(d => d.rule === 'clearance' || d.rule === 'short'), [])
+  assert.deepEqual(
+    b.drc.filter(d => d.rule === 'clearance' || d.rule === 'short'),
+    [],
+  )
   const pad = b.items.find(i => i.kind === 'pad' && i.ref === 'J9')
   // the one at J1 shrinks to 75%: 0.6375 mm past the pad edge
-  near(Math.max(...drops(b).flatMap(g => g.paths[0].map(p => p[0])).filter(x => x < 15)), 5.85 + 0.6375, 1e-6)
+  near(
+    Math.max(
+      ...drops(b)
+        .flatMap(g => g.paths[0].map(p => p[0]))
+        .filter(x => x < 15),
+    ),
+    5.85 + 0.6375,
+    1e-6,
+  )
   assert.equal(drops(b).length, 2)
   for (const g of drops(b)) assert.ok(!overlaps(polysToRings(offset(g.paths, b.rules.clearance - 0.001)), [pad.poly]), 'keeps the clearance')
   // closer still: no size fits, the teardrop at J1 is dropped and said so
@@ -87,7 +109,11 @@ test('teardrops: one that would come too close to other copper shrinks, else dro
   assert.equal(dropped[0].severity, 'info')
   assert.match(dropped[0].message, /no teardrop where track A leaves pad J1\.1 on F\.Cu: even at 50% it would meet pad J9\.1 \(B\), closer than 0\.\d+ mm/)
   assert.equal(drops(c).length, 1, 'the other end keeps its own')
-  assert.deepEqual(c.drc.filter(d => d.severity === 'error'), [], 'J9 itself keeps its clearance to the pad and the track')
+  assert.deepEqual(
+    c.drc.filter(d => d.severity === 'error'),
+    [],
+    'J9 itself keeps its clearance to the pad and the track',
+  )
 })
 
 test('teardrops: a pour of another net clears around them, a pour of their net takes them in', () => {
@@ -95,5 +121,8 @@ test('teardrops: a pour of another net clears around them, a pour of their net t
   const b = board({ teardrops: { pads: 'tht' } }, ...kids, pour('GND', 'F.Cu', 'M0 0 H30 V10 H0 Z'))
   const zone = b.items.find(i => i.kind === 'zone')
   for (const g of drops(b)) assert.equal(polysToRings(intersection(polysToRings(offset(g.paths, b.rules.clearance - 0.001)), polysToRings(zone.fill))).length, 0)
-  assert.deepEqual(b.drc.filter(d => d.severity === 'error'), [])
+  assert.deepEqual(
+    b.drc.filter(d => d.severity === 'error'),
+    [],
+  )
 })

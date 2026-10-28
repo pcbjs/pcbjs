@@ -23,7 +23,12 @@ export interface PairTuneContext {
   over?: number
 }
 
-export interface PairTuned { job: PairJob; laid: PairLaid; added: number; note?: string }
+export interface PairTuned {
+  job: PairJob
+  laid: PairLaid
+  added: number
+  note?: string
+}
 
 const MARGIN = 0.05
 const EPS = 1e-6
@@ -37,7 +42,8 @@ export function tunePairCentre(job: PairJob, extra: number, ctx: PairTuneContext
   const tol = ctx.tolerance ?? 0.01
   const free = ctx.pair.free
   if (!(extra > tol) || !free) return { job: cur, laid, added: 0, ...(extra > tol ? { note: 'no free test to tune the pair with' } : {}) }
-  const pitch = job.w + job.g, cw = 2 * job.w + job.g
+  const pitch = job.w + job.g,
+    cw = 2 * job.w + job.g
   // below half the pitch the inner track's arc shrinks to a point
   const rmin = Math.max(job.w, pitch / 2)
   const amin = Math.max(2 * rmin, pitch + 0.02)
@@ -49,8 +55,12 @@ export function tunePairCentre(job: PairJob, extra: number, ctx: PairTuneContext
   const disc = Math.max(pitch, job.via.size + job.clearance) + job.via.size
   const place = (base: PairJob, at: number, span: FreeSpan, x: number, A: number): { laid: PairLaid; L: number; added: number } | null => {
     const res = meander(span.a, span.b, span.side, { extra: x, ...shape, amplitude: A })
-    if (!res || 'why' in res || res.added < EPS) { if (res && 'why' in res) why = res.why; return null }
-    const ins = res.corners.pts.slice(1, -1), insR = res.corners.radii.slice(1, -1)
+    if (!res || 'why' in res || res.added < EPS) {
+      if (res && 'why' in res) why = res.why
+      return null
+    }
+    const ins = res.corners.pts.slice(1, -1),
+      insR = res.corners.radii.slice(1, -1)
     const centre = [...base.centre.slice(0, at + 1), ...ins, ...base.centre.slice(at + 1)]
     const shift = ins.length
     const auto = base.auto ? [...base.auto.slice(0, at + 1), ...Array(shift).fill(false), ...base.auto.slice(at + 1)] : undefined
@@ -58,7 +68,11 @@ export function tunePairCentre(job: PairJob, extra: number, ctx: PairTuneContext
     const radii = [...radii0.slice(0, at + 1), ...insR, ...radii0.slice(at + 1)]
     const next: PairJob = mergeStraight({ ...base, centre, vias: base.vias.map(i => (i > at ? i + shift : i)), ...(auto ? { auto } : {}), radii })
     let laid2: PairLaid
-    try { laid2 = layPairJob(next, ctx.pair) } catch { return null }
+    try {
+      laid2 = layPairJob(next, ctx.pair)
+    } catch {
+      return null
+    }
     if (laid2.clash) return null
     return { laid: laid2, L: ctx.measure(laid2), added: res.added }
   }
@@ -68,7 +82,10 @@ export function tunePairCentre(job: PairJob, extra: number, ctx: PairTuneContext
     if (!last) return false
     const p = place(last.base, last.at, last.span, last.added + left, last.A)
     if (!p || p.L <= L + EPS) return false
-    laid = p.laid; cur = p.laid.job; L = p.L; last.added = p.added
+    laid = p.laid
+    cur = p.laid.job
+    L = p.L
+    last.added = p.added
     return true
   }
   let ai = 0
@@ -82,13 +99,16 @@ export function tunePairCentre(job: PairJob, extra: number, ctx: PairTuneContext
     }
     const A = amps[ai]
     const viaPts = cur.vias.map(i => cur.centre[i])
-    const centreFree = ctx.pair.centreFree, pads = ctx.pads
+    const centreFree = ctx.pair.centreFree,
+      pads = ctx.pads
     const clearOf = (layer: string, x: number, y: number, w: number) =>
-      viaPts.every(v => Math.hypot(x - v[0], y - v[1]) >= (disc + w) / 2 + job.copper) && (!pads || pads.every(p => !p.layers.includes(layer) || padDist(p, x, y) >= w / 2 + job.copper + MARGIN))
+      viaPts.every(v => Math.hypot(x - v[0], y - v[1]) >= (disc + w) / 2 + job.copper) &&
+      (!pads || pads.every(p => !p.layers.includes(layer) || padDist(p, x, y) >= w / 2 + job.copper + MARGIN))
     const room = ctx.room
-    const base: IsFree = centreFree && pads
-      ? (layer, x, y, _n, w) => centreFree(layer, x, y, job.nets[0], w + 2 * MARGIN) && clearOf(layer, x, y, w)
-      : (layer, x, y, _n, w) => free(layer, x, y, job.nets[0], w + 2 * MARGIN) && free(layer, x, y, job.nets[1], w + 2 * MARGIN) && clearOf(layer, x, y, w)
+    const base: IsFree =
+      centreFree && pads
+        ? (layer, x, y, _n, w) => centreFree(layer, x, y, job.nets[0], w + 2 * MARGIN) && clearOf(layer, x, y, w)
+        : (layer, x, y, _n, w) => free(layer, x, y, job.nets[0], w + 2 * MARGIN) && free(layer, x, y, job.nets[1], w + 2 * MARGIN) && clearOf(layer, x, y, w)
     const ok: IsFree = room ? (layer, x, y, n, w) => base(layer, x, y, n, w) && room(layer, x, y, job.nets[0], w + 2 * MARGIN) : base
     const bounds = [0, ...cur.vias, cur.centre.length - 1]
     let best: { k: number; span: FreeSpan } | null = null
@@ -97,31 +117,45 @@ export function tunePairCentre(job: PairJob, extra: number, ctx: PairTuneContext
       const span = longestFreeSegment(sec, ok, cw, A + MARGIN, { layer: cur.layers[k], net: job.nets[0], step: 0.1, clearance: job.copper + MARGIN })
       if (span && (!best || span.length > best.span.length + 1e-9)) best = { k, span }
     }
-    if (!best) { ai++; continue }
+    if (!best) {
+      ai++
+      continue
+    }
     const { span } = best
     const at = bounds[best.k] + span.index
     // never strand a leftover below the smallest bump
-    const cap = meanderCapacity(span.length, { ...shape, amplitude: A }), sm = smallestBump(rmin)
+    const cap = meanderCapacity(span.length, { ...shape, amplitude: A }),
+      sm = smallestBump(rmin)
     const ask = cap < left - EPS && left - cap < sm && left - sm >= sm ? left - sm : left
     const p = place(cur, at, span, ask, A)
-    if (!p || p.L <= L + EPS) { ai++; continue }
+    if (!p || p.L <= L + EPS) {
+      ai++
+      continue
+    }
     last = { base: cur, L, at, span, A, added: p.added }
-    laid = p.laid; cur = p.laid.job; L = p.L
+    laid = p.laid
+    cur = p.laid.job
+    L = p.L
   }
   if (extra - (L - L0) > tol) enlarge(extra - (L - L0))
   const added = L - L0
-  const small = extra - added < smallestBump(rmin) ? `, below the smallest U bump of ${smallestBump(rmin).toFixed(2)} mm` : why ? `: ${why}` : ': the centre line had no room for more'
+  const small =
+    extra - added < smallestBump(rmin) ? `, below the smallest U bump of ${smallestBump(rmin).toFixed(2)} mm` : why ? `: ${why}` : ': the centre line had no room for more'
   return { job: cur, laid, added, ...(extra - added > tol ? { note: `pair tuning added ${added.toFixed(2)} of ${extra.toFixed(2)} mm${small}` } : {}) }
 }
 
 /** Distance from a point to a pad's copper outline, 0 inside it. */
 function padDist(p: Pad, x: number, y: number): number {
   const r = p.poly
-  let inside = false, d = Infinity
+  let inside = false,
+    d = Infinity
   for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
-    const a = r[j], b = r[i]
-    if ((b[1] > y) !== (a[1] > y) && x < ((a[0] - b[0]) * (y - b[1])) / (a[1] - b[1]) + b[0]) inside = !inside
-    const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy
+    const a = r[j],
+      b = r[i]
+    if (b[1] > y !== a[1] > y && x < ((a[0] - b[0]) * (y - b[1])) / (a[1] - b[1]) + b[0]) inside = !inside
+    const dx = b[0] - a[0],
+      dy = b[1] - a[1],
+      l2 = dx * dx + dy * dy
     const t = l2 < 1e-18 ? 0 : Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l2))
     d = Math.min(d, Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy))
   }

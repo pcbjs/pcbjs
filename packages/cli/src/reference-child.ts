@@ -10,6 +10,14 @@ try {
   const r = await compileReferenced(entry, meshDir)
   writeFileSync(out, JSON.stringify({ ok: true, ...r }))
 } catch (e: any) {
-  writeFileSync(out, JSON.stringify({ ok: false, error: String(e?.message ?? e).replace(/\x1b\[[0-9;]*m/g, '').split('\n')[0] }))
+  writeFileSync(
+    out,
+    JSON.stringify({
+      ok: false,
+      error: String(e?.message ?? e)
+        .replace(/\x1b\[[0-9;]*m/g, '')
+        .split('\n')[0],
+    }),
+  )
 }
 process.exit(0)

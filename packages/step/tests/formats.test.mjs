@@ -11,7 +11,15 @@ const bytes = name => new Uint8Array(readFileSync(fx(name)))
 const near = (a, b, tol, msg) => a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < tol, `${msg ?? ''} got ${a}, want ${b}`))
 
 test('the format comes from the extension, any case, else from the first bytes', () => {
-  for (const [n, f] of [['a.step', 'step'], ['A.STP', 'step'], ['x.gltf', 'gltf'], ['x.GLB', 'glb'], ['R_0603.wrl', 'wrl'], ['https://h/x.stp?dl=1', 'step']]) assert.equal(formatOfName(n), f, n)
+  for (const [n, f] of [
+    ['a.step', 'step'],
+    ['A.STP', 'step'],
+    ['x.gltf', 'gltf'],
+    ['x.GLB', 'glb'],
+    ['R_0603.wrl', 'wrl'],
+    ['https://h/x.stp?dl=1', 'step'],
+  ])
+    assert.equal(formatOfName(n), f, n)
   assert.equal(formatOfName('x.zip'), null)
   assert.equal(formatOfContent(bytes('pin.step')), 'step')
   assert.equal(formatOfContent(bytes('box.glb')), 'glb')
@@ -37,7 +45,10 @@ test('glTF: metres and y up become millimetres and z up, with the node transform
     // every normal points out of the box: the top faces up
     const { positions: p, normals: n } = m.meshes[0]
     for (let i = 0; i < p.length; i += 3) if (Math.abs(p[i + 2] - 1) < 1e-4 && Math.abs(n[i + 2]) > 0.9) assert.ok(n[i + 2] > 0, `${name} top normal ${n[i + 2]}`)
-    for (let i = 0; i < p.length; i += 3) { const c = [p[i], p[i + 1], p[i + 2] - 0.5]; assert.ok(c[0] * n[i] + c[1] * n[i + 1] + c[2] * n[i + 2] > 0, `${name} normal inward at ${c}`) }
+    for (let i = 0; i < p.length; i += 3) {
+      const c = [p[i], p[i + 1], p[i + 2] - 0.5]
+      assert.ok(c[0] * n[i] + c[1] * n[i + 1] + c[2] * n[i + 2] > 0, `${name} normal inward at ${c}`)
+    }
   }
 })
 
@@ -74,7 +85,8 @@ test('VRML 2: KiCad tenths of an inch become millimetres, DEF and USE are follow
 
 test('modelToMesh reads each format by path or by bytes, and its meshes round trip through the binary', async () => {
   for (const name of ['box.gltf', 'box.glb', 'box.wrl']) {
-    const a = await modelToMesh(fx(name)), b = await modelToMesh(bytes(name))
+    const a = await modelToMesh(fx(name)),
+      b = await modelToMesh(bytes(name))
     assert.deepEqual(bounds(a), bounds(b), name)
     assert.deepEqual(bounds(meshFromBinary(meshToBinary(a))), bounds(a))
   }

@@ -18,5 +18,7 @@ test('skills: install copies every skill of @pcbjs/skills, and an unknown action
   }
   try {
     for (const d of ['.claude/skills', 'agents']) assert.ok(existsSync(join(dir, d, 'pcbjs-basics', 'SKILL.md')), d)
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

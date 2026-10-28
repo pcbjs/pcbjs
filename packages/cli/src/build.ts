@@ -13,7 +13,13 @@ import { fabDate } from '@pcbjs/export/fab'
 import { pageHtml, previewPrerendered, safeSegment, scriptJson, siteRoutes, type Rendered } from './prerender.js'
 import { resolveRepo } from './repo.js'
 
-export interface BuildOptions extends OutputOptions { entries?: string[]; root?: string; config?: string; outDir?: string; date?: string }
+export interface BuildOptions extends OutputOptions {
+  entries?: string[]
+  root?: string
+  config?: string
+  outDir?: string
+  date?: string
+}
 
 export async function build(opts: BuildOptions): Promise<void> {
   // createServer would set NODE_ENV to development, giving the builds below Vue's development build
@@ -25,13 +31,19 @@ export async function build(opts: BuildOptions): Promise<void> {
   // every fab set written is read back and compared with its board, see fab-check.ts in @pcbjs/export
   cfg.fabCheck = true
   const state = pluginState(cfg)
-  const say = (line: string) => { if (!opts.quiet) console.log(line) }
+  const say = (line: string) => {
+    if (!opts.quiet) console.log(line)
+  }
   const rel = (p: string) => relative(cfg.root, p) || '.'
 
   // a failed entry does not stop the others
   const errors = new Map<BoardSlot, unknown>()
   const server = await compileServer(cfg, state, { verbose: opts.verbose })
-  try { await compileSlots(server, cfg, state.slots, errors) } finally { await server.close() }
+  try {
+    await compileSlots(server, cfg, state.slots, errors)
+  } finally {
+    await server.close()
+  }
   const broken = state.slots.filter(s => !s.compiled || s.conflict)
   // every entry: one per board, one per target of a board with variants
   const all = state.slots.filter(s => s.compiled && !s.conflict).flatMap(s => s.compiled!) as Compiled[]
@@ -83,10 +95,19 @@ export async function build(opts: BuildOptions): Promise<void> {
   if (prerender) {
     const ssrDir = join(cfg.root, '.pcbjs', 'cache', 'ssr')
     await viteBuild({
-      ...vc, mode: 'production', logLevel: logLevel === 'info' ? 'warn' : logLevel,
+      ...vc,
+      mode: 'production',
+      logLevel: logLevel === 'info' ? 'warn' : logLevel,
       // everything is bundled, Vue included, so the bundle runs from the cache without the project resolving the client's dependencies
       ssr: { ...vc.ssr, noExternal: true },
-      build: { ...vc.build, ssr: join(CLIENT_DIR, 'src', 'entry-server.ts'), outDir: ssrDir, emptyOutDir: true, copyPublicDir: false, rollupOptions: { output: { entryFileNames: 'entry-server.mjs', format: 'es' } } },
+      build: {
+        ...vc.build,
+        ssr: join(CLIENT_DIR, 'src', 'entry-server.ts'),
+        outDir: ssrDir,
+        emptyOutDir: true,
+        copyPublicDir: false,
+        rollupOptions: { output: { entryFileNames: 'entry-server.mjs', format: 'es' } },
+      },
     })
     const data = buildPayload(state)
     pages = await prerenderSite(join(ssrDir, 'entry-server.mjs'), cfg.outDir, cfg.base, data)
@@ -100,7 +121,8 @@ export async function build(opts: BuildOptions): Promise<void> {
     writeFileSync(file, JSON.stringify(c.site))
   }
   writeFileSync(join(cfg.outDir, 'boards.json'), JSON.stringify(boardsIndex(all, state.slots.length === 1), null, 2))
-  const n = state.slots.length, targets = all.length > n ? `, ${all.length} entries` : ''
+  const n = state.slots.length,
+    targets = all.length > n ? `, ${all.length} entries` : ''
   say(`site   ${rel(cfg.outDir)}  ${n} board${n === 1 ? '' : 's'}${targets}${prerender ? `, ${pages.length} pages` : ''}  ${msText(performance.now() - t0)}`)
   console.log(totalLine(state.slots))
   report(pages)
@@ -115,7 +137,7 @@ export const isAbsoluteBase = (base: string): boolean => base.startsWith('/')
 
 /** Render every route with the SSR bundle to `<outDir>/<route>/index.html` and 404.html; returns the routes written. */
 export async function prerenderSite(bundle: string, outDir: string, base: string, data: ReturnType<typeof boardsPayload>): Promise<string[]> {
-  const { render } = await import(pathToFileURL(bundle).href + `?t=${Date.now()}`) as { render: (path: string, data: unknown) => Promise<Rendered> }
+  const { render } = (await import(pathToFileURL(bundle).href + `?t=${Date.now()}`)) as { render: (path: string, data: unknown) => Promise<Rendered> }
   const template = readFileSync(join(outDir, 'index.html'), 'utf8')
   const json = scriptJson(data)
   const b = base.endsWith('/') ? base : base + '/'
@@ -123,7 +145,10 @@ export async function prerenderSite(bundle: string, outDir: string, base: string
   // the root last, since the template is the root's index.html
   const routes = siteRoutes(data)
   for (const segs of [...routes.slice(1), routes[0]]) {
-    if (!segs.every(safeSegment)) { console.warn(`pcbjs: no page for ${segs.join('/')}, the name cannot be a directory; the site still shows it from another page`); continue }
+    if (!segs.every(safeSegment)) {
+      console.warn(`pcbjs: no page for ${segs.join('/')}, the name cannot be a directory; the site still shows it from another page`)
+      continue
+    }
     const url = b + segs.map(encodeURIComponent).join('/')
     const r = await render(url, data)
     const dir = join(outDir, ...segs)
@@ -144,7 +169,8 @@ export async function preview(opts: BuildOptions & { port?: number; host?: strin
   // a prerendered site is served as a static host serves it, a client-rendered one with Vite's index.html fallback
   const prerendered = existsSync(join(cfg.outDir, '404.html')) && isAbsoluteBase(cfg.base)
   const server = await vitePreview({
-    ...vc, preview: { port: opts.port ?? 4173, host: opts.host },
+    ...vc,
+    preview: { port: opts.port ?? 4173, host: opts.host },
     ...(prerendered ? { appType: 'mpa' as const, plugins: [...(vc.plugins ?? []), previewPrerendered(cfg.outDir, cfg.base)] } : {}),
   })
   server.printUrls()

@@ -48,25 +48,37 @@ export function checkClasses(v: unknown, where: string): Record<string, NetClass
     const o = c as Record<string, unknown>
     for (const k of Object.keys(o)) if (!CLASS_KEYS.has(k)) throw new Error(`${at}: unknown field ${JSON.stringify(k)} (known: ${[...CLASS_KEYS].join(', ')})`)
     if (o.clearance !== undefined) clearanceValue(o.clearance, at, false)
-    for (const k of LENGTH_KEYS) if (o[k] !== undefined) {
-      let x: number
-      try { x = mm(o[k] as Length) } catch (e) { throw new Error(`${at}: ${k}: ${(e as Error).message}`) }
-      if (!(Number.isFinite(x) && (k === 'skew' || k === 'uncoupled' || k === 'tolerance' ? x >= 0 : x > 0))) throw new Error(`${at}: ${k} must be a ${k === 'width' || k === 'gap' ? 'positive' : 'non-negative'} length, got ${JSON.stringify(o[k])}`)
-    }
-    if (o.impedance !== undefined && !(typeof o.impedance === 'number' && Number.isFinite(o.impedance) && o.impedance > 0)) throw new Error(`${at}: impedance must be a positive number of ohms, got ${JSON.stringify(o.impedance)}`)
+    for (const k of LENGTH_KEYS)
+      if (o[k] !== undefined) {
+        let x: number
+        try {
+          x = mm(o[k] as Length)
+        } catch (e) {
+          throw new Error(`${at}: ${k}: ${(e as Error).message}`)
+        }
+        if (!(Number.isFinite(x) && (k === 'skew' || k === 'uncoupled' || k === 'tolerance' ? x >= 0 : x > 0)))
+          throw new Error(`${at}: ${k} must be a ${k === 'width' || k === 'gap' ? 'positive' : 'non-negative'} length, got ${JSON.stringify(o[k])}`)
+      }
+    if (o.impedance !== undefined && !(typeof o.impedance === 'number' && Number.isFinite(o.impedance) && o.impedance > 0))
+      throw new Error(`${at}: impedance must be a positive number of ohms, got ${JSON.stringify(o.impedance)}`)
     if (o.via !== undefined) {
       if (!o.via || typeof o.via !== 'object' || Array.isArray(o.via)) throw new Error(`${at}: via must be an object { drill?, size? }`)
       for (const [k, x] of Object.entries(o.via)) {
         if (k !== 'drill' && k !== 'size') throw new Error(`${at}: via has an unknown field ${JSON.stringify(k)}`)
         let n: number
-        try { n = mm(x as Length) } catch (e) { throw new Error(`${at}: via ${k}: ${(e as Error).message}`) }
+        try {
+          n = mm(x as Length)
+        } catch (e) {
+          throw new Error(`${at}: via ${k}: ${(e as Error).message}`)
+        }
         if (!(n > 0)) throw new Error(`${at}: via ${k} must be positive, got ${JSON.stringify(x)}`)
       }
     }
     if (o.neck !== undefined) checkNeck(o.neck, at)
     if (o.corner !== undefined) checkCorner(o.corner, at)
     if (o.teardrops !== undefined) checkTeardrops(o.teardrops, at)
-    if (o.layers !== undefined && !(Array.isArray(o.layers) && o.layers.length && o.layers.every(l => typeof l === 'string'))) throw new Error(`${at}: layers must be a list of copper layer names`)
+    if (o.layers !== undefined && !(Array.isArray(o.layers) && o.layers.length && o.layers.every(l => typeof l === 'string')))
+      throw new Error(`${at}: layers must be a list of copper layer names`)
     if (o.autoroute !== undefined) checkAutoroute(o.autoroute, at)
     if (o.loops !== undefined && typeof o.loops !== 'boolean') throw new Error(`${at}: loops must be true or false, got ${JSON.stringify(o.loops)}`)
   }
@@ -81,8 +93,13 @@ export function checkNeck(v: unknown, at: string): { width?: number; length?: nu
     if (x === undefined) continue
     if (k !== 'width' && k !== 'length') throw new Error(`${at}: neck has an unknown field ${JSON.stringify(k)}, it takes width and length`)
     let n: number
-    try { n = mm(x as Length) } catch (e) { throw new Error(`${at}: neck ${k}: ${(e as Error).message}`) }
-    if (!(Number.isFinite(n) && (k === 'width' ? n > 0 : n >= 0))) throw new Error(`${at}: neck ${k} must be a ${k === 'width' ? 'positive' : 'non-negative'} length, got ${JSON.stringify(x)}`)
+    try {
+      n = mm(x as Length)
+    } catch (e) {
+      throw new Error(`${at}: neck ${k}: ${(e as Error).message}`)
+    }
+    if (!(Number.isFinite(n) && (k === 'width' ? n > 0 : n >= 0)))
+      throw new Error(`${at}: neck ${k} must be a ${k === 'width' ? 'positive' : 'non-negative'} length, got ${JSON.stringify(x)}`)
     out[k] = n
   }
   return out
@@ -95,9 +112,16 @@ export function checkCorner(v: unknown, at: string): { radius?: number | 'none' 
   for (const [k, x] of Object.entries(v)) {
     if (x === undefined) continue
     if (k !== 'radius') throw new Error(`${at}: corner has an unknown field ${JSON.stringify(k)}, it takes radius`)
-    if (x === 'none') { out.radius = 'none'; continue }
+    if (x === 'none') {
+      out.radius = 'none'
+      continue
+    }
     let n: number
-    try { n = mm(x as Length) } catch (e) { throw new Error(`${at}: corner radius: ${(e as Error).message}`) }
+    try {
+      n = mm(x as Length)
+    } catch (e) {
+      throw new Error(`${at}: corner radius: ${(e as Error).message}`)
+    }
     if (!(Number.isFinite(n) && n > 0)) throw new Error(`${at}: corner radius must be a positive length or 'none', got ${JSON.stringify(x)}`)
     out.radius = n
   }
@@ -148,7 +172,10 @@ export function resolveClasses(t: Record<string, NetClass>): Record<string, Reso
     if (c.layers) r.layers = [...c.layers]
     if (c.neck) r.neck = checkNeck(c.neck, `class ${JSON.stringify(name)}`)
     if (c.corner) r.corner = checkCorner(c.corner, `class ${JSON.stringify(name)}`)
-    if (c.teardrops !== undefined) { const t = checkTeardrops(c.teardrops, `class ${JSON.stringify(name)}`); r.teardrops = t === true ? {} : t }
+    if (c.teardrops !== undefined) {
+      const t = checkTeardrops(c.teardrops, `class ${JSON.stringify(name)}`)
+      r.teardrops = t === true ? {} : t
+    }
     if (c.autoroute && Object.keys(c.autoroute).length) r.autoroute = { ...c.autoroute }
     if (c.loops) r.loops = true
     out[name] = r

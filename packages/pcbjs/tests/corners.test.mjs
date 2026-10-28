@@ -18,10 +18,21 @@ afterEach(() => resetDefaults())
 const opts = { routeCache: false }
 const edge = (w = 30, hh = 20) => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w, h: hh })
 const smd = (ref, x, y, net, size = 1) => h('footprint', { ref, at: [x, y], nets: { 1: net } }, h('pad', { num: 1, size, type: 'smd' }))
-const two = (ref, x, y, a, b) => h('footprint', { ref, at: [x, y], nets: { 1: a, 2: b } },
-  h('pad', { num: 1, at: [-0.25, 0], size: [0.3, 1], type: 'smd' }), h('pad', { num: 2, at: [0.25, 0], size: [0.3, 1], type: 'smd' }))
+const two = (ref, x, y, a, b) =>
+  h(
+    'footprint',
+    { ref, at: [x, y], nets: { 1: a, 2: b } },
+    h('pad', { num: 1, at: [-0.25, 0], size: [0.3, 1], type: 'smd' }),
+    h('pad', { num: 2, at: [0.25, 0], size: [0.3, 1], type: 'smd' }),
+  )
 const arcsOf = b => b.items.filter(i => i.kind === 'track').flatMap(t => (t.prims ?? []).filter(p => p.kind === 'arc').map(p => ({ ...p, t })))
-const clean = b => { assert.deepEqual(b.drc.filter(d => d.rule !== 'single-pad').map(d => `${d.rule}: ${d.message}`), []); assert.equal(b.unconnected, 0) }
+const clean = b => {
+  assert.deepEqual(
+    b.drc.filter(d => d.rule !== 'single-pad').map(d => `${d.rule}: ${d.message}`),
+    [],
+  )
+  assert.equal(b.unconnected, 0)
+}
 
 test('builder: .corner() takes a radius or none; a bad one is a TypeError, a bad class corner a compile error', () => {
   assert.equal(route('A.1', 'B.1').corner(0.5).props.corner, 0.5)
@@ -44,29 +55,58 @@ test('single routes: square by default; .corner(r) rounds the corners between ma
   clean(rd)
   // the class corner applies to its routes, and .corner('none') turns it off
   const { X } = nets({ X: { class: 'r' } })
-  const cl = compileBoard(h(PCB, { name: 'S', classes: { r: { corner: { radius: 0.5 } } } }, edge(), smd('A', 5, 5, X), smd('B', 25, 15, X), route('A.1', 'B.1', 'H 15 V 15 Z').width(0.25)), opts)
+  const cl = compileBoard(
+    h(PCB, { name: 'S', classes: { r: { corner: { radius: 0.5 } } } }, edge(), smd('A', 5, 5, X), smd('B', 25, 15, X), route('A.1', 'B.1', 'H 15 V 15 Z').width(0.25)),
+    opts,
+  )
   assert.equal(arcsOf(cl).length, 2)
-  const off = compileBoard(h(PCB, { name: 'S', classes: { r: { corner: { radius: 0.5 } } } }, edge(), smd('A', 5, 5, X), smd('B', 25, 15, X), route('A.1', 'B.1', 'H 15 V 15 Z').width(0.25).corner('none')), opts)
+  const off = compileBoard(
+    h(
+      PCB,
+      { name: 'S', classes: { r: { corner: { radius: 0.5 } } } },
+      edge(),
+      smd('A', 5, 5, X),
+      smd('B', 25, 15, X),
+      route('A.1', 'B.1', 'H 15 V 15 Z').width(0.25).corner('none'),
+    ),
+    opts,
+  )
   assert.equal(arcsOf(off).length, 0)
 })
 
 test('single routes: an arc that would meet a pad on the inside of the corner shrinks, then chamfers; the copper never moves onto it', () => {
   // a pad of another net just inside the corner at (15, 5): a 2 mm arc would cut across it
-  const b = compileBoard(h(PCB, { name: 'S' }, edge(), smd('A', 5, 5, 'X'), smd('B', 25, 15, 'X'), smd('C', 14.2, 5.8, 'Y', 0.4),
-    route('A.1', 'B.1', 'H 15 V 15 Z').width(0.25).corner(2)), opts)
-  const a = arcsOf(b), first = a.find(p => p.center[0] < 15 && p.center[1] < 10), second = a.find(p => p !== first)
+  const b = compileBoard(
+    h(PCB, { name: 'S' }, edge(), smd('A', 5, 5, 'X'), smd('B', 25, 15, 'X'), smd('C', 14.2, 5.8, 'Y', 0.4), route('A.1', 'B.1', 'H 15 V 15 Z').width(0.25).corner(2)),
+    opts,
+  )
+  const a = arcsOf(b),
+    first = a.find(p => p.center[0] < 15 && p.center[1] < 10),
+    second = a.find(p => p !== first)
   assert.ok(first && arcRadius(first) < 2 - 1e-6 && arcRadius(first) >= 0.25 - 1e-9, a.map(arcRadius).join(' '))
   near(arcRadius(second), 2, 1e-6)
-  assert.deepEqual(b.drc.filter(d => d.rule === 'clearance'), [])
+  assert.deepEqual(
+    b.drc.filter(d => d.rule === 'clearance'),
+    [],
+  )
 })
 
 test('pairs: every corner drawn by hand is rounded on the centre line by the pitch, both tracks concentric; .corner("none") keeps them square', () => {
-  const kids = c => [two('J1', 5, 3, 'DP', 'DN'), h('footprint', { ref: 'J2', at: '25 15 90deg', nets: { 1: 'DP', 2: 'DN' } },
-    h('pad', { num: 1, at: [-0.25, 0], size: [0.3, 1], type: 'smd' }), h('pad', { num: 2, at: [0.25, 0], size: [0.3, 1], type: 'smd' })),
-  c(route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'V 15 Z').width(0.2).gap(0.2))]
+  const kids = c => [
+    two('J1', 5, 3, 'DP', 'DN'),
+    h(
+      'footprint',
+      { ref: 'J2', at: '25 15 90deg', nets: { 1: 'DP', 2: 'DN' } },
+      h('pad', { num: 1, at: [-0.25, 0], size: [0.3, 1], type: 'smd' }),
+      h('pad', { num: 2, at: [0.25, 0], size: [0.3, 1], type: 'smd' }),
+    ),
+    c(route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'V 15 Z').width(0.2).gap(0.2)),
+  ]
   const b = compileBoard(h(PCB, { name: 'P' }, edge(), ...kids(r => r)), opts)
   // the corner: an arc on each track about one centre, the pitch of 0.4 less and more the half pitch
-  const a = arcsOf(b), outer = a.find(p => Math.abs(arcRadius(p) - 0.6) < 1e-6), inner = a.find(p => Math.abs(arcRadius(p) - 0.2) < 1e-6 && p.t.net !== outer.t.net)
+  const a = arcsOf(b),
+    outer = a.find(p => Math.abs(arcRadius(p) - 0.6) < 1e-6),
+    inner = a.find(p => Math.abs(arcRadius(p) - 0.2) < 1e-6 && p.t.net !== outer.t.net)
   assert.ok(outer && inner)
   near(Math.hypot(outer.center[0] - inner.center[0], outer.center[1] - inner.center[1]), 0, 1e-6)
   // a single right angle leaves the outer track pi h longer, which a U bump on the inner track takes: four more arcs, none
@@ -81,8 +121,17 @@ test('pairs: every corner drawn by hand is rounded on the centre line by the pit
 })
 
 test('pairs: a via pair in a run with rounded corners is clean copper, each track one polyline per layer run, the vias on them', () => {
-  const b = compileBoard(h(PCB, { name: 'P' }, edge(), two('J1', 5, 3, 'DP', 'DN'), two('J2', 25, 17, 'DP', 'DN'),
-    route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'V 6 @B.Cu V 10 H 18 @F.Cu H 25 Z').width(0.2).gap(0.2).vias({ drill: 0.3, size: 0.6 })), opts)
+  const b = compileBoard(
+    h(
+      PCB,
+      { name: 'P' },
+      edge(),
+      two('J1', 5, 3, 'DP', 'DN'),
+      two('J2', 25, 17, 'DP', 'DN'),
+      route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'V 6 @B.Cu V 10 H 18 @F.Cu H 25 Z').width(0.2).gap(0.2).vias({ drill: 0.3, size: 0.6 }),
+    ),
+    opts,
+  )
   clean(b)
   assert.deepEqual(boardShapeIssues(b), [])
   const vias = b.items.filter(i => i.kind === 'via')
@@ -94,7 +143,7 @@ test('pairs: a via pair in a run with rounded corners is clean copper, each trac
   assert.ok(arcsOf(b).length >= 2)
 })
 
-test('examples/usb-hub: DRC clean, and every route\'s copper is free of overlaps and notches', async () => {
+test("examples/usb-hub: DRC clean, and every route's copper is free of overlaps and notches", async () => {
   const R = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
   const { resolveConfig } = await import('@pcbjs/cli/config')
   const { pluginState } = await import('@pcbjs/cli/plugin')
@@ -102,11 +151,21 @@ test('examples/usb-hub: DRC clean, and every route\'s copper is free of overlaps
   const cfg = await resolveConfig([], 'build', undefined, resolve(R, '../examples/usb-hub'))
   const state = pluginState(cfg)
   const server = await compileServer(cfg, state, {})
-  try { await compileSlots(server, cfg, state.slots, new Map()) } finally { await server.close() }
+  try {
+    await compileSlots(server, cfg, state.slots, new Map())
+  } finally {
+    await server.close()
+  }
   const [b] = state.slots.flatMap(s => s.compiled ?? []).map(c => c.board)
   assert.ok(b, 'usb-hub compiles')
-  assert.deepEqual(b.drc.filter(d => d.severity !== 'info').map(d => `${d.rule}: ${d.message}`), [])
-  assert.deepEqual(boardShapeIssues(b).map(i => `${i.route} ${i.kind}: ${i.message}`), [])
+  assert.deepEqual(
+    b.drc.filter(d => d.severity !== 'info').map(d => `${d.rule}: ${d.message}`),
+    [],
+  )
+  assert.deepEqual(
+    boardShapeIssues(b).map(i => `${i.route} ${i.kind}: ${i.message}`),
+    [],
+  )
   // the hub legs drawn with H and L are rounded, and no pair track carries a trapezoid: every bump corner is an arc or a chamfer
   assert.ok(arcsOf(b).filter(p => p.t.pair).length >= 12)
 })

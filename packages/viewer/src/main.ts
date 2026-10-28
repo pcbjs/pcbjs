@@ -28,7 +28,7 @@ const q = parseIdeQuery(location.search)
 const load = import.meta.hot ? startLoad(import.meta.hot, window.__PCBJS_BOOT__ ?? null) : null
 const boot = load ? createApp(Boot).provide(LOAD, load) : null
 // the server inlines the first paint of the boot screen, see boot.css
-const bootEl = boot ? document.getElementById('pcbjs-boot') ?? Object.assign(document.body.appendChild(document.createElement('div')), { className: 'boot' }) : null
+const bootEl = boot ? (document.getElementById('pcbjs-boot') ?? Object.assign(document.body.appendChild(document.createElement('div')), { className: 'boot' })) : null
 if (boot) boot.mount(bootEl!)
 
 /** The page's data; a workspace dev server with several scopes serves each one under /<scope>/. */
@@ -36,7 +36,11 @@ async function siteData(): Promise<{ data: SiteState; init: Partial<StoreInit> }
   const { boards, entries, errors, single, workspace } = await import('virtual:pcbjs/board')
   const own: SiteState = window.__PCBJS_DATA__ ?? { boards, single, errors, entries }
   if (!workspace || workspace.single) return { data: own, init: { workspace } }
-  const slug = scopeOfPath(location.pathname, workspace.scopes.map(s => s.slug)) ?? (q.ide ? workspace.displayed : null)
+  const slug =
+    scopeOfPath(
+      location.pathname,
+      workspace.scopes.map(s => s.slug),
+    ) ?? (q.ide ? workspace.displayed : null)
   if (!slug) return { data: { boards: [], single: false, errors: {}, entries: {} }, init: { workspace, scope: null } }
   const r = await fetch(`/__pcbjs/scope/${encodeURIComponent(slug)}`)
   const body = r.ok ? await r.json() : { boards: [], single: true, errors: { [slug]: `no such project: ${slug}` }, entries: {} }

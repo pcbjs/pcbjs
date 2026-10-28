@@ -16,11 +16,14 @@ const shown = ref(!props.lazy)
 let observer: IntersectionObserver | null = null
 onMounted(() => {
   if (shown.value || !root.value) return
-  observer = new IntersectionObserver(entries => {
-    if (!entries.some(e => e.isIntersecting)) return
-    shown.value = true
-    observer?.disconnect()
-  }, { rootMargin: '400px' })
+  observer = new IntersectionObserver(
+    entries => {
+      if (!entries.some(e => e.isIntersecting)) return
+      shown.value = true
+      observer?.disconnect()
+    },
+    { rootMargin: '400px' },
+  )
   observer.observe(root.value)
 })
 onBeforeUnmount(() => observer?.disconnect())
@@ -33,6 +36,12 @@ onBeforeUnmount(() => observer?.disconnect())
 </template>
 
 <style scoped>
-.board-svg { width: 100%; }
-.board-svg > :deep(svg) { display: block; width: 100%; height: 100%; }
+.board-svg {
+  width: 100%;
+}
+.board-svg > :deep(svg) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 </style>

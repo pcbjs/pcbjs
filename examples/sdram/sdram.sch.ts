@@ -13,37 +13,109 @@ export const D = bus('D', 16, SD)
 export const RAM_DQ = [4, 5, 6, 7, 0, 1, 2, 3, 15, 14, 13, 12, 11, 10, 9, 8] as const
 export const A = bus('A', 13, SD)
 export const { BA0, BA1, SDCLK, SDCKE, SDNE, SDNRAS, SDNCAS, SDNWE, NBL0, NBL1 } = nets({
-  BA0: SD, BA1: SD, SDCLK: SD, SDCKE: SD, SDNE: SD, SDNRAS: SD, SDNCAS: SD, SDNWE: SD, NBL0: SD, NBL1: SD,
+  BA0: SD,
+  BA1: SD,
+  SDCLK: SD,
+  SDCKE: SD,
+  SDNE: SD,
+  SDNRAS: SD,
+  SDNCAS: SD,
+  SDNWE: SD,
+  NBL0: SD,
+  NBL1: SD,
 })
 export const { GND, VBUS, V3V3, VCAP1, VCAP2, NRST, BOOT0, OSC_IN, OSC_OUT, CC1, CC2 } = nets()
 export const { USB_DP, USB_DN } = nets({ USB_DP: { class: 'usb' }, USB_DN: { class: 'usb' } })
 
 // the FMC SDRAM pins of the F429
 const FMC: Record<string, Net> = {
-  PD14: D[0], PD15: D[1], PD0: D[2], PD1: D[3], PE7: D[4], PE8: D[5], PE9: D[6], PE10: D[7],
-  PE11: D[8], PE12: D[9], PE13: D[10], PE14: D[11], PE15: D[12], PD8: D[13], PD9: D[14], PD10: D[15],
-  PF0: A[0], PF1: A[1], PF2: A[2], PF3: A[3], PF4: A[4], PF5: A[5], PF12: A[6], PF13: A[7], PF14: A[8], PF15: A[9],
-  PG0: A[10], PG1: A[11], PG2: A[12], PG4: BA0, PG5: BA1, PG8: SDCLK, PG15: SDNCAS, PF11: SDNRAS, PC0: SDNWE,
-  PC2: SDNE, PC3: SDCKE, PE0: NBL0, PE1: NBL1,
+  PD14: D[0],
+  PD15: D[1],
+  PD0: D[2],
+  PD1: D[3],
+  PE7: D[4],
+  PE8: D[5],
+  PE9: D[6],
+  PE10: D[7],
+  PE11: D[8],
+  PE12: D[9],
+  PE13: D[10],
+  PE14: D[11],
+  PE15: D[12],
+  PD8: D[13],
+  PD9: D[14],
+  PD10: D[15],
+  PF0: A[0],
+  PF1: A[1],
+  PF2: A[2],
+  PF3: A[3],
+  PF4: A[4],
+  PF5: A[5],
+  PF12: A[6],
+  PF13: A[7],
+  PF14: A[8],
+  PF15: A[9],
+  PG0: A[10],
+  PG1: A[11],
+  PG2: A[12],
+  PG4: BA0,
+  PG5: BA1,
+  PG8: SDCLK,
+  PG15: SDNCAS,
+  PF11: SDNRAS,
+  PC0: SDNWE,
+  PC2: SDNE,
+  PC3: SDCKE,
+  PE0: NBL0,
+  PE1: NBL1,
 }
 const USED: Record<string, Net> = {
   ...FMC,
-  VDD: V3V3, VBAT: V3V3, VDDA: V3V3, VREF: V3V3, PDR_ON: V3V3, VSS: GND, VSSA: GND, VCAP1, VCAP2,
-  PH0: OSC_IN, PH1: OSC_OUT, NRST, BOOT0, PA11: USB_DN, PA12: USB_DP,
+  VDD: V3V3,
+  VBAT: V3V3,
+  VDDA: V3V3,
+  VREF: V3V3,
+  PDR_ON: V3V3,
+  VSS: GND,
+  VSSA: GND,
+  VCAP1,
+  VCAP2,
+  PH0: OSC_IN,
+  PH1: OSC_OUT,
+  NRST,
+  BOOT0,
+  PA11: USB_DN,
+  PA12: USB_DP,
 }
 type McuPin = (typeof F429_LQFP144_PINS)[number]
 // every GPIO the board does not use is left open on purpose
 const pins = Object.fromEntries(F429_LQFP144_PINS.map(p => [p, USED[p] ?? NC])) as Record<McuPin, Net | typeof NC>
 export const U1 = STM32F429('STM32F429ZIT6').source({ MPN: 'STM32F429ZIT6', Manufacturer: 'STMicroelectronics' }).connect(pins)
 
-export const U2 = SDRAM_TSOP54('W9825G6KH-6I').source({ MPN: 'W9825G6KH-6I', Manufacturer: 'Winbond', 'MPN:LCSC': 'C62379' }).connect({
-  ...Object.fromEntries(RAM_DQ.map((bit, i) => [`DQ${i}`, D[bit]])), ...Object.fromEntries(A.map((n, i) => [`A${i}`, n])),
-  BA0, BA1, CLK: SDCLK, CKE: SDCKE, CS: SDNE, RAS: SDNRAS, CAS: SDNCAS, WE: SDNWE, LDQM: NBL0, UDQM: NBL1,
-  VDD: V3V3, VDDQ: V3V3, VSS: GND, VSSQ: GND,
-} as any)
+export const U2 = SDRAM_TSOP54('W9825G6KH-6I')
+  .source({ MPN: 'W9825G6KH-6I', Manufacturer: 'Winbond', 'MPN:LCSC': 'C62379' })
+  .connect({
+    ...Object.fromEntries(RAM_DQ.map((bit, i) => [`DQ${i}`, D[bit]])),
+    ...Object.fromEntries(A.map((n, i) => [`A${i}`, n])),
+    BA0,
+    BA1,
+    CLK: SDCLK,
+    CKE: SDCKE,
+    CS: SDNE,
+    RAS: SDNRAS,
+    CAS: SDNCAS,
+    WE: SDNWE,
+    LDQM: NBL0,
+    UDQM: NBL1,
+    VDD: V3V3,
+    VDDQ: V3V3,
+    VSS: GND,
+    VSSQ: GND,
+  } as any)
 
 // USB-C for power and full-speed data, 5.1k pull-downs on CC for a 5 V sink
-export const J1 = USBC('full16', 'TYPE-C-31-M-12').source({ MPN: 'TYPE-C-31-M-12', Manufacturer: 'HRO', 'MPN:LCSC': 'C165948' })
+export const J1 = USBC('full16', 'TYPE-C-31-M-12')
+  .source({ MPN: 'TYPE-C-31-M-12', Manufacturer: 'HRO', 'MPN:LCSC': 'C165948' })
   .connect({ GND, VBUS, CC1, CC2, DP: USB_DP, DN: USB_DN, SBU1: NC, SBU2: NC, SHIELD: GND })
 export const R_CC1 = R0603('5k1').connect(CC1, GND)
 export const R_CC2 = R0603('5k1').connect(CC2, GND)

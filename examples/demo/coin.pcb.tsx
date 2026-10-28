@@ -27,7 +27,9 @@ export default (
     {route(Coin.TP1[1]).Z(Coin.TP2[1]).width(0.5)}
 
     {/* silk */}
-    <text layer="F.SilkS" at="10 14" size={1}>Coin · pcbjs</text>
+    <text layer="F.SilkS" at="10 14" size={1}>
+      Coin · pcbjs
+    </text>
     <Brand at="10 5.3" height={4} />
   </PCB>
 )

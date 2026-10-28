@@ -66,7 +66,6 @@ Every pad lands at KiCad's position, with the half turn added on each back part.
 
 ## Import conventions
 
-
 - A board footprint returns to its own frame: KiCad stores pad and text angles absolute, a back part's children flipped and footprint zones in board coordinates.
 - A back part is placed `side="B"` at KiCad's angle plus 180, as kicad.md explains, and its footprint is written front side up, so one module serves both sides.
 - Text keeps its anchor: left and right justification become `anchor`, and `at` moves to pcbjs's vertical centre. Back text is mirrored by its layer.

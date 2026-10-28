@@ -5,8 +5,9 @@ import { esc } from './boot-screen.js'
 import { RETRY_MS, useLoad } from './load'
 
 const v = useLoad()
-const actions = `<div class="load-card"><p>Start it again in <code>${esc(v?.boot?.root ?? 'the project folder')}</code>:</p><pre>${esc(v?.boot?.command ?? 'pcbjs dev')}</pre>`
-  + `${v?.boot ? `<p>A running server writes <code>${esc(v.boot.devJson)}</code>.</p>` : ''}<p>Trying again every ${RETRY_MS / 1000} s; the page reloads once it answers.</p></div>`
+const actions =
+  `<div class="load-card"><p>Start it again in <code>${esc(v?.boot?.root ?? 'the project folder')}</code>:</p><pre>${esc(v?.boot?.command ?? 'pcbjs dev')}</pre>` +
+  `${v?.boot ? `<p>A running server writes <code>${esc(v.boot.devJson)}</code>.</p>` : ''}<p>Trying again every ${RETRY_MS / 1000} s; the page reloads once it answers.</p></div>`
 </script>
 
 <template>

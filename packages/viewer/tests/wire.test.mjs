@@ -4,7 +4,12 @@ import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { gridSegs, outlineSegs } from '../src/scene/wire.ts'
 
-const rect = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+const rect = (x0, y0, x1, y1) => [
+  [x0, y0],
+  [x1, y0],
+  [x1, y1],
+  [x0, y1],
+]
 const count = segs => segs.length / 4
 
 test('the outline is one segment per edge of every ring, cutouts included', () => {
@@ -26,7 +31,13 @@ test('a cutout splits the lines across it, so the hole stays open', () => {
   assert.equal(count(g), 5 + 3 + 2)
   const at15 = []
   for (let i = 0; i < g.length; i += 4) if (g[i] === 15 && g[i + 2] === 15) at15.push([g[i + 1], g[i + 3]].sort((a, b) => a - b))
-  assert.deepEqual(at15.sort((a, b) => a[0] - b[0]), [[-20, -14], [-6, 0]])
+  assert.deepEqual(
+    at15.sort((a, b) => a[0] - b[0]),
+    [
+      [-20, -14],
+      [-6, 0],
+    ],
+  )
 })
 
 test('no rings or no step, no grid', () => {

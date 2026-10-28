@@ -34,11 +34,20 @@ const MARGIN = 0.01
 
 /** Place the vias of every stitch job on a filled board and refill the pours they change. Returns `stitch-empty` findings. */
 export function stitchBoard(board: Board, jobs: readonly StitchJob[]): DrcMarker[] {
-  const added: Via[] = [], out: DrcMarker[] = []
+  const added: Via[] = [],
+    out: DrcMarker[] = []
   for (const job of jobs) {
     const vias = placeStitches(board, job)
     added.push(...vias)
-    if (!vias.length) out.push({ severity: 'info', rule: 'stitch-empty', message: `stitch() of ${job.net} placed no via: ${emptyWhy(board, job)}`, at: job.area ? centre(job.area) : [board.bbox.x + board.bbox.w / 2, board.bbox.y + board.bbox.h / 2], net: job.net, ...(job.src ? { src: job.src } : {}) })
+    if (!vias.length)
+      out.push({
+        severity: 'info',
+        rule: 'stitch-empty',
+        message: `stitch() of ${job.net} placed no via: ${emptyWhy(board, job)}`,
+        at: job.area ? centre(job.area) : [board.bbox.x + board.bbox.w / 2, board.bbox.y + board.bbox.h / 2],
+        net: job.net,
+        ...(job.src ? { src: job.src } : {}),
+      })
   }
   if (added.length) {
     const touched = touchedZones(board, added)
@@ -47,7 +56,10 @@ export function stitchBoard(board: Board, jobs: readonly StitchJob[]): DrcMarker
   return out
 }
 
-const centre = (rings: Ring[]): Pt => { const b = bbox(rings); return [b.x + b.w / 2, b.y + b.h / 2] }
+const centre = (rings: Ring[]): Pt => {
+  const b = bbox(rings)
+  return [b.x + b.w / 2, b.y + b.h / 2]
+}
 
 function emptyWhy(board: Board, job: StitchJob): string {
   const cu = copperLayers(board.copper)
@@ -59,7 +71,8 @@ function emptyWhy(board: Board, job: StitchJob): string {
 function placeStitches(board: Board, job: StitchJob): Via[] {
   const cu = copperLayers(board.copper)
   const span: [string, string] = [cu[0], cu[cu.length - 1]]
-  const R = job.size / 2, rules = board.rules
+  const R = job.size / 2,
+    rules = board.rules
   let region: Ring[] | null = null
   for (const l of job.layers ?? cu) {
     const fill = board.items.filter((i): i is Zone => i.kind === 'zone' && i.net === job.net && i.layer === l).flatMap(z => polysToRings(z.fill))
@@ -111,7 +124,8 @@ function placeStitches(board: Board, job: StitchJob): Via[] {
       if (yard.length && near(bbox(yard), reach)) cuts.push(polysToRings(offset(yard, R + MARGIN)))
     }
   }
-  const inRegion = new PointIn(region), cutGrid = new Grid(cuts.map(bbox))
+  const inRegion = new PointIn(region),
+    cutGrid = new Grid(cuts.map(bbox))
   const free = (p: Pt) => inRegion.has(p) && !cutGrid.query({ x: p[0], y: p[1], w: 0, h: 0 }).some(k => inside(cuts[k], p))
 
   // a via or through-hole pad of the net suppresses the lattice points within the pitch
@@ -120,7 +134,9 @@ function placeStitches(board: Board, job: StitchJob): Via[] {
     if (it.net !== job.net) continue
     if (it.kind === 'via' || (it.kind === 'pad' && it.drill && copperLayersOf(it, cu).length > 1)) held.push(it.at)
   }
-  const pitch = job.pitch, snap = pitch / 2, step = job.grid ?? Math.min(0.1, pitch / 20)
+  const pitch = job.pitch,
+    snap = pitch / 2,
+    step = job.grid ?? Math.min(0.1, pitch / 20)
   // anchored to the board or the origin, so a change elsewhere does not shift the lattice
   const [ox, oy] = job.origin ?? (job.grid ? [0, 0] : [board.bbox.x + pitch / 2, board.bbox.y + pitch / 2])
   const onGrid = (v: number, o: number) => (job.grid ? o + Math.round((v - o) / job.grid) * job.grid : v)
@@ -130,8 +146,10 @@ function placeStitches(board: Board, job: StitchJob): Via[] {
   offsets.sort((a, b) => Math.hypot(a[0], a[1]) - Math.hypot(b[0], b[1]))
   const placed: Pt[] = []
   const far = (p: Pt, pts: Pt[], d: number) => pts.every(q => Math.hypot(q[0] - p[0], q[1] - p[1]) >= d - 1e-9)
-  const i0 = Math.ceil((box.x - snap - ox) / pitch), i1 = Math.floor((box.x + box.w + snap - ox) / pitch)
-  const j0 = Math.ceil((box.y - snap - oy) / pitch), j1 = Math.floor((box.y + box.h + snap - oy) / pitch)
+  const i0 = Math.ceil((box.x - snap - ox) / pitch),
+    i1 = Math.floor((box.x + box.w + snap - ox) / pitch)
+  const j0 = Math.ceil((box.y - snap - oy) / pitch),
+    j1 = Math.floor((box.y + box.h + snap - oy) / pitch)
   const r4 = (v: number) => Math.round(v * 1e4) / 1e4
   for (let j = j0; j <= j1; j++)
     for (let i = i0; i <= i1; i++) {
@@ -145,7 +163,22 @@ function placeStitches(board: Board, job: StitchJob): Via[] {
       }
     }
   let id = board.items.reduce((m, it) => Math.max(m, it.id), 0) + 1
-  const vias = placed.map(at => ({ kind: 'via', id: id++, layer: span[0], net: job.net, at, drill: job.drill, size: job.size, layers: span, stitch: true, ...(job.src ? { src: job.src } : {}), ...(job.chain ? { chain: job.chain } : {}) }) as Via)
+  const vias = placed.map(
+    at =>
+      ({
+        kind: 'via',
+        id: id++,
+        layer: span[0],
+        net: job.net,
+        at,
+        drill: job.drill,
+        size: job.size,
+        layers: span,
+        stitch: true,
+        ...(job.src ? { src: job.src } : {}),
+        ...(job.chain ? { chain: job.chain } : {}),
+      }) as Via,
+  )
   board.items.push(...vias)
   return vias
 }
@@ -177,15 +210,21 @@ function touchedZones(board: Board, vias: Via[]): Set<Zone> {
   }
   const out = new Set<Zone>()
   for (const z of zones) {
-    const near = viaGrid.query(boxes.get(z)!, reach).map(k => vias[k]).filter(v => copperLayersOf(v, cu).includes(z.layer))
-    if (near.some(v => v.net === z.net ? !!z.islandsRemoved && !within(z, v.at, v.size / 2) : closeTo(z, v.at, gap(z, v)))) out.add(z)
+    const near = viaGrid
+      .query(boxes.get(z)!, reach)
+      .map(k => vias[k])
+      .filter(v => copperLayersOf(v, cu).includes(z.layer))
+    if (near.some(v => (v.net === z.net ? !!z.islandsRemoved && !within(z, v.at, v.size / 2) : closeTo(z, v.at, gap(z, v))))) out.add(z)
   }
   const hits = (a: Box, b: Box) => a.x <= b.x + b.w && a.x + a.w >= b.x && a.y <= b.y + b.h && a.y + a.h >= b.y
   for (let grew = true; grew;) {
     grew = false
     for (const z of zones) {
       if (out.has(z)) continue
-      if ([...out].some(t => t.layer === z.layer && t.priority >= z.priority && hits(boxes.get(t)!, boxes.get(z)!))) { out.add(z); grew = true }
+      if ([...out].some(t => t.layer === z.layer && t.priority >= z.priority && hits(boxes.get(t)!, boxes.get(z)!))) {
+        out.add(z)
+        grew = true
+      }
     }
   }
   return out
@@ -193,7 +232,10 @@ function touchedZones(board: Board, vias: Via[]): Set<Zone> {
 
 /** Whether the disc of radius r about c meets a zone's fill. */
 function closeTo(z: Zone, c: Pt, r: number): boolean {
-  return z.fill.some(poly => { const d = edgeDistance(poly, c, r); return d === -1 || d < r })
+  return z.fill.some(poly => {
+    const d = edgeDistance(poly, c, r)
+    return d === -1 || d < r
+  })
 }
 
 /** Whether the disc of radius r about c lies wholly in one piece of a zone's fill, so it holds no removed island. */
@@ -215,7 +257,9 @@ function edgeDistance(poly: Poly, c: Pt, r: number): number {
 }
 
 function segDist(p: Pt, q: Pt, c: Pt): number {
-  const ex = q[0] - p[0], ey = q[1] - p[1], l2 = ex * ex + ey * ey
+  const ex = q[0] - p[0],
+    ey = q[1] - p[1],
+    l2 = ex * ex + ey * ey
   const t = l2 ? Math.max(0, Math.min(1, ((c[0] - p[0]) * ex + (c[1] - p[1]) * ey) / l2)) : 0
   return Math.hypot(p[0] + t * ex - c[0], p[1] + t * ey - c[1])
 }

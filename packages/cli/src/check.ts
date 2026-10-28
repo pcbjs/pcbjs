@@ -6,7 +6,20 @@ import { viteConfig } from './vite.js'
 import type { PluginState } from './plugin.js'
 import { compileEntry, type Compiled } from './project.js'
 import { markConflicts, type BoardSlot } from './boards.js'
-import { boardFindings, boardLine, counts, routingLines, diffFindings, diffLine, failing, findingLine, formatFindings, orderFindings, type Finding, type TargetFindings } from '@pcbjs/export/findings'
+import {
+  boardFindings,
+  boardLine,
+  counts,
+  routingLines,
+  diffFindings,
+  diffLine,
+  failing,
+  findingLine,
+  formatFindings,
+  orderFindings,
+  type Finding,
+  type TargetFindings,
+} from '@pcbjs/export/findings'
 import { variantSlug } from '@pcbjs/core/variants'
 import { countModels } from '@pcbjs/core/model-source'
 import { typecheck, typeErrorLine } from './typecheck.js'
@@ -29,7 +42,9 @@ export function logLevelFor(cfg: ResolvedConfig, verbose?: boolean): 'info' | 'w
 export function quietLogger(level: LogLevel): Logger {
   const logger = createLogger(level, { allowClearScreen: false })
   const error = logger.error.bind(logger)
-  logger.error = (msg, o) => { if (!strip(msg).includes('Error when evaluating SSR module')) error(msg, o) }
+  logger.error = (msg, o) => {
+    if (!strip(msg).includes('Error when evaluating SSR module')) error(msg, o)
+  }
   return logger
 }
 
@@ -37,9 +52,13 @@ export function quietLogger(level: LogLevel): Logger {
 export async function compileServer(cfg: ResolvedConfig, state: PluginState, o: { verbose?: boolean; watch?: boolean } = {}): Promise<ViteDevServer> {
   const vc = viteConfig(cfg, state, 'build')
   return createServer({
-    ...vc, logLevel: logLevelFor(cfg, o.verbose), customLogger: quietLogger(logLevelFor(cfg, o.verbose)),
+    ...vc,
+    logLevel: logLevelFor(cfg, o.verbose),
+    customLogger: quietLogger(logLevelFor(cfg, o.verbose)),
     server: { ...vc.server, middlewareMode: true, ws: false, hmr: false, watch: o.watch ? {} : null },
-    optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom', mode: 'production',
+    optimizeDeps: { noDiscovery: true, include: [] },
+    appType: 'custom',
+    mode: 'production',
   })
 }
 
@@ -55,15 +74,23 @@ export function errorText(e: any, verbose?: boolean, root?: string): { line: str
   if (!loc && root && !/\.(m?[jt]sx?):\d+:\d+/.test(first)) {
     for (const l of strip(String(e?.stack ?? '')).split('\n')) {
       const m = /^\s+at (?:.*\()?(?:file:\/\/)?(\/[^()]+?):(\d+):(\d+)\)?$/.exec(l)
-      if (m && m[1].startsWith(root + '/') && !m[1].includes('/node_modules/')) { loc = `${rel(m[1])}:${m[2]}:${m[3]}: `; break }
+      if (m && m[1].startsWith(root + '/') && !m[1].includes('/node_modules/')) {
+        loc = `${rel(m[1])}:${m[2]}:${m[3]}: `
+        break
+      }
     }
   }
   const detail: string[] = []
   if (verbose) {
-    const rest = msg.split('\n').slice(msg.split('\n').indexOf(first) + 1).filter(l => l.trim())
+    const rest = msg
+      .split('\n')
+      .slice(msg.split('\n').indexOf(first) + 1)
+      .filter(l => l.trim())
     detail.push(...rest)
     if (e?.frame) detail.push(...strip(String(e.frame)).split('\n'))
-    const stack = strip(String(e?.stack ?? '')).split('\n').filter(l => /^\s+at /.test(l))
+    const stack = strip(String(e?.stack ?? ''))
+      .split('\n')
+      .filter(l => /^\s+at /.test(l))
     detail.push(...stack)
   }
   return { line: `${loc}${first}`, detail }
@@ -72,7 +99,11 @@ export function errorText(e: any, verbose?: boolean, root?: string): { line: str
 /** Keeps on after a failure; the error of a failed one goes in `slot.error`. */
 export async function compileSlots(server: ViteDevServer, cfg: ResolvedConfig, slots: BoardSlot[], errors: Map<BoardSlot, unknown>): Promise<void> {
   for (const s of slots) {
-    try { s.compiled = await compileEntry(server, cfg, s.entry, false); s.error = null; errors.delete(s) } catch (e: any) {
+    try {
+      s.compiled = await compileEntry(server, cfg, s.entry, false)
+      s.error = null
+      errors.delete(s)
+    } catch (e: any) {
       s.error = strip(String(e?.message ?? e))
       s.compiled = null
       errors.set(s, e)
@@ -104,13 +135,31 @@ export interface ReportBoard {
   pages: string[]
   error?: string
 }
-export interface Report { boards: ReportBoard[] }
+export interface Report {
+  boards: ReportBoard[]
+}
 
 export function reportOf(cfg: ResolvedConfig, s: BoardSlot, e: unknown, extra: { fab?: (c: Compiled) => ReportBoard['fab']; pages?: string[] } = {}): ReportBoard[] {
   const rel = (p: string) => relative(cfg.root, p) || '.'
   if (!s.compiled || s.conflict) {
     const err = s.conflict ?? errorText(e, false, cfg.root).line
-    return [{ name: s.entry.rel, target: null, entry: s.entry.rel, status: 'error', stats: null, timings: null, ms: null, counts: null, drc: [], erc: [], fab: null, pages: [], error: err }]
+    return [
+      {
+        name: s.entry.rel,
+        target: null,
+        entry: s.entry.rel,
+        status: 'error',
+        stats: null,
+        timings: null,
+        ms: null,
+        counts: null,
+        drc: [],
+        erc: [],
+        fab: null,
+        pages: [],
+        error: err,
+      },
+    ]
   }
   return s.compiled.map(c => {
     const b = c.board
@@ -119,10 +168,21 @@ export function reportOf(cfg: ResolvedConfig, s: BoardSlot, e: unknown, extra: {
     const pages = (extra.pages ?? []).filter(p => p === `board/${b.name}` || (slug ? p === `board/${b.name}/${slug}` : false))
     const fab = extra.fab?.(c) ?? null
     return {
-      name: b.name, target: b.variant?.name ?? null, entry: c.entry.rel, status: failing(b) ? 'fail' : 'ok',
-      stats: b.stats, timings: b.timings ?? null, ...(b.routing ? { routing: b.routing } : {}), ms: Math.round(c.ms), counts: counts(b), ...(b.schematic.drawing ? { schematic: b.schematic.drawing.stats } : {}), models: countModels(c.site.footprints),
-      drc: orderFindings(f.filter(x => x.kind === 'drc')), erc: orderFindings(f.filter(x => x.kind === 'erc')),
-      fab: fab ? { dir: rel(fab.dir), zip: rel(fab.zip) } : null, pages,
+      name: b.name,
+      target: b.variant?.name ?? null,
+      entry: c.entry.rel,
+      status: failing(b) ? 'fail' : 'ok',
+      stats: b.stats,
+      timings: b.timings ?? null,
+      ...(b.routing ? { routing: b.routing } : {}),
+      ms: Math.round(c.ms),
+      counts: counts(b),
+      ...(b.schematic.drawing ? { schematic: b.schematic.drawing.stats } : {}),
+      models: countModels(c.site.footprints),
+      drc: orderFindings(f.filter(x => x.kind === 'drc')),
+      erc: orderFindings(f.filter(x => x.kind === 'erc')),
+      fab: fab ? { dir: rel(fab.dir), zip: rel(fab.zip) } : null,
+      pages,
     }
   })
 }
@@ -150,12 +210,25 @@ export function slotLines(s: BoardSlot, e: unknown, o: { root: string; cap: numb
 
 /** Every board's counts added up. */
 export function totalLine(slots: BoardSlot[]): string {
-  let de = 0, dw = 0, un = 0, ee = 0, ew = 0, bad = 0, failed = 0
+  let de = 0,
+    dw = 0,
+    un = 0,
+    ee = 0,
+    ew = 0,
+    bad = 0,
+    failed = 0
   for (const s of slots) {
-    if (!s.compiled || s.conflict) { failed++; continue }
+    if (!s.compiled || s.conflict) {
+      failed++
+      continue
+    }
     for (const c of s.compiled) {
       const k = counts(c.board)
-      de += k.drcErrors; dw += k.drcWarnings; un += k.unconnected; ee += k.ercErrors; ew += k.ercWarnings
+      de += k.drcErrors
+      dw += k.drcWarnings
+      un += k.unconnected
+      ee += k.ercErrors
+      ew += k.ercWarnings
       if (failing(c.board)) bad++
     }
   }
@@ -171,7 +244,11 @@ export function markStale(cfg: ResolvedConfig, entry: string, error: string): st
   const index = join(cfg.outDir, 'boards.json')
   if (!existsSync(index)) return []
   let boards: { name: string; variant?: string; file: string; entry: string }[] = []
-  try { boards = JSON.parse(readFileSync(index, 'utf8')).boards ?? [] } catch { return [] }
+  try {
+    boards = JSON.parse(readFileSync(index, 'utf8')).boards ?? []
+  } catch {
+    return []
+  }
   const marked: string[] = []
   const note = `STALE: the last compile of ${entry} failed, these files are from an earlier build.\n${error}\n`
   for (const b of boards.filter(b => b.entry === entry)) {
@@ -181,7 +258,9 @@ export function markStale(cfg: ResolvedConfig, entry: string, error: string): st
         const data = JSON.parse(readFileSync(file, 'utf8'))
         writeFileSync(file, JSON.stringify({ ...data, stale: true, staleError: error }))
         marked.push(relative(cfg.root, file))
-      } catch { /* not ours */ }
+      } catch {
+        /* not ours */
+      }
     }
     const segs = [b.name, ...(b.variant ? [variantSlug(b.variant)] : [])]
     for (const dir of [join(cfg.fabDir, ...segs), join(cfg.outDir, 'fab', ...segs)]) {
@@ -203,11 +282,19 @@ export async function check(opts: OutputOptions & { cfg: ResolvedConfig; state: 
   const run = async (): Promise<Map<string, Finding[]>> => {
     await compileSlots(server, cfg, state.slots, errors)
     const now = new Map<string, Finding[]>()
-    for (const s of state.slots) if (s.compiled && !s.conflict) for (const c of s.compiled) now.set(`${c.board.name}|${c.board.variant?.name ?? ''}`, boardFindings(c.board, cfg.root))
+    for (const s of state.slots)
+      if (s.compiled && !s.conflict) for (const c of s.compiled) now.set(`${c.board.name}|${c.board.variant?.name ?? ''}`, boardFindings(c.board, cfg.root))
     return now
   }
   const print = () => {
-    for (const s of state.slots) for (const l of slotLines(s, errors.get(s), { root: cfg.root, cap: CHECK_CAP, verbose: opts.verbose, more: opts.json ? `all in ${opts.json}` : 'all with --verbose or --json <file>' })) console.log(l)
+    for (const s of state.slots)
+      for (const l of slotLines(s, errors.get(s), {
+        root: cfg.root,
+        cap: CHECK_CAP,
+        verbose: opts.verbose,
+        more: opts.json ? `all in ${opts.json}` : 'all with --verbose or --json <file>',
+      }))
+        console.log(l)
     console.log(totalLine(state.slots))
     if (opts.json) console.log(`json   ${writeReport(cfg, opts.json, { boards: state.slots.flatMap(s => reportOf(cfg, s, errors.get(s))) })}`)
   }
@@ -215,7 +302,10 @@ export async function check(opts: OutputOptions & { cfg: ResolvedConfig; state: 
     let last = await run()
     print()
     // cached per file, see typecheck.ts
-    const tc = typecheck(cfg.root, cfg.entries.map(e => e.file))
+    const tc = typecheck(
+      cfg.root,
+      cfg.entries.map(e => e.file),
+    )
     if (tc) {
       console.log(`typecheck  ${tc.errors.length ? `${tc.errors.length} error${tc.errors.length === 1 ? '' : 's'}` : 'ok'}  ${Math.round(tc.ms)} ms${tc.cached ? ', cached' : ''}`)
       for (const e of tc.errors.slice(0, 20)) console.log(typeErrorLine(e, opts.verbose))
@@ -224,14 +314,18 @@ export async function check(opts: OutputOptions & { cfg: ResolvedConfig; state: 
     if (!opts.watch) return slotsFailed(state.slots) || tc?.errors.length ? 1 : 0
     console.log(`watching ${cfg.root} for changes, Ctrl-C to stop`)
     const graph = server.environments.ssr.moduleGraph
-    let timer: NodeJS.Timeout | null = null, busy: Promise<void> | null = null
+    let timer: NodeJS.Timeout | null = null,
+      busy: Promise<void> | null = null
     const again = async () => {
       graph.invalidateAll()
       const t0 = performance.now()
       const now = await run()
       const lines: string[] = []
       for (const s of state.slots) {
-        if (!s.compiled || s.conflict) { lines.push(...slotLines(s, errors.get(s), { root: cfg.root, cap: 10, verbose: opts.verbose })); continue }
+        if (!s.compiled || s.conflict) {
+          lines.push(...slotLines(s, errors.get(s), { root: cfg.root, cap: 10, verbose: opts.verbose }))
+          continue
+        }
         for (const c of s.compiled) {
           const key = `${c.board.name}|${c.board.variant?.name ?? ''}`
           const d = diffFindings(last.get(key) ?? [], now.get(key) ?? [])
@@ -249,13 +343,18 @@ export async function check(opts: OutputOptions & { cfg: ResolvedConfig; state: 
     const changed = (f: string) => {
       if (!inProject(f)) return
       if (timer) clearTimeout(timer)
-      timer = setTimeout(() => { timer = null; busy = (busy ?? Promise.resolve()).then(again).catch(e => console.error(`pcbjs: ${e?.message ?? e}`)) }, 80)
+      timer = setTimeout(() => {
+        timer = null
+        busy = (busy ?? Promise.resolve()).then(again).catch(e => console.error(`pcbjs: ${e?.message ?? e}`))
+      }, 80)
     }
     server.watcher.add(cfg.root)
     server.watcher.on('change', changed)
     server.watcher.on('add', changed)
     server.watcher.on('unlink', changed)
-    await new Promise<void>(done => { for (const sig of ['SIGINT', 'SIGTERM'] as const) process.once(sig, () => done()) })
+    await new Promise<void>(done => {
+      for (const sig of ['SIGINT', 'SIGTERM'] as const) process.once(sig, () => done())
+    })
     return 0
   } finally {
     await server.close()

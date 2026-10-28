@@ -23,7 +23,9 @@ test('typecheck: reports an error as one findings line, caches it, and skips a p
     const c = typecheck(dir, ['main.ts'])
     assert.equal(c.cached, false)
     assert.deepEqual(c.errors, [])
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('typecheck: a message is never cut, and the line ends with the innermost reason of the chain, all of it with verbose', () => {
@@ -31,7 +33,10 @@ test('typecheck: a message is never cut, and the line ends with the innermost re
   try {
     writeFileSync(join(dir, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true, noEmit: true, types: [] } }))
     const long = Array.from({ length: 30 }, (_, i) => `field${i}: number`).join('; ')
-    writeFileSync(join(dir, 'main.ts'), `const o = { a: { b: 1 }, ${long.replace(/: number/g, ': 1').replace(/;/g, ',')} }\nfunction f(p: { a: { b: string }; ${long} }) { return p }\nexport default f(o)\n`)
+    writeFileSync(
+      join(dir, 'main.ts'),
+      `const o = { a: { b: 1 }, ${long.replace(/: number/g, ': 1').replace(/;/g, ',')} }\nfunction f(p: { a: { b: string }; ${long} }) { return p }\nexport default f(o)\n`,
+    )
     const [e] = typecheck(dir, ['main.ts']).errors
     assert.equal(e.code, 2345)
     assert.ok(e.message.length > 240 && e.message.endsWith('.') && !e.message.endsWith('...'), e.message)
@@ -41,5 +46,7 @@ test('typecheck: a message is never cut, and the line ends with the innermost re
     assert.match(line[0], /^error    typecheck  main\.ts:3:18: TS2345 Argument of type /)
     assert.equal(line[1], "    Type 'number' is not assignable to type 'string'.")
     assert.equal(typeErrorLine(e, true).split('\n').length, 1 + e.detail.length)
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

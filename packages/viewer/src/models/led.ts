@@ -8,7 +8,13 @@ import { chipSize, PLCC_SIZES } from './sizes'
 type LedSpec = Extract<ModelSpec, { kind: 'led' }>
 
 const TINT: Record<string, string> = {
-  red: '#ff2a2a', green: '#2fe05a', blue: '#2f6bff', yellow: '#ffd400', amber: '#ffae00', orange: '#ff8200', white: '#f4f6ff',
+  red: '#ff2a2a',
+  green: '#2fe05a',
+  blue: '#2f6bff',
+  yellow: '#ffd400',
+  amber: '#ffae00',
+  orange: '#ff8200',
+  white: '#f4f6ff',
 }
 
 export function ledModel(spec: LedSpec, height: number): THREE.Object3D {
@@ -41,16 +47,18 @@ export function ledModel(spec: LedSpec, height: number): THREE.Object3D {
 
 function plccModel(spec: LedSpec, height: number): THREE.Object3D {
   const p = PLCC_SIZES[spec.size]
-  const side = p.side, t = Math.max(0.3, height || p.height)
+  const side = p.side,
+    t = Math.max(0.3, height || p.height)
   const g = new THREE.Group()
   // the body, a notch cut at the pin 1 corner by a dark wedge laid on its top edge
   g.add(mesh(roundedBox(side, side, t, Math.min(0.08, side / 20)), M.ledBody))
   const notch = side * 0.12
   g.add(mesh(box(notch, notch, 0.02), M.die, -side / 2 + notch / 2, side / 2 - notch / 2, t))
   const [ll, lw] = p.lead
-  for (const sx of [-1, 1]) for (const sy of [-1, 1])
-    g.add(mesh(box(ll, lw, Math.min(0.2, t * 0.3)), M.tin, sx * (side / 2 - ll / 2 + 0.01), sy * (side / 2 - lw / 2 - side * 0.05)))
-  const r = p.window / 2, depth = t * 0.35
+  for (const sx of [-1, 1])
+    for (const sy of [-1, 1]) g.add(mesh(box(ll, lw, Math.min(0.2, t * 0.3)), M.tin, sx * (side / 2 - ll / 2 + 0.01), sy * (side / 2 - lw / 2 - side * 0.05)))
+  const r = p.window / 2,
+    depth = t * 0.35
   const frame = new THREE.CylinderGeometry(r, r, 0.02, 40)
   frame.rotateX(Math.PI / 2)
   g.add(mesh(frame, M.tin, 0, 0, t - depth))

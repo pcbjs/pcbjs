@@ -5,7 +5,11 @@ import { mm } from './units.js'
 /** A teardrop size: a fraction of the pad's smaller side, or a length in mm. */
 export type TeardropSize = { ratio: number } | { mm: number }
 /** Teardrop parameters with every field filled in. */
-export interface ResolvedTeardrops { pads: 'tht' | 'smd' | 'all'; length: TeardropSize; width: TeardropSize }
+export interface ResolvedTeardrops {
+  pads: 'tht' | 'smd' | 'all'
+  length: TeardropSize
+  width: TeardropSize
+}
 /** A partial spec in resolved units, as a level gives it. */
 export type TeardropLevel = Partial<ResolvedTeardrops>
 
@@ -16,12 +20,18 @@ const KEYS = ['pads', 'length', 'width']
 
 function size(v: unknown, at: string, k: string): TeardropSize {
   if (typeof v === 'number') {
-    if (!(Number.isFinite(v) && v > 0 && v <= 4)) throw new Error(`${at}: teardrops ${k} must be a fraction of the pad size above 0 and at most 4, or a length such as '0.5mm', got ${v}`)
+    if (!(Number.isFinite(v) && v > 0 && v <= 4))
+      throw new Error(`${at}: teardrops ${k} must be a fraction of the pad size above 0 and at most 4, or a length such as '0.5mm', got ${v}`)
     return { ratio: v }
   }
   let n = NaN
-  try { n = mm(v as string) } catch { /* reported below */ }
-  if (typeof v !== 'string' || !(Number.isFinite(n) && n > 0)) throw new Error(`${at}: teardrops ${k} must be a fraction of the pad size such as 0.5, or a length such as '0.5mm', got ${JSON.stringify(v)}`)
+  try {
+    n = mm(v as string)
+  } catch {
+    /* reported below */
+  }
+  if (typeof v !== 'string' || !(Number.isFinite(n) && n > 0))
+    throw new Error(`${at}: teardrops ${k} must be a fraction of the pad size such as 0.5, or a length such as '0.5mm', got ${JSON.stringify(v)}`)
   return { mm: n }
 }
 
@@ -47,7 +57,10 @@ export function resolveTeardrops(levels: (boolean | TeardropLevel | undefined)[]
   const spec: ResolvedTeardrops = { ...TEARDROP_DEFAULTS }
   for (const l of levels) {
     if (l === undefined) continue
-    if (typeof l === 'boolean') { on = l; continue }
+    if (typeof l === 'boolean') {
+      on = l
+      continue
+    }
     on = true
     Object.assign(spec, l)
   }

@@ -7,7 +7,10 @@ import type { Preview } from './project.js'
 import type { Finding } from '@pcbjs/export/findings'
 
 /** What a scope holds once loaded: its config and board slots, like the state of a one-project dev server. */
-export interface ScopeBoards { slots: BoardSlot[]; preview?: Preview | null }
+export interface ScopeBoards {
+  slots: BoardSlot[]
+  preview?: Preview | null
+}
 
 export interface Scope extends ScopeInfo {
   /** unloaded until first use; error when its config failed to load */
@@ -37,7 +40,18 @@ export interface Workspace {
 }
 
 export function workspaceOf(folders: string[]): Workspace {
-  const scopes: Scope[] = findScopes(folders).map(s => ({ ...s, status: 'unloaded', error: null, cfg: null, state: null, defaults: null, stale: false, files: [], stamps: new Map(), findings: new Map() }))
+  const scopes: Scope[] = findScopes(folders).map(s => ({
+    ...s,
+    status: 'unloaded',
+    error: null,
+    cfg: null,
+    state: null,
+    defaults: null,
+    stale: false,
+    files: [],
+    stamps: new Map(),
+    findings: new Map(),
+  }))
   return { folders, scopes, displayed: null }
 }
 
@@ -85,15 +99,31 @@ export interface ScopeSummary {
 
 export function scopeSummary(ws: Workspace, s: Scope): ScopeSummary {
   const boards = s.state ? ideBoards(s.state.slots).boards : []
-  const failed = s.state ? Object.values(ideBoards(s.state.slots).errors).find(e => e) ?? null : null
+  const failed = s.state ? (Object.values(ideBoards(s.state.slots).errors).find(e => e) ?? null) : null
   const status = s.status === 'unloaded' ? 'unloaded' : s.status === 'error' || failed ? 'error' : boards.some(b => b.status !== 'ok') ? 'incomplete' : 'ok'
   return {
-    slug: s.slug, name: basename(s.dir), dir: s.rel || '.', root: s.dir, route: scopeRoute(ws, s), status, stale: s.stale, displayed: ws.displayed === s,
-    error: s.error ?? failed, boards: boards.map(b => ({ name: b.name, title: b.title, entry: b.entry, status: b.status })),
+    slug: s.slug,
+    name: basename(s.dir),
+    dir: s.rel || '.',
+    root: s.dir,
+    route: scopeRoute(ws, s),
+    status,
+    stale: s.stale,
+    displayed: ws.displayed === s,
+    error: s.error ?? failed,
+    boards: boards.map(b => ({ name: b.name, title: b.title, entry: b.entry, status: b.status })),
   }
 }
 
 /** What the viewers get as `pcbjs:scopes` and the editor host as `pcbjs:ide:scopes`. */
-export interface ScopesInfo { scopes: ScopeSummary[]; displayed: string | null; single: boolean }
+export interface ScopesInfo {
+  scopes: ScopeSummary[]
+  displayed: string | null
+  single: boolean
+}
 
-export const scopesInfo = (ws: Workspace): ScopesInfo => ({ scopes: ws.scopes.map(s => scopeSummary(ws, s)), displayed: ws.displayed?.slug ?? null, single: ws.scopes.length === 1 })
+export const scopesInfo = (ws: Workspace): ScopesInfo => ({
+  scopes: ws.scopes.map(s => scopeSummary(ws, s)),
+  displayed: ws.displayed?.slug ?? null,
+  single: ws.scopes.length === 1,
+})

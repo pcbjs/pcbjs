@@ -19,9 +19,15 @@ import { versionLine } from './version.js'
 import { fabDate } from '@pcbjs/export/fab'
 
 const cli = cac('pcbjs')
-cli.usage('<build|check|dev|preview> [entry...] [options]\n       pcbjs dev --workspace <folder>... [options]\n       pcbjs inspect [entry] [ref|net|REF.PAD|references|sch...] [--lengths [net|pair|group]] [--layer <name>] [--json]\n       pcbjs model add <file-or-url|lcsc:C123> [--ref [<board>/]<REF> | --footprint <name>] [--entry <board>] [--as <name>] [--write]\n       pcbjs model add --ref <REF> [--write], the model of its MPN:LCSC number\n       pcbjs model align [entry] [<board>/]<ref> [--file <model>]\n       pcbjs model check [entry...]\n       pcbjs model fetch [entry...]\n       pcbjs shot [entry...] [-o <dir>] [-p <port>] [--view 2d|3d|sch|both|all] [--select <ref>...] [--layer <name>...] [--side top|bottom] [--size WxH]\n       pcbjs import footprint <Lib:Name|file.kicad_mod> [-o lib/<name>.tsx] [--force]\n       pcbjs import board <file.kicad_pcb> [-o pcb.tsx] [--force]\n       pcbjs docs [topic] [--grep <word|regex>]\n       pcbjs ide <install|status>\n       pcbjs skills <install [--to <dir>]|list|path>\n       pcbjs doctor\n       pcbjs create <dir> [--template board]\n\n  The entries are `entries` in pcb.config.ts, paths relative to it, globs allowed; entries on the command line win for that run.\n  Each entry is a .tsx or .ts module that default-exports <PCB>. Several entries make a multi-board site.\n  The current directory is the project root. The config is pcb.config.ts, .mts, .js or .mjs in it; pcbjs.config.* still loads with a warning.')
+cli.usage(
+  '<build|check|dev|preview> [entry...] [options]\n       pcbjs dev --workspace <folder>... [options]\n       pcbjs inspect [entry] [ref|net|REF.PAD|references|sch...] [--lengths [net|pair|group]] [--layer <name>] [--json]\n       pcbjs model add <file-or-url|lcsc:C123> [--ref [<board>/]<REF> | --footprint <name>] [--entry <board>] [--as <name>] [--write]\n       pcbjs model add --ref <REF> [--write], the model of its MPN:LCSC number\n       pcbjs model align [entry] [<board>/]<ref> [--file <model>]\n       pcbjs model check [entry...]\n       pcbjs model fetch [entry...]\n       pcbjs shot [entry...] [-o <dir>] [-p <port>] [--view 2d|3d|sch|both|all] [--select <ref>...] [--layer <name>...] [--side top|bottom] [--size WxH]\n       pcbjs import footprint <Lib:Name|file.kicad_mod> [-o lib/<name>.tsx] [--force]\n       pcbjs import board <file.kicad_pcb> [-o pcb.tsx] [--force]\n       pcbjs docs [topic] [--grep <word|regex>]\n       pcbjs ide <install|status>\n       pcbjs skills <install [--to <dir>]|list|path>\n       pcbjs doctor\n       pcbjs create <dir> [--template board]\n\n  The entries are `entries` in pcb.config.ts, paths relative to it, globs allowed; entries on the command line win for that run.\n  Each entry is a .tsx or .ts module that default-exports <PCB>. Several entries make a multi-board site.\n  The current directory is the project root. The config is pcb.config.ts, .mts, .js or .mjs in it; pcbjs.config.* still loads with a warning.',
+)
 
-cli.command('dev [...entries]', 'dev server: compiles the boards, updates the viewer on every change, serves fab files on demand; --workspace serves every project under the folders')
+cli
+  .command(
+    'dev [...entries]',
+    'dev server: compiles the boards, updates the viewer on every change, serves fab files on demand; --workspace serves every project under the folders',
+  )
   .option('--workspace [folder]', 'serve every directory with a pcb.config.* under the folders, given here or as the arguments; each loads on first use')
   .option('-c, --config <file>', 'config file (default: pcb.config.ts, .mts, .js or .mjs)')
   .option('-p, --port <port>', 'port (default 5173)')
@@ -44,7 +50,8 @@ cli.command('dev [...entries]', 'dev server: compiles the boards, updates the vi
     await dev({ entries, config: o.config, ...common })
   })
 
-cli.command('build [...entries]', 'compile the boards, write the fab files and the static site; exit 1 on DRC or ERC errors')
+cli
+  .command('build [...entries]', 'compile the boards, write the fab files and the static site; exit 1 on DRC or ERC errors')
   .option('-c, --config <file>', 'config file (default: pcb.config.ts, .mts, .js or .mjs)')
   .option('--out-dir <dir>', 'site output (default .pcbjs/dist)')
   .option('-q, --quiet', 'print only the board lines, the findings and the total')
@@ -53,12 +60,26 @@ cli.command('build [...entries]', 'compile the boards, write the fab files and t
   .option('--date <iso>', 'the date every fab file carries, such as 2026-01-31T12:00:00Z, so two builds of one tree are byte identical (default SOURCE_DATE_EPOCH, else now)')
   .action(async (entries: string[], o) => {
     if (o.date === true || o.date === '') usageError('--date needs a date, for example --date 2026-01-31T12:00:00Z')
-    if (o.date !== undefined) try { fabDate(String(o.date)) } catch (e) { usageError(`--date: ${(e as Error).message}`) }
+    if (o.date !== undefined)
+      try {
+        fabDate(String(o.date))
+      } catch (e) {
+        usageError(`--date: ${(e as Error).message}`)
+      }
     warnVersionSkew()
-    await build({ entries, config: o.config, outDir: o.outDir, quiet: !!o.quiet, verbose: !!o.verbose, json: jsonFile(o.json), date: o.date === undefined ? undefined : String(o.date) })
+    await build({
+      entries,
+      config: o.config,
+      outDir: o.outDir,
+      quiet: !!o.quiet,
+      verbose: !!o.verbose,
+      json: jsonFile(o.json),
+      date: o.date === undefined ? undefined : String(o.date),
+    })
   })
 
-cli.command('check [...entries]', 'compile and run DRC and ERC only: no fab files, no site; exit 1 on errors')
+cli
+  .command('check [...entries]', 'compile and run DRC and ERC only: no fab files, no site; exit 1 on errors')
   .option('-c, --config <file>', 'config file (default: pcb.config.ts, .mts, .js or .mjs)')
   .option('-w, --watch', 'recompile on every change and print what is new, fixed and unchanged')
   .option('-q, --quiet', 'the same output as without it; accepted for symmetry with build')
@@ -72,12 +93,19 @@ cli.command('check [...entries]', 'compile and run DRC and ERC only: no fab file
     process.exitCode = await check({ cfg, state: pluginState(cfg), watch: !!o.watch, quiet: !!o.quiet, verbose: !!o.verbose, json: jsonFile(o.json) })
   })
 
-cli.command('inspect [...queries]', 'compile one board and print its frame and footprints, or each query: a ref with its pads, a net with its pads, vias and routes, a pad as REF.PAD; --lengths prints the route table; one compile answers them all')
+cli
+  .command(
+    'inspect [...queries]',
+    'compile one board and print its frame and footprints, or each query: a ref with its pads, a net with its pads, vias and routes, a pad as REF.PAD; --lengths prints the route table; one compile answers them all',
+  )
   .option('-c, --config <file>', 'config file (default: pcb.config.ts, .mts, .js or .mjs)')
   .option('-t, --target <name>', 'the target of a board with variants, by name or slug (default the first)')
   .option('--json', 'print JSON instead of text')
   .option('--lengths [filter]', 'print every route with its length, target, match group, status and source, or those of one net, pair or match group; repeat it for several')
-  .option('--layer <name>', 'print every item on the layer, by id or alias, with its bounds, text, ref and source: strokes and glyphs of text, drawings, tracks, pours, pads; a query filters it by part or net; repeatable')
+  .option(
+    '--layer <name>',
+    'print every item on the layer, by id or alias, with its bounds, text, ref and source: strokes and glyphs of text, drawings, tracks, pours, pads; a query filters it by part or net; repeatable',
+  )
   .option('--fresh', 'compile here even when a running dev server of the project holds a current board')
   .option('--verbose', "show Vite's output and the stack of a compile error")
   .action(async (args: string[], o) => {
@@ -87,7 +115,8 @@ cli.command('inspect [...queries]', 'compile one board and print its frame and f
     process.exitCode = await inspect({ entry, requests, config: o.config, json: !!o.json, target: o.target, verbose: !!o.verbose, fresh: !!o.fresh })
   })
 
-cli.command('shot [...entries]', 'PNG screenshots of the viewer with a headless Chrome: one per board, target and view, to .pcbjs/shots/<board>-<view>[-<options>].png')
+cli
+  .command('shot [...entries]', 'PNG screenshots of the viewer with a headless Chrome: one per board, target and view, to .pcbjs/shots/<board>-<view>[-<options>].png')
   .option('-c, --config <file>', 'config file (default: pcb.config.ts, .mts, .js or .mjs)')
   .option('-o, --out <dir>', 'output directory (default .pcbjs/shots)')
   .option('-p, --port <port>', 'port of the dev server the shots are taken from (default a free port)')
@@ -116,10 +145,28 @@ cli.command('shot [...entries]', 'PNG screenshots of the viewer with a headless 
     const many = (v: unknown): string[] | undefined => (v === undefined ? undefined : (Array.isArray(v) ? v : [v]).map(String))
     for (const k of ['out', 'layer', 'select'] as const) if (many(o[k])?.some(v => v === 'true' || v === '')) usageError(`--${k} needs a value`)
     if (Array.isArray(o.out)) usageError('give --out once')
-    process.exitCode = await shot({ entries, config: o.config, outDir: o.out, view: view as '2d' | '3d' | 'sch' | 'both' | 'all', explode, layer: many(o.layer), select: many(o.select), size, theme: theme as 'light' | 'dark' | undefined, side: side as 'top' | 'bottom' | undefined, verbose: !!o.verbose, port: portOf(o.port), fresh: !!o.fresh })
+    process.exitCode = await shot({
+      entries,
+      config: o.config,
+      outDir: o.out,
+      view: view as '2d' | '3d' | 'sch' | 'both' | 'all',
+      explode,
+      layer: many(o.layer),
+      select: many(o.select),
+      size,
+      theme: theme as 'light' | 'dark' | undefined,
+      side: side as 'top' | 'bottom' | undefined,
+      verbose: !!o.verbose,
+      port: portOf(o.port),
+      fresh: !!o.fresh,
+    })
   })
 
-cli.command('model <action> [...args]', 'model files: `add <file-or-url|lcsc:C123>` copies or downloads one into models/ and fits it with --ref, and with --ref alone fetches the part\'s MPN:LCSC model; `align [entry] <ref>` prints the transform that puts a model on its pads; `check [entry...]` lists every model and flags missing, unread and misplaced ones; `fetch [entry...]` downloads the models the parts name, KiCad library, LCSC or URL, into .pcbjs/models/fetched')
+cli
+  .command(
+    'model <action> [...args]',
+    "model files: `add <file-or-url|lcsc:C123>` copies or downloads one into models/ and fits it with --ref, and with --ref alone fetches the part's MPN:LCSC model; `align [entry] <ref>` prints the transform that puts a model on its pads; `check [entry...]` lists every model and flags missing, unread and misplaced ones; `fetch [entry...]` downloads the models the parts name, KiCad library, LCSC or URL, into .pcbjs/models/fetched",
+  )
   .option('-c, --config <file>', 'config file (default: pcb.config.ts, .mts, .js or .mjs)')
   .option('--ref <ref>', 'add: fit the model to this placed part and print its model option; `<board>/<ref>`, such as Sense/SW1, names its board')
   .option('--entry <entry>', 'add, align: the board the ref is on, by entry file, board name or folder; needed when the ref is on several boards')
@@ -134,10 +181,20 @@ cli.command('model <action> [...args]', 'model files: `add <file-or-url|lcsc:C12
     for (const k of ['ref', 'footprint', 'as', 'file', 'entry'] as const) if (o[k] === true || o[k] === '') usageError(`--${k} needs a value`)
     const common = { config: o.config, verbose: !!o.verbose }
     if (action === 'add') {
-      if (args.length > 1 || (!args.length && !o.ref)) usageError('model add takes one file, URL or lcsc:<C-number>, or --ref alone for a part with an MPN:LCSC number: pcbjs model add <file-or-url> [--ref J1]')
+      if (args.length > 1 || (!args.length && !o.ref))
+        usageError('model add takes one file, URL or lcsc:<C-number>, or --ref alone for a part with an MPN:LCSC number: pcbjs model add <file-or-url> [--ref J1]')
       if (o.ref && o.footprint) usageError('give --ref or --footprint, not both')
       if (o.write && !o.ref && !o.footprint) usageError('--write needs --ref or --footprint')
-      process.exitCode = await modelAdd({ source: args.length ? String(args[0]) : undefined, ref: str(o.ref), entry: str(o.entry), footprint: str(o.footprint), as: str(o.as), write: !!o.write, force: !!o.force, ...common })
+      process.exitCode = await modelAdd({
+        source: args.length ? String(args[0]) : undefined,
+        ref: str(o.ref),
+        entry: str(o.entry),
+        footprint: str(o.footprint),
+        as: str(o.as),
+        write: !!o.write,
+        force: !!o.force,
+        ...common,
+      })
     } else if (action === 'align') {
       if (args.length < 1 || args.length > 2) usageError('model align takes a ref, and an entry first when the config lists several: pcbjs model align [entry] <ref>')
       const [entry, ref] = args.length === 2 ? args.map(String) : [str(o.entry), String(args[0])]
@@ -148,7 +205,11 @@ cli.command('model <action> [...args]', 'model files: `add <file-or-url|lcsc:C12
     else usageError(`unknown model action: ${action}, use add, align, check or fetch`)
   })
 
-cli.command('import <kind> <source>', 'KiCad files as code: `import footprint <Lib:Name|file.kicad_mod>` writes a defineFootprint module, `import board <file.kicad_pcb>` a board skeleton with its schematic, copper, footprints and rules')
+cli
+  .command(
+    'import <kind> <source>',
+    'KiCad files as code: `import footprint <Lib:Name|file.kicad_mod>` writes a defineFootprint module, `import board <file.kicad_pcb>` a board skeleton with its schematic, copper, footprints and rules',
+  )
   .option('-o, --out <file>', 'footprint: the module to write (default lib/<name>.tsx); board: the board file (default pcb.tsx), the others beside it')
   .option('--force', 'replace files that exist')
   .action(async (kind: string, source: string, o) => {
@@ -156,41 +217,62 @@ cli.command('import <kind> <source>', 'KiCad files as code: `import footprint <L
     process.exitCode = await importCommand({ kind: String(kind), source: String(source), out: o.out === undefined ? undefined : String(o.out), force: !!o.force })
   })
 
-cli.command('preview [...entries]', 'serve the built site')
+cli
+  .command('preview [...entries]', 'serve the built site')
   .option('-c, --config <file>', 'config file (default: pcb.config.ts, .mts, .js or .mjs)')
   .option('-p, --port <port>', 'port (default 4173)')
   .option('--host [host]', 'listen on all addresses')
   .option('--out-dir <dir>', 'site to serve (default .pcbjs/dist)')
-  .action(async (entries: string[], o) => { await preview({ entries, config: o.config, outDir: o.outDir, port: portOf(o.port), host: o.host }) })
+  .action(async (entries: string[], o) => {
+    await preview({ entries, config: o.config, outDir: o.outDir, port: portOf(o.port), host: o.host })
+  })
 
-cli.command('ide <action>', 'the bundled VS Code extension: `ide install` installs it with the code CLI, `ide status` compares it with the installed one')
+cli
+  .command('ide <action>', 'the bundled VS Code extension: `ide install` installs it with the code CLI, `ide status` compares it with the installed one')
   .action(async (action: string) => {
     if (action === 'install') process.exitCode = await ideInstall()
     else if (action === 'status') process.exitCode = await ideStatus()
     else usageError(`unknown ide action: ${action}, use install or status`)
   })
 
-cli.command('skills <action>', 'the agent skills of @pcbjs/skills: `skills install` copies them into .claude/skills or --to <dir>, `skills list` names each, `skills path` prints where they ship')
+cli
+  .command(
+    'skills <action>',
+    'the agent skills of @pcbjs/skills: `skills install` copies them into .claude/skills or --to <dir>, `skills list` names each, `skills path` prints where they ship',
+  )
   .option('--to <dir>', 'install: the skills folder to copy into (default .claude/skills)')
   .action(async (action: string, o) => {
     if (o.to !== undefined && action !== 'install') usageError('--to goes with skills install')
     process.exitCode = await skills(action, { to: o.to === undefined ? undefined : String(o.to) })
   })
 
-cli.command('docs [topic]', 'print the docs: the topic list, one topic such as routing, or with --grep every line that matches')
-  .option('--grep <word>', 'print the lines of every topic, or of the one given, that mention <word>; anything but letters, digits, spaces and dashes is a regular expression, such as neck|escape')
+cli
+  .command('docs [topic]', 'print the docs: the topic list, one topic such as routing, or with --grep every line that matches')
+  .option(
+    '--grep <word>',
+    'print the lines of every topic, or of the one given, that mention <word>; anything but letters, digits, spaces and dashes is a regular expression, such as neck|escape',
+  )
   .action((topic: string | undefined, o) => {
     if (o.grep === true || o.grep === '') usageError('--grep needs a word, for example --grep keepout')
     process.exitCode = docs({ topic: topic === undefined ? undefined : String(topic), grep: o.grep === undefined ? undefined : String(o.grep) })
   })
 
-cli.command('doctor', 'print the installed @pcbjs versions, Node, Chrome, the step converter, the file format versions and the config; exit 1 when the packages disagree on major.minor')
+cli
+  .command(
+    'doctor',
+    'print the installed @pcbjs versions, Node, Chrome, the step converter, the file format versions and the config; exit 1 when the packages disagree on major.minor',
+  )
   .option('-c, --config <file>', 'config file (default: pcb.config.ts, .mts, .js or .mjs)')
-  .action(async o => { process.exitCode = await doctor({ config: o.config }) })
+  .action(async o => {
+    process.exitCode = await doctor({ config: o.config })
+  })
 
-cli.command('create <dir>', 'start a new project in <dir> from a template: a board in pcb.tsx, pcb.config.ts listing it, package.json and tsconfig.json')
+cli
+  .command('create <dir>', 'start a new project in <dir> from a template: a board in pcb.tsx, pcb.config.ts listing it, package.json and tsconfig.json')
   .option('-t, --template <name>', 'template (default board)')
-  .action((dir: string, o) => { create({ dir, template: o.template }) })
+  .action((dir: string, o) => {
+    create({ dir, template: o.template })
+  })
 
 cli.help(sections => [{ body: versionLine() }, ...sections.slice(1)])
 cli.version(cliVersion())
@@ -248,7 +330,13 @@ export async function run(argv = process.argv): Promise<void> {
     // the stack only when asked for
     const msg = String(e?.message ?? e).replace(/\x1b\[[0-9;]*m/g, '')
     console.error(`pcbjs: ${msg.split('\n')[0]}`)
-    if (cli.options.verbose || process.env.DEBUG) console.error(String(e?.stack ?? '').split('\n').filter(l => /^\s+at /.test(l)).join('\n'))
+    if (cli.options.verbose || process.env.DEBUG)
+      console.error(
+        String(e?.stack ?? '')
+          .split('\n')
+          .filter(l => /^\s+at /.test(l))
+          .join('\n'),
+      )
     process.exit(1)
   }
 }

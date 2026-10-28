@@ -1,7 +1,23 @@
 // The viewer's source resolver, imported straight from the client TypeScript: Node strips the types itself.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { clickAction, followHint, followOf, definitionOf, fileKey, itemsIn, openQuery, placementOf, rangeFor, rangeLabel, refsOfIds, repoUrl, resolveCursor, resolveItem, sourceTarget } from '../src/source.ts'
+import {
+  clickAction,
+  followHint,
+  followOf,
+  definitionOf,
+  fileKey,
+  itemsIn,
+  openQuery,
+  placementOf,
+  rangeFor,
+  rangeLabel,
+  refsOfIds,
+  repoUrl,
+  resolveCursor,
+  resolveItem,
+  sourceTarget,
+} from '../src/source.ts'
 
 const outer = { start: [12, 3], end: [40, 10], ids: [1, 2, 3, 4], refs: ['J1', 'D1'] }
 const j1 = { start: [18, 5], end: [18, 92], ids: [1, 2, 3], refs: ['J1'] }
@@ -27,12 +43,14 @@ test('resolveItem tries the id, then the ref', () => {
 test('a cursor resolves to the innermost range and everything nested in it', () => {
   const hit = resolveCursor(sources, 'main.tsx', 18, 40)
   assert.equal(hit.range, j1)
-  assert.deepEqual(hit.ids, [1, 2, 3]); assert.deepEqual(hit.refs, ['J1'])
+  assert.deepEqual(hit.ids, [1, 2, 3])
+  assert.deepEqual(hit.refs, ['J1'])
   const mid = resolveCursor(sources, 'main.tsx', 21, 10)
   assert.equal(mid.range, ch)
   const top = resolveCursor(sources, 'main.tsx', 30, 1)
   assert.equal(top.range, outer)
-  assert.deepEqual(top.ids.sort(), [1, 2, 3, 4]); assert.deepEqual(top.refs.sort(), ['D1', 'J1'])
+  assert.deepEqual(top.ids.sort(), [1, 2, 3, 4])
+  assert.deepEqual(top.refs.sort(), ['D1', 'J1'])
   assert.equal(resolveCursor(sources, 'main.tsx', 21, 25).range, inner)
 })
 
@@ -85,7 +103,10 @@ test('open query and range label', () => {
 })
 
 test('refsOfIds reads the refs of ids from the layer markup', () => {
-  const layers = [{ svg: '<rect data-id="1" data-kind="pad" data-ref="J1" x="0"/><path data-id="7" data-kind="track" data-net="GND"/>' }, { svg: '<circle data-ref="R&amp;1" data-id="9"/>' }]
+  const layers = [
+    { svg: '<rect data-id="1" data-kind="pad" data-ref="J1" x="0"/><path data-id="7" data-kind="track" data-net="GND"/>' },
+    { svg: '<circle data-ref="R&amp;1" data-id="9"/>' },
+  ]
   assert.deepEqual([...refsOfIds({ layers }, [1, 7, 9])].sort(), ['J1', 'R&1'])
   assert.deepEqual([...refsOfIds({ layers }, [])], [])
 })
@@ -96,7 +117,14 @@ test('cmd+click: a footprint item opens its placement, shift the innermost range
   const track = { start: [30, 3], end: [30, 50], ids: [5], refs: [] }
   const board = {
     sources: { 'main.tsx': [outer, ch, track], 'lib/MyGroup.tsx': [lib, pad] },
-    footprints: [{ ref: 'D1', src: { file: 'main.tsx', line: 21, col: 5, endLine: 21, endCol: 60, abs: '/p/main.tsx' }, def: { file: 'lib/MyGroup.tsx', line: 3, col: 1, endLine: 9, endCol: 2, abs: '/p/lib/MyGroup.tsx' } }, { ref: 'U9', src: { file: 'main.tsx', line: 33, col: 5, abs: '/p/main.tsx' } }],
+    footprints: [
+      {
+        ref: 'D1',
+        src: { file: 'main.tsx', line: 21, col: 5, endLine: 21, endCol: 60, abs: '/p/main.tsx' },
+        def: { file: 'lib/MyGroup.tsx', line: 3, col: 1, endLine: 9, endCol: 2, abs: '/p/lib/MyGroup.tsx' },
+      },
+      { ref: 'U9', src: { file: 'main.tsx', line: 33, col: 5, abs: '/p/main.tsx' } },
+    ],
   }
   const at = t => t && `${t.file}:${t.start.join(':')}-${t.end ? t.end.join(':') : ''}`
   assert.deepEqual(placementOf(board, 'D1'), { file: 'main.tsx', start: [21, 5], end: [21, 60], abs: '/p/main.tsx' })

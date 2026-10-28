@@ -27,16 +27,26 @@ test('nets: the same key gives the same net, classes are declared once, identity
   const R1 = R0603('1k').connect(n.GND, n.VIN)
   const R2 = R0603('1k').connect(other.GND, n.VIN)
   const b = compileBoard(board(h(R1, { at: '5 5' }), h(R2, { at: '15 5' })))
-  assert.deepEqual(b.nets.map(x => x.name), ['GND', 'VIN'])
+  assert.deepEqual(
+    b.nets.map(x => x.name),
+    ['GND', 'VIN'],
+  )
   const sch = b.schematic.nets
-  assert.deepEqual(sch.map(x => x.name), ['GND', 'VIN'], 'declaration order')
+  assert.deepEqual(
+    sch.map(x => x.name),
+    ['GND', 'VIN'],
+    'declaration order',
+  )
   assert.deepEqual(sch[0].pins, ['R1.1', 'R2.1'])
   assert.equal(sch[1].class, 'power')
 })
 
 test('nets: bus gives name0 to name<n-1>', () => {
   const d = bus('D', 4, { class: 'data' })
-  assert.deepEqual(d.map(x => x.name), ['D0', 'D1', 'D2', 'D3'])
+  assert.deepEqual(
+    d.map(x => x.name),
+    ['D0', 'D1', 'D2', 'D3'],
+  )
   assert.ok(d.every(x => x.class === 'data'))
   assert.throws(() => bus('D', 0), SchematicError)
 })
@@ -98,7 +108,11 @@ test('parts: NC leaves a pin open on purpose, an unconnected pin is an ERC warni
   assert.match(warn[0].message, /^J2\.2/)
   nearPt(warn[0].at, [15, 7.54], 1e-9)
   const j1 = b.schematic.parts.find(p => p.ref === 'J1')
-  assert.deepEqual(j1.pins, [{ name: '1', net: 'A', nc: false }, { name: '2', net: null, nc: true }, { name: '3', net: 'A', nc: false }])
+  assert.deepEqual(j1.pins, [
+    { name: '1', net: 'A', nc: false },
+    { name: '2', net: null, nc: true },
+    { name: '3', net: 'A', nc: false },
+  ])
 })
 
 test('registry: refs follow declaration order per prefix, explicit and written refs are reserved first', () => {
@@ -107,15 +121,17 @@ test('registry: refs follow declaration order per prefix, explicit and written r
   const Rb = R0603('2').connect(A, B).ref('R1')
   const Rc = R0603('3').connect(A, B)
   const Ja = PinHeader(2).connect(A, B)
-  const b = compileBoard(board(
-    h(Rc, { at: '5 5' }), h(Ja, { at: '25 5' }), h(Rb, { at: '10 5' }), h(Ra, { at: '15 5' }),
-    h(R0603, { ref: 'R2', at: '20 10', nets: { 1: A, 2: B } }),
-  ))
+  const b = compileBoard(
+    board(h(Rc, { at: '5 5' }), h(Ja, { at: '25 5' }), h(Rb, { at: '10 5' }), h(Ra, { at: '15 5' }), h(R0603, { ref: 'R2', at: '20 10', nets: { 1: A, 2: B } })),
+  )
   assert.equal(refOf(b, [10, 5]), 'R1', '.ref() pins R1')
   assert.equal(refOf(b, [15, 5]), 'R3', 'Ra is declared first, R2 is written down')
   assert.equal(refOf(b, [5, 5]), 'R4')
   assert.equal(refOf(b, [25, 5]), 'J1')
-  assert.deepEqual(b.schematic.parts.map(p => p.ref), ['J1', 'R1', 'R2', 'R3', 'R4'])
+  assert.deepEqual(
+    b.schematic.parts.map(p => p.ref),
+    ['J1', 'R1', 'R2', 'R3', 'R4'],
+  )
   for (const it of b.items) assert.ok(!it.ref?.includes('\u0000'), 'no placeholder ref is left')
 })
 
@@ -124,8 +140,10 @@ test('registry: a part placed twice is a CompileError naming both sites', () => 
   const R = R0603('1').connect(A, B)
   const at1 = { file: 'main.tsx', line: 3, col: 5, endLine: 3, endCol: 20 }
   const at2 = { file: 'main.tsx', line: 4, col: 5, endLine: 4, endCol: 20 }
-  assert.throws(() => compileBoard(board(h(R, { at: '5 5', __src: at1 }), h(R, { at: '9 5', __src: at2 }))),
-    e => e instanceof CompileError && /R0603\("1"\) is placed twice/.test(e.message) && e.message.includes('main.tsx:3:5') && e.message.includes('main.tsx:4:5'))
+  assert.throws(
+    () => compileBoard(board(h(R, { at: '5 5', __src: at1 }), h(R, { at: '9 5', __src: at2 }))),
+    e => e instanceof CompileError && /R0603\("1"\) is placed twice/.test(e.message) && e.message.includes('main.tsx:3:5') && e.message.includes('main.tsx:4:5'),
+  )
 })
 
 test('registry: a declared part that is never placed is an ERC error, and refs and nets come from connect only', () => {
@@ -156,7 +174,10 @@ test('ERC: a net with fewer than two pins is a warning', () => {
   const T = R0603('3').connect(P, Q)
   const c = compileBoard(board(h(T, { at: '5 5' })))
   const single = rule(c, 'single-pin-net')
-  assert.deepEqual(single.map(m => m.message), ['net P has only one pin, R1.1', 'net Q has only one pin, R1.2'])
+  assert.deepEqual(
+    single.map(m => m.message),
+    ['net P has only one pin, R1.1', 'net Q has only one pin, R1.2'],
+  )
   nearPt(single[0].at, [5 - 0.825, 5], 1e-9)
 })
 
@@ -223,15 +244,27 @@ test('factories: dual mode, a part from a value or options, the footprint from J
   assert.deepEqual(b.footprints[0].fields, { MPN: 'M2', LCSC: 'C1' })
   assert.equal(b.footprints[0].value, '4k7')
   // a user footprint: static metadata and part()
-  function Pad1(props) { const { children, ...rest } = props; return h('footprint', rest, h('pad', { num: 1, size: 1 }), children) }
+  function Pad1(props) {
+    const { children, ...rest } = props
+    return h('footprint', rest, h('pad', { num: 1, size: 1 }), children)
+  }
   Pad1.pins = ['1']
   Pad1.prefix = 'TP'
   const T = part(Pad1, { value: 'T' }).connect(A)
   const TP = defineFootprint(Pad1, { pins: ['1'], prefix: 'TP' })
   const U = TP('U').connect(A)
   const c = compileBoard(board(h(T, { at: '5 5' }), h(U, { at: '9 5' })))
-  assert.deepEqual(c.footprints.map(f => f.ref), ['TP1', 'TP2'])
-  assert.throws(() => part(function Bare() { return null }), /declares no pins/)
+  assert.deepEqual(
+    c.footprints.map(f => f.ref),
+    ['TP1', 'TP2'],
+  )
+  assert.throws(
+    () =>
+      part(function Bare() {
+        return null
+      }),
+    /declares no pins/,
+  )
   // a footprint element without ref or at is a part, which cannot be a child
   assert.throws(() => compileBoard(board(h(R0603, { value: '1k' }))), /made the part R0603\("1k"\) instead of an element/)
 })
@@ -242,7 +275,10 @@ test('strictNets: string nets are rejected once the board uses the schematic lay
   const strict = (...kids) => h(PCB, { name: 'S', rules: { strictNets: true } }, edge(), ...kids)
   assert.throws(() => compileBoard(strict(h(R, { at: '5 5' }), route('A', { width: 0.3, d: 'M 0 0 H 4' }))), /strictNets: the net "A" is a string/)
   const ok = compileBoard(strict(h(R, { at: '5 5' }), route(A, { width: 0.3, d: 'M 4.175 5 H 2' })))
-  assert.deepEqual(ok.drc.filter(d => d.severity === 'error'), [])
+  assert.deepEqual(
+    ok.drc.filter(d => d.severity === 'error'),
+    [],
+  )
   // a board without parts or Net values keeps its string nets
   compileBoard(strict(h(R0603, { ref: 'R1', at: '5 5', nets: { 1: 'A', 2: 'B' } })))
   assert.throws(() => compileBoard(h(PCB, { name: 'S', rules: { strictNets: 1 } }, edge())), /strictNets must be true or false/)
@@ -256,23 +292,56 @@ test('site data: the schematic and the ERC list follow the contract', () => {
   const b = compileBoard(board(h(J, { at: '5 5' }), h(R, { at: '15 5' })))
   const root = b.schematic.parts[0].src.file.replace(/[\\/][^\\/]+$/, '')
   const site = siteData(b, { root, fabUrl: '', fabName: '', fabFiles: [], fabStatus: 'ok', svgUrl: '', dev: false, bom: [] })
-  assert.deepEqual(site.schematic.parts.map(p => [p.ref, p.value, p.prefix, p.placed]), [['J1', 'Conn_01x02', 'J', true], ['R1', '1k', 'R', true], ['R2', '2k', 'R', false]])
+  assert.deepEqual(
+    site.schematic.parts.map(p => [p.ref, p.value, p.prefix, p.placed]),
+    [
+      ['J1', 'Conn_01x02', 'J', true],
+      ['R1', '1k', 'R', true],
+      ['R2', '2k', 'R', false],
+    ],
+  )
   const r1 = site.schematic.parts[1]
   assert.equal(r1.footprint, 'pcbjs:R_0603_1608Metric')
-  assert.deepEqual(r1.pins, [{ name: '1', net: 'VIN', nc: false }, { name: '2', net: 'GND', nc: false }])
+  assert.deepEqual(r1.pins, [
+    { name: '1', net: 'VIN', nc: false },
+    { name: '2', net: 'GND', nc: false },
+  ])
   assert.equal(r1.src.file, 'schematic.test.mjs')
   assert.deepEqual(Object.keys(r1.src).sort(), ['col', 'file', 'line'])
   assert.deepEqual(site.schematic.nets, [
     { name: 'VIN', class: 'power', local: false, pins: ['J1.1', 'R1.1'] },
     { name: 'GND', local: false, pins: ['J1.2', 'R1.2'] },
   ])
-  assert.deepEqual(site.erc.map(e => [e.severity, e.rule]), [['error', 'unplaced-part']])
+  assert.deepEqual(
+    site.erc.map(e => [e.severity, e.rule]),
+    [['error', 'unplaced-part']],
+  )
   assert.deepEqual(site.erc, b.erc)
   void S
   // a board without the schematic layer lists its footprints as parts
   const plain = compileBoard(board(h(R0603, { ref: 'R1', at: '5 5', nets: { 1: 'A', 2: 'B' } })))
-  assert.deepEqual(plain.schematic.parts, [{ ref: 'R1', value: 'R', footprint: 'pcbjs:R_0603_1608Metric', prefix: 'R', pins: [{ name: '1', net: 'A', nc: false }, { name: '2', net: 'B', nc: false }], placed: true, path: [], local: 'R1' }])
-  assert.deepEqual(plain.schematic.nets.map(n => [n.name, n.pins]), [['A', ['R1.1']], ['B', ['R1.2']]])
+  assert.deepEqual(plain.schematic.parts, [
+    {
+      ref: 'R1',
+      value: 'R',
+      footprint: 'pcbjs:R_0603_1608Metric',
+      prefix: 'R',
+      pins: [
+        { name: '1', net: 'A', nc: false },
+        { name: '2', net: 'B', nc: false },
+      ],
+      placed: true,
+      path: [],
+      local: 'R1',
+    },
+  ])
+  assert.deepEqual(
+    plain.schematic.nets.map(n => [n.name, n.pins]),
+    [
+      ['A', ['R1.1']],
+      ['B', ['R1.2']],
+    ],
+  )
   assert.deepEqual(plain.erc, [])
 })
 
@@ -288,27 +357,48 @@ const padFp = (name, pads, meta = {}) => {
 
 test('pads: a pad matching no pin is a compile error naming the footprint, the pad and the pins, with a suggestion', () => {
   const { V, G } = nets()
-  const Reg = padFp('Reg', [['1', '0 0', { name: 'VIN' }], ['2', '1 0', { name: 'GDN' }]], { pins: ['VIN', 'GND'], id: 'test:Reg' })
+  const Reg = padFp(
+    'Reg',
+    [
+      ['1', '0 0', { name: 'VIN' }],
+      ['2', '1 0', { name: 'GDN' }],
+    ],
+    { pins: ['VIN', 'GND'], id: 'test:Reg' },
+  )
   const U = Reg().connect(V, G)
-  assert.throws(() => compileBoard(board(h(U, { at: '5 5' }))), e => e instanceof CompileError
-    && /Reg\(\): pad 2 "GDN" of footprint test:Reg matches no pin; did you mean GND\? Its pins are VIN, GND\./.test(e.message)
-    && /nc on the pad or in the footprint's nc list/.test(e.message))
+  assert.throws(
+    () => compileBoard(board(h(U, { at: '5 5' }))),
+    e =>
+      e instanceof CompileError &&
+      /Reg\(\): pad 2 "GDN" of footprint test:Reg matches no pin; did you mean GND\? Its pins are VIN, GND\./.test(e.message) &&
+      /nc on the pad or in the footprint's nc list/.test(e.message),
+  )
 })
 
 test('pads: the review repro, pins A B C and pads 1:A 2:NC2 3:B 4:C, is an error instead of pad 2 taking net B', () => {
   const { A, B, C } = nets()
-  const pads = [['1', '0 0', { name: 'A' }], ['2', '1 0', { name: 'NC2' }], ['3', '2 0', { name: 'B' }], ['4', '3 0', { name: 'C' }]]
+  const pads = [
+    ['1', '0 0', { name: 'A' }],
+    ['2', '1 0', { name: 'NC2' }],
+    ['3', '2 0', { name: 'B' }],
+    ['4', '3 0', { name: 'C' }],
+  ]
   const Mod = padFp('Mod', pads, { pins: ['A', 'B', 'C'] })
   assert.throws(() => compileBoard(board(h(Mod().connect(A, B, C), { at: '5 5' }))), /Mod\(\): pad 2 "NC2" of footprint Mod matches no pin.*Its pins are A, B, C/)
 })
 
 test('pads: nc on the pad or in the factory nc list gives no net and no unconnected-pin finding', () => {
   const { A, B, C } = nets()
-  const base = [['1', '0 0', { name: 'A' }], ['3', '2 0', { name: 'B' }], ['4', '3 0', { name: 'C' }]]
+  const base = [
+    ['1', '0 0', { name: 'A' }],
+    ['3', '2 0', { name: 'B' }],
+    ['4', '3 0', { name: 'C' }],
+  ]
   const OnPad = padFp('OnPad', [...base, ['2', '1 0', { name: 'NC2', nc: true }]], { pins: ['A', 'B', 'C'] })
   const InList = padFp('InList', [...base, ['2', '1 0', { name: 'NC2' }], ['5', '4 0']], { pins: ['A', 'B', 'C'], nc: ['NC2', 5] })
   assert.deepEqual(InList.nc, ['NC2', '5'])
-  const P = OnPad().connect(A, B, C), Q = InList().connect(A, B, C)
+  const P = OnPad().connect(A, B, C),
+    Q = InList().connect(A, B, C)
   const b = compileBoard(board(h(P, { at: '5 5' }), h(Q, { at: '5 10' })))
   for (const ref of ['U1', 'U2']) {
     const pads = b.items.filter(i => i.kind === 'pad' && i.ref === ref)
@@ -316,7 +406,10 @@ test('pads: nc on the pad or in the factory nc list gives no net and no unconnec
   }
   assert.deepEqual(errors(b), [])
   assert.equal(rule(b, 'unconnected-pin').length, 0)
-  assert.deepEqual(b.schematic.parts.find(p => p.ref === 'U2').pins.map(p => p.name), ['A', 'B', 'C'])
+  assert.deepEqual(
+    b.schematic.parts.find(p => p.ref === 'U2').pins.map(p => p.name),
+    ['A', 'B', 'C'],
+  )
   // an unconnected pin is still reported; a name both a pin and an nc pad is rejected
   const R = OnPad().connect({ A, B })
   assert.equal(rule(compileBoard(board(h(R, { at: '5 5' }))), 'unconnected-pin').length, 1)
@@ -325,7 +418,15 @@ test('pads: nc on the pad or in the factory nc list gives no net and no unconnec
 
 test('pads: a pin with several pads routes from the pad nearest the other end; pad() and "REF.PAD" address one pad', () => {
   const { VB, G } = nets()
-  const Usb = padFp('Usb', [['A9', '-1.5 0', { name: 'VBUS' }], ['B4', '1.5 0', { name: 'VBUS' }], ['G', '0 1', { name: 'GND' }]], { pins: ['VBUS', 'GND'] })
+  const Usb = padFp(
+    'Usb',
+    [
+      ['A9', '-1.5 0', { name: 'VBUS' }],
+      ['B4', '1.5 0', { name: 'VBUS' }],
+      ['G', '0 1', { name: 'GND' }],
+    ],
+    { pins: ['VBUS', 'GND'] },
+  )
   const J = Usb().connect(VB, G)
   const K = PinHeader(2).connect(VB, G)
   const ends = (...routes) => {
@@ -334,10 +435,12 @@ test('pads: a pin with several pads routes from the pad nearest the other end; p
   }
   // K is to the right, so J.VBUS starts at B4, x = 11.5
   let [[a, z]] = ends(route(VB, { from: J.VBUS, to: K[1], width: 0.25 }))
-  nearPt(a, [11.5, 5]); nearPt(z, [25, 5])
+  nearPt(a, [11.5, 5])
+  nearPt(z, [25, 5])
   // the other way round: the end is the pin handle
   ;[[a, z]] = ends(route(VB, { from: K[1], to: J.VBUS, width: 0.25 }))
-  nearPt(a, [25, 5]); nearPt(z, [11.5, 5])
+  nearPt(a, [25, 5])
+  nearPt(z, [11.5, 5])
   // a pad handle picks A9 although B4 is nearer, by number or by a unique name
   ;[[a]] = ends(route(VB, { from: J.pad('A9'), to: K[1], width: 0.25 }))
   nearPt(a, [8.5, 5])
@@ -381,21 +484,43 @@ test('types: every defineFootprint form gives literal pin names, and tsc rejects
   const file = join(dir, 'fixture.ts')
   writeFileSync(file, lines.join('\n') + '\n')
   try {
-    const program = ts.createProgram([file], { strict: true, noEmit: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, skipLibCheck: true, types: [] })
+    const program = ts.createProgram([file], {
+      strict: true,
+      noEmit: true,
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      skipLibCheck: true,
+      types: [],
+    })
     const diags = ts.getPreEmitDiagnostics(program).filter(d => d.file?.fileName === file)
     const byLine = new Map(diags.map(d => [d.file.getLineAndCharacterOfPosition(d.start).line, ts.flattenDiagnosticMessageText(d.messageText, '\n')]))
     const badLines = lines.flatMap((l, i) => (l.startsWith('export const bad') ? [i] : []))
-    assert.deepEqual([...byLine.keys()].sort((a, b) => a - b), badLines, [...byLine.values()].join('\n---\n'))
+    assert.deepEqual(
+      [...byLine.keys()].sort((a, b) => a - b),
+      badLines,
+      [...byLine.values()].join('\n---\n'),
+    )
     assert.match(byLine.get(badLines[1]), /Property 'IO99' does not exist/)
     assert.match(byLine.get(badLines[2]), /Property 'PA99' does not exist/)
     // a widened string[] gives a part without named pin keys, so even a real pin name is an error that points at the list
     assert.match(byLine.get(badLines[4]), /Property 'IO0' does not exist on type 'Part<string(, never)?>'/)
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('pad keys: a number is a pad number, any other key a pin first, then a pad id of the rendered footprint; an unknown key names the nearest pin or pad', () => {
   const { VB, G } = nets()
-  const Usb = padFp('Usb', [['A9', '-1.5 0', { name: 'VBUS' }], ['B4', '1.5 0', { name: 'VBUS' }], ['G', '0 1', { name: 'GND' }]], { pins: ['VBUS', 'GND'] })
+  const Usb = padFp(
+    'Usb',
+    [
+      ['A9', '-1.5 0', { name: 'VBUS' }],
+      ['B4', '1.5 0', { name: 'VBUS' }],
+      ['G', '0 1', { name: 'GND' }],
+    ],
+    { pins: ['VBUS', 'GND'] },
+  )
   const J = Usb().connect(VB, G)
   assert.equal(J['A9'], J.pad('A9'))
   assert.equal(J.A9.pad, 'A9')
@@ -403,12 +528,29 @@ test('pad keys: a number is a pad number, any other key a pin first, then a pad 
   // G is a pad number but no pin, GND a pin
   assert.equal(J.G, J.pad('G'))
   assert.equal(J.GND.pad, undefined)
-  assert.throws(() => J[1], e => e instanceof SchematicError && /^Usb\(\) has no pad numbered "1"; a number key is a pad number, never a pin position\. Its pads are A9, B4, G; its pins are VBUS, GND$/.test(e.message))
-  assert.throws(() => J.B5, e => e instanceof SchematicError && /^Usb\(\) has no pin or pad "B5"; did you mean B4\? Its pins are VBUS, GND; its pads are A9, B4, G$/.test(e.message))
+  assert.throws(
+    () => J[1],
+    e =>
+      e instanceof SchematicError &&
+      /^Usb\(\) has no pad numbered "1"; a number key is a pad number, never a pin position\. Its pads are A9, B4, G; its pins are VBUS, GND$/.test(e.message),
+  )
+  assert.throws(
+    () => J.B5,
+    e => e instanceof SchematicError && /^Usb\(\) has no pin or pad "B5"; did you mean B4\? Its pins are VBUS, GND; its pads are A9, B4, G$/.test(e.message),
+  )
   assert.throws(() => J.XYZ, /has no pin or pad "XYZ"\. Its pins are VBUS, GND; its pads are A9, B4, G/)
   // a number is the pad of that number, whatever pin sits there: pin 2 is B, on pad 3
   const { A, B, C } = nets()
-  const Swap = padFp('Swap', [['1', '0 0', { name: 'A' }], ['2', '1 0', { name: 'C' }], ['3', '2 0', { name: 'B' }], ['4', '3 0', { name: 'C' }]], { pins: ['A', 'B', 'C'] })
+  const Swap = padFp(
+    'Swap',
+    [
+      ['1', '0 0', { name: 'A' }],
+      ['2', '1 0', { name: 'C' }],
+      ['3', '2 0', { name: 'B' }],
+      ['4', '3 0', { name: 'C' }],
+    ],
+    { pins: ['A', 'B', 'C'] },
+  )
   const S = Swap().connect(A, B, C)
   assert.equal(S[2], S.pad('2'))
   assert.equal(S[2].net, C)
@@ -422,7 +564,15 @@ test('pad keys: a number is a pad number, any other key a pin first, then a pad 
   assert.equal(T.C.net, C)
   assert.throws(() => Swap().connect({ 5: A }), /Swap\(\)\.connect: no pin "5"; its pins are A, B, C/)
   // a pad number that is also the name of the pin on it is that pin, a pin handle
-  const P = padFp('Num', [['1', '0 0'], ['2', '1 0'], ['3', '2 0', { name: '1' }]], { pins: ['1', '2'] })()
+  const P = padFp(
+    'Num',
+    [
+      ['1', '0 0'],
+      ['2', '1 0'],
+      ['3', '2 0', { name: '1' }],
+    ],
+    { pins: ['1', '2'] },
+  )()
   assert.equal(P[2], P.pin('2'))
   assert.equal(P[2].pad, undefined)
   // pin 1 is on pad 1 and on pad 3, named 1: the number then means only pad 1
@@ -443,18 +593,29 @@ test('pad keys: a number is a pad number, any other key a pin first, then a pad 
 
 test('pad keys: routes between pad handles compile through compileBoards and end at those pads', () => {
   const { VB, G, D } = nets()
-  const Usb = padFp('Usb', [['A9', '-1.5 0', { name: 'VBUS' }], ['B4', '1.5 0', { name: 'VBUS' }], ['G', '0 1', { name: 'GND' }], ['T', '0 -1', { name: 'D' }]], { pins: ['VBUS', 'GND', 'D'] })
+  const Usb = padFp(
+    'Usb',
+    [
+      ['A9', '-1.5 0', { name: 'VBUS' }],
+      ['B4', '1.5 0', { name: 'VBUS' }],
+      ['G', '0 1', { name: 'GND' }],
+      ['T', '0 -1', { name: 'D' }],
+    ],
+    { pins: ['VBUS', 'GND', 'D'] },
+  )
   const J = Usb().connect(VB, G, D)
   const K = PinHeader(2).connect(VB, G)
-  const [b] = compileBoards(board(h(J, { at: '10 5' }), h(K, { at: '25 5' }),
-    route(VB, { from: J['A9'], to: K[1], width: 0.25 }),
-    route(G, { from: J.G, to: K[2], width: 0.25 })))
+  const [b] = compileBoards(board(h(J, { at: '10 5' }), h(K, { at: '25 5' }), route(VB, { from: J['A9'], to: K[1], width: 0.25 }), route(G, { from: J.G, to: K[2], width: 0.25 })))
   const ends = net => b.items.filter(i => i.kind === 'track' && i.net === net).map(t => [t.pts[0], t.pts.at(-1)])
   const [[a, z]] = ends('VB')
-  nearPt(a, [8.5, 5]); nearPt(z, [25, 5])
+  nearPt(a, [8.5, 5])
+  nearPt(z, [25, 5])
   const [[g]] = ends('G')
   nearPt(g, [10, 6])
-  assert.deepEqual(b.drc.filter(d => d.severity === 'error'), [])
+  assert.deepEqual(
+    b.drc.filter(d => d.severity === 'error'),
+    [],
+  )
 })
 
 test('types: pad ids are typed keys, pin keys win, and tsc rejects an unknown pad id', async () => {
@@ -516,8 +677,21 @@ test('types: pad ids are typed keys, pin keys win, and tsc rejects an unknown pa
   const file = join(dir, 'fixture.ts')
   writeFileSync(file, lines.join('\n') + '\n')
   try {
-    const program = ts.createProgram([file], { strict: true, noEmit: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, skipLibCheck: true, types: [] })
+    const program = ts.createProgram([file], {
+      strict: true,
+      noEmit: true,
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      skipLibCheck: true,
+      types: [],
+    })
     const diags = ts.getPreEmitDiagnostics(program).filter(d => d.file?.fileName === file)
-    assert.deepEqual(diags.map(d => `${d.file.getLineAndCharacterOfPosition(d.start).line + 1}: ${ts.flattenDiagnosticMessageText(d.messageText, '\n')}`), [])
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+    assert.deepEqual(
+      diags.map(d => `${d.file.getLineAndCharacterOfPosition(d.start).line + 1}: ${ts.flattenDiagnosticMessageText(d.messageText, '\n')}`),
+      [],
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

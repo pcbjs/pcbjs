@@ -12,10 +12,17 @@ export function deepFreeze<T>(v: T): Readonly<T> {
 /** A deep copy of plain objects and arrays; functions, such as a RouteFn, and other objects are kept by reference. */
 export function cloneData<T>(v: T): T {
   if (Array.isArray(v)) return v.map(cloneData) as T
-  if (v && typeof v === 'object' && isPlain(v)) { const o: Record<string, unknown> = {}; for (const [k, x] of Object.entries(v)) o[k] = cloneData(x); return o as T }
+  if (v && typeof v === 'object' && isPlain(v)) {
+    const o: Record<string, unknown> = {}
+    for (const [k, x] of Object.entries(v)) o[k] = cloneData(x)
+    return o as T
+  }
   return v
 }
-const isPlain = (v: object) => { const p = Object.getPrototypeOf(v); return p === Object.prototype || p === null }
+const isPlain = (v: object) => {
+  const p = Object.getPrototypeOf(v)
+  return p === Object.prototype || p === null
+}
 
 /** `base` with the defined keys of `overrides` on top; `thermal`, `edge` and the hole clearance sides merge key by key. */
 export function mergeRules(base: Rules, ...overrides: (Partial<Rules> | null | undefined)[]): Rules {
@@ -27,7 +34,7 @@ export function mergeRules(base: Rules, ...overrides: (Partial<Rules> | null | u
       const was = (out as any)[k]
       if ((k === 'holeClearance' || k === 'minHoleToHole') && v && typeof v === 'object') {
         const sides = k === 'holeClearance' ? ['inner', 'outer'] : ['pad', 'via']
-        ;(out as any)[k] = { ...(typeof was === 'number' ? Object.fromEntries(sides.map(s => [s, was])) : was ?? {}), ...v }
+        ;(out as any)[k] = { ...(typeof was === 'number' ? Object.fromEntries(sides.map(s => [s, was])) : (was ?? {})), ...v }
         continue
       }
       ;(out as any)[k] = (k === 'thermal' || k === 'edge' || k === 'maskWebByColor') && was && v && typeof v === 'object' ? { ...was, ...v } : v
@@ -106,16 +113,19 @@ export function defaultVia(r: Rules): { drill: number; size: number } {
 /** Resolve hole clearances given by side to the larger side, keeping the sides in `holeClearanceBy` and `minHoleToHoleBy`. */
 export function resolveRules(r: Rules): ResolvedRules {
   // a set resolved before has its sides made again from its values; the keys keep their order, which the route and tune cache keys hash
-  const hc = r.holeClearance, hh = r.minHoleToHole
+  const hc = r.holeClearance,
+    hh = r.minHoleToHole
   const out = {} as ResolvedRules
   for (const [k, v] of Object.entries(r)) if (k !== 'holeClearanceBy' && k !== 'minHoleToHoleBy') (out as any)[k] = v
   if (typeof hc === 'object') {
-    const inner = hc.inner ?? hc.outer ?? hc.via ?? 0, outer = hc.outer ?? hc.inner ?? hc.via ?? 0
+    const inner = hc.inner ?? hc.outer ?? hc.via ?? 0,
+      outer = hc.outer ?? hc.inner ?? hc.via ?? 0
     out.holeClearance = Math.max(inner, outer, hc.via ?? 0)
     out.holeClearanceBy = { inner, outer, ...(hc.via !== undefined ? { via: hc.via } : {}) }
   } else out.holeClearance = hc
   if (typeof hh === 'object') {
-    const pad = hh.pad ?? hh.via ?? 0, via = hh.via ?? hh.pad ?? 0
+    const pad = hh.pad ?? hh.via ?? 0,
+      via = hh.via ?? hh.pad ?? 0
     out.minHoleToHole = Math.max(pad, via)
     out.minHoleToHoleBy = { pad, via }
   } else out.minHoleToHole = hh

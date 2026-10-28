@@ -7,7 +7,10 @@ const memo = new Map<string, unknown>()
 export function memoised<T>(family: string, args: unknown[], build: () => T): T {
   const key = `${family}:${JSON.stringify(args)}`
   let f = memo.get(key) as T | undefined
-  if (f === undefined) { f = build(); memo.set(key, f) }
+  if (f === undefined) {
+    f = build()
+    memo.set(key, f)
+  }
   return f
 }
 
@@ -26,7 +29,8 @@ export function sizeArg(gen: string, what: string, v: unknown, hint = ''): asser
 }
 
 export function intArg(gen: string, what: string, v: unknown, min: number, max = Infinity): asserts v is number {
-  if (!(typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max)) throw new TypeError(`${gen}: ${what} must be a whole number ${max === Infinity ? `of at least ${min}` : `from ${min} to ${max}`}, got ${show(v)}`)
+  if (!(typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max))
+    throw new TypeError(`${gen}: ${what} must be a whole number ${max === Infinity ? `of at least ${min}` : `from ${min} to ${max}`}, got ${show(v)}`)
 }
 
 export function optsArg(gen: string, v: unknown, known: readonly string[], position = 'the options'): void {
@@ -39,26 +43,37 @@ export function optsArg(gen: string, v: unknown, known: readonly string[], posit
 export function show(v: unknown): string {
   if (typeof v === 'function') return 'a function'
   if (v === undefined) return 'undefined'
-  try { return JSON.stringify(v) ?? String(v) } catch { return String(v) }
+  try {
+    return JSON.stringify(v) ?? String(v)
+  } catch {
+    return String(v)
+  }
 }
 
 /** The options a connector call takes besides its value: the family's own, the generator's and the part's. */
-export type ConnectorOptions<N extends string = string, G = {}> = G & PartOptions & {
-  /** pin names, as the generators' `pinNames`: a list in pin order or a record keyed by pad number or pin */
-  pinNames?: PinNames<N>
-  /** the ref prefix, default the family's */
-  prefix?: string
-  /** the silk: 'full', 'open' without the mating side, or 'none'; see GeneratorOptions */
-  silk?: 'full' | 'open' | 'none'
-}
+export type ConnectorOptions<N extends string = string, G = {}> = G &
+  PartOptions & {
+    /** pin names, as the generators' `pinNames`: a list in pin order or a record keyed by pad number or pin */
+    pinNames?: PinNames<N>
+    /** the ref prefix, default the family's */
+    prefix?: string
+    /** the silk: 'full', 'open' without the mating side, or 'none'; see GeneratorOptions */
+    silk?: 'full' | 'open' | 'none'
+  }
 
 const PART_OPTION_KEYS = ['value', 'fields', 'source', 'bom', 'pos', 'description', 'height', 'model']
 
-export function connectorCall(gen: string, arg: unknown, known: readonly string[], position: string): { gen: Record<string, any>; part: string | number | Record<string, unknown> | undefined } {
+export function connectorCall(
+  gen: string,
+  arg: unknown,
+  known: readonly string[],
+  position: string,
+): { gen: Record<string, any>; part: string | number | Record<string, unknown> | undefined } {
   if (arg === undefined || arg === null) return { gen: {}, part: undefined }
   if (typeof arg === 'string' || typeof arg === 'number') return { gen: {}, part: arg }
   if (typeof arg !== 'object' || Array.isArray(arg)) throw new TypeError(`${gen}: ${position} must be the value, such as 'B4B-XH-A', or an options object, got ${show(arg)}`)
-  const g: Record<string, unknown> = {}, p: Record<string, unknown> = {}
+  const g: Record<string, unknown> = {},
+    p: Record<string, unknown> = {}
   const genKeys = [...known, 'pinNames', 'prefix', 'silk']
   for (const [k, v] of Object.entries(arg)) {
     if (genKeys.includes(k)) g[k] = v

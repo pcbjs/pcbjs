@@ -37,9 +37,14 @@ async function compiled(example, passes, prepare = () => {}) {
         if (errs.length) throw errs[0]
         out.push(state.slots.flatMap(s => s.compiled ?? []).map(c => c.board))
       }
-    } finally { await server.close() }
+    } finally {
+      await server.close()
+    }
     return out
-  } finally { clearRouteCache(); rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    clearRouteCache()
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 for (const example of ['usb3-hub', 'usb-hub', 'eth-phy']) {
@@ -49,12 +54,19 @@ for (const example of ['usb3-hub', 'usb-hub', 'eth-phy']) {
     cold.forEach((b, i) => {
       assert.equal(warm[i].routing.cached, warm[i].routing.legs, 'every leg from the cache')
       assert.deepEqual(warm[i].items, b.items)
-      assert.deepEqual(warm[i].drc.map(d => d.message), b.drc.map(d => d.message))
-      assert.deepEqual(b.drc.filter(d => d.severity === 'error').map(d => d.message), [])
+      assert.deepEqual(
+        warm[i].drc.map(d => d.message),
+        b.drc.map(d => d.message),
+      )
+      assert.deepEqual(
+        b.drc.filter(d => d.severity === 'error').map(d => d.message),
+        [],
+      )
     })
     if (example === 'usb3-hub') {
       // cold routes in about 5 s unloaded; the warm run beside it in this process is the baseline, so load scales both
-      const { route: c } = cold[0].timings, { route: w } = warm[0].timings
+      const { route: c } = cold[0].timings,
+        { route: w } = warm[0].timings
       assert.ok(c < 60000, `cold route ${c} ms`)
       assert.ok(w < c / 3, `warm route ${w} ms against cold ${c} ms`)
     }
@@ -68,6 +80,9 @@ test('examples/usb3-hub: the route file of a warm compile that reported a short 
     cpSync(join(HERE, 'usb3-hub-short', 'routes-short.json'), join(dir, '.pcbjs', 'routes', 'usb3-hub.json'))
   })
   // the file stored P1/PWRCTL and P2/PWRCTL crossing at (67.65, 33.98), each with a hash that matched
-  assert.deepEqual(b.drc.filter(d => d.rule === 'short' || d.rule === 'clearance').map(d => d.message), [])
+  assert.deepEqual(
+    b.drc.filter(d => d.rule === 'short' || d.rule === 'clearance').map(d => d.message),
+    [],
+  )
   assert.ok(b.routing.cached > 0, 'the rest of the file is used')
 })

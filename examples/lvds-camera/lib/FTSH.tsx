@@ -11,7 +11,8 @@ function FTSHFootprint(props: FootprintProps) {
   return (
     <footprint id="lvds:FTSH-110-01-L-DV" value="FTSH-110" height={4.3} {...rest}>
       {PINS.map((num, i) => {
-        const k = Math.floor(i / 2), odd = i % 2 === 0
+        const k = Math.floor(i / 2),
+          odd = i % 2 === 0
         return <pad num={num} at={`${(k - 4.5) * 1.27} ${odd ? 2.0 : -2.0}`} size={[0.74, 2.4]} />
       })}
       {silkRect(13.6, 1.0)}

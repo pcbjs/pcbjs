@@ -10,12 +10,15 @@ import { chain } from '../lib/wire'
 import * as sch from './controller.sch'
 
 const Hole = MountingHole(3.2)
-const SIG = 0.2, PWR = 0.4
+const SIG = 0.2,
+  PWR = 0.4
 
 export default (
   <PCB name="controller" title="Motor stack controller" revision="0.1.0" schematic={sch} color="blue">
     <path layer="Edge.Cuts" d={roundedRect(W, H, 2)} />
-    {HOLES.map(([x, y], i) => <Hole ref={`H${i + 1}`} at={`${x} ${y}`} />)}
+    {HOLES.map(([x, y], i) => (
+      <Hole ref={`H${i + 1}`} at={`${x} ${y}`} />
+    ))}
 
     {/* the socket on the back, mating the driver header; the MCU turned so TIM1 faces it */}
     <J1 at={SOCKET_AT} side="B" thermal={{ 9: 'solid', 10: 'solid', 17: 'solid', 18: 'solid' }} />
@@ -55,8 +58,14 @@ export default (
     <D1 at="42 33 180deg" />
 
     {/* test pads for the jig on the back */}
-    {TP.map((T, i) => <T at={`${TEST_PADS[i].x} ${TEST_PADS[i].y}`} side="B" />)}
-    {TEST_PADS.map(t => <text layer="B.SilkS" at={`${t.x} ${t.y - 2.2}`} size={0.7}>{t.name}</text>)}
+    {TP.map((T, i) => (
+      <T at={`${TEST_PADS[i].x} ${TEST_PADS[i].y}`} side="B" />
+    ))}
+    {TEST_PADS.map(t => (
+      <text layer="B.SilkS" at={`${t.x} ${t.y - 2.2}`} size={0.7}>
+        {t.name}
+      </text>
+    ))}
 
     {/* supplies */}
     {chain(PWR, J1[socketPin(V5)], J1[socketPin(V5) + 1])}
@@ -78,9 +87,22 @@ export default (
     {chain(SIG, C_LOUT[1], J3[1])}
 
     {/* the bridge commands, sense and status to the socket */}
-    {([[U1.PA8, nHA], [U1.PB13, nLA], [U1.PA9, nHB], [U1.PB14, nLB], [U1.PA10, nHC], [U1.PB15, nLC],
-      [U1.PA1, ISA], [U1.PA7, ISB], [U1.PB0, ISC], [U1.PA0, VSNS], [U1.PB12, nFAULT], [U1.PB11, SD]] as const)
-      .map(([pin, net]) => chain(SIG, pin, J1[socketPin(net)]))}
+    {(
+      [
+        [U1.PA8, nHA],
+        [U1.PB13, nLA],
+        [U1.PA9, nHB],
+        [U1.PB14, nLB],
+        [U1.PA10, nHC],
+        [U1.PB15, nLC],
+        [U1.PA1, ISA],
+        [U1.PA7, ISB],
+        [U1.PB0, ISC],
+        [U1.PA0, VSNS],
+        [U1.PB12, nFAULT],
+        [U1.PB11, SD],
+      ] as const
+    ).map(([pin, net]) => chain(SIG, pin, J1[socketPin(net)]))}
     {chain(SIG, R_FLT[2], U1.PB12)}
     {chain(SIG, R_SD[2], U1.PB11)}
     {/* clock, CAN, debug */}
@@ -109,11 +131,34 @@ export default (
     {/* ground: both layers poured, stitched */}
     {pour(GND, 'F.Cu', rect(W, H), { connect: 'solid' })}
     {pour(GND, 'B.Cu', rect(W, H))}
-    {[[14, 14], [14, 30], [26, 36], [44, 36], [44, 8], [52, 14], [30, 9], [36, 30]].map(([x, y]) => via(GND, `${x} ${y}`))}
+    {[
+      [14, 14],
+      [14, 30],
+      [26, 36],
+      [44, 36],
+      [44, 8],
+      [52, 14],
+      [30, 9],
+      [36, 30],
+    ].map(([x, y]) => via(GND, `${x} ${y}`))}
     {/* F.Cu GND pieces the tracks fence off: VSS pin 35 tied to its decoupling capacitor, the VDDA capacitor to the VDD3 one, a stitching via in each other piece */}
-    {chain(0.3, U1.pad('35'), C_VDD1[2])}{chain(0.3, C_VDDA[2], C_VDD3[2])}{[[31.38, 27.11], [21.92, 24.32], [39.85, 19.4], [25.75, 17.97], [13.88, 7.39], [22.01, 5.3], [40.67, 20.8], [45.95, 17.75], [48.58, 25.9]].map(([x, y]) => via(GND, `${x} ${y}`, { drill: 0.2, size: 0.45 }))}
+    {chain(0.3, U1.pad('35'), C_VDD1[2])}
+    {chain(0.3, C_VDDA[2], C_VDD3[2])}
+    {[
+      [31.38, 27.11],
+      [21.92, 24.32],
+      [39.85, 19.4],
+      [25.75, 17.97],
+      [13.88, 7.39],
+      [22.01, 5.3],
+      [40.67, 20.8],
+      [45.95, 17.75],
+      [48.58, 25.9],
+    ].map(([x, y]) => via(GND, `${x} ${y}`, { drill: 0.2, size: 0.45 }))}
 
-    <text layer="F.SilkS" at="44 41" size={1.2}>motor-stack controller</text>
+    <text layer="F.SilkS" at="44 41" size={1.2}>
+      motor-stack controller
+    </text>
 
     {/* the driver below, its header in the socket: the socket's V5 pin on the header's V5 pin, the socket turned 180deg */}
     {reference('../driver/pcb.tsx', { mate: { local: J1[socketPin(V5)], remote: 'J1', pin: headerPin(V5), nets: true }, stack: 'below', rotate: 180 })}

@@ -23,15 +23,19 @@ const NEXT: Record<Exclude<Step, 'end'>, [[number, number, string], string]> = {
   up: [[0.8, 0.55 - PITCH, 'F.Cu'], `H 2 V ${0.55 - PITCH} Z`],
 }
 
-export const PixelCell = layout(pixel, (g, { at, step = 'right' }: { at?: At; step?: Step }) => (
-  <g at={at}>
-    <g.LED at="0 0 180deg" />
-    <g.C at="0 2" refAt="-1.7 0.6 90" />
-    {/* GND pads drop to the back pour */}
-    {route(g.LED.GND, '0.8 -1.6', 'Z').width(0.25)}
-    {via(g.ports.GND, '0.8 -1.6')}
-    {route(g.C[2], '1.3 2.6', 'Z').width(0.25)}
-    {via(g.ports.GND, '1.3 2.6')}
-    {step !== 'end' && route(g.LED.DOUT, NEXT[step][0], NEXT[step][1]).width(0.2)}
-  </g>
-), 'PixelCell')
+export const PixelCell = layout(
+  pixel,
+  (g, { at, step = 'right' }: { at?: At; step?: Step }) => (
+    <g at={at}>
+      <g.LED at="0 0 180deg" />
+      <g.C at="0 2" refAt="-1.7 0.6 90" />
+      {/* GND pads drop to the back pour */}
+      {route(g.LED.GND, '0.8 -1.6', 'Z').width(0.25)}
+      {via(g.ports.GND, '0.8 -1.6')}
+      {route(g.C[2], '1.3 2.6', 'Z').width(0.25)}
+      {via(g.ports.GND, '1.3 2.6')}
+      {step !== 'end' && route(g.LED.DOUT, NEXT[step][0], NEXT[step][1]).width(0.2)}
+    </g>
+  ),
+  'PixelCell',
+)

@@ -2,9 +2,17 @@
 import type { RepoLink, SiteData, SourceIndex, SourceRange } from '@pcbjs/core/site-data'
 
 /** A range together with the file it belongs to, as the index keys it. */
-export interface Located { file: string; range: SourceRange }
+export interface Located {
+  file: string
+  range: SourceRange
+}
 /** What a cursor position resolves to: the innermost range and every item it and its nested ranges produced. */
-export interface CursorHit { file: string; range: SourceRange; ids: number[]; refs: string[] }
+export interface CursorHit {
+  file: string
+  range: SourceRange
+  ids: number[]
+  refs: string[]
+}
 
 type Pos = [number, number]
 const cmp = (a: Pos, b: Pos) => a[0] - b[0] || a[1] - b[1]
@@ -23,21 +31,29 @@ function smallest(found: Located[]): Located | null {
 /** The innermost range listing an item id, or a footprint ref given a string; `whole` skips single path commands. */
 export function rangeFor(sources: SourceIndex | undefined, item: number | string, whole = false): Located | null {
   if (!sources) return null
-  const found: Located[] = [], own: Located[] = []
-  for (const [file, ranges] of Object.entries(sources)) for (const range of ranges) {
-    if (whole && range.seg !== undefined) continue
-    if (!(typeof item === 'number' ? range.ids.includes(item) : range.refs.includes(item))) continue
-    found.push({ file, range })
-    // a call that drew the item wins over a shorter call site around it, such as `<Row g={CH1} />` around a pour
-    if (typeof item === 'string' || !range.outer?.includes(item)) own.push({ file, range })
-  }
+  const found: Located[] = [],
+    own: Located[] = []
+  for (const [file, ranges] of Object.entries(sources))
+    for (const range of ranges) {
+      if (whole && range.seg !== undefined) continue
+      if (!(typeof item === 'number' ? range.ids.includes(item) : range.refs.includes(item))) continue
+      found.push({ file, range })
+      // a call that drew the item wins over a shorter call site around it, such as `<Row g={CH1} />` around a pour
+      if (typeof item === 'string' || !range.outer?.includes(item)) own.push({ file, range })
+    }
   return smallest(own.length ? own : found)
 }
 
 /** Where a source link goes: a range, or a bare position when only a footprint's `src` without an end is known. `abs` is the absolute path when known. */
-export interface SourceTarget { file: string; start: Pos; end?: Pos; abs?: string
+export interface SourceTarget {
+  file: string
+  start: Pos
+  end?: Pos
+  abs?: string
   /** a clicked pad, `Q1.2`, and its board: the dev server opens its key in the code when the language server finds one */
-  pad?: string; board?: string }
+  pad?: string
+  board?: string
+}
 /** Which end of an item's call chain a link opens: the outermost call that placed its footprint, or the innermost range that drew it. */
 export type SourceKind = 'placement' | 'definition'
 
@@ -55,11 +71,18 @@ export function definitionOf(board: Pick<SiteData, 'footprints'>, ref: string): 
 }
 
 /** Where a source link on an item goes: its footprint's placement or the innermost range that drew it, by `kind`. */
-export function sourceTarget(board: Pick<SiteData, 'sources' | 'footprints'>, item: { id?: number | null; ref?: string | null }, kind: SourceKind = 'placement'): SourceTarget | null {
+export function sourceTarget(
+  board: Pick<SiteData, 'sources' | 'footprints'>,
+  item: { id?: number | null; ref?: string | null },
+  kind: SourceKind = 'placement',
+): SourceTarget | null {
   const placed = item.ref ? placementOf(board, item.ref) : null
   if (kind === 'placement' && placed) return placed
   // a footprint body has no item of its own, so its definition comes from the footprint, not from the smallest range that lists the ref
-  if (item.id == null && item.ref) { const def = definitionOf(board, item.ref); if (def) return def }
+  if (item.id == null && item.ref) {
+    const def = definitionOf(board, item.ref)
+    if (def) return def
+  }
   const hit = resolveItem(board, item, kind === 'definition')
   return hit ? { file: hit.file, start: hit.range.start, end: hit.range.end } : placed
 }
@@ -107,8 +130,13 @@ export function resolveCursor(sources: SourceIndex | undefined, file: string, li
 
 /** The ids and refs of a range and of every range of the same file nested inside it. */
 export function itemsIn(ranges: SourceRange[], outer: SourceRange): { ids: number[]; refs: string[] } {
-  const ids = new Set(outer.ids), refs = new Set(outer.refs)
-  for (const r of ranges) if (r !== outer && within(r, outer)) { for (const i of r.ids) ids.add(i); for (const s of r.refs) refs.add(s) }
+  const ids = new Set(outer.ids),
+    refs = new Set(outer.refs)
+  for (const r of ranges)
+    if (r !== outer && within(r, outer)) {
+      for (const i of r.ids) ids.add(i)
+      for (const s of r.refs) refs.add(s)
+    }
   return { ids: [...ids], refs: [...refs] }
 }
 
@@ -116,22 +144,35 @@ export function itemsIn(ranges: SourceRange[], outer: SourceRange): { ids: numbe
 export function repoUrl(repo: RepoLink, file: string, range: Pick<SourceRange, 'start' | 'end'>): string {
   const base = repo.url.replace(/\/+$/, '')
   const seg = (p: string) => p.split('/').map(encodeURIComponent).join('/')
-  const path = seg(repo.dir + norm(file)), ref = seg(repo.ref)
-  const a = range.start[0], b = range.end[0]
+  const path = seg(repo.dir + norm(file)),
+    ref = seg(repo.ref)
+  const a = range.start[0],
+    b = range.end[0]
   switch (repo.kind) {
-    case 'github': return `${base}/blob/${ref}/${path}#L${a}-L${b}`
-    case 'gitlab': return `${base}/-/blob/${ref}/${path}#L${a}-${b}`
-    case 'gitea': return `${base}/src/${ref}/${path}#L${a}-L${b}`
-    case 'bitbucket': return `${base}/src/${ref}/${path}#lines-${a}:${b}`
-    default: return `${base}/${path}#L${a}`
+    case 'github':
+      return `${base}/blob/${ref}/${path}#L${a}-L${b}`
+    case 'gitlab':
+      return `${base}/-/blob/${ref}/${path}#L${a}-${b}`
+    case 'gitea':
+      return `${base}/src/${ref}/${path}#L${a}-L${b}`
+    case 'bitbucket':
+      return `${base}/src/${ref}/${path}#lines-${a}:${b}`
+    default:
+      return `${base}/${path}#L${a}`
   }
 }
 
 /** The query of the dev open endpoint: the range, or a bare position when only a footprint's `src` is known. */
 export function openQuery(file: string, at: Pick<SourceRange, 'start'> & Partial<Pick<SourceRange, 'end'>> & { pad?: string; board?: string }): string {
   const q = new URLSearchParams({ file, line: String(at.start[0]), col: String(at.start[1]) })
-  if (at.end) { q.set('endLine', String(at.end[0])); q.set('endCol', String(at.end[1])) }
-  if (at.pad) { q.set('pad', at.pad); if (at.board) q.set('board', at.board) }
+  if (at.end) {
+    q.set('endLine', String(at.end[0]))
+    q.set('endCol', String(at.end[1]))
+  }
+  if (at.pad) {
+    q.set('pad', at.pad)
+    if (at.board) q.set('board', at.board)
+  }
   return q.toString()
 }
 
@@ -144,21 +185,37 @@ export function rangeLabel(file: string, r: Pick<SourceRange, 'start' | 'end'>):
 
 /** The footprint ref of every item id in the layer markup, for views that only know footprints. */
 export function refsOfIds(board: Pick<SiteData, 'layers'>, ids: Iterable<number>): Set<string> {
-  const want = new Set(ids), refs = new Set<string>()
+  const want = new Set(ids),
+    refs = new Set<string>()
   if (!want.size) return refs
-  for (const l of board.layers) for (const m of l.svg.matchAll(/<[a-z]+\b[^>]*\bdata-id="(\d+)"[^>]*>/g)) {
-    if (!want.has(+m[1])) continue
-    const r = /\bdata-ref="([^"]*)"/.exec(m[0])
-    if (r) refs.add(r[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'))
-  }
+  for (const l of board.layers)
+    for (const m of l.svg.matchAll(/<[a-z]+\b[^>]*\bdata-id="(\d+)"[^>]*>/g)) {
+      if (!want.has(+m[1])) continue
+      const r = /\bdata-ref="([^"]*)"/.exec(m[0])
+      if (r)
+        refs.add(
+          r[1]
+            .replace(/&quot;/g, '"')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&'),
+        )
+    }
   return refs
 }
 
 /** How a click follows to the source, from `editor.follow` in the config: 'click' opens on a plain click, 'meta-click' on cmd+click or ctrl+click. */
 export type FollowMode = 'click' | 'meta-click'
-export interface ClickKeys { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean }
+export interface ClickKeys {
+  metaKey: boolean
+  ctrlKey: boolean
+  shiftKey: boolean
+}
 /** What a click on an item does: whether it changes the selection, and which source link it opens, null for none. */
-export interface ClickAction { select: boolean; open: SourceKind | null }
+export interface ClickAction {
+  select: boolean
+  open: SourceKind | null
+}
 
 /** 'click' selects and opens on every click; 'meta-click' selects, and opens only with the link key, leaving the selection. */
 export function clickAction(follow: FollowMode, e: ClickKeys, mac: boolean): ClickAction {
@@ -168,7 +225,12 @@ export function clickAction(follow: FollowMode, e: ClickKeys, mac: boolean): Cli
 }
 
 /** A click's effect on the views: the net to pin and the part to select, null to clear, absent to keep; the source to open, quietly when it also selected. */
-export interface ClickPlan { pin?: string | null; select?: string | null; open: SourceKind | null; quiet: boolean }
+export interface ClickPlan {
+  pin?: string | null
+  select?: string | null
+  open: SourceKind | null
+  quiet: boolean
+}
 
 /** A pad, via or track pins its net, a part's item selects the part, a pour or anything else clears both; any item opens its source, a pour its pour() call. */
 export function clickPlan(it: { kind: string; ref?: string | null; net?: string | null } | null, act: ClickAction): ClickPlan {
@@ -177,7 +239,10 @@ export function clickPlan(it: { kind: string; ref?: string | null; net?: string 
   const plan: ClickPlan = { open, quiet: true }
   if (it && (it.kind === 'pad' || it.kind === 'via' || it.kind === 'track')) plan.pin = it.net ?? null
   if (it?.ref) plan.select = it.ref
-  if (!it || it.kind === 'zone' || (!it.ref && !it.net)) { plan.pin = null; plan.select = null }
+  if (!it || it.kind === 'zone' || (!it.ref && !it.net)) {
+    plan.pin = null
+    plan.select = null
+  }
   return plan
 }
 
@@ -191,9 +256,18 @@ export function followHint(follow: FollowMode, mac: boolean): string {
 }
 
 /** What the language server resolved under the editor cursor, per board: a part, a pad, a net, a group, a point or a reference. */
-export interface CursorTarget { kind: string; boards: { board: string; ids: number[]; refs: string[]; points?: Pos[]; reference?: string; name: string }[] }
+export interface CursorTarget {
+  kind: string
+  boards: { board: string; ids: number[]; refs: string[]; points?: Pos[]; reference?: string; name: string }[]
+}
 /** The highlight of a target on one board, with a label such as `pad Q1.2`; null when the target is not on it. */
-export interface TargetHighlight { ids: number[]; refs: string[]; points?: Pos[]; reference?: string; label: string }
+export interface TargetHighlight {
+  ids: number[]
+  refs: string[]
+  points?: Pos[]
+  reference?: string
+  label: string
+}
 
 export function targetHighlight(t: CursorTarget | null | undefined, board: string): TargetHighlight | null {
   const b = t?.boards.find(x => x.board === board)
@@ -209,7 +283,12 @@ export function padOf(board: Pick<SiteData, 'layers'>, id: number): string | nul
     if (at < 0) continue
     const tag = l.svg.slice(l.svg.lastIndexOf('<', at), l.svg.indexOf('>', at))
     const m = /\bdata-pad="([^"]*)"/.exec(tag)
-    if (m) return m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+    if (m)
+      return m[1]
+        .replace(/&quot;/g, '"')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
   }
   return null
 }

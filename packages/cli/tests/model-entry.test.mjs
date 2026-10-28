@@ -32,7 +32,10 @@ const root = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-model-entry-')))
 mkdirSync(join(root, 'node_modules'))
 mkdirSync(join(root, 'models'))
 symlinkSync(join(REPO, 'node_modules', '@pcbjs'), join(root, 'node_modules', '@pcbjs'), 'dir')
-writeFileSync(join(root, 'pcb.config.ts'), "import { defineConfig } from '@pcbjs/core'\nexport default defineConfig({ entries: ['base.tsx', 'sense.tsx'], vite: { logLevel: 'silent' } })\n")
+writeFileSync(
+  join(root, 'pcb.config.ts'),
+  "import { defineConfig } from '@pcbjs/core'\nexport default defineConfig({ entries: ['base.tsx', 'sense.tsx'], vite: { logLevel: 'silent' } })\n",
+)
 writeFileSync(join(root, 'base.tsx'), BASE)
 writeFileSync(join(root, 'sense.tsx'), SENSE)
 copyFileSync(join(REPO, 'examples', 'highspeed', 'models', 'R_0603_1608Metric.step'), join(root, 'models', 'R.step'))

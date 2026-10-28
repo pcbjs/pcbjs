@@ -2,13 +2,47 @@
 import type { HoverMsg, HoverTarget } from './sync'
 import { computed, effectScope, inject, reactive, shallowRef, watch, watchEffect, type InjectionKey } from 'vue'
 import type { SiteData, SourceRange } from '@pcbjs/core/site-data'
-import { clickAction, followHint, followOf, openQuery, padOf, refsOfIds, repoUrl, resolveCursor, sourceTarget, itemsIn, targetHighlight, type CursorTarget, type ClickAction, type FollowMode, type SourceKind, type SourceTarget } from './source'
+import {
+  clickAction,
+  followHint,
+  followOf,
+  openQuery,
+  padOf,
+  refsOfIds,
+  repoUrl,
+  resolveCursor,
+  sourceTarget,
+  itemsIn,
+  targetHighlight,
+  type CursorTarget,
+  type ClickAction,
+  type FollowMode,
+  type SourceKind,
+  type SourceTarget,
+} from './source'
 export { sourceTarget }
 export type { ClickAction, FollowMode, SourceKind, SourceTarget }
 import { focusSwitch, ideRoute, parseIdeQuery, parseIdeRequest, type FocusEvent, type IdeRequest, type IdeTheme } from './ide'
 import { EXPLODE_MAX, hasViewQuery, queryMode, soloHidden, type ViewQuery } from './query'
 import { schAtCursor } from './schview'
-import { appBase, assetUrl, boardPath, checkSummary, drcSummary, groupBoards, hashToPath, isAppPath, pickTarget, routeFromPath, sameEntry, targetBySlug, targetName, upsertEntry, variantSlug, type BoardGroup } from './variants'
+import {
+  appBase,
+  assetUrl,
+  boardPath,
+  checkSummary,
+  drcSummary,
+  groupBoards,
+  hashToPath,
+  isAppPath,
+  pickTarget,
+  routeFromPath,
+  sameEntry,
+  targetBySlug,
+  targetName,
+  upsertEntry,
+  variantSlug,
+  type BoardGroup,
+} from './variants'
 export { checkSummary, drcSummary }
 export type { FocusEvent, IdeTheme }
 
@@ -28,9 +62,14 @@ export interface SiteState {
 }
 /** One scope of a workspace dev server, as /__pcbjs/scopes and the `pcbjs:scopes` event list it. */
 export interface ScopeCard {
-  slug: string; name: string; dir: string; route: string
+  slug: string
+  name: string
+  dir: string
+  route: string
   status: 'unloaded' | 'ok' | 'incomplete' | 'error'
-  stale: boolean; displayed: boolean; error: string | null
+  stale: boolean
+  displayed: boolean
+  error: string | null
   boards: { name: string; title: string; entry: string; status: string }[]
 }
 /** The scope a path names on a workspace dev server with several scopes: its first segment when that is a scope slug. */
@@ -38,11 +77,19 @@ export function scopeOfPath(path: string, slugs: readonly string[]): string | nu
   const m = /^\/([^/?#]+)/.exec(path)
   if (!m) return null
   let seg: string
-  try { seg = decodeURIComponent(m[1]) } catch { return null }
+  try {
+    seg = decodeURIComponent(m[1])
+  } catch {
+    return null
+  }
   return slugs.includes(seg) ? seg : null
 }
 /** What a workspace dev server says about its scopes; `displayed` is the scope HMR follows. */
-export interface WorkspaceInfo { single: boolean; displayed: string | null; scopes: ScopeCard[] }
+export interface WorkspaceInfo {
+  single: boolean
+  displayed: string | null
+  scopes: ScopeCard[]
+}
 export interface StoreInit extends SiteState {
   /** a workspace dev server's scopes, from the virtual module */
   workspace?: WorkspaceInfo | null
@@ -92,29 +139,70 @@ export interface BoardViewState {
   /** the target shown, by variant name; null for the first, and for a board without variants */
   target: string | null
 }
-export interface BoardsEvent { boards: SiteData[]; single: boolean; errors: Record<string, string | null>; entries?: Record<string, string>; scope?: string }
+export interface BoardsEvent {
+  boards: SiteData[]
+  single: boolean
+  errors: Record<string, string | null>
+  entries?: Record<string, string>
+  scope?: string
+}
 /** The items a range of code produced; `col` and `seg` name one command of a path string, such as "H 9". */
-export interface SourceHighlight { board: string; file: string; line: number; col?: number; seg?: string; ids: number[]; refs: string[]; n: number
+export interface SourceHighlight {
+  board: string
+  file: string
+  line: number
+  col?: number
+  seg?: string
+  ids: number[]
+  refs: string[]
+  n: number
   /** the schematic elements the range drew, see schAtCursor */
   sch?: string[]
   /** board points to mark and a reference to outline, for a target the language server resolved */
-  points?: [number, number][]; reference?: string
+  points?: [number, number][]
+  reference?: string
   /** what the target is, `pad Q1.2`, shown instead of the file and line */
-  label?: string }
-export interface CursorEvent { file: string; line: number; col: number; target?: CursorTarget }
+  label?: string
+}
+export interface CursorEvent {
+  file: string
+  line: number
+  col: number
+  target?: CursorTarget
+}
 /** One card per entry in entry order, with the board it last compiled to, the board's targets in order, and its error. */
-export interface Card { entry: string; board: SiteData | null; targets: SiteData[]; error: string | null }
+export interface Card {
+  entry: string
+  board: SiteData | null
+  targets: SiteData[]
+  error: string | null
+}
 
 // storage can throw in private windows or with blocked site data, so every access is guarded
-export function load(key: string): string | null { try { return localStorage.getItem(key) } catch { return null } }
-export function save(key: string, value: string | null) { try { value == null ? localStorage.removeItem(key) : localStorage.setItem(key, value) } catch { /* not persisted */ } }
+export function load(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+export function save(key: string, value: string | null) {
+  try {
+    value == null ? localStorage.removeItem(key) : localStorage.setItem(key, value)
+  } catch {
+    /* not persisted */
+  }
+}
 
 export const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
 // set once by setFollow before the app mounts; the prerenderer keeps the default
 let follow: FollowMode = 'click'
 /** The HUD hint of the follow mode: shown while a click would open a source link. */
 export let linkHint = followHint(follow, isMac)
-export function setFollow(f: FollowMode) { follow = f; linkHint = followHint(f, isMac) }
+export function setFollow(f: FollowMode) {
+  follow = f
+  linkHint = followHint(f, isMac)
+}
 export const followMode = (): FollowMode => follow
 /** The platform's link key, cmd on macOS and ctrl elsewhere. */
 export const platformLinkKey = (e: { metaKey: boolean; ctrlKey: boolean }) => (isMac ? e.metaKey : e.ctrlKey)
@@ -125,9 +213,12 @@ export const linkKind = (e: { shiftKey: boolean }): SourceKind => (e.shiftKey ? 
 /** What a click on an item does under the page's follow mode. */
 export const clickOf = (e: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean }): ClickAction => clickAction(follow, e, isMac)
 
-function sameList<T>(a: readonly T[], b: readonly T[]): boolean { return a.length === b.length && a.every((x, i) => x === b[i]) }
+function sameList<T>(a: readonly T[], b: readonly T[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i])
+}
 const within = (s: { line: number; col: number; endLine?: number; endCol?: number }, r: SourceRange) =>
-  (s.line > r.start[0] || (s.line === r.start[0] && s.col >= r.start[1])) && ((s.endLine ?? s.line) < r.end[0] || ((s.endLine ?? s.line) === r.end[0] && (s.endCol ?? s.col) <= r.end[1]))
+  (s.line > r.start[0] || (s.line === r.start[0] && s.col >= r.start[1])) &&
+  ((s.endLine ?? s.line) < r.end[0] || ((s.endLine ?? s.line) === r.end[0] && (s.endCol ?? s.col) <= r.end[1]))
 
 /** The footprint refs a highlight touches, directly or through its item ids, for the 3D view. */
 export function highlightRefs(board: SiteData, h: SourceHighlight): Set<string> {
@@ -143,7 +234,9 @@ export async function openInEditor(t: SourceTarget): Promise<boolean> {
     if (r.ok) return true
     if (r.status === 404 && t.abs) return (await fetch(`/__open-in-editor?file=${encodeURIComponent(`${t.abs}:${t.start[0]}:${t.start[1]}`)}`)).ok
     return false
-  } catch { return false }
+  } catch {
+    return false
+  }
 }
 
 /** A fresh viewer state. Every watcher it makes belongs to it and stops with `stop()`. */
@@ -213,7 +306,25 @@ function makeStore(init: StoreInit) {
   // a plain map of reactive entries, so asking for a new board's state inside a computed does not trigger anything
   const views: Record<string, BoardViewState> = {}
   function boardView(name: string): BoardViewState {
-    return views[name] ??= reactive(pinMode({ hidden: new Set<string>(), pinnedNet: null, activeRef: null, selectedRefs: [], activeCircuit: null, expanded: new Set<string>(), tab: 'drc', mode: defaultMode(), schHidden: new Set<string>(), split: false, flipped: false, fade: true, explode: false, separation: 4, target: null })) as BoardViewState
+    return (views[name] ??= reactive(
+      pinMode({
+        hidden: new Set<string>(),
+        pinnedNet: null,
+        activeRef: null,
+        selectedRefs: [],
+        activeCircuit: null,
+        expanded: new Set<string>(),
+        tab: 'drc',
+        mode: defaultMode(),
+        schHidden: new Set<string>(),
+        split: false,
+        flipped: false,
+        fade: true,
+        explode: false,
+        separation: 4,
+        target: null,
+      }),
+    ) as BoardViewState)
   }
   /** An editor pane opened on one view keeps it: a finding or a selection never switches it. */
   function pinMode<T extends { mode: Mode }>(v: T): T {
@@ -246,8 +357,14 @@ function makeStore(init: StoreInit) {
 
   // routes: <base> home, <base>board/<name>, <base>board/<name>/<slug>; with one entry the base shows the board
   /** Set the path without touching the history, for rendering a given URL. */
-  function setPath(path: string) { state.path = path }
-  const isHome = (path: string) => { const b = slash(base), p = path.replace(/[?#].*$/, ''); return p === b || p + '/' === b || p === b + 'index.html' }
+  function setPath(path: string) {
+    state.path = path
+  }
+  const isHome = (path: string) => {
+    const b = slash(base),
+      p = path.replace(/[?#].*$/, '')
+    return p === b || p + '/' === b || p === b + 'index.html'
+  }
   const pathRoute = (): Route => {
     const r = routeFromPath(state.path, base)
     if (r.page === 'board') return r
@@ -256,7 +373,15 @@ function makeStore(init: StoreInit) {
     return state.single ? { page: 'board', name: state.boards[0]?.name ?? null, target: null } : { page: 'home' }
   }
   // IDE mode never shows the home page: the focused board or the first one stands in for it
-  const route = computed<Route>(() => (ide.on ? ideRoute(pathRoute(), groups.value.map(g => g.name), ide.focused) : pathRoute()))
+  const route = computed<Route>(() =>
+    ide.on
+      ? ideRoute(
+          pathRoute(),
+          groups.value.map(g => g.name),
+          ide.focused,
+        )
+      : pathRoute(),
+  )
   /** The URL of a path: IDE mode keeps its query, so a reload stays in IDE mode. */
   const urlOf = (path: string) => (ide.on ? path + ide.search : path)
   /** Navigate to a path under the base with a new history entry. */
@@ -273,13 +398,16 @@ function makeStore(init: StoreInit) {
   /** The board the route names with all its targets, null on the home page or for an unknown name. */
   const currentGroup = computed(() => {
     const r = route.value
-    return r.page === 'board' ? groups.value.find(g => g.name === r.name) ?? null : null
+    return r.page === 'board' ? (groups.value.find(g => g.name === r.name) ?? null) : null
   })
   /** The target a board shows: the one it last showed, else its first. */
-  function boardTarget(g: BoardGroup): SiteData | null { return pickTarget(g.targets, boardView(g.name).target) }
+  function boardTarget(g: BoardGroup): SiteData | null {
+    return pickTarget(g.targets, boardView(g.name).target)
+  }
   /** The entry shown: the current board at the target the route names, else at the target it last showed. */
   const current = computed(() => {
-    const g = currentGroup.value, r = route.value
+    const g = currentGroup.value,
+      r = route.value
     if (!g || r.page !== 'board') return null
     return (r.target != null ? targetBySlug(g.targets, r.target) : null) ?? boardTarget(g)
   })
@@ -290,7 +418,9 @@ function makeStore(init: StoreInit) {
   }
   // the target in the URL becomes the board's remembered one, and a board route to a board with several targets always names its target
   watchEffect(() => {
-    const g = currentGroup.value, b = current.value, r = route.value
+    const g = currentGroup.value,
+      b = current.value,
+      r = route.value
     if (!g || !b || r.page !== 'board' || g.targets.length < 2) return
     const t = targetName(b)
     const v = boardView(g.name)
@@ -364,10 +494,17 @@ function makeStore(init: StoreInit) {
   function onFocus(e: FocusEvent) {
     if (!ide.on || !e) return
     // a file of another scope: the server shows that scope now, and so does this page
-    if (e.scope && workspace.info && !workspace.info.single && e.scope !== workspace.scope) { toScope(e.scope); return }
+    if (e.scope && workspace.info && !workspace.info.single && e.scope !== workspace.scope) {
+      toScope(e.scope)
+      return
+    }
     // the board shown before this focus counts, not the one the home path would now resolve to
     const r = route.value
-    const next = focusSwitch(r.page === 'board' ? r.name : null, e, groups.value.map(g => g.name))
+    const next = focusSwitch(
+      r.page === 'board' ? r.name : null,
+      e,
+      groups.value.map(g => g.name),
+    )
     if (e.board) ide.focused = e.board
     if (!next) return
     go(boardHref(next))
@@ -383,14 +520,19 @@ function makeStore(init: StoreInit) {
     const card = workspace.info?.scopes.find(s => s.slug === slug)
     if (browser) location.assign((card?.route ?? `/${encodeURIComponent(slug)}/`) + (ide.on ? ide.search : ''))
   }
-  function resolvedTheme(): Theme { return ui.theme ?? (system.dark ? 'dark' : 'light') }
+  function resolvedTheme(): Theme {
+    return ui.theme ?? (system.dark ? 'dark' : 'light')
+  }
   function toggleTheme() {
     const next: Theme = resolvedTheme() === 'dark' ? 'light' : 'dark'
     // picking the system theme again goes back to following it
     ui.theme = next === (system.dark ? 'dark' : 'light') ? null : next
     save('pcbjs:theme', ui.theme)
   }
-  function toggleGrid() { ui.grid = !ui.grid; save('pcbjs:grid', ui.grid ? null : '0') }
+  function toggleGrid() {
+    ui.grid = !ui.grid
+    save('pcbjs:grid', ui.grid ? null : '0')
+  }
 
   // ---- the view query: ?view, explode, layer, select and side, applied to each board the first time it shows ----
   const query = shallowRef<ViewQuery | null>(null)
@@ -401,22 +543,31 @@ function makeStore(init: StoreInit) {
     if (hasViewQuery(q)) query.value = q
   }
   watchEffect(() => {
-    const q = query.value, b = current.value
+    const q = query.value,
+      b = current.value
     if (!q || !b || queried.has(b.name)) return
     queried.add(b.name)
     const v = boardView(b.name)
     const mode = queryMode(q)
     if (mode) v.mode = mode
     if (q.side) v.flipped = q.side === 'bottom'
-    if (q.explode !== null) { v.explode = q.explode > 0; if (q.explode > 0) v.separation = Math.round(q.explode * EXPLODE_MAX * 100) / 100 }
+    if (q.explode !== null) {
+      v.explode = q.explode > 0
+      if (q.explode > 0) v.separation = Math.round(q.explode * EXPLODE_MAX * 100) / 100
+    }
     if (q.layer) {
       const hidden = soloHidden(b.layers, q.layer)
       if (hidden) v.hidden = new Set(hidden)
       else console.warn(`pcbjs: ?layer=${q.layer} matches no layer of ${b.name}`)
     }
     if (q.select) {
-      if (b.footprints.some(f => f.ref === q.select)) { v.activeRef = q.select; v.activeCircuit = null; v.selectedRefs = []; v.tab = 'part'; ui.frame = { board: b.name, ref: q.select } }
-      else console.warn(`pcbjs: ?select=${q.select} matches no part of ${b.name}`)
+      if (b.footprints.some(f => f.ref === q.select)) {
+        v.activeRef = q.select
+        v.activeCircuit = null
+        v.selectedRefs = []
+        v.tab = 'part'
+        ui.frame = { board: b.name, ref: q.select }
+      } else console.warn(`pcbjs: ?select=${q.select} matches no part of ${b.name}`)
     }
   })
 
@@ -438,7 +589,9 @@ function makeStore(init: StoreInit) {
   function showToast(text: string, err = false) {
     source.toast = { text, err, n: ++toastN }
     clearTimeout(toastTimer)
-    toastTimer = setTimeout(() => { source.toast = null }, 2500)
+    toastTimer = setTimeout(() => {
+      source.toast = null
+    }, 2500)
   }
 
   // no hold: a cursor that leaves every range clears the highlight at once
@@ -447,7 +600,9 @@ function makeStore(init: StoreInit) {
   function setHighlight(h: Omit<SourceHighlight, 'n'>) {
     source.highlight = { ...h, n: ++hlN }
   }
-  function clearSourceHighlight() { source.highlight = null }
+  function clearSourceHighlight() {
+    source.highlight = null
+  }
 
   /** The handler of the `pcbjs:cursor` HMR event: highlight what the code under the editor cursor produced on the current board. */
   function onSourceCursor(p: CursorEvent) {
@@ -472,7 +627,16 @@ function makeStore(init: StoreInit) {
     if (hit && b && (hit.ids.length || hit.refs.length)) {
       // the same range again, as each keystroke inside one call sends: the views keep what they drew
       const h = source.highlight
-      if (h && h.board === b.name && h.file === hit.file && h.line === hit.range.start[0] && h.col === segOf(hit.range).col && sameList(h.ids, hit.ids) && sameList(h.refs, hit.refs)) return
+      if (
+        h &&
+        h.board === b.name &&
+        h.file === hit.file &&
+        h.line === hit.range.start[0] &&
+        h.col === segOf(hit.range).col &&
+        sameList(h.ids, hit.ids) &&
+        sameList(h.refs, hit.refs)
+      )
+        return
       setHighlight({ board: b.name, file: hit.file, line: hit.range.start[0], ...segOf(hit.range), ids: hit.ids, refs: hit.refs })
       return
     }
@@ -493,7 +657,10 @@ function makeStore(init: StoreInit) {
   }
   /** Open a known source location, as openSource does for an item. */
   async function openTarget(board: SiteData, t: SourceTarget | null, quiet = false) {
-    if (!t) { if (!quiet) showToast('No source location', true); return }
+    if (!t) {
+      if (!quiet) showToast('No source location', true)
+      return
+    }
     if (board.dev) {
       const ok = await openInEditor(t)
       if (!ok || !quiet) showToast(ok ? 'Opened in editor' : `Could not open ${t.file}:${t.start[0]}`, !ok)
@@ -503,8 +670,49 @@ function makeStore(init: StoreInit) {
   }
 
   return {
-    base, homeHref, boardHref, asset, state, boardView, applyBoard, applyBoards, setPath, route, go, groups, siteGroups, followSetting, linksAvailable, currentGroup, boardTarget, current, selectTarget,
-    currentError, cards, pageTitle, workspace, workspaceHome, scopeCards, onScopes, toScope, viewports, ui, system, resolvedTheme, toggleTheme, toggleGrid, ide, enterIde, onFocus, source, showToast, clearSourceHighlight, onSourceCursor, showSourceRange, openSource, openTarget,
+    base,
+    homeHref,
+    boardHref,
+    asset,
+    state,
+    boardView,
+    applyBoard,
+    applyBoards,
+    setPath,
+    route,
+    go,
+    groups,
+    siteGroups,
+    followSetting,
+    linksAvailable,
+    currentGroup,
+    boardTarget,
+    current,
+    selectTarget,
+    currentError,
+    cards,
+    pageTitle,
+    workspace,
+    workspaceHome,
+    scopeCards,
+    onScopes,
+    toScope,
+    viewports,
+    ui,
+    system,
+    resolvedTheme,
+    toggleTheme,
+    toggleGrid,
+    ide,
+    enterIde,
+    onFocus,
+    source,
+    showToast,
+    clearSourceHighlight,
+    onSourceCursor,
+    showSourceRange,
+    openSource,
+    openTarget,
     applyViewQuery,
   }
 }
@@ -526,7 +734,10 @@ export function startBrowser(store: Store): boolean {
     hot.on('pcbjs:scopes', (i: WorkspaceInfo) => store.onScopes(i))
     // the editor may have moved before this page opened: the server answers with the last focus and cursor
     if (store.ide.on) {
-      const shown = () => { const r = store.route.value; return r.page === 'board' ? r.name : null }
+      const shown = () => {
+        const r = store.route.value
+        return r.page === 'board' ? r.name : null
+      }
       hot.send('pcbjs:viewer:hello', { board: shown() })
       watch(shown, name => hot.send('pcbjs:viewer:board', { name }))
     }
@@ -547,16 +758,27 @@ export function startBrowser(store: Store): boolean {
   // a built site without the inlined data: boards.json next to index.html, then each board's JSON
   if (!state.boards.length && !hot && !Object.keys(state.errors).length) {
     state.loading = true
-    fetch(store.asset('boards.json')).then(r => r.json()).then(async (idx: { boards: { name: string; file: string; entry: string; variant?: string }[]; single: boolean }) => {
-      state.single = idx.single
-      state.entries = Object.fromEntries(idx.boards.map(b => [b.name, b.entry]))
-      state.boards = await Promise.all(idx.boards.map(b => fetch(store.asset(b.file)).then(r => r.json() as Promise<SiteData>)))
-    }).catch(() => {}).finally(() => { state.loading = false })
+    fetch(store.asset('boards.json'))
+      .then(r => r.json())
+      .then(async (idx: { boards: { name: string; file: string; entry: string; variant?: string }[]; single: boolean }) => {
+        state.single = idx.single
+        state.entries = Object.fromEntries(idx.boards.map(b => [b.name, b.entry]))
+        state.boards = await Promise.all(idx.boards.map(b => fetch(store.asset(b.file)).then(r => r.json() as Promise<SiteData>)))
+      })
+      .catch(() => {})
+      .finally(() => {
+        state.loading = false
+      })
   }
 
   const old = location.hash ? hashToPath(location.hash, store.base) : null
-  if (old) { history.replaceState(history.state, '', old); state.path = old }
-  addEventListener('popstate', () => { state.path = location.pathname })
+  if (old) {
+    history.replaceState(history.state, '', old)
+    state.path = old
+  }
+  addEventListener('popstate', () => {
+    state.path = location.pathname
+  })
   // links to routes stay real <a href> for middle-click and copy link; a plain click navigates in place
   document.addEventListener('click', e => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
@@ -572,16 +794,22 @@ export function startBrowser(store: Store): boolean {
   setFollow(store.followSetting.value)
   watch(store.followSetting, f => setFollow(f))
   const sync = (e: KeyboardEvent | MouseEvent) => {
-    const m = follow === 'click' ? store.linksAvailable.value : platformLinkKey(e), s = m && e.shiftKey
+    const m = follow === 'click' ? store.linksAvailable.value : platformLinkKey(e),
+      s = m && e.shiftKey
     if (m !== store.source.meta) store.source.meta = m
     if (s !== store.source.shift) store.source.shift = s
   }
   addEventListener('keydown', sync)
   addEventListener('keyup', sync)
   addEventListener('pointermove', sync, { passive: true })
-  addEventListener('blur', () => { store.source.meta = false; store.source.shift = false })
+  addEventListener('blur', () => {
+    store.source.meta = false
+    store.source.shift = false
+  })
 
-  watchEffect(() => { document.title = store.pageTitle.value })
+  watchEffect(() => {
+    document.title = store.pageTitle.value
+  })
   return !!old
 }
 
@@ -595,7 +823,9 @@ export function afterMount(store: Store, query?: ViewQuery) {
   if ((load('pcbjs:grid') ?? load('pcbjs.3d.grid')) === '0') ui.grid = false
   const media = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null
   system.dark = media?.matches ?? false
-  media?.addEventListener('change', e => { system.dark = e.matches })
+  media?.addEventListener('change', e => {
+    system.dark = e.matches
+  })
   // the inline script in index.html set the stored theme before the first paint; from here the store owns it
   watchEffect(() => {
     const el = document.documentElement

@@ -3,7 +3,11 @@ import type { Sourcing } from '@pcbjs/core/site-data'
 import { resolveSourcing } from '@pcbjs/core/sourcing'
 
 export interface BomRow {
-  refs: string[]; value: string; footprint: string; qty: number; fields: Record<string, string>
+  refs: string[]
+  value: string
+  footprint: string
+  qty: number
+  fields: Record<string, string>
   /** the part number this board or target orders, from its sourcing tags */
   sourcing: Sourcing
 }
@@ -14,7 +18,8 @@ export function bomRows(board: Board): BomRow[] {
     if (!fp.bom) continue
     const key = `${fp.value}\0${fp.id}\0${JSON.stringify(fp.fields)}`
     const g = groups.get(key) ?? { refs: [], value: fp.value, footprint: fp.id, qty: 0, fields: fp.fields, sourcing: resolveSourcing(fp.fields, board.sourcingTags ?? []) }
-    g.refs.push(fp.ref); g.qty++
+    g.refs.push(fp.ref)
+    g.qty++
     groups.set(key, g)
   }
   const natural = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true })

@@ -9,14 +9,14 @@ import './stm32-dev.sourcing'
 import * as sch from './stm32-dev.sch'
 
 const PCB = variants(JLCPCB, OSHPark)
-const W = 50, H = 35
+const W = 50,
+  H = 35
 const SIG = 0.2
 
 export default (
   // both targets share one routing under the stricter of the JLCPCB and OSH Park rules, so they get the same copper.
   // autoroute: signals on the outer layers only; a keepout holds the back under the package for the supply capacitors.
-  <PCB name="stm32-dev" revision="0.1.0" schematic={sch}
-    autoroute={{ layers: ['F.Cu', 'B.Cu'] }}>
+  <PCB name="stm32-dev" revision="0.1.0" schematic={sch} autoroute={{ layers: ['F.Cu', 'B.Cu'] }}>
     {/* outline: 50 x 35 mm with 1.5 mm corners */}
     <path layer="Edge.Cuts" d={roundedRect(W, H, 1.5)} />
 
@@ -100,11 +100,16 @@ export default (
     {route(SW_BOOT[2], J_TOP[2]).width(0.3)}
 
     {/* supply pins: a via in each back capacitor pad goes to its plane, the pins reach it on the top inside the package outline */}
-    {via(V3V3, '24.375 15.3')}{via(GND, '26.025 15.3')}
-    {via(V3V3, '27.775 15.6')}{via(GND, '29.425 15.6')}
-    {via(GND, '24.375 17.6')}{via(V3V3, '26.025 17.6')}
-    {via(V3V3, '27.775 17.6')}{via(GND, '29.425 17.6')}
-    {via(GND, '27.775 19.6')}{via(V3V3, '29.425 19.6')}
+    {via(V3V3, '24.375 15.3')}
+    {via(GND, '26.025 15.3')}
+    {via(V3V3, '27.775 15.6')}
+    {via(GND, '29.425 15.6')}
+    {via(GND, '24.375 17.6')}
+    {via(V3V3, '26.025 17.6')}
+    {via(V3V3, '27.775 17.6')}
+    {via(GND, '29.425 17.6')}
+    {via(GND, '27.775 19.6')}
+    {via(V3V3, '29.425 19.6')}
     {route(U1.VBAT, '24.375 15.3').width(0.25).priority(4)}
     {route(U1.VDD_3, '24.375 15.3').width(0.25).priority(4)}
     {route(U1.VSS_3, '26.025 15.3').width(0.25).priority(4)}
@@ -116,19 +121,27 @@ export default (
     {route(U1.VSS_1, '27.775 19.6').width(0.25).priority(4)}
 
     {/* plane vias for the other parts: GND to In1.Cu, 3V3 to In2.Cu */}
-    {gnd(HSE.Y.GND1, 19.3, 21.0)}{gnd(HSE.Y.GND2, 15.9, 17.4)}
-    {gnd(HSE.CIN[2], 11.9, 16.0)}{gnd(HSE.COUT[2], 11.9, 19.0)}
-    {gnd(LSE.CIN[2], 18.675, 9.3)}{gnd(LSE.COUT[2], 13.7, 13.2)}
-    {gnd(USB.RCC1[2], 40.825, 12.3)}{gnd(USB.RCC2[2], 40.825, 22.3)}
+    {gnd(HSE.Y.GND1, 19.3, 21.0)}
+    {gnd(HSE.Y.GND2, 15.9, 17.4)}
+    {gnd(HSE.CIN[2], 11.9, 16.0)}
+    {gnd(HSE.COUT[2], 11.9, 19.0)}
+    {gnd(LSE.CIN[2], 18.675, 9.3)}
+    {gnd(LSE.COUT[2], 13.7, 13.2)}
+    {gnd(USB.RCC1[2], 40.825, 12.3)}
+    {gnd(USB.RCC2[2], 40.825, 22.3)}
     {pwr(R_DP[1], 34.175, 12.9)}
-    {gnd(LDO.U.GND, 44.0, 5.9)}{pwr(LDO.U.VOUT, 44.0, 10.2)}
+    {gnd(LDO.U.GND, 44.0, 5.9)}
+    {pwr(LDO.U.VOUT, 44.0, 10.2)}
     {gnd(LDO.CIN[2], 47.8, 5.9)}
-    {gnd(LDO.COUT[2], 41.8, 5.9)}{pwr(LDO.COUT[1], 41.8, 10.1)}
+    {gnd(LDO.COUT[2], 41.8, 5.9)}
+    {pwr(LDO.COUT[1], 41.8, 10.1)}
     {gnd(R_BOOT0[2], 6.0, 8.4)}
-    {gnd(SW_RST[2], 4.3, 25.4)}{gnd(C_NRST[2], 6.0, 24.9)}
+    {gnd(SW_RST[2], 4.3, 25.4)}
+    {gnd(C_NRST[2], 6.0, 24.9)}
     {gnd(R_BOOT1[2], 25.0, 27.5)}
     {gnd(D_PWR.K, 12.0, 14.0)}
-    {pwr(R_LED1[1], 5.675, 15.5)}{route(R_LED2[1], "5.675 15.5").layers(["F.Cu"]).width(0.3)}
+    {pwr(R_LED1[1], 5.675, 15.5)}
+    {route(R_LED2[1], '5.675 15.5').layers(['F.Cu']).width(0.3)}
 
     {/* the rest by the router: every GPIO to its header pin first, then SWD, reset and boot, which cross the fan-out */}
     {/* SWD: PA13 and PA14 up to their top header pins on the front, then the SWD header chained from those pins along the top and left edges on the back */}
@@ -145,15 +158,23 @@ export default (
     {route(D_USR.K, U1.PC13).width(SIG)}
     {route(R_BOOT1[1], J_BOT[10], 'Z').width(SIG)}
     {TOP_IO.map((p, i) => route(U1.pin(p), J_TOP[[3, 5, 6, 7, 8, 9, 10, 11, 12, 13][i]]).width(SIG).priority(1))}
-    {BOTTOM_IO.map((p, i) => route(U1.pin(p), J_BOT[i + 1]).width(SIG).priority(1))}
+    {BOTTOM_IO.map((p, i) =>
+      route(U1.pin(p), J_BOT[i + 1])
+        .width(SIG)
+        .priority(1),
+    )}
 
     {/* planes */}
     {pour(GND, 'In1.Cu', rect(W, H))}
     {pour(V3V3, 'In2.Cu', rect(W, H))}
 
     {/* silk */}
-    <text layer="F.SilkS" at="13 24" size={1}>stm32-dev</text>
-    <text layer="F.SilkS" at="13 25.6" size={0.8}>rev 0.1.0</text>
+    <text layer="F.SilkS" at="13 24" size={1}>
+      stm32-dev
+    </text>
+    <text layer="F.SilkS" at="13 25.6" size={0.8}>
+      rev 0.1.0
+    </text>
     <Brand at="39.35 27.5" height={6} />
   </PCB>
 )

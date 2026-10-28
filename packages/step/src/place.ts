@@ -3,8 +3,16 @@
 export type Mat4 = number[]
 export type Vec3 = [number, number, number]
 
-export interface StepTransform { offset: Vec3; rotate: Vec3; scale: Vec3 }
-export interface StepPlacement { at: [number, number]; rot: number; side: 'F' | 'B' }
+export interface StepTransform {
+  offset: Vec3
+  rotate: Vec3
+  scale: Vec3
+}
+export interface StepPlacement {
+  at: [number, number]
+  rot: number
+  side: 'F' | 'B'
+}
 
 const DEG = Math.PI / 180
 
@@ -13,18 +21,31 @@ export const identity = (): Mat4 => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0
 /** a * b */
 export function mul(a: Mat4, b: Mat4): Mat4 {
   const o = new Array(16).fill(0)
-  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
-    let s = 0
-    for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]
-    o[c * 4 + r] = s
-  }
+  for (let c = 0; c < 4; c++)
+    for (let r = 0; r < 4; r++) {
+      let s = 0
+      for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]
+      o[c * 4 + r] = s
+    }
   return o
 }
 export const translate = (x: number, y: number, z: number): Mat4 => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1]
 export const scale = (x: number, y: number, z: number): Mat4 => [x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, 1]
-export function rotX(a: number): Mat4 { const c = Math.cos(a), s = Math.sin(a); return [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1] }
-export function rotY(a: number): Mat4 { const c = Math.cos(a), s = Math.sin(a); return [c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1] }
-export function rotZ(a: number): Mat4 { const c = Math.cos(a), s = Math.sin(a); return [c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] }
+export function rotX(a: number): Mat4 {
+  const c = Math.cos(a),
+    s = Math.sin(a)
+  return [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]
+}
+export function rotY(a: number): Mat4 {
+  const c = Math.cos(a),
+    s = Math.sin(a)
+  return [c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]
+}
+export function rotZ(a: number): Mat4 {
+  const c = Math.cos(a),
+    s = Math.sin(a)
+  return [c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+}
 
 /** The point p moved by m. */
 export function apply(m: Mat4, p: Vec3): Vec3 {
@@ -33,7 +54,9 @@ export function apply(m: Mat4, p: Vec3): Vec3 {
 
 /** KiCad's model transform, in the model frame. */
 export function modelMatrix(t: StepTransform): Mat4 {
-  const [ox, oy, oz] = t.offset, [rx, ry, rz] = t.rotate, [sx, sy, sz] = t.scale
+  const [ox, oy, oz] = t.offset,
+    [rx, ry, rz] = t.rotate,
+    [sx, sy, sz] = t.scale
   return [translate(ox, oy, oz), rotZ(-rz * DEG), rotY(-ry * DEG), rotX(-rx * DEG), scale(sx, sy, sz)].reduce(mul)
 }
 
@@ -46,16 +69,28 @@ export function footprintMatrix(fp: StepPlacement, face: number): Mat4 {
 /** The whole placement of a STEP model: the footprint's, times the model transform. */
 export const stepMatrix = (fp: StepPlacement, t: StepTransform, face: number): Mat4 => mul(footprintMatrix(fp, face), modelMatrix(t))
 
-export interface Box3 { min: Vec3; max: Vec3 }
+export interface Box3 {
+  min: Vec3
+  max: Vec3
+}
 /** A rectangle in the footprint frame: mm, x right, y down as on the board, as the courtyard is drawn. */
-export interface Rect { x0: number; y0: number; x1: number; y1: number }
+export interface Rect {
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+}
 
 /** The box around the eight corners of `b` moved by `m`. */
 export function transformBox(m: Mat4, b: Box3): Box3 {
-  const min: Vec3 = [Infinity, Infinity, Infinity], max: Vec3 = [-Infinity, -Infinity, -Infinity]
+  const min: Vec3 = [Infinity, Infinity, Infinity],
+    max: Vec3 = [-Infinity, -Infinity, -Infinity]
   for (let i = 0; i < 8; i++) {
     const p = apply(m, [i & 1 ? b.max[0] : b.min[0], i & 2 ? b.max[1] : b.min[1], i & 4 ? b.max[2] : b.min[2]])
-    for (let k = 0; k < 3; k++) { if (p[k] < min[k]) min[k] = p[k]; if (p[k] > max[k]) max[k] = p[k] }
+    for (let k = 0; k < 3; k++) {
+      if (p[k] < min[k]) min[k] = p[k]
+      if (p[k] > max[k]) max[k] = p[k]
+    }
   }
   return { min, max }
 }
@@ -70,22 +105,37 @@ export function footprintRect(bounds: Box3, t: StepTransform): Rect {
 const r1 = (v: number) => (Math.round(v * 10) / 10).toFixed(1)
 
 /** The footprint's declared body height and whether it has drilled pads. */
-export interface PlacementFootprint { height?: number; tht?: boolean }
+export interface PlacementFootprint {
+  height?: number
+  tht?: boolean
+}
 
 /** Why a placed model looks wrong against its footprint and courtyard, `tol` in mm, or null when it fits. */
 export function placementIssue(bounds: Box3, t: StepTransform, courtyard: Rect, tol = 1, fp: PlacementFootprint = {}): string | null {
   if (!Number.isFinite(bounds.min[0]) || !Number.isFinite(bounds.max[0])) return 'the model has no geometry'
   const m = footprintRect(bounds, t)
-  const mw = m.x1 - m.x0, mh = m.y1 - m.y0, cw = courtyard.x1 - courtyard.x0, ch = courtyard.y1 - courtyard.y0
-  const out: [string, number][] = [['-x', courtyard.x0 - m.x0], ['+x', m.x1 - courtyard.x1], ['-y', courtyard.y0 - m.y0], ['+y', m.y1 - courtyard.y1]]
+  const mw = m.x1 - m.x0,
+    mh = m.y1 - m.y0,
+    cw = courtyard.x1 - courtyard.x0,
+    ch = courtyard.y1 - courtyard.y0
+  const out: [string, number][] = [
+    ['-x', courtyard.x0 - m.x0],
+    ['+x', m.x1 - courtyard.x1],
+    ['-y', courtyard.y0 - m.y0],
+    ['+y', m.y1 - courtyard.y1],
+  ]
   const worst = out.reduce((a, c) => (c[1] > a[1] ? c : a))
   if (worst[1] > tol) {
-    const sides = out.filter(o => o[1] > tol).map(o => o[0]).join(' ')
+    const sides = out
+      .filter(o => o[1] > tol)
+      .map(o => o[0])
+      .join(' ')
     return `model box reaches ${r1(worst[1])} mm past the courtyard at ${sides}`
   }
   if (cw > 0.5 && ch > 0.5 && mw < cw / 5 && mh < ch / 5) return `model is ${r1(mw)} x ${r1(mh)} mm on a ${r1(cw)} x ${r1(ch)} mm courtyard: wrong units?`
   const b = transformBox(modelMatrix(t), bounds)
-  const top = b.max[2], bottom = b.min[2]
+  const top = b.max[2],
+    bottom = b.min[2]
   if (top <= 0.05) return `model is under the board face, its top at ${r1(top)} mm: sunk into the board?`
   if (!fp.tht && bottom < -0.2) return `model reaches ${r1(-bottom)} mm into the board: sunk into the board?`
   const h = fp.height

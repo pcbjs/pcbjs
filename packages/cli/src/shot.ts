@@ -42,7 +42,10 @@ export interface ShotOptions {
   fresh?: boolean
 }
 
-export interface ShotCombo { select?: string; layer?: string }
+export interface ShotCombo {
+  select?: string
+  layer?: string
+}
 
 /** Each select with each layer; --layer is 2D only, so with several layers 3D is shot once per select. */
 export function shotCombos(view: ShotView, selects: string[], layers: string[]): ShotCombo[] {
@@ -51,7 +54,15 @@ export function shotCombos(view: ShotView, selects: string[], layers: string[]):
   return ss.flatMap(select => ls.map(layer => ({ ...(select ? { select } : {}), ...(layer ? { layer } : {}) })))
 }
 
-export interface ShotJob { board: string; target: string | null; path: string; view: ShotView; file: string; select?: string; layer?: string }
+export interface ShotJob {
+  board: string
+  target: string | null
+  path: string
+  view: ShotView
+  file: string
+  select?: string
+  layer?: string
+}
 
 export const shotViews = (view?: ShotView | 'both' | 'all'): ShotView[] => (!view || view === 'both' ? ['2d', '3d'] : view === 'all' ? ['2d', '3d', 'sch'] : [view])
 
@@ -62,7 +73,12 @@ export function chromeCandidates(platform: NodeJS.Platform, env: NodeJS.ProcessE
   const out: string[] = []
   if (env.PCBJS_CHROME) out.push(env.PCBJS_CHROME)
   if (platform === 'darwin') {
-    const apps = ['Google Chrome.app/Contents/MacOS/Google Chrome', 'Chromium.app/Contents/MacOS/Chromium', 'Microsoft Edge.app/Contents/MacOS/Microsoft Edge', 'Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary']
+    const apps = [
+      'Google Chrome.app/Contents/MacOS/Google Chrome',
+      'Chromium.app/Contents/MacOS/Chromium',
+      'Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+      'Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+    ]
     for (const a of apps) out.push(`/Applications/${a}`)
     if (env.HOME) for (const a of apps) out.push(join(env.HOME, 'Applications', a))
   } else if (platform === 'win32') {
@@ -99,7 +115,8 @@ export function shotQuery(view: ShotView, o: { explode?: number; layer?: string;
 export function parseSize(v: string): [number, number] | null {
   const m = /^\s*(\d+)\s*[x×X,]\s*(\d+)\s*$/.exec(v)
   if (!m) return null
-  const w = +m[1], h = +m[2]
+  const w = +m[1],
+    h = +m[2]
   return w >= 100 && h >= 100 && w <= 8000 && h <= 8000 ? [w, h] : null
 }
 
@@ -113,26 +130,45 @@ export function shotSuffix(view: ShotView, o: { explode?: number; layer?: string
     o.layer && view !== 'sch' ? fileSafe(o.layer) : '',
     o.side === 'bottom' && view !== 'sch' ? 'bottom' : '',
     o.theme ?? '',
-  ].filter(Boolean).map(p => `-${p}`).join('')
+  ]
+    .filter(Boolean)
+    .map(p => `-${p}`)
+    .join('')
 }
 
 /** Per board, per target, per view. */
-export function shotJobs(boards: { name: string; targets: (string | null)[] }[], views: ShotView[], outDir: string, o: Pick<ShotOptions, 'explode' | 'layer' | 'select' | 'side' | 'theme'> = {}): ShotJob[] {
+export function shotJobs(
+  boards: { name: string; targets: (string | null)[] }[],
+  views: ShotView[],
+  outDir: string,
+  o: Pick<ShotOptions, 'explode' | 'layer' | 'select' | 'side' | 'theme'> = {},
+): ShotJob[] {
   const out: ShotJob[] = []
   const list = (v: string | string[] | undefined) => (v === undefined ? [] : Array.isArray(v) ? v : [v])
-  for (const b of boards) for (const t of b.targets) for (const view of views) for (const combo of shotCombos(view, list(o.select), list(o.layer))) {
-    const slug = t != null ? variantSlug(t) : null
-    out.push({
-      board: b.name, target: t, view, ...combo,
-      path: `/board/${encodeURIComponent(b.name)}${slug ? `/${encodeURIComponent(slug)}` : ''}`,
-      file: join(outDir, `${fileSafe(b.name)}${slug ? `-${fileSafe(slug)}` : ''}-${view}${shotSuffix(view, { ...o, ...combo, select: combo.select, layer: combo.layer })}.png`),
-    })
-  }
+  for (const b of boards)
+    for (const t of b.targets)
+      for (const view of views)
+        for (const combo of shotCombos(view, list(o.select), list(o.layer))) {
+          const slug = t != null ? variantSlug(t) : null
+          out.push({
+            board: b.name,
+            target: t,
+            view,
+            ...combo,
+            path: `/board/${encodeURIComponent(b.name)}${slug ? `/${encodeURIComponent(slug)}` : ''}`,
+            file: join(
+              outDir,
+              `${fileSafe(b.name)}${slug ? `-${fileSafe(slug)}` : ''}-${view}${shotSuffix(view, { ...o, ...combo, select: combo.select, layer: combo.layer })}.png`,
+            ),
+          })
+        }
   return out
 }
 
-
-interface Cdp { send(method: string, params?: object): Promise<any>; close(): void }
+interface Cdp {
+  send(method: string, params?: object): Promise<any>
+  close(): void
+}
 
 async function connect(url: string): Promise<Cdp> {
   const WS: typeof WebSocket = (globalThis as any).WebSocket ?? ((await import('ws' as string)) as any).WebSocket
@@ -151,9 +187,17 @@ async function connect(url: string): Promise<Cdp> {
     if (m.error) w.fail(new Error(`${m.error.message}${m.error.data ? `: ${m.error.data}` : ''}`))
     else w.done(m.result)
   })
-  ws.addEventListener('close', () => { for (const w of waiting.values()) w.fail(new Error('Chrome closed the connection')); waiting.clear() })
+  ws.addEventListener('close', () => {
+    for (const w of waiting.values()) w.fail(new Error('Chrome closed the connection'))
+    waiting.clear()
+  })
   return {
-    send: (method, params = {}) => new Promise((done, fail) => { const n = ++id; waiting.set(n, { done, fail }); ws.send(JSON.stringify({ id: n, method, params })) }),
+    send: (method, params = {}) =>
+      new Promise((done, fail) => {
+        const n = ++id
+        waiting.set(n, { done, fail })
+        ws.send(JSON.stringify({ id: n, method, params }))
+      }),
     close: () => ws.close(),
   }
 }
@@ -163,26 +207,46 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 /** Resolves with the process and the page's socket URL. */
 async function launch(bin: string, size: [number, number], profile: string): Promise<{ proc: ChildProcess; page: string }> {
   const args = [
-    '--headless=new', '--hide-scrollbars', `--window-size=${size[0]},${size[1]}`, '--remote-debugging-port=0', `--user-data-dir=${profile}`,
-    '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-background-networking', '--disable-sync', '--mute-audio',
+    '--headless=new',
+    '--hide-scrollbars',
+    `--window-size=${size[0]},${size[1]}`,
+    '--remote-debugging-port=0',
+    `--user-data-dir=${profile}`,
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-extensions',
+    '--disable-background-networking',
+    '--disable-sync',
+    '--mute-audio',
     // WebGL in software when there is no GPU, as on a CI machine
-    '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--ignore-gpu-blocklist',
+    '--enable-unsafe-swiftshader',
+    '--use-angle=swiftshader',
+    '--ignore-gpu-blocklist',
     'about:blank',
   ]
   const proc = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
   let stderr = ''
-  proc.stderr!.on('data', d => { stderr = (stderr + d).slice(-4000) })
-  const exited = new Promise<never>((_, fail) => proc.once('exit', code => fail(new Error(`Chrome exited with code ${code} before it was ready${stderr ? `:\n${stderr.trim().split('\n').slice(-5).join('\n')}` : ''}`))))
+  proc.stderr!.on('data', d => {
+    stderr = (stderr + d).slice(-4000)
+  })
+  const exited = new Promise<never>((_, fail) =>
+    proc.once('exit', code => fail(new Error(`Chrome exited with code ${code} before it was ready${stderr ? `:\n${stderr.trim().split('\n').slice(-5).join('\n')}` : ''}`))),
+  )
   exited.catch(() => {})
   const file = join(profile, 'DevToolsActivePort')
   const start = Date.now()
   while (!existsSync(file) || readFileSync(file, 'utf8').split('\n').length < 2) {
-    if (Date.now() - start > 30000) { proc.kill(); throw new Error('Chrome did not open its debugging port within 30 s') }
+    if (Date.now() - start > 30000) {
+      proc.kill()
+      throw new Error('Chrome did not open its debugging port within 30 s')
+    }
     await Promise.race([sleep(50), exited])
   }
   const port = readFileSync(file, 'utf8').split('\n')[0].trim()
   for (let i = 0; i < 100; i++) {
-    const list = await fetch(`http://127.0.0.1:${port}/json/list`).then(r => r.json() as Promise<{ type: string; webSocketDebuggerUrl: string }[]>).catch(() => [])
+    const list = await fetch(`http://127.0.0.1:${port}/json/list`)
+      .then(r => r.json() as Promise<{ type: string; webSocketDebuggerUrl: string }[]>)
+      .catch(() => [])
     const page = list.find(t => t.type === 'page')
     if (page) return { proc, page: page.webSocketDebuggerUrl }
     await Promise.race([sleep(50), exited])
@@ -198,7 +262,12 @@ async function load(cdp: Cdp, url: string, view: ShotView, timeout: number): Pro
   // the navigation replaces the document, so a ready mark seen here belongs to the new page
   await sleep(100)
   while (Date.now() - start < timeout) {
-    const r = await cdp.send('Runtime.evaluate', { expression: `[document.readyState, document.documentElement.dataset.ready || '', document.querySelector('.error-box, .view3d-host .empty')?.textContent || '']`, returnByValue: true }).catch(() => null)
+    const r = await cdp
+      .send('Runtime.evaluate', {
+        expression: `[document.readyState, document.documentElement.dataset.ready || '', document.querySelector('.error-box, .view3d-host .empty')?.textContent || '']`,
+        returnByValue: true,
+      })
+      .catch(() => null)
     const [state, ready, err] = (r?.result?.value ?? ['', '', '']) as [string, string, string]
     if (state === 'complete' && ready === view) return null
     if (err.trim() && /compile error|failed/i.test(err)) return err.trim().split('\n')[0]
@@ -227,13 +296,26 @@ export async function shot(opts: ShotOptions): Promise<number> {
   let cdp: Cdp | null = null
   const profile = mkdtempSync(join(tmpdir(), 'pcbjs-shot-'))
   const stop = async () => {
-    cdp?.close(); cdp = null
-    if (chrome && chrome.exitCode === null) { const p = chrome; await new Promise<void>(done => { p.once('exit', () => done()); p.kill(); setTimeout(done, 3000) }) }
+    cdp?.close()
+    cdp = null
+    if (chrome && chrome.exitCode === null) {
+      const p = chrome
+      await new Promise<void>(done => {
+        p.once('exit', () => done())
+        p.kill()
+        setTimeout(done, 3000)
+      })
+    }
     chrome = null
-    try { rmSync(profile, { recursive: true, force: true }) } catch {}
-    await server?.close().catch(() => {}); server = null
+    try {
+      rmSync(profile, { recursive: true, force: true })
+    } catch {}
+    await server?.close().catch(() => {})
+    server = null
   }
-  const onSignal = () => { void stop().finally(() => process.exit(130)) }
+  const onSignal = () => {
+    void stop().finally(() => process.exit(130))
+  }
   process.once('SIGINT', onSignal)
   try {
     let base = ''
@@ -247,7 +329,14 @@ export async function shot(opts: ShotOptions): Promise<number> {
         const route = got[0]!.route ?? '/'
         base = dev.origin + route.replace(/\/$/, '')
         boards = got.map(g => ({ name: g!.name!, targets: g!.targets ?? [null], refs: g!.refs ?? [] }))
-        console.log(devLine(dev.origin, cfg.entries.map(e => e.rel), Math.max(...got.map(g => g!.ms ?? 0)), Math.max(...got.map(g => g!.age ?? 0))))
+        console.log(
+          devLine(
+            dev.origin,
+            cfg.entries.map(e => e.rel),
+            Math.max(...got.map(g => g!.ms ?? 0)),
+            Math.max(...got.map(g => g!.age ?? 0)),
+          ),
+        )
       }
     }
     if (!base) {
@@ -266,10 +355,17 @@ export async function shot(opts: ShotOptions): Promise<number> {
       console.log(`compiled  ${state.slots.map(s => s.entry.rel).join(', ')}  ${secs(Date.now() - c0)}`)
       for (const s of state.slots) {
         const e = errorOf(s)
-        if (e && !s.compiled) { console.error(`${s.entry.rel}  compile error: ${e.split('\n')[0]}`); failed++ }
-        else if (e) { console.error(`${s.entry.rel}  ${s.conflict ? '' : 'compile error: '}${e.split('\n')[0]}`); failed++ }
+        if (e && !s.compiled) {
+          console.error(`${s.entry.rel}  compile error: ${e.split('\n')[0]}`)
+          failed++
+        } else if (e) {
+          console.error(`${s.entry.rel}  ${s.conflict ? '' : 'compile error: '}${e.split('\n')[0]}`)
+          failed++
+        }
       }
-      boards = liveSlots(state.slots).filter(s => !s.error).map(s => ({ name: s.compiled![0].board.name, targets: s.compiled!.map(c => c.board.variant?.name ?? null), refs: s.compiled![0].board.footprints.map(f => f.ref) }))
+      boards = liveSlots(state.slots)
+        .filter(s => !s.error)
+        .map(s => ({ name: s.compiled![0].board.name, targets: s.compiled!.map(c => c.board.variant?.name ?? null), refs: s.compiled![0].board.footprints.map(f => f.ref) }))
     }
     for (const sel of selects) for (const b of boards) if (!b.refs.includes(sel)) console.error(`warning  --select ${sel} matches no part of ${b.name}`)
     const jobs = shotJobs(boards, views, outDir, opts)
@@ -286,7 +382,11 @@ export async function shot(opts: ShotOptions): Promise<number> {
       const t0 = Date.now()
       const label = [`${j.board}${j.target ? ` [${j.target}]` : ''}`, j.view, j.select ? `select ${j.select}` : '', j.layer ?? ''].filter(Boolean).join('  ')
       const err = await load(cdp, base + j.path + shotQuery(j.view, { ...opts, select: j.select, layer: j.layer }), j.view, timeout)
-      if (err) { console.error(`${label}  FAIL  ${err}`); failed++; continue }
+      if (err) {
+        console.error(`${label}  FAIL  ${err}`)
+        failed++
+        continue
+      }
       const png = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
       writeFileSync(j.file, Buffer.from(png.data, 'base64'))
       const rel = relative(process.cwd(), j.file)

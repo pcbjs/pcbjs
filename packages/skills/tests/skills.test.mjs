@@ -28,11 +28,12 @@ test('skills: the five skills, each with valid frontmatter, a short body and onl
 })
 
 test('skills: no em-dash and no path to an untracked note', () => {
-  for (const name of names) for (const file of readdirSync(join(root, name), { recursive: true }).filter(f => f.endsWith('.md'))) {
-    const text = readFileSync(join(root, name, file), 'utf8')
-    assert.ok(!text.includes('—'), `${name}/${file}: em-dash`)
-    assert.ok(!/\b(CLAUDE|REVIEW|PORT|IMPROVEMENTS)\.md\b/.test(text), `${name}/${file}: names an untracked note`)
-  }
+  for (const name of names)
+    for (const file of readdirSync(join(root, name), { recursive: true }).filter(f => f.endsWith('.md'))) {
+      const text = readFileSync(join(root, name, file), 'utf8')
+      assert.ok(!text.includes('—'), `${name}/${file}: em-dash`)
+      assert.ok(!/\b(CLAUDE|REVIEW|PORT|IMPROVEMENTS)\.md\b/.test(text), `${name}/${file}: names an untracked note`)
+    }
 })
 
 test('pcbjs-skills: install, list and path', () => {
@@ -51,7 +52,9 @@ test('pcbjs-skills: install, list and path', () => {
     assert.equal(run(['path'], dir).stdout.trim(), root)
     assert.equal(run(['nonsense'], dir).status, 1)
     assert.equal(run(['list', '--to', 'x'], dir).status, 1)
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 const CHANGELOG = `# @pcbjs/core
@@ -90,8 +93,14 @@ test('sync-changelog: Migration sections per minor, newest first, one per text a
     { version: '0.2.0', body: 'Replace `foo(` with `bar(`.' },
     { version: '0.1.0', body: 'Move to the scoped packages.' },
   ])
-  const text = render([{ name: '@pcbjs/core', text: CHANGELOG }, { name: '@pcbjs/lib', text: CHANGELOG }])
-  assert.match(text, /## 0\.2\n\n### 0\.2\.0, @pcbjs\/core, @pcbjs\/lib\n\nReplace `foo\(` with `bar\(`\.\n\n## 0\.1\n\n### 0\.1\.0, @pcbjs\/core, @pcbjs\/lib\n\nMove to the scoped packages\.\n$/)
+  const text = render([
+    { name: '@pcbjs/core', text: CHANGELOG },
+    { name: '@pcbjs/lib', text: CHANGELOG },
+  ])
+  assert.match(
+    text,
+    /## 0\.2\n\n### 0\.2\.0, @pcbjs\/core, @pcbjs\/lib\n\nReplace `foo\(` with `bar\(`\.\n\n## 0\.1\n\n### 0\.1\.0, @pcbjs\/core, @pcbjs\/lib\n\nMove to the scoped packages\.\n$/,
+  )
   assert.match(render([]), /No release has a Migration section yet/)
 })
 
@@ -103,5 +112,7 @@ test('sync-changelog: the script writes the reference file it is given', () => {
     const r = spawnSync(process.execPath, [join(pkg, 'scripts', 'sync-changelog.mjs'), '--out', out, join(dir, 'CHANGELOG.md')], { encoding: 'utf8' })
     assert.equal(r.status, 0, r.stderr)
     assert.match(readFileSync(out, 'utf8'), /### 0\.2\.0, pcbjs/)
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

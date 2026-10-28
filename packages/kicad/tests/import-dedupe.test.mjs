@@ -15,7 +15,8 @@ const fx = (ref, at, items) => `  (footprint "Test:R_Ring" (layer "F.Cu") (at ${
 ${items.map(s => '    ' + s).join('\n')}
   )`
 // a pad's angle in the file is the footprint's: KiCad writes it on the board
-const pad = (n, x, net, extra = '', rot = 0) => `(pad "${n}" smd roundrect (at ${x} 0${rot ? ` ${rot}` : ''}) (size 0.8 0.95) (roundrect_rratio 0.25) (layers "F.Cu" "F.Paste" "F.Mask") (net "${net}")${extra})`
+const pad = (n, x, net, extra = '', rot = 0) =>
+  `(pad "${n}" smd roundrect (at ${x} 0${rot ? ` ${rot}` : ''}) (size 0.8 0.95) (roundrect_rratio 0.25) (layers "F.Cu" "F.Paste" "F.Mask") (net "${net}")${extra})`
 const fabRect = `(fp_rect (start -0.8 -0.4125) (end 0.8 0.4125) (stroke (width 0.1) (type solid)) (fill no) (layer "F.Fab"))`
 // the same rectangle as KiCad writes it for a copy turned 15 degrees and back: a polygon a nanometre off
 const fabNoisy = `(fp_poly (pts (xy -0.8 -0.412499) (xy 0.8 -0.4125) (xy 0.8 0.412499) (xy -0.8 0.4125)) (stroke (width 0.1) (type solid)) (fill no) (layer "F.Fab"))`
@@ -38,15 +39,20 @@ function imported() {
   try {
     writeFileSync(join(top, 'ring.kicad_pcb'), pcb)
     return importBoard(join(top, 'ring.kicad_pcb'), { outDir: join(top, 'out'), schematic: false })
-  } finally { rmSync(top, { recursive: true, force: true }) }
+  } finally {
+    rmSync(top, { recursive: true, force: true })
+  }
 }
 
 test('import dedupe: copies differing in zone connections and by 1 nm of rotation noise make one module', () => {
   const res = imported()
-  assert.deepEqual([...res.files.keys()].filter(k => k.startsWith('lib/')), ['lib/R_Ring.tsx'])
+  assert.deepEqual(
+    [...res.files.keys()].filter(k => k.startsWith('lib/')),
+    ['lib/R_Ring.tsx'],
+  )
   assert.equal(res.counts.lib, 1)
   const lib = res.files.get('lib/R_Ring.tsx')
-  assert.doesNotMatch(lib, /thermal=/, 'the pads where the copies differ keep the pour\'s relief')
+  assert.doesNotMatch(lib, /thermal=/, "the pads where the copies differ keep the pour's relief")
 })
 
 test('import dedupe: each placement that joins pours differently carries a thermal map of those pads', () => {
@@ -68,10 +74,21 @@ test('sameGeometry: numbers within 1 µm are equal, beyond it or with other text
 test('padThermals: one setting per pad number, null when a number has two', () => {
   const top = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-kicad-thermals-')))
   try {
-    const twice = pcb.replace(`${fx('R1', '10 10', [pad(1, -0.825, 'SIG'), pad(2, 0.825, 'GND'), fabRect, crt])}`, `${fx('R1', '10 10', [pad(1, -0.825, 'SIG', ' (zone_connect 2)'), pad(1, 0.825, 'SIG'), fabRect, crt])}`)
+    const twice = pcb.replace(
+      `${fx('R1', '10 10', [pad(1, -0.825, 'SIG'), pad(2, 0.825, 'GND'), fabRect, crt])}`,
+      `${fx('R1', '10 10', [pad(1, -0.825, 'SIG', ' (zone_connect 2)'), pad(1, 0.825, 'SIG'), fabRect, crt])}`,
+    )
     writeFileSync(join(top, 'a.kicad_pcb'), twice)
     const fps = readKicadPcb(join(top, 'a.kicad_pcb')).footprints
     assert.equal(padThermals(fps[0]), null)
-    assert.deepEqual([...padThermals(fps[2])], [['1', 'null'], ['2', '"solid"']])
-  } finally { rmSync(top, { recursive: true, force: true }) }
+    assert.deepEqual(
+      [...padThermals(fps[2])],
+      [
+        ['1', 'null'],
+        ['2', '"solid"'],
+      ],
+    )
+  } finally {
+    rmSync(top, { recursive: true, force: true })
+  }
 })

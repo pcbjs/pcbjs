@@ -16,12 +16,16 @@ const only = (b, rule, n = 1) => {
 
 test('drc rules: a clean board with vias, a plated pad, a hole and silk has no markers', () => {
   const b = board(
-    h('via', { at: '5 5' }), h('via', { at: '5 10' }),
+    h('via', { at: '5 5' }),
+    h('via', { at: '5 10' }),
     fp('J1', '12 5', h('pad', { num: 1, size: 1.7, drill: 1.0 })),
     fp('H1', '12 12', h('pad', { num: '', size: 2.2, drill: 2.2, type: 'npth' })),
     fp('R1', '5 15', h('pad', { num: 1, at: '-0.8 0', size: [0.9, 1.0] }), h('line', { layer: 'F.SilkS', x1: -0.2, y1: 0.75, x2: 0.2, y2: 0.75 })),
   )
-  assert.deepEqual(b.drc.map(d => `${d.rule}: ${d.message}`), [])
+  assert.deepEqual(
+    b.drc.map(d => `${d.rule}: ${d.message}`),
+    [],
+  )
 })
 
 test('drc rules: via-drill and via-size', () => {
@@ -60,17 +64,17 @@ test('drc rules: hole-to-hole counts every drill, plated or not', () => {
 
 test('drc rules: hole-to-copper flags other-net and no-net copper, not the same net', () => {
   // a GND track 0.2 mm from the hole edge of a SIG via passes the copper clearance but not the hole clearance
-  const mk = net => board(
-    h('via', { at: '5 5', net: 'SIG', drill: 0.3, size: 0.45 }),
-    h('track', { net, layer: 'F.Cu', width: 0.2, d: 'M 5.45 3 V 7' }),
-  )
+  const mk = net => board(h('via', { at: '5 5', net: 'SIG', drill: 0.3, size: 0.45 }), h('track', { net, layer: 'F.Cu', width: 0.2, d: 'M 5.45 3 V 7' }))
   const b = mk('GND')
   const m = marks(b, 'hole-to-copper')
   assert.ok(m.length >= 1, JSON.stringify(b.drc.map(d => d.message)))
   assert.match(m[0].message, /^track GND \(GND\) is 0.2 mm from the hole of via SIG \(SIG\) on F.Cu, closer than 0.3 mm$/)
   assert.equal(marks(mk('SIG'), 'hole-to-copper').length, 0, 'same net is fine')
   // copper over the hole itself has no gap to measure
-  assert.match(only(board(h('via', { at: '5 5', net: 'SIG', drill: 0.3, size: 0.45 }), h('track', { net: 'GND', layer: 'B.Cu', width: 0.2, d: 'M 3 5 H 7' })), 'hole-to-copper')[0].message, /^track GND \(GND\) covers the hole of via SIG/)
+  assert.match(
+    only(board(h('via', { at: '5 5', net: 'SIG', drill: 0.3, size: 0.45 }), h('track', { net: 'GND', layer: 'B.Cu', width: 0.2, d: 'M 3 5 H 7' })), 'hole-to-copper')[0].message,
+    /^track GND \(GND\) covers the hole of via SIG/,
+  )
   // an NPTH has no net: copper of any net near it is flagged
   const n = board(fp('H1', '10 10', h('pad', { num: '', size: 1.0, drill: 1.0, type: 'npth' })), h('track', { net: 'A', layer: 'B.Cu', width: 0.2, d: 'M 10.65 8 V 12' }))
   assert.match(only(n, 'hole-to-copper')[0].message, /is 0.05 mm from unplated hole of H1 at \(10, 10\) \(no net\) on B.Cu, closer than 0.3 mm/)

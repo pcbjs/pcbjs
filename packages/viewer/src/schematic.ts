@@ -9,7 +9,12 @@ export function parsePin(s: string): { ref: string; pin: string } | null {
 }
 
 /** One row of the Nets tab. */
-export interface NetRow { name: string; class?: string; local: boolean; /** the owning instance of a local net, absent for a board-level net and on old data */ path?: string[] }
+export interface NetRow {
+  name: string
+  class?: string
+  local: boolean
+  /** the owning instance of a local net, absent for a board-level net and on old data */ path?: string[]
+}
 /** The nets in schematic declaration order, then the board's others; the board's alphabetical list without schematic nets. */
 export function orderNets(boardNets: readonly string[] | undefined, schematic: Partial<Schematic> | null | undefined): NetRow[] {
   const sn = schematic?.nets ?? []
@@ -20,7 +25,11 @@ export function orderNets(boardNets: readonly string[] | undefined, schematic: P
     seen.add(n.name)
     out.push({ name: n.name, ...(n.class ? { class: n.class } : {}), local: !!n.local, ...(Array.isArray(n.path) && n.path.length ? { path: [...n.path] } : {}) })
   }
-  for (const name of boardNets ?? []) if (!seen.has(name)) { seen.add(name); out.push({ name, local: false }) }
+  for (const name of boardNets ?? [])
+    if (!seen.has(name)) {
+      seen.add(name)
+      out.push({ name, local: false })
+    }
   return out
 }
 
@@ -30,7 +39,8 @@ export const schematicPart = (schematic: Partial<Schematic> | null | undefined, 
 
 /** Natural ref order: prefix, then number, so R2 comes before R10. */
 export function compareRefs(a: string, b: string): number {
-  const ra = /^(.*?)(\d+)$/.exec(a), rb = /^(.*?)(\d+)$/.exec(b)
+  const ra = /^(.*?)(\d+)$/.exec(a),
+    rb = /^(.*?)(\d+)$/.exec(b)
   if (ra && rb && ra[1] === rb[1]) return +ra[2] - +rb[2]
   return a < b ? -1 : a > b ? 1 : 0
 }

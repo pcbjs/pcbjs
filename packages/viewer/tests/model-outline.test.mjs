@@ -36,5 +36,8 @@ test('the outline follows the model: a child of the placed group moves with its 
 
 test('the view and the cli judge a placement with the same check', () => {
   assert.equal(typeof placementIssue, 'function')
-  assert.match(placementIssue({ min: [0, 0, 0], max: [1, 1, 1] }, { offset: [5, 0, 0], rotate: [0, 0, 0], scale: [1, 1, 1] }, { x0: -1, y0: -1, x1: 1, y1: 1 }), /past the courtyard at \+x/)
+  assert.match(
+    placementIssue({ min: [0, 0, 0], max: [1, 1, 1] }, { offset: [5, 0, 0], rotate: [0, 0, 0], scale: [1, 1, 1] }, { x0: -1, y0: -1, x1: 1, y1: 1 }),
+    /past the courtyard at \+x/,
+  )
 })

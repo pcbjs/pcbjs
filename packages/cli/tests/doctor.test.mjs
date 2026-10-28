@@ -63,8 +63,13 @@ test('versionSkew: the editor extension is versioned on its own', () => {
 test('installedPackages: reads node_modules/@pcbjs of the project', () => {
   const root = project({ core: '0.1.0', lib: '0.1.2' })
   try {
-    assert.deepEqual(installedPackages(root).map(p => `${p.name}@${p.version}`), ['@pcbjs/core@0.1.0', '@pcbjs/lib@0.1.2'])
-  } finally { rmSync(root, { recursive: true, force: true }) }
+    assert.deepEqual(
+      installedPackages(root).map(p => `${p.name}@${p.version}`),
+      ['@pcbjs/core@0.1.0', '@pcbjs/lib@0.1.2'],
+    )
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('doctor: prints versions, formats and config, exits 1 on a skew', async () => {
@@ -81,7 +86,9 @@ test('doctor: prints versions, formats and config, exits 1 on a skew', async () 
     assert.match(out, /^entries\s+pcb\.tsx/m)
     assert.ok(out.includes(`; run ${update}`), out)
     assert.match(out, /error: @pcbjs packages disagree/)
-  } finally { rmSync(root, { recursive: true, force: true }) }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('doctor: the repository tree agrees', async () => {
@@ -98,5 +105,7 @@ test('warnVersionSkew: one warning line per process', () => {
     warnVersionSkew(root, l => lines.push(l))
     assert.equal(lines.length, 1)
     assert.match(lines[0], /^pcbjs: warning: @pcbjs packages disagree/)
-  } finally { rmSync(root, { recursive: true, force: true }) }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

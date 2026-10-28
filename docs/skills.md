@@ -33,7 +33,7 @@ Each skill is a folder with a `SKILL.md` and a `references/` folder. `SKILL.md` 
 ## Writing a skill
 
 - Keep `SKILL.md` under 500 lines; move long material into `references/`.
-- Every TypeScript, TSX and JavaScript block in a skill is a module that must type-check against the current packages, and every Python block must parse: `packages/pcbjs/tests/skill-samples.test.mjs` checks them. A block opened as ```` ```ts file=lib/pinout.ts ```` is written at that path, so another block of the same file can import it. Write code that cannot compile, such as an old API, in a `diff` or `text` block.
+- Every TypeScript, TSX and JavaScript block in a skill is a module that must type-check against the current packages, and every Python block must parse: `packages/pcbjs/tests/skill-samples.test.mjs` checks them. A block opened as ` ```ts file=lib/pinout.ts ` is written at that path, so another block of the same file can import it. Write code that cannot compile, such as an old API, in a `diff` or `text` block.
 - Keep skills generic: no project names, and no paths to notes outside the package.
 - `packages/skills/tests` checks the frontmatter, the length, that every named reference exists, and the bin.
 

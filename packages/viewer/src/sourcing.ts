@@ -2,7 +2,14 @@
 import type { Sourcing } from '@pcbjs/core/site-data'
 
 /** A BOM row as the viewer may receive it: `sourcing` is absent on data built before sourcing existed. */
-export interface BomRow { refs: string[]; value: string; footprint: string; qty: number; fields?: Record<string, string>; sourcing?: Sourcing | null }
+export interface BomRow {
+  refs: string[]
+  value: string
+  footprint: string
+  qty: number
+  fields?: Record<string, string>
+  sourcing?: Sourcing | null
+}
 
 /** The resolved part number of a row; without sourcing data, the plain MPN field as before. */
 export function rowMpn(r: BomRow): string | null {
@@ -44,7 +51,9 @@ export function sourcingEntries(s: Sourcing | null | undefined): [string, string
 
 /** The tooltip of an MPN cell: one "key: value" line per sourcing key. */
 export function sourcingTitle(s: Sourcing | null | undefined): string {
-  return sourcingEntries(s).map(([k, v]) => `${k}: ${v}`).join('\n')
+  return sourcingEntries(s)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n')
 }
 
 /** The BOM row a ref belongs to. */

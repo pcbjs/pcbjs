@@ -6,10 +6,11 @@ const PX_PER_MM = 160
 const AMBER = `#${ISSUE_COLOR.toString(16).padStart(6, '0')}`
 // made on first use: three.js stays out of module scope for the prerender
 let mats: { lines: THREE.LineDashedMaterial; faces: THREE.MeshBasicMaterial } | null = null
-const materials = () => (mats ??= {
-  lines: new THREE.LineDashedMaterial({ color: ISSUE_COLOR, dashSize: 0.35, gapSize: 0.25, transparent: true, opacity: 0.95 }),
-  faces: new THREE.MeshBasicMaterial({ color: ISSUE_COLOR, transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide }),
-})
+const materials = () =>
+  (mats ??= {
+    lines: new THREE.LineDashedMaterial({ color: ISSUE_COLOR, dashSize: 0.35, gapSize: 0.25, transparent: true, opacity: 0.95 }),
+    faces: new THREE.MeshBasicMaterial({ color: ISSUE_COLOR, transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide }),
+  })
 
 /** The ref over `no model`, amber on a transparent canvas of the top face's aspect. */
 function tagTexture(ref: string, w: number, h: number): THREE.CanvasTexture {
@@ -18,8 +19,12 @@ function tagTexture(ref: string, w: number, h: number): THREE.CanvasTexture {
   canvas.height = Math.max(32, Math.round(h * PX_PER_MM))
   const g = canvas.getContext('2d')!
   const font = (px: number) => `600 ${px}px system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif`
-  const fit = (text: string, px: number, share: number) => { g.font = font(px); return Math.min(px, (px * canvas.width * share) / Math.max(1, g.measureText(text).width)) }
-  const big = fit(ref, canvas.height * 0.4, 0.9), small = fit('no model', big * 0.55, 0.9)
+  const fit = (text: string, px: number, share: number) => {
+    g.font = font(px)
+    return Math.min(px, (px * canvas.width * share) / Math.max(1, g.measureText(text).width))
+  }
+  const big = fit(ref, canvas.height * 0.4, 0.9),
+    small = fit('no model', big * 0.55, 0.9)
   g.fillStyle = AMBER
   g.textAlign = 'center'
   g.textBaseline = 'middle'

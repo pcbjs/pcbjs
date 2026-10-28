@@ -5,9 +5,17 @@ import ts from 'typescript'
 import type { Plugin } from 'vite'
 
 /** 1-based, end inclusive; `lit` is the first character inside its path literal's quotes, `raw` when the literal is plain text. */
-export interface SrcProp { file: string; line: number; col: number; endLine: number; endCol: number; lit?: { line: number; col: number }; raw?: true
+export interface SrcProp {
+  file: string
+  line: number
+  col: number
+  endLine: number
+  endCol: number
+  lit?: { line: number; col: number }
+  raw?: true
   /** for a route or via call, the lines of the helper whose caller the call site is */
-  fn?: { line: number; endLine: number } }
+  fn?: { line: number; endLine: number }
+}
 
 const PATH_TAGS = new Set(['track', 'path', 'zone'])
 
@@ -50,10 +58,11 @@ export function transformSourceRanges(code: string, id: string, file: string, li
     const clause = st.importClause
     if (!clause || clause.isTypeOnly || !clause.namedBindings) continue
     if (ts.isNamespaceImport(clause.namedBindings)) namespaces.add(clause.namedBindings.name.text)
-    else for (const el of clause.namedBindings.elements) {
-      if (el.isTypeOnly) continue
-      if (HELPERS.has((el.propertyName ?? el.name).text)) named.set(el.name.text, (el.propertyName ?? el.name).text)
-    }
+    else
+      for (const el of clause.namedBindings.elements) {
+        if (el.isTypeOnly) continue
+        if (HELPERS.has((el.propertyName ?? el.name).text)) named.set(el.name.text, (el.propertyName ?? el.name).text)
+      }
   }
 
   const s = new MagicString(code)
@@ -65,7 +74,8 @@ export function transformSourceRanges(code: string, id: string, file: string, li
       let q: ts.Node = p
       while (q.parent && ts.isParenthesizedExpression(q.parent)) q = q.parent
       if (q.parent && (ts.isCallExpression(q.parent) || ts.isNewExpression(q.parent)) && q.parent.arguments?.includes(q as ts.Expression)) continue
-      const a = lc(p.getStart(sf)), b = lc(p.getEnd() - 1)
+      const a = lc(p.getStart(sf)),
+        b = lc(p.getEnd() - 1)
       return `, fn: { line: ${a.line + 1}, endLine: ${b.line + 1} }`
     }
     return ''
@@ -104,7 +114,10 @@ export function transformSourceRanges(code: string, id: string, file: string, li
       const third = unwrapExpr(args[2])
       if (third && !ts.isObjectLiteralExpression(third)) return third
     }
-    for (const a of args) { const d = dProp(a); if (d) return d }
+    for (const a of args) {
+      const d = dProp(a)
+      if (d) return d
+    }
     return undefined
   }
   const jsxLiteral = (tagName: ts.JsxTagNameExpression, attrs: ts.JsxAttributes): ts.Expression | undefined => {
@@ -117,8 +130,13 @@ export function transformSourceRanges(code: string, id: string, file: string, li
   const hasSrcAttr = (attrs: ts.JsxAttributes) => attrs.properties.some(p => ts.isJsxAttribute(p) && ts.isIdentifier(p.name) && p.name.text === '__src')
   const isHelper = (callee: ts.Expression): boolean => {
     if (ts.isIdentifier(callee)) return named.has(callee.text)
-    return ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && namespaces.has(callee.expression.text)
-      && ts.isIdentifier(callee.name) && HELPERS.has(callee.name.text)
+    return (
+      ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      namespaces.has(callee.expression.text) &&
+      ts.isIdentifier(callee.name) &&
+      HELPERS.has(callee.name.text)
+    )
   }
   // last, so it wins over a spread of the props a component received, which may carry the caller's __src
   const tag = (tagName: ts.JsxTagNameExpression, attrs: ts.JsxAttributes, whole: ts.Node) => {
@@ -142,7 +160,13 @@ export function transformSourceRanges(code: string, id: string, file: string, li
     return false
   }
   const chainTop = (node: ts.Expression): ts.Expression => {
-    while (ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node && ts.isCallExpression(node.parent.parent) && node.parent.parent.expression === node.parent) node = node.parent.parent
+    while (
+      ts.isPropertyAccessExpression(node.parent) &&
+      node.parent.expression === node &&
+      ts.isCallExpression(node.parent.parent) &&
+      node.parent.parent.expression === node.parent
+    )
+      node = node.parent.parent
     return node
   }
   // from the method name to the closing parenthesis
@@ -153,7 +177,13 @@ export function transformSourceRanges(code: string, id: string, file: string, li
   }
 
   const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && ts.isIdentifier(node.expression.name) && CHAIN.has(node.expression.name.text) && onRoute(node.expression.expression)) {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.name) &&
+      CHAIN.has(node.expression.name.text) &&
+      onRoute(node.expression.expression)
+    ) {
       s.appendLeft(node.getEnd(), `.__at(${chainRange(node, node.expression.name)})`)
       edits++
     }
@@ -174,8 +204,7 @@ export function transformSourceRanges(code: string, id: string, file: string, li
         s.appendLeft(last.getEnd(), `, { __src: ${src} }`)
         edits++
       }
-    }
-    else if (ts.isCallExpression(node) && isHelper(node.expression) && node.arguments.length) {
+    } else if (ts.isCallExpression(node) && isHelper(node.expression) && node.arguments.length) {
       const arg = node.arguments[0]
       const src = range(node, callLiteral(node), helperName(node.expression) !== 'pour')
       if (ts.isObjectLiteralExpression(arg)) {

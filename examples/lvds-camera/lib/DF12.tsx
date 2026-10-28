@@ -4,14 +4,46 @@
 import { defineFootprint, type FootprintProps } from '@pcbjs/core'
 import { npth, courtyard, silkRect } from '@pcbjs/lib'
 
-const PINS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30'] as const
+const PINS = [
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  '10',
+  '11',
+  '12',
+  '13',
+  '14',
+  '15',
+  '16',
+  '17',
+  '18',
+  '19',
+  '20',
+  '21',
+  '22',
+  '23',
+  '24',
+  '25',
+  '26',
+  '27',
+  '28',
+  '29',
+  '30',
+] as const
 
 function DF12Footprint(props: FootprintProps) {
   const { children, ...rest } = props
   return (
     <footprint id="lvds:DF12-30DS-0.5V" value="DF12-30DS" height={3} {...rest}>
       {PINS.map((num, i) => {
-        const k = Math.floor(i / 2), odd = i % 2 === 0
+        const k = Math.floor(i / 2),
+          odd = i % 2 === 0
         return <pad num={num} at={`${(k - 7) * 0.5} ${odd ? -1.9 : 1.9}`} size={[0.3, 1.3]} />
       })}
       {npth(-4.6, 0, 0.7)}

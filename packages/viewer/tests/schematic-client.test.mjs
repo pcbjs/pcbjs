@@ -55,29 +55,84 @@ test('pin references split at the first dot', () => {
 
 test('nets follow the declaration order, then the board nets the schematic lacks; without schematic nets the board order stays', () => {
   const board = ['GND', 'LED1', 'VCC', 'X']
-  const sch = { parts: [], nets: [{ name: 'VCC', class: 'power', local: false, pins: [] }, { name: 'GND', local: false, pins: [] }, { name: 'led/A', local: true, pins: [] }] }
-  assert.deepEqual(orderNets(board, sch), [{ name: 'VCC', class: 'power', local: false }, { name: 'GND', local: false }, { name: 'led/A', local: true }, { name: 'LED1', local: false }, { name: 'X', local: false }])
-  assert.deepEqual(orderNets(board, undefined).map(n => n.name), board)
-  assert.deepEqual(orderNets(board, { parts: [], nets: [] }).map(n => n.name), board)
+  const sch = {
+    parts: [],
+    nets: [
+      { name: 'VCC', class: 'power', local: false, pins: [] },
+      { name: 'GND', local: false, pins: [] },
+      { name: 'led/A', local: true, pins: [] },
+    ],
+  }
+  assert.deepEqual(orderNets(board, sch), [
+    { name: 'VCC', class: 'power', local: false },
+    { name: 'GND', local: false },
+    { name: 'led/A', local: true },
+    { name: 'LED1', local: false },
+    { name: 'X', local: false },
+  ])
+  assert.deepEqual(
+    orderNets(board, undefined).map(n => n.name),
+    board,
+  )
+  assert.deepEqual(
+    orderNets(board, { parts: [], nets: [] }).map(n => n.name),
+    board,
+  )
   assert.deepEqual(orderNets(undefined, null), [])
 })
 
 const sch = {
   parts: [
-    { ref: 'R10', value: '1k', footprint: 'R_0603', prefix: 'R', placed: true, pins: [{ name: '1', net: 'VCC', nc: false }, { name: '2', net: 'LED1', nc: false }] },
-    { ref: 'R2', value: '10k', footprint: 'R_0603', prefix: 'R', placed: false, pins: [{ name: '1', net: null, nc: true }, { name: '2', net: null, nc: false }] },
+    {
+      ref: 'R10',
+      value: '1k',
+      footprint: 'R_0603',
+      prefix: 'R',
+      placed: true,
+      pins: [
+        { name: '1', net: 'VCC', nc: false },
+        { name: '2', net: 'LED1', nc: false },
+      ],
+    },
+    {
+      ref: 'R2',
+      value: '10k',
+      footprint: 'R_0603',
+      prefix: 'R',
+      placed: false,
+      pins: [
+        { name: '1', net: null, nc: true },
+        { name: '2', net: null, nc: false },
+      ],
+    },
     { ref: 'D1', value: 'red', footprint: 'LED_0603', prefix: 'D', placed: true, pins: [{ name: '1', net: 'GND', nc: false }] },
   ],
-  nets: [{ name: 'VCC', class: 'power', local: false, pins: ['R10.1'] }, { name: 'LED1', local: false, pins: ['R10.2'] }, { name: 'GND', local: false, pins: ['D1.1'] }],
+  nets: [
+    { name: 'VCC', class: 'power', local: false, pins: ['R10.1'] },
+    { name: 'LED1', local: false, pins: ['R10.2'] },
+    { name: 'GND', local: false, pins: ['D1.1'] },
+  ],
 }
 
 test('parts in natural ref order, one filter for parts and nets', () => {
-  assert.deepEqual(filterSchematic(sch, '').parts.map(p => p.ref), ['D1', 'R2', 'R10'])
-  assert.deepEqual(filterSchematic(sch, '').nets.map(n => n.name), ['VCC', 'LED1', 'GND'])
+  assert.deepEqual(
+    filterSchematic(sch, '').parts.map(p => p.ref),
+    ['D1', 'R2', 'R10'],
+  )
+  assert.deepEqual(
+    filterSchematic(sch, '').nets.map(n => n.name),
+    ['VCC', 'LED1', 'GND'],
+  )
   const f = filterSchematic(sch, 'gnd')
   assert.deepEqual([f.parts.map(p => p.ref), f.nets.map(n => n.name)], [['D1'], ['GND']])
-  assert.deepEqual(filterSchematic(sch, 'power').nets.map(n => n.name), ['VCC'])
-  assert.deepEqual(filterSchematic(sch, 'r10.2').nets.map(n => n.name), ['LED1'])
+  assert.deepEqual(
+    filterSchematic(sch, 'power').nets.map(n => n.name),
+    ['VCC'],
+  )
+  assert.deepEqual(
+    filterSchematic(sch, 'r10.2').nets.map(n => n.name),
+    ['LED1'],
+  )
   assert.deepEqual(filterSchematic(undefined, 'x'), { parts: [], nets: [] })
   assert.ok(compareRefs('R2', 'R10') < 0 && compareRefs('C1', 'R1') < 0)
   assert.equal(schematicPart(sch, 'R2').placed, false)

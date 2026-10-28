@@ -5,8 +5,14 @@ type Box = Extract<ModelSpec, { kind: 'box' }>
 type Xyz = [number, number, number]
 
 /** The dashed outline a part shows until its model is fetched, or for good with a `reason`. */
-export const outline = (w: number, h: number, height: number, color?: string, reason?: string): Box =>
-  ({ kind: 'box', w, h, height, ...(color ? { color } : {}), ...(reason ? { reason } : {}) })
+export const outline = (w: number, h: number, height: number, color?: string, reason?: string): Box => ({
+  kind: 'box',
+  w,
+  h,
+  height,
+  ...(color ? { color } : {}),
+  ...(reason ? { reason } : {}),
+})
 
 /** A model from `kicad:<Lib>.3dshapes/<Name>.step`, `lcsc:C123` or an https URL, in KiCad's transform: offset in mm with y up, rotate in degrees. */
 export function fetched(source: string, box: Box, offset?: Xyz, rotate?: Xyz): StepModelSpec {

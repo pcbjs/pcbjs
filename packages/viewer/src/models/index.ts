@@ -48,13 +48,20 @@ export function describe(spec: ModelSpec | undefined, ctx: Pick<ModelCtx, 'value
 
 function build(spec: ModelSpec, ctx: ModelCtx, marking: string): THREE.Object3D {
   switch (spec.kind) {
-    case 'chip': return chipModel(spec, ctx.height, marking)
-    case 'led': return ledModel(spec, ctx.height)
-    case 'header': return headerModel(spec, ctx.height, ctx.thickness)
-    case 'sot23': return sot23Model(spec, ctx.height)
-    case 'ic': return boxModel(spec)
-    case 'box': return missingModel(spec.w, spec.h, spec.height, '')
-    case 'none': return new THREE.Group()
+    case 'chip':
+      return chipModel(spec, ctx.height, marking)
+    case 'led':
+      return ledModel(spec, ctx.height)
+    case 'header':
+      return headerModel(spec, ctx.height, ctx.thickness)
+    case 'sot23':
+      return sot23Model(spec, ctx.height)
+    case 'ic':
+      return boxModel(spec)
+    case 'box':
+      return missingModel(spec.w, spec.h, spec.height, '')
+    case 'none':
+      return new THREE.Group()
     default: {
       const s = spec as { kind?: string }
       console.warn(`3D view: no generator for model kind ${JSON.stringify(s.kind)}, drawing its outline`)
@@ -68,6 +75,9 @@ export function getModel(spec: ModelSpec, ctx: ModelCtx): THREE.Object3D {
   // the height and thickness change the shape of most parts, so they are part of the key
   const key = JSON.stringify([spec, marking, ctx.height, spec.kind === 'header' ? ctx.thickness : 0])
   let proto = cache.get(key)
-  if (!proto) { proto = build(spec, ctx, marking); cache.set(key, proto) }
+  if (!proto) {
+    proto = build(spec, ctx, marking)
+    cache.set(key, proto)
+  }
   return proto.clone()
 }

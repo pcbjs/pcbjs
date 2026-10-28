@@ -1,9 +1,13 @@
 // which parts of the 3D board turn see-through, and how far a hover reaches while a focus is on
 import type { HlState } from './highlight'
 
-export interface Selection { net?: string | null; ref?: string | null; refs?: readonly string[]
+export interface Selection {
+  net?: string | null
+  ref?: string | null
+  refs?: readonly string[]
   /** the pinned net with the rest of its pair group, as netRoles gives them; the net alone when absent */
-  nets?: Iterable<string> }
+  nets?: Iterable<string>
+}
 
 /** Groups that are no layer of the stack and never dim for a hovered one. */
 const OVER = new Set(['overlay', 'References'])
@@ -26,10 +30,21 @@ export function slabState(o: { inner: boolean; translucent: boolean; dimmed: boo
 }
 
 /** What a hover is held to under the focus fade: the pinned net with its pair group, the selected parts, and for part bodies also the parts on those nets. */
-export interface Scope { nets: ReadonlySet<string>; refs: ReadonlySet<string>; parts: ReadonlySet<string> }
+export interface Scope {
+  nets: ReadonlySet<string>
+  refs: ReadonlySet<string>
+  parts: ReadonlySet<string>
+}
 /** A hovered item: copper names its net and part; `body` is a part body or symbol; `refs` the parts of a sheet. */
-export interface Hovered { net?: string | null; ref?: string | null; refs?: readonly string[]; body?: boolean }
-interface ScopeBoard { footprints: readonly { ref: string; pads: readonly { net?: string | null }[] }[] }
+export interface Hovered {
+  net?: string | null
+  ref?: string | null
+  refs?: readonly string[]
+  body?: boolean
+}
+interface ScopeBoard {
+  footprints: readonly { ref: string; pads: readonly { net?: string | null }[] }[]
+}
 
 /** The scope of a focus, null without one: the fade off, or nothing pinned or selected. */
 export function hoverScope(s: Selection, fade: boolean, board: ScopeBoard | null): Scope | null {

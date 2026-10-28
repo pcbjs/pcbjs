@@ -13,8 +13,13 @@ export function roundedBox(w: number, h: number, d: number, r: number, z0 = 0): 
 export function chamferedBox(w: number, h: number, d: number, c: number, z0 = 0): THREE.BufferGeometry {
   c = Math.min(c, w / 3, h / 3, d / 3)
   const s = new THREE.Shape()
-  const x = w / 2 - c, y = h / 2 - c
-  s.moveTo(-x, -y); s.lineTo(x, -y); s.lineTo(x, y); s.lineTo(-x, y); s.closePath()
+  const x = w / 2 - c,
+    y = h / 2 - c
+  s.moveTo(-x, -y)
+  s.lineTo(x, -y)
+  s.lineTo(x, y)
+  s.lineTo(-x, y)
+  s.closePath()
   const g = new THREE.ExtrudeGeometry(s, { depth: d - 2 * c, bevelEnabled: true, bevelThickness: c, bevelSize: c, bevelSegments: 1 })
   g.translate(0, 0, z0 + c)
   return g

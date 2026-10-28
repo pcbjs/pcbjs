@@ -43,11 +43,19 @@ test('pcbjs build never loads the language server', () => {
 })
 
 test('pcbjs dev loads it on the first LSP initialize, not before', async () => {
-  const child = spawn(process.execPath, ['--import', HOOK, BIN, 'dev', '-p', String(PORT), '--host', '127.0.0.1'], { cwd: root, env: env('dev'), stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(process.execPath, ['--import', HOOK, BIN, 'dev', '-p', String(PORT), '--host', '127.0.0.1'], {
+    cwd: root,
+    env: env('dev'),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
   try {
     let out = ''
-    child.stdout.on('data', d => { out += d })
-    child.stderr.on('data', d => { out += d })
+    child.stdout.on('data', d => {
+      out += d
+    })
+    child.stderr.on('data', d => {
+      out += d
+    })
     const t0 = Date.now()
     while (!/127\.0\.0\.1:5272/.test(out)) {
       if (Date.now() - t0 > 30000) throw new Error(`dev did not start:\n${out}`)
@@ -56,7 +64,10 @@ test('pcbjs dev loads it on the first LSP initialize, not before', async () => {
     // a viewer page, a compiled board, a bridge with cursor and focus: still nothing
     assert.equal((await fetch(`http://127.0.0.1:${PORT}/__pcbjs/Lazy/board.json`)).status, 200)
     const ws = new WebSocket(`ws://127.0.0.1:${PORT}/`, 'vite-hmr')
-    await new Promise((ok, fail) => { ws.once('open', ok); ws.once('error', fail) })
+    await new Promise((ok, fail) => {
+      ws.once('open', ok)
+      ws.once('error', fail)
+    })
     const send = (event, data) => ws.send(JSON.stringify({ type: 'custom', event, data }))
     send('pcbjs:ide:hello', { name: 'test', version: '0' })
     send('pcbjs:ide:focus', { file: join(root, 'pcb.tsx') })
@@ -64,7 +75,12 @@ test('pcbjs dev loads it on the first LSP initialize, not before', async () => {
     await new Promise(r => setTimeout(r, 300))
     assert.equal(loaded('dev'), '')
     // the editor asks for the language server
-    const answer = new Promise(ok => ws.on('message', raw => { const m = JSON.parse(raw.toString()); if (m.event === 'pcbjs:lsp' && m.data?.id === 1) ok(m.data) }))
+    const answer = new Promise(ok =>
+      ws.on('message', raw => {
+        const m = JSON.parse(raw.toString())
+        if (m.event === 'pcbjs:lsp' && m.data?.id === 1) ok(m.data)
+      }),
+    )
     send('pcbjs:lsp', { jsonrpc: '2.0', id: 1, method: 'initialize', params: { processId: null, rootUri: null, capabilities: {} } })
     const res = await answer
     assert.equal(res.result.serverInfo.name, 'pcbjs')

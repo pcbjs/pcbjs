@@ -25,6 +25,10 @@ The CLI and the tests run from each package's `dist`, so rebuild after changing 
 
 The docs site in `site/` renders these topic files as they are, one page each. `.github/workflows/pages.yml` deploys it to GitHub Pages on every push to `main` and after a publish: the last published train at https://pcbjs.dev and the docs of `main` at https://pcbjs.dev/next/; site/README.md has the pages, the gallery and the DNS records.
 
+## Formatting
+
+Prettier formats every file it knows, markdown included with `proseWrap: preserve` so a paragraph stays on one line; `.prettierrc.json` has the options, `scripts/prettier-tables.mjs` keeps markdown tables as written so padding does not grow the docs, and `.prettierignore` leaves out dist, caches, lock files, changelogs, the fonts and other machine-written data. `npm install` runs `prepare`, which installs a pre-commit hook through simple-git-hooks; the hook runs lint-staged, which formats the staged files, so nobody formats by hand. The Prettier job in CI runs `npm run format:check` and fails on an unformatted tree; `npm run format` rewrites the whole tree. There is no linter.
+
 ## Packages
 
 Every component lives in `packages/<dir>` with its own `package.json`, `tsconfig.json`, `src`, `dist` and `tests`; the viewer is served from source and has no `dist`, and `@pcbjs/pcbjs` has only its bin and tests. Packages import each other by name, such as `@pcbjs/core/model`, never by a relative path into another package; every package exports `.` and `./*` for its modules.

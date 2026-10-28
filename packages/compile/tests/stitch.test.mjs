@@ -4,16 +4,25 @@ import PCB, { h, pour, stitch, resetDefaults } from '@pcbjs/core'
 import { compileBoard, CompileError } from '../dist/index.js'
 import { intersection, polysToRings } from '../dist/geom.js'
 
-const W = 30, H = 20
+const W = 30,
+  H = 20
 const outline = () => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: W, h: H })
 const box = `M0 0 H${W} V${H} H0 Z`
-const board = (...kids) => { resetDefaults(); return compileBoard(h(PCB, { name: 'S' }, outline(), ...kids), { routeCache: false }) }
+const board = (...kids) => {
+  resetDefaults()
+  return compileBoard(h(PCB, { name: 'S' }, outline(), ...kids), { routeCache: false })
+}
 /** a through-hole GND pad that holds both pours */
 const anchor = () => h('footprint', { ref: 'J1', at: '2 2', 'net:1': 'GND' }, h('pad', { num: 1, size: 1.6, drill: 0.8 }))
 const pours = () => [pour('GND', 'F.Cu', box), pour('GND', 'B.Cu', box)]
 const stitched = b => b.items.filter(i => i.kind === 'via' && i.stitch)
 const errors = b => b.drc.filter(d => d.severity === 'error')
-const sq = ([x, y], r = 0.05) => [[x - r, y - r], [x + r, y - r], [x + r, y + r], [x - r, y + r]]
+const sq = ([x, y], r = 0.05) => [
+  [x - r, y - r],
+  [x + r, y - r],
+  [x + r, y + r],
+  [x - r, y + r],
+]
 const filled = (b, layer, p) => b.items.some(z => z.kind === 'zone' && z.layer === layer && polysToRings(intersection(polysToRings(z.fill), [sq(p)])).length > 0)
 
 test('stitch: vias of the net on a pitch lattice where both pours have fill, joined to them, DRC clean', () => {
@@ -53,7 +62,10 @@ test('stitch: a via of the net suppresses the lattice points within the pitch, p
   const toPad = ([x, y]) => Math.hypot(Math.max(0, Math.abs(x - 15) - 0.5), Math.max(0, Math.abs(y - 10) - 0.5)) - 0.5
   assert.ok(stitched(kept).length > 10)
   for (const x of stitched(kept)) assert.ok(toPad(x.at) - x.size / 2 >= 1.5 - 0.005, `via at ${x.at}`)
-  assert.ok(stitched(kept).some(x => toPad(x.at) - x.size / 2 < 1.6), 'a via sits close to the limit')
+  assert.ok(
+    stitched(kept).some(x => toPad(x.at) - x.size / 2 < 1.6),
+    'a via sits close to the limit',
+  )
   const area = board(anchor(), ...pours(), stitch('GND', { pitch: 3, area: 'M 15 0 H 30 V 20 H 15 Z' }))
   assert.ok(stitched(area).length > 5)
   for (const x of stitched(area)) assert.ok(x.at[0] >= 15)
@@ -68,7 +80,10 @@ test('stitch: avoid.silk keeps vias off silk, and the pours refill around the vi
   for (const x of off) assert.ok(!(x.at[0] > 8 - 0.4 && x.at[0] < 22 + 0.4 && x.at[1] > 5 - 0.4 && x.at[1] < 15 + 0.4), `via at ${x.at} on silk`)
   // a SIG pour on In1.Cu of a four-layer board: through vias cut it, and it refills around them
   resetDefaults()
-  const b = compileBoard(h(PCB, { name: 'S4', copper: 4 }, outline(), anchor(), ...pours(), pour('SIG', 'In1.Cu', box, { islands: 'keep' }), stitch('GND', { pitch: 4, layers: ['F.Cu', 'B.Cu'] })), { routeCache: false })
+  const b = compileBoard(
+    h(PCB, { name: 'S4', copper: 4 }, outline(), anchor(), ...pours(), pour('SIG', 'In1.Cu', box, { islands: 'keep' }), stitch('GND', { pitch: 4, layers: ['F.Cu', 'B.Cu'] })),
+    { routeCache: false },
+  )
   const v = stitched(b)
   assert.ok(v.length > 10)
   for (const x of v) assert.ok(!filled(b, 'In1.Cu', x.at), `In1.Cu fill under the via at ${x.at}`)

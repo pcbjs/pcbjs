@@ -5,8 +5,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { impedanceOf, traceWidth, pairGeometry, traceModel, twoLayer, sixLayer, JLCPCB_4L_7628 } from '../dist/index.js'
 
-const within = (actual, expected, frac, what) =>
-  assert.ok(Math.abs(actual - expected) <= frac * expected, `${what}: ${actual} is not within ${frac * 100}% of ${expected}`)
+const within = (actual, expected, frac, what) => assert.ok(Math.abs(actual - expected) <= frac * expected, `${what}: ${actual} is not within ${frac * 100}% of ${expected}`)
 const J = JLCPCB_4L_7628
 
 test('impedance: the model reads planes, height, er and copper from the stackup', () => {
@@ -30,9 +29,15 @@ test('impedance: 50 ohm microstrip on a 1.6 mm two layer FR4 board is about 3 mm
   // twoLayer(): 1.51 mm core after copper and mask, er 4.5, 35 um copper. Saturn and KiCad give about 2.8 mm for that core.
   const w = traceWidth(twoLayer(), 'F.Cu', 50)
   within(w, 2.95, 0.1, '50 ohm on twoLayer()')
-  within(w, 2.80, 0.02, '50 ohm on twoLayer(), against Hammerstad and Jensen in KiCad')
+  within(w, 2.8, 0.02, '50 ohm on twoLayer(), against Hammerstad and Jensen in KiCad')
   // a full 1.6 mm dielectric, the textbook case: 2.9 to 3.0 mm
-  const s = { layers: [{ type: 'copper', name: 'F.Cu', thickness: 0.035 }, { type: 'core', thickness: 1.6, er: 4.5 }, { type: 'copper', name: 'B.Cu', thickness: 0.035 }] }
+  const s = {
+    layers: [
+      { type: 'copper', name: 'F.Cu', thickness: 0.035 },
+      { type: 'core', thickness: 1.6, er: 4.5 },
+      { type: 'copper', name: 'B.Cu', thickness: 0.035 },
+    ],
+  }
   within(traceWidth(s, 'F.Cu', 50), 2.95, 0.03, '50 ohm over 1.6 mm')
 })
 
@@ -78,12 +83,17 @@ test('impedance: stripline on an inner layer', () => {
   within(impedanceOf(J, 'In1.Cu', 0.2), 56.0, 0.1, 'In1 0.2 mm')
   within(impedanceOf(J, 'In1.Cu', 0.3), 46.6, 0.1, 'In1 0.3 mm')
   // FD on a near-centred inner layer, 0.2 and 0.42 mm to the planes, 17.5 um copper, er 4.5: 0.15 mm is 57.1 ohm
-  const six = { layers: [
-    { type: 'copper', name: 'F.Cu', thickness: 0.035 }, { type: 'core', thickness: 0.2, er: 4.5 },
-    { type: 'copper', name: 'In1.Cu', thickness: 0.0175 }, { type: 'core', thickness: 0.42, er: 4.5 },
-    { type: 'copper', name: 'In2.Cu', thickness: 0.0175 }, { type: 'core', thickness: 0.2, er: 4.5 },
-    { type: 'copper', name: 'B.Cu', thickness: 0.035 },
-  ] }
+  const six = {
+    layers: [
+      { type: 'copper', name: 'F.Cu', thickness: 0.035 },
+      { type: 'core', thickness: 0.2, er: 4.5 },
+      { type: 'copper', name: 'In1.Cu', thickness: 0.0175 },
+      { type: 'core', thickness: 0.42, er: 4.5 },
+      { type: 'copper', name: 'In2.Cu', thickness: 0.0175 },
+      { type: 'core', thickness: 0.2, er: 4.5 },
+      { type: 'copper', name: 'B.Cu', thickness: 0.035 },
+    ],
+  }
   within(impedanceOf(six, 'In1.Cu', 0.15), 57.1, 0.04, 'centred stripline')
   // FD for an In1.Cu pair, 0.15 / 0.15 mm: 92.6 ohm
   within(impedanceOf(J, 'In1.Cu', 0.15, 0.15), 92.6, 0.1, 'In1 pair')
@@ -93,7 +103,12 @@ test('impedance: stripline on an inner layer', () => {
 
 test('impedance: clear errors', () => {
   assert.throws(() => impedanceOf(J, 'In3.Cu', 0.2), /"In3.Cu" is not a copper layer of the stackup \(it has F.Cu, In1.Cu, In2.Cu, B.Cu\)/)
-  const lone = { layers: [{ type: 'copper', name: 'F.Cu', thickness: 0.035 }, { type: 'core', thickness: 1.5 }] }
+  const lone = {
+    layers: [
+      { type: 'copper', name: 'F.Cu', thickness: 0.035 },
+      { type: 'core', thickness: 1.5 },
+    ],
+  }
   assert.throws(() => impedanceOf(lone, 'F.Cu', 0.2), /no reference plane for F.Cu/)
   assert.throws(() => impedanceOf(J, 'F.Cu', 0), /width must be a positive number/)
   assert.throws(() => traceWidth(J, 'F.Cu', 1000), /1000 ohms is out of reach for a trace on F.Cu/)

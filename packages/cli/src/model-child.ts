@@ -10,8 +10,14 @@ try {
   const { modelToMesh, meshToBinary } = await import('@pcbjs/step')
   const bin = meshToBinary(await modelToMesh(content, { path }))
   mkdirSync(dir, { recursive: true })
-  const file = join(dir, `${hash}.bin`), tmp = `${file}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`
-  try { writeFileSync(tmp, bin); renameSync(tmp, file) } finally { rmSync(tmp, { force: true }) }
+  const file = join(dir, `${hash}.bin`),
+    tmp = `${file}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`
+  try {
+    writeFileSync(tmp, bin)
+    renameSync(tmp, file)
+  } finally {
+    rmSync(tmp, { force: true })
+  }
   process.exit(0)
 } catch (e: any) {
   process.stderr.write(String(e?.message ?? e).split('\n')[0] + '\n')

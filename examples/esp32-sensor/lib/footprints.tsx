@@ -26,7 +26,9 @@ function ESP32C3MiniFootprint(props: FootprintProps) {
       <rect layer="F.Fab" x={-6.6} y={-8.3} w={13.2} h={16.6} />
       <path layer="F.SilkS" d="M -6.75 -8.45 H 6.75 V -2.6 M -6.75 -8.45 V -2.6" />
       <circle layer="F.SilkS" cx={-7.0} cy={-2.6} r={0.15} fill />
-      <text layer="F.Fab" at="0 -5.5" size={1}>ANT</text>
+      <text layer="F.Fab" at="0 -5.5" size={1}>
+        ANT
+      </text>
       {children}
     </footprint>
   )
@@ -35,9 +37,18 @@ export const ESP32C3Mini = defineFootprint(ESP32C3MiniFootprint, { pins: C3_PINS
 
 // USB-C 16-pin receptacle, HRO TYPE-C-31-M-12 style. Signal pads at y = 0, mouth toward +y, shell pads THT.
 const USB_PADS: [string, string, number, number][] = [
-  ['A1', 'GND', -3.2, 0.6], ['A4', 'VBUS', -2.4, 0.6], ['B8', 'SBU2', -1.75, 0.3], ['A5', 'CC1', -1.25, 0.3],
-  ['B7', 'DN', -0.75, 0.3], ['A6', 'DP', -0.25, 0.3], ['A7', 'DN', 0.25, 0.3], ['B6', 'DP', 0.75, 0.3],
-  ['A8', 'SBU1', 1.25, 0.3], ['B5', 'CC2', 1.75, 0.3], ['B4', 'VBUS', 2.4, 0.6], ['B1', 'GND', 3.2, 0.6],
+  ['A1', 'GND', -3.2, 0.6],
+  ['A4', 'VBUS', -2.4, 0.6],
+  ['B8', 'SBU2', -1.75, 0.3],
+  ['A5', 'CC1', -1.25, 0.3],
+  ['B7', 'DN', -0.75, 0.3],
+  ['A6', 'DP', -0.25, 0.3],
+  ['A7', 'DN', 0.25, 0.3],
+  ['B6', 'DP', 0.75, 0.3],
+  ['A8', 'SBU1', 1.25, 0.3],
+  ['B5', 'CC2', 1.75, 0.3],
+  ['B4', 'VBUS', 2.4, 0.6],
+  ['B1', 'GND', 3.2, 0.6],
 ]
 function USBCFootprint(props: FootprintProps) {
   const { children, ...rest } = props
@@ -46,15 +57,24 @@ function USBCFootprint(props: FootprintProps) {
       {USB_PADS.map(([num, name, x, w]) => smd(num, x, 0, w, 1.15, { name }))}
       {npth(-2.89, 1.25, 0.65)}
       {npth(2.89, 1.25, 0.65)}
-      {[-4.32, 4.32].map((x) => <pad num="S" name="SHIELD" at={[x, 1.55]} size={[1.0, 2.1]} drill={[0.6, 1.7]} shape="oval" />)}
-      {[-4.32, 4.32].map((x) => <pad num="S" name="SHIELD" at={[x, 5.73]} size={[1.0, 1.6]} drill={[0.6, 1.2]} shape="oval" />)}
+      {[-4.32, 4.32].map(x => (
+        <pad num="S" name="SHIELD" at={[x, 1.55]} size={[1.0, 2.1]} drill={[0.6, 1.7]} shape="oval" />
+      ))}
+      {[-4.32, 4.32].map(x => (
+        <pad num="S" name="SHIELD" at={[x, 5.73]} size={[1.0, 1.6]} drill={[0.6, 1.2]} shape="oval" />
+      ))}
       <rect layer="F.CrtYd" x={-5.1} y={-0.9} w={10.2} h={8.4} width={0.05} />
       <rect layer="F.Fab" x={-4.47} y={0.1} w={8.94} h={7.3} />
       {children}
     </footprint>
   )
 }
-export const USBC = defineFootprint(USBCFootprint, { pins: ['GND', 'VBUS', 'CC1', 'CC2', 'DP', 'DN', 'SBU1', 'SBU2', 'SHIELD'], prefix: 'J', id: 'esp32:USB_C_Receptacle_HRO_TYPE-C-31-M-12', name: 'USBC' })
+export const USBC = defineFootprint(USBCFootprint, {
+  pins: ['GND', 'VBUS', 'CC1', 'CC2', 'DP', 'DN', 'SBU1', 'SBU2', 'SHIELD'],
+  prefix: 'J',
+  id: 'esp32:USB_C_Receptacle_HRO_TYPE-C-31-M-12',
+  name: 'USBC',
+})
 
 // SOT-23-5 and SOT-23-6 from the standard library: pins 1 to 3 down the left, the rest up the right.
 export const SOT23_5 = SOT23(5)

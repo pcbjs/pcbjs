@@ -73,7 +73,10 @@ test('scope: a shadowed or member-only use binds nothing', () => {
 
 test('scope: two schematic namespaces in one file are an error asking for a split', () => {
   const code = `import * as a from './board.sch'\nimport * as b from './other'\nexport const x = <PCB name="a" schematic={a}><U1 /></PCB>\nexport const y = <PCB name="b" schematic={b}><U1 /></PCB>\n`
-  assert.throws(() => scopeInject(code, resolve, '/p/pcb.tsx'), e => e instanceof ScopeError && /a and b in one file/.test(e.message) && e.pos === code.lastIndexOf('schematic='))
+  assert.throws(
+    () => scopeInject(code, resolve, '/p/pcb.tsx'),
+    e => e instanceof ScopeError && /a and b in one file/.test(e.message) && e.pos === code.lastIndexOf('schematic='),
+  )
 })
 
 test('scope: a namespace not passed to schematic, or a drawing passed by name, injects nothing', () => {

@@ -4,9 +4,15 @@ import assert from 'node:assert/strict'
 import { createSync, remoteHover } from '../src/sync.ts'
 
 function harness() {
-  const sent = [], frames = []
-  const sync = createSync((event, data) => sent.push({ event, data }), cb => frames.push(cb))
-  const flush = () => { while (frames.length) frames.shift()() }
+  const sent = [],
+    frames = []
+  const sync = createSync(
+    (event, data) => sent.push({ event, data }),
+    cb => frames.push(cb),
+  )
+  const flush = () => {
+    while (frames.length) frames.shift()()
+  }
   return { sync, sent, flush }
 }
 const F = { net: 'GND', ref: 'R1', refs: [], circuit: null }
@@ -19,18 +25,28 @@ test('a remote focus is applied without echo, a later local change is sent', () 
   assert.equal(sent.length, 0, 'the change the remote focus caused is not sent back')
   sync.focus('B', { ...F, ref: null })
   sync.focus('B', { ...F, ref: null })
-  assert.deepEqual(sent.map(m => m.event), ['pcbjs:sync:focus'])
+  assert.deepEqual(
+    sent.map(m => m.event),
+    ['pcbjs:sync:focus'],
+  )
 })
 
 test('hover: one message a frame, the last state of it, and only on change', () => {
   const { sync, sent, flush } = harness()
   const h = id => ({ ids: [id], refs: [], net: null })
-  sync.hover('B', h(1)); sync.hover('B', h(2)); sync.hover('B', h(3))
+  sync.hover('B', h(1))
+  sync.hover('B', h(2))
+  sync.hover('B', h(3))
   flush()
-  assert.deepEqual(sent.map(m => m.data.hover.ids[0]), [3])
-  sync.hover('B', h(3)); flush()
+  assert.deepEqual(
+    sent.map(m => m.data.hover.ids[0]),
+    [3],
+  )
+  sync.hover('B', h(3))
+  flush()
   assert.equal(sent.length, 1)
-  sync.hover('B', null); flush()
+  sync.hover('B', null)
+  flush()
   assert.equal(sent.at(-1).data.hover, null)
 })
 

@@ -55,8 +55,12 @@ const until = async (pred, ms = 30000) => {
 function start(args, token) {
   const child = spawn(process.execPath, args, { cwd: root, env: { ...process.env, NO_COLOR: '1' }, stdio: ['ignore', 'pipe', 'pipe'] })
   let out = ''
-  child.stdout.on('data', d => { out += d })
-  child.stderr.on('data', d => { out += d })
+  child.stdout.on('data', d => {
+    out += d
+  })
+  child.stderr.on('data', d => {
+    out += d
+  })
   const exited = new Promise(done => child.once('exit', (code, signal) => done({ code, signal })))
   const ready = () => frames.find(f => f.path === `/${token}` && f.event === 'pcbjs:ide:ready')
   const boards = () => frames.some(f => f.path === `/${token}` && f.event === 'pcbjs:ide:boards')

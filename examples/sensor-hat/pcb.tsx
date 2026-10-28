@@ -5,10 +5,17 @@ import { route, pour, keepout, via } from '@pcbjs/core'
 import { Brand, roundedRect, circle, slot } from '@pcbjs/lib'
 import * as sch from './hat.sch'
 
-const W = 65, H = 56.5
+const W = 65,
+  H = 56.5
 // mounting: round 2.75 mm holes by the header, 2.75 mm slots at the far edge, each with a 6 mm keepout for the M2.5 screw head
-const HOLES = [[3.5, 3.5], [61.5, 3.5]]
-const SLOTS = [[3.5, 52.5], [61.5, 52.5]]
+const HOLES = [
+  [3.5, 3.5],
+  [61.5, 3.5],
+]
+const SLOTS = [
+  [3.5, 52.5],
+  [61.5, 52.5],
+]
 const BOARD = roundedRect(W, H, 3)
 
 // a 1 mm band along the outline and round the mounting holes keeps courtyards, silk and pads clear of a case's wall and the screw
@@ -16,8 +23,12 @@ const BOARD = roundedRect(W, H, 3)
 export default (
   <PCB name="sensor-hat" revision="0.1.0" schematic={sch} rules={{ strictNets: true, thermal: { gap: 0.3 }, edge: { width: 1, except: [J1, J4, J3] } }}>
     <path layer="Edge.Cuts" d={BOARD} />
-    {HOLES.map(([x, y]) => <path layer="Edge.Cuts" d={circle(2.75, x, y)} />)}
-    {SLOTS.map(([x, y]) => <path layer="Edge.Cuts" d={slot(x - 0.75, y, x + 0.75, y, 2.75)} />)}
+    {HOLES.map(([x, y]) => (
+      <path layer="Edge.Cuts" d={circle(2.75, x, y)} />
+    ))}
+    {SLOTS.map(([x, y]) => (
+      <path layer="Edge.Cuts" d={slot(x - 0.75, y, x + 0.75, y, 2.75)} />
+    ))}
     {[...HOLES, ...SLOTS].map(([x, y]) => keepout('all', circle(6.2, x, y)))}
 
     {/* GPIO socket, drawn on the front as in KiCad's HAT template and fitted as a stacking socket: pin 1 at (8.37, 4.77), the even row toward the edge */}
@@ -68,7 +79,6 @@ export default (
     <R6 at="24 36" />
     <SW1 at="28 50" />
     <SW2 at="35.5 50" />
-
 
     {/* 3V3, 0.3 mm: pin 1 to the OLED, pin 17 to the EEPROM, the accelerometer, the SD socket and the BME280 */}
     {route(J1[1]).X(J2[2]).width(0.3)}
@@ -144,7 +154,19 @@ export default (
     {route(C6[2]).X(U4.VSS).width(0.3)}
 
     {/* stitching vias for F.Cu GND pieces the tracks fence off: by R1 and R2, below and right of U2, by SW2, by C3, by C4, by D2, by C7, by U1 and by C1 */}
-    {[[11, 24.4], [31.3, 29.4], [35.3, 27.3], [41.2, 50.8], [41, 38.23], [11.8, 17.2], [45.49, 24.53], [48.56, 27], [59.56, 28.37], [56.45, 28], [55.78, 33.1]].map(([x, y]) => via(GND, [x, y], { drill: 0.2, size: 0.45 }))}
+    {[
+      [11, 24.4],
+      [31.3, 29.4],
+      [35.3, 27.3],
+      [41.2, 50.8],
+      [41, 38.23],
+      [11.8, 17.2],
+      [45.49, 24.53],
+      [48.56, 27],
+      [59.56, 28.37],
+      [56.45, 28],
+      [55.78, 33.1],
+    ].map(([x, y]) => via(GND, [x, y], { drill: 0.2, size: 0.45 }))}
     {/* each button has two pads per side, joined inside the switch but not on the board */}
     {route(SW1.pad('1')).X(SW1.pad('2')).width(0.2)}
     {route(SW2.pad('1')).X(SW2.pad('2')).width(0.2)}
@@ -153,7 +175,9 @@ export default (
     {pour(GND, 'F.Cu', BOARD)}
     {pour(GND, 'B.Cu', BOARD)}
 
-    <text layer="F.SilkS" at="32.5 33.5" size={1}>sensor-hat</text>
+    <text layer="F.SilkS" at="32.5 33.5" size={1}>
+      sensor-hat
+    </text>
     <Brand at="35 19.25" height={6} />
   </PCB>
 )

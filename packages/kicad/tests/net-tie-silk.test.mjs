@@ -12,7 +12,11 @@ before(() => {
   for (const k of ['KICAD10_FOOTPRINT_DIR', 'KICAD_FOOTPRINTS']) saved[k] = process.env[k]
   process.env.KICAD10_FOOTPRINT_DIR = FOOTPRINTS
 })
-after(() => { for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v })
+after(() => {
+  for (const [k, v] of Object.entries(saved))
+    if (v === undefined) delete process.env[k]
+    else process.env[k] = v
+})
 
 // a Kelvin shunt: sense tabs 2 and 3 overlap the current pads 1 and 4
 const SHUNT = `(footprint "Shunt_Kelvin" (version 20240108) (generator "test") (layer "F.Cu")
@@ -26,19 +30,37 @@ const SHUNT = `(footprint "Shunt_Kelvin" (version 20240108) (generator "test") (
 )`
 
 test('net tie: net_tie_pad_groups is read, written by the importer and compiles without a short', () => {
-  assert.deepEqual(readKicadMod(SHUNT).netTie, [['1', '2'], ['3', '4']])
+  assert.deepEqual(readKicadMod(SHUNT).netTie, [
+    ['1', '2'],
+    ['3', '4'],
+  ])
   const { code } = footprintModule(readKicadMod(SHUNT))
   assert.match(code, /netTie: \[\['1', '2'\], \['3', '4'\]\]/)
   const def = readFootprint(SHUNT)
-  assert.deepEqual(def.meta.netTie, [['1', '2'], ['3', '4']])
-  const b = compileBoard(h(PCB, { name: 'T' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 }),
-    h(def.render, { ref: 'RS1', at: '5 5', 'net:1': 'HI', 'net:2': 'SP', 'net:3': 'SN', 'net:4': 'LO' })))
-  assert.deepEqual(b.drc.filter(d => d.rule === 'short' || d.rule === 'clearance').map(d => d.message), [])
-  assert.deepEqual(b.footprints[0].netTie, [['1', '2'], ['3', '4']])
+  assert.deepEqual(def.meta.netTie, [
+    ['1', '2'],
+    ['3', '4'],
+  ])
+  const b = compileBoard(
+    h(
+      PCB,
+      { name: 'T' },
+      h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 }),
+      h(def.render, { ref: 'RS1', at: '5 5', 'net:1': 'HI', 'net:2': 'SP', 'net:3': 'SN', 'net:4': 'LO' }),
+    ),
+  )
+  assert.deepEqual(
+    b.drc.filter(d => d.rule === 'short' || d.rule === 'clearance').map(d => d.message),
+    [],
+  )
+  assert.deepEqual(b.footprints[0].netTie, [
+    ['1', '2'],
+    ['3', '4'],
+  ])
 })
 
 test('kicadFootprint silk: none drops the footprint silk, full and open keep it', () => {
-  const silkOf = (F) => {
+  const silkOf = F => {
     const b = compileBoard(h(PCB, { name: 'T' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 }), h(F, { ref: 'R1', at: '5 5', refAt: false })))
     return { n: b.items.filter(i => i.layer.endsWith('.SilkS')).length, id: b.footprints[0].id }
   }

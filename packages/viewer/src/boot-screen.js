@@ -25,11 +25,13 @@ export const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<':
 
 /** What goes inside `.load-screen`: the dots, the mark, the name, the status with its spinner, a progress bar, a hint and the actions, which are HTML. */
 export function screenInner({ mark, name = '', text = '', hint = '', actions = '' }) {
-  return DOTS
-    + `<div class="load-body"><span class="mark">${mark}</span><div class="load-name">${esc(name)}</div>`
-    + `<div class="load-text"><span class="spin" aria-hidden="true"></span><span class="load-msg">${esc(text)}</span></div>`
-    + `<div class="load-bar off"><span></span></div></div>`
-    + `<div class="load-more"><div class="load-hint">${esc(hint)}</div><div class="load-actions">${actions}</div></div>`
+  return (
+    DOTS +
+    `<div class="load-body"><span class="mark">${mark}</span><div class="load-name">${esc(name)}</div>` +
+    `<div class="load-text"><span class="spin" aria-hidden="true"></span><span class="load-msg">${esc(text)}</span></div>` +
+    `<div class="load-bar off"><span></span></div></div>` +
+    `<div class="load-more"><div class="load-hint">${esc(hint)}</div><div class="load-actions">${actions}</div></div>`
+  )
 }
 
 /** The whole screen; `state` is loading, idle, stopped, failed or gone, and `busy` shows the spinner. */
@@ -39,7 +41,10 @@ export function bootScreen(o) {
 
 /** Puts a screen's text in place without touching the dots, so their waves and the spinner run on. */
 export function fillScreen(el, { name, text, hint, busy, state, progress }) {
-  const set = (sel, v) => { const n = el.querySelector(sel); if (n && v !== undefined && n.textContent !== v) n.textContent = v }
+  const set = (sel, v) => {
+    const n = el.querySelector(sel)
+    if (n && v !== undefined && n.textContent !== v) n.textContent = v
+  }
   set('.load-name', name)
   set('.load-msg', text)
   set('.load-hint', hint)

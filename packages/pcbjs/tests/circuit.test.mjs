@@ -22,9 +22,10 @@ const channel = circuit('chan', ({ VCC, SW }, { nets: { led } }) => ({
   R: R0603('330').connect(VCC, led),
   D: LED0603('green').connect({ A: led, K: SW }),
 }))
-const Row = layout(channel, (g, { at }) => h('g', { at }, h(g.R, { at: '0 0' }), h(g.D, { at: '6 0 180deg' }),
-  route(g.nets.led, { width: 0.3, d: 'M 0.825 0 H 5.175' })), 'Row')
-const Column = layout(channel, function Column(g, { at }) { return h('g', { at }, h(g.R, { at: '0 0 90deg' }), h(g.D, { at: '0 4 90deg' })) })
+const Row = layout(channel, (g, { at }) => h('g', { at }, h(g.R, { at: '0 0' }), h(g.D, { at: '6 0 180deg' }), route(g.nets.led, { width: 0.3, d: 'M 0.825 0 H 5.175' })), 'Row')
+const Column = layout(channel, function Column(g, { at }) {
+  return h('g', { at }, h(g.R, { at: '0 0 90deg' }), h(g.D, { at: '0 4 90deg' }))
+})
 
 test('circuit: an instance has its members, ports, private nets, name, circuit and path', () => {
   const { VCC, SW } = nets()
@@ -43,7 +44,9 @@ test('circuit: an instance has its members, ports, private nets, name, circuit a
   assert.ok(isNet(A.nets.led))
   assert.equal(A.nets.led, A.nets.led)
   assert.equal(A.nets.led.local, true)
-  assert.throws(() => { A.X = 1 }, TypeError)
+  assert.throws(() => {
+    A.X = 1
+  }, TypeError)
   const B = channel({ VCC, SW }, 'B')
   assert.notEqual(A.nets.led, B.nets.led)
   const b = compileBoard(board({}, h(Row, { g: A, at: '5 5' }), h(Row, { g: B, at: '5 15' })))
@@ -64,7 +67,13 @@ test('circuit: the object form makes one instance of parts made beforehand, and 
   const b = compileBoard(board({}, h(root.J1, { at: '5 5' }), h(root.R1, { at: '15 5' })))
   assert.deepEqual(errors(b), [])
   const s = b.schematic
-  assert.deepEqual(s.parts.map(p => [p.ref, p.path, p.local]), [['J1', ['root'], 'J1'], ['R1', ['root'], 'R1']])
+  assert.deepEqual(
+    s.parts.map(p => [p.ref, p.path, p.local]),
+    [
+      ['J1', ['root'], 'J1'],
+      ['R1', ['root'], 'R1'],
+    ],
+  )
   assert.deepEqual(s.circuits, [{ path: ['root'], name: 'root', circuit: 'root', parts: ['J1', 'R1'], children: [], placed: true }])
   const part = R0603('1').connect(A, B)
   circuit('one', { P: part })
@@ -91,10 +100,13 @@ test('circuit: nested instances take their key as name, paths concatenate, and p
   const s = b.schematic
   const byLocal = Object.fromEntries(s.parts.map(p => [p.path.concat(p.local).join('.'), p.ref]))
   assert.deepEqual(byLocal, { J1: 'J1', 'Power.LDO.C': 'C1', 'Power.LDO.R': 'R1', 'Power.Load': 'R2' })
-  assert.deepEqual(s.circuits.map(c => [c.path.join('/'), c.circuit, c.parts, c.children]), [
-    ['Power', 'power', ['R2'], ['LDO']],
-    ['Power/LDO', 'ldo', ['C1', 'R1'], []],
-  ])
+  assert.deepEqual(
+    s.circuits.map(c => [c.path.join('/'), c.circuit, c.parts, c.children]),
+    [
+      ['Power', 'power', ['R2'], ['LDO']],
+      ['Power/LDO', 'ldo', ['C1', 'R1'], []],
+    ],
+  )
   const v3 = s.nets.find(n => n.name === 'Power/V3')
   assert.deepEqual(v3.path, ['Power'])
   assert.deepEqual(v3.pins.sort(), ['R1.1', 'R2.1'])
@@ -114,7 +126,15 @@ test('circuit: refs are flat, numbered per prefix in declaration order, instance
   assert.equal(refAt(b, 5, 20), 'R3')
   assert.equal(refAt(b, 30, 5), 'R4')
   assert.equal(refAt(b, 30, 10), 'C1')
-  assert.deepEqual(b.schematic.parts.filter(p => p.path.length).map(p => [p.ref, p.path[0], p.local]), [['D1', 'A', 'D'], ['D2', 'B', 'D'], ['R2', 'A', 'R'], ['R3', 'B', 'R']])
+  assert.deepEqual(
+    b.schematic.parts.filter(p => p.path.length).map(p => [p.ref, p.path[0], p.local]),
+    [
+      ['D1', 'A', 'D'],
+      ['D2', 'B', 'D'],
+      ['R2', 'A', 'R'],
+      ['R3', 'B', 'R'],
+    ],
+  )
 })
 
 test('circuit: refStyle "hierarchical" names the parts of instances after their path, explicit refs still reserve', () => {
@@ -141,7 +161,8 @@ test('circuit: names come from named(), the second argument, or the circuit name
   const board1 = compileBoard(board({}, h(Row, { g: a, at: '5 5' }), h(Row, { g: b, at: '5 10' }), h(Row, { g: c, at: '5 15' }), h(Row, { g: d, at: '5 20' })))
   assert.ok(board1.schematic.nets.some(n => n.name === 'chan2/led'))
   assert.throws(() => channel({ VCC, SW }, 'not a name'), /must be an identifier/)
-  const x = channel({ VCC, SW }, 'Twin'), y = channel({ VCC, SW }, 'Twin')
+  const x = channel({ VCC, SW }, 'Twin'),
+    y = channel({ VCC, SW }, 'Twin')
   assert.throws(() => compileBoard(board({}, h(Row, { g: x, at: '5 5' }), h(Row, { g: y, at: '5 10' }))), /two circuit instances on <PCB Circ> are named Twin/)
 })
 
@@ -175,8 +196,10 @@ test('layout: places an instance as an element or a call, and the site data name
 test('layout: an instance laid out twice is a compile error naming both sites', () => {
   const { VCC, SW } = nets()
   const A = channel({ VCC, SW }, 'A')
-  assert.throws(() => compileBoard(board({}, h(Row, { g: A, at: '5 5' }), h(Column, { g: A, at: '20 5' }))),
-    e => e instanceof CompileError && /the circuit instance A is laid out twice on <PCB Circ>: by Row at .* and by Column at /.test(e.message))
+  assert.throws(
+    () => compileBoard(board({}, h(Row, { g: A, at: '5 5' }), h(Column, { g: A, at: '20 5' }))),
+    e => e instanceof CompileError && /the circuit instance A is laid out twice on <PCB Circ>: by Row at .* and by Column at /.test(e.message),
+  )
 })
 
 test('layout: a part of a laid-out instance placed outside the layout is an error; without a layout, parts are placed one by one', () => {
@@ -184,8 +207,10 @@ test('layout: a part of a laid-out instance placed outside the layout is an erro
   const solo = circuit('solo', ({ VCC, SW }, { nets: { led } }) => ({ R: R0603('330').connect(VCC, led), D: LED0603('red').connect({ A: led, K: SW }) }))
   const Half = layout(solo, (g, { at }) => h('g', { at }, h(g.R, { at: '0 0' })), 'Half')
   const A = solo({ VCC, SW }, 'A')
-  assert.throws(() => compileBoard(board({}, h(Half, { g: A, at: '5 5' }), h(A.D, { at: '20 5' }))),
-    e => e instanceof CompileError && /LED0603\("red"\), A\.D, is placed at .* outside a layout, while Half lays out A at /.test(e.message))
+  assert.throws(
+    () => compileBoard(board({}, h(Half, { g: A, at: '5 5' }), h(A.D, { at: '20 5' }))),
+    e => e instanceof CompileError && /LED0603\("red"\), A\.D, is placed at .* outside a layout, while Half lays out A at /.test(e.message),
+  )
   const B = solo({ VCC, SW }, 'B')
   const b = compileBoard(board({}, h(B.R, { at: '5 5' }), h(B.D, { at: '20 5' })))
   assert.deepEqual(errors(b), [])
@@ -209,12 +234,21 @@ test('ERC: an instance never laid out is one unplaced-circuit error; a partly pl
   const circuits = Object.fromEntries(b.schematic.circuits.map(c => [c.name, c.placed]))
   assert.deepEqual(circuits, { A: true, B: false, C: false })
   // the parts of B are still numbered, after the placed ones, and listed as not placed
-  assert.deepEqual(b.schematic.parts.filter(p => p.path[0] === 'B').map(p => [p.ref, p.local, p.placed]), [['D2', 'D', false], ['R3', 'R', false]])
+  assert.deepEqual(
+    b.schematic.parts.filter(p => p.path[0] === 'B').map(p => [p.ref, p.local, p.placed]),
+    [
+      ['D2', 'D', false],
+      ['R3', 'R', false],
+    ],
+  )
 })
 
 test('ports: a port left out throws naming it, NC is allowed for a tolerated port, nets cross only through ports', () => {
   const { VCC, SW, GND } = nets()
-  assert.throws(() => channel({ VCC }), e => e instanceof SchematicError && /chan\(…\): the port SW is not connected/.test(e.message))
+  assert.throws(
+    () => channel({ VCC }),
+    e => e instanceof SchematicError && /chan\(…\): the port SW is not connected/.test(e.message),
+  )
   assert.throws(() => channel({ VCC, SW: 'SW' }), /the port SW needs a Net from nets\(\) or NC/)
   const en = circuit('en', ({ VIN, EN }) => ({ U: PinHeader(2).connect(VIN, EN) }))
   const E = en({ VIN: VCC, EN: NC }, 'E')
@@ -225,7 +259,10 @@ test('ports: a port left out throws naming it, NC is allowed for a tolerated por
   assert.equal(b.schematic.parts.find(p => p.path[0] === 'E').pins[1].nc, true)
   const leaky = circuit('leaky', ({ A }) => ({ R: R0603('1').connect(A, GND) }))
   assert.throws(() => leaky({ A: VCC }), /reaches the net GND, which is neither a port nor one of its own nets/)
-  const lost = circuit('lost', ({ A }) => { R0603('2').connect(A, A); return { R: R0603('1').connect(A, A) } })
+  const lost = circuit('lost', ({ A }) => {
+    R0603('2').connect(A, A)
+    return { R: R0603('1').connect(A, A) }
+  })
   assert.throws(() => lost({ A: VCC }), /R0603\("2"\) is made in the build but not returned/)
   const outside = R0603('3')
   const thief = circuit('thief', () => ({ R: outside }))

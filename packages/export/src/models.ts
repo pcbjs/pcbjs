@@ -9,7 +9,11 @@ const memo = (): Map<string, { size: number; mtime: number; key: string }> => ((
 
 function nodeFs(): typeof import('node:fs') | null {
   const p = (globalThis as any).process
-  try { return p?.getBuiltinModule?.('node:fs') ?? null } catch { return null }
+  try {
+    return p?.getBuiltinModule?.('node:fs') ?? null
+  } catch {
+    return null
+  }
 }
 
 // null when the file is missing or unreadable
@@ -24,13 +28,15 @@ export function stepMeshKey(path: string): string | null {
     const key = meshKey(new Uint8Array(fs.readFileSync(path)))
     memo().set(path, { size: st.size, mtime: st.mtimeMs, key })
     return key
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 export function siteStep(spec: StepModelSpec, rel: (p: string) => string): SiteStep {
   const mesh = spec.path ? stepMeshKey(spec.path) : null
   return {
-    file: spec.path ? rel(spec.path) : spec.step ?? spec.file ?? '',
+    file: spec.path ? rel(spec.path) : (spec.step ?? spec.file ?? ''),
     ...(mesh ? { mesh } : {}),
     transform: { offset: spec.offset ?? [0, 0, 0], rotate: spec.rotate ?? [0, 0, 0], scale: spec.scale ?? [1, 1, 1] },
   }

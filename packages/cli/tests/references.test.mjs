@@ -12,7 +12,9 @@ import { devWorkspace } from '../dist/workspace.js'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const roots = []
-after(() => { for (const r of roots) rmSync(r, { recursive: true, force: true }) })
+after(() => {
+  for (const r of roots) rmSync(r, { recursive: true, force: true })
+})
 
 const board = (name, title, extra = '', kids = '') => `import PCB, { reference } from '@pcbjs/core'
 import { PinHeader } from '@pcbjs/lib'
@@ -47,13 +49,18 @@ const memo = () => globalThis[Symbol.for('pcbjs.cli.references')]
 test('references: a referenced entry compiles once per content of its graph, from the cache after that', () => {
   const s = stack()
   const r = referenceResolver(s.a, join(s.a, 'pcb.tsx'))
-  const st = referenceStats(), spawned = st.spawned
+  const st = referenceStats(),
+    spawned = st.spawned
   const one = r.resolve(join(s.b, 'pcb.tsx'))
   assert.equal(st.spawned, spawned + 1)
-  assert.equal(one.name, 'B'); assert.equal(one.title, 'Beta 1')
+  assert.equal(one.name, 'B')
+  assert.equal(one.title, 'Beta 1')
   assert.ok(one.files.includes(join(s.b, 'pcb.tsx')) && one.files.includes(join(s.b, 'pcb.config.ts')), one.files.join(' '))
   assert.ok(existsSync(join(boardMeshDir(s.a), `${one.mesh}.bin`)), 'the mesh is in the cache')
-  assert.deepEqual(one.footprints.map(f => f.ref), ['J1'])
+  assert.deepEqual(
+    one.footprints.map(f => f.ref),
+    ['J1'],
+  )
   // the same process, then a new one with only the cache file: neither compiles again
   assert.equal(r.resolve(join(s.b, 'pcb.tsx')).hash, one.hash)
   memo().clear()
@@ -81,16 +88,23 @@ test('references: the workspace server marks a scope stale when a board it refer
   const log = console.log
   console.log = () => {}
   let server, workspace
-  try { ({ server, workspace } = await devWorkspace({ folders: [s.stack], port: 0, host: '127.0.0.1' })) } finally { console.log = log }
+  try {
+    ;({ server, workspace } = await devWorkspace({ folders: [s.stack], port: 0, host: '127.0.0.1' }))
+  } finally {
+    console.log = log
+  }
   server.config.logger.info = () => {}
   try {
     const base = `http://127.0.0.1:${server.httpServer.address().port}`
     const scope = slug => workspace.scopes.find(x => x.slug === slug)
     const refTitle = () => scope('a').state?.slots[0].compiled?.[0].board.references?.[0].title
-    const until = async (fn, what) => { for (let i = 0; i < 600 && !fn(); i++) await new Promise(r => setTimeout(r, 25)); assert.ok(fn(), what) }
+    const until = async (fn, what) => {
+      for (let i = 0; i < 600 && !fn(); i++) await new Promise(r => setTimeout(r, 25))
+      assert.ok(fn(), what)
+    }
     await fetch(`${base}/__pcbjs/scope/a`)
     assert.equal(refTitle(), 'Beta 1')
-    assert.ok(scope('a').files.includes(join(s.b, 'pcb.tsx')), 'the referenced entry is in the scope\'s files')
+    assert.ok(scope('a').files.includes(join(s.b, 'pcb.tsx')), "the referenced entry is in the scope's files")
     await fetch(`${base}/__pcbjs/scope/b`)
     await new Promise(r => setTimeout(r, 50))
     writeFileSync(join(s.b, 'pcb.tsx'), board('B', 'Beta 2'))
@@ -98,5 +112,7 @@ test('references: the workspace server marks a scope stale when a board it refer
     await fetch(`${base}/__pcbjs/scope/a`)
     await until(() => refTitle() === 'Beta 2', 'shown again, it recompiles with the new reference')
     assert.equal(scope('a').stale, false)
-  } finally { await server.close() }
+  } finally {
+    await server.close()
+  }
 })

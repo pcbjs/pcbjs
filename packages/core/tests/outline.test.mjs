@@ -9,7 +9,10 @@ import { near } from './helpers.mjs'
 const file = fileURLToPath(new URL('./fixtures/fonts/RobotoSlab-subset.ttf', import.meta.url))
 // size 1.456 mm is the cap height of 1456 units, so a font unit is 1 um
 const unit = { size: 1.456, anchor: 'start' }
-const box = polys => { const p = polys.flatMap(q => q.outer); return [Math.min(...p.map(q => q[0])), Math.min(...p.map(q => q[1])), Math.max(...p.map(q => q[0])), Math.max(...p.map(q => q[1]))] }
+const box = polys => {
+  const p = polys.flatMap(q => q.outer)
+  return [Math.min(...p.map(q => q[0])), Math.min(...p.map(q => q[1])), Math.max(...p.map(q => q[0])), Math.max(...p.map(q => q[1]))]
+}
 
 test('outline: the metrics of the name table, OS/2 and fvar', () => {
   const f = loadOutlineFont(file)
@@ -25,7 +28,14 @@ test('outline: the metrics of the name table, OS/2 and fvar', () => {
 test('outline: advances follow the weight axis as fontTools instances them, side bearings included', () => {
   // hmtx of fontTools.varLib.instancer at wght 700: H 1600 lsb 56, A 1512, V 1535, o 1155, © 1566; at 400 H is 1578
   const b = loadOutlineFont(file, 700)
-  for (const [ch, adv] of [['H', 1600], ['A', 1512], ['V', 1535], ['o', 1155], ['©', 1566]]) near(outlineText(ch, b, unit).width, adv / 1000, 1e-9, ch)
+  for (const [ch, adv] of [
+    ['H', 1600],
+    ['A', 1512],
+    ['V', 1535],
+    ['o', 1155],
+    ['©', 1566],
+  ])
+    near(outlineText(ch, b, unit).width, adv / 1000, 1e-9, ch)
   near(box(outlineText('H', b, unit).polys)[0], 0.056, 1e-6)
   near(outlineText('H', loadOutlineFont(file), unit).width, 1.578, 1e-9)
 })
@@ -58,7 +68,12 @@ test('outline: contours are unioned under the nonzero rule, counters as holes', 
   const b = outlineText('B', f, unit).polys
   assert.equal(b[0].holes.length, 2)
   // two overlapping squares come out as one outline; a square inside another, wound the same way, adds nothing
-  const sq = (x, y, s) => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]]
+  const sq = (x, y, s) => [
+    [x, y],
+    [x + s, y],
+    [x + s, y + s],
+    [x, y + s],
+  ]
   assert.equal(unionNonZero([sq(0, 0, 2), sq(1, 1, 2)]).length, 1)
   assert.equal(unionNonZero([sq(0, 0, 4), sq(1, 1, 1)])[0].holes.length, 0)
   // the copyright sign: ring and C, two pieces, the ring with its hole
@@ -79,7 +94,17 @@ test('outline: the KiCad size conversion, em 1.4 times the size', () => {
 })
 
 test('outline: thinInk finds ink thinner than the minimum and thickening by half the deficit clears it', () => {
-  const thin = [{ outer: [[0, 0], [2, 0], [2, 0.1], [0, 0.1]], holes: [] }]
+  const thin = [
+    {
+      outer: [
+        [0, 0],
+        [2, 0],
+        [2, 0.1],
+        [0, 0.1],
+      ],
+      holes: [],
+    },
+  ]
   const t = thinInk(thin, 0.15)
   assert.ok(t)
   near(t.width, 0.1, 0.002)

@@ -6,7 +6,12 @@ import { PinHeader, rect } from '@pcbjs/lib'
 import { compileBoard } from '../dist/index.js'
 import { area, orientRings, polysToRings, union } from '../dist/geom.js'
 
-const sq = (x, y, s) => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]]
+const sq = (x, y, s) => [
+  [x, y],
+  [x + s, y],
+  [x + s, y + s],
+  [x, y + s],
+]
 const sign = r => Math.sign(area([r]))
 
 test('orientRings: three depths, every combination of drawing directions', () => {
@@ -30,16 +35,22 @@ test('orientRings: rings already right are returned as they are', () => {
 function cutBoard(sweep) {
   const { GND } = nets()
   const J1 = PinHeader(1).connect(GND)
-  return compileBoard(h(PCB, { name: 'Cut' },
-    h('path', { layer: 'Edge.Cuts', d: rect(20, 20) }),
-    h('path', { layer: 'Edge.Cuts', d: `M 7 10 A 3 3 0 0 ${sweep} 13 10 A 3 3 0 0 ${sweep} 7 10 Z` }),
-    h(J1, { at: '3 3' }),
-    pour(GND, 'F.Cu', rect(20, 20))))
+  return compileBoard(
+    h(
+      PCB,
+      { name: 'Cut' },
+      h('path', { layer: 'Edge.Cuts', d: rect(20, 20) }),
+      h('path', { layer: 'Edge.Cuts', d: `M 7 10 A 3 3 0 0 ${sweep} 13 10 A 3 3 0 0 ${sweep} 7 10 Z` }),
+      h(J1, { at: '3 3' }),
+      pour(GND, 'F.Cu', rect(20, 20)),
+    ),
+  )
 }
 
 test('cutouts: a cutout drawn either way gives the same outline and the same fill', () => {
   resetDefaults()
-  const a = cutBoard(0), b = cutBoard(1)
+  const a = cutBoard(0),
+    b = cutBoard(1)
   for (const x of [a, b]) {
     assert.equal(x.outline.length, 2)
     assert.deepEqual(x.outline.map(sign).sort(), [-1, 1])
@@ -53,9 +64,7 @@ test('cutouts: a cutout drawn either way gives the same outline and the same fil
 
 test('cutouts: a cutout outside the outline is a cutout-outside error', () => {
   resetDefaults()
-  const b = compileBoard(h(PCB, { name: 'Off' },
-    h('path', { layer: 'Edge.Cuts', d: rect(20, 20) }),
-    h('path', { layer: 'Edge.Cuts', d: rect(4, 4, 30, 30) })))
+  const b = compileBoard(h(PCB, { name: 'Off' }, h('path', { layer: 'Edge.Cuts', d: rect(20, 20) }), h('path', { layer: 'Edge.Cuts', d: rect(4, 4, 30, 30) })))
   const e = b.drc.filter(d => d.rule === 'cutout-outside')
   assert.equal(e.length, 1)
   assert.match(e[0].message, /lies outside the board outline, 16 mm²/)

@@ -3,7 +3,10 @@ import { copperLayers } from '@pcbjs/compile/layers'
 
 // mm to the 0.001 mm units of `UNITS CUST 1`
 const um = (v: number) => Math.round(v * 1000)
-const signed6 = (v: number) => { const n = Math.max(-999999, Math.min(999999, um(v))); return (n < 0 ? '-' : '+') + String(Math.abs(n)).padStart(6, '0') }
+const signed6 = (v: number) => {
+  const n = Math.max(-999999, Math.min(999999, um(v)))
+  return (n < 0 ? '-' : '+') + String(Math.abs(n)).padStart(6, '0')
+}
 const size4 = (v: number) => String(Math.max(0, Math.min(9999, um(v)))).padStart(4, '0')
 const pad = (s: string, n: number) => s.slice(0, n).padEnd(n)
 
@@ -16,21 +19,55 @@ export function ipc356(board: Board, date: string): string {
     const n = net.replace(/\s+/g, '_')
     if (n.length <= 14) return n
     let a = aliases.get(n)
-    if (!a) { a = `NNAME${aliases.size + 1}`; aliases.set(n, a) }
+    if (!a) {
+      a = `NNAME${aliases.size + 1}`
+      aliases.set(n, a)
+    }
     return a
   }
   const records: string[] = []
-  const rec = (op: number, net: string, ref: string, pin: string, mid: boolean, drill: string, access: number, x: number, y: number, sx: number, sy: number, rot: number, mask: number) =>
-    records.push(`${op}${pad(net, 14)}   ${pad(ref, 6)}${pin ? '-' : ' '}${pad(pin, 4)}${mid ? 'M' : ' '}${drill}A${String(access).padStart(2, '0')}X${signed6(x)}Y${signed6(-y)}X${size4(sx)}Y${size4(sy)}R${String(((Math.round(rot) % 360) + 360) % 360).padStart(3, '0')}S${mask} `.trimEnd())
+  const rec = (
+    op: number,
+    net: string,
+    ref: string,
+    pin: string,
+    mid: boolean,
+    drill: string,
+    access: number,
+    x: number,
+    y: number,
+    sx: number,
+    sy: number,
+    rot: number,
+    mask: number,
+  ) =>
+    records.push(
+      `${op}${pad(net, 14)}   ${pad(ref, 6)}${pin ? '-' : ' '}${pad(pin, 4)}${mid ? 'M' : ' '}${drill}A${String(access).padStart(2, '0')}X${signed6(x)}Y${signed6(-y)}X${size4(sx)}Y${size4(sy)}R${String(((Math.round(rot) % 360) + 360) % 360).padStart(3, '0')}S${mask} `.trimEnd(),
+    )
   for (const it of board.items) {
     if (it.kind === 'pad') {
       const npth = it.type === 'npth'
-      const top = it.layers.includes(cu[0]), bottom = it.layers.includes(cu[cu.length - 1])
+      const top = it.layers.includes(cu[0]),
+        bottom = it.layers.includes(cu[cu.length - 1])
       const access = it.drill ? 0 : top ? 1 : bottom ? board.copper : 0
       const open = (s: 'F' | 'B') => it.layers.includes(`${s}.Mask`) || it.layers.includes(`${s}.Cu`)
       const mask = (open('F') ? 1 : 0) + (open('B') ? 2 : 0)
       const drill = it.drill ? `D${size4(Math.min(...it.drill))}${npth ? 'U' : 'P'}` : '      '
-      rec(npth ? 367 : it.drill ? 317 : 327, npth && !it.net ? 'N/C' : netField(it.net), it.ref ?? '', it.num || it.name || '', false, drill, access, it.at[0], it.at[1], it.size[0], it.size[1], it.rot, mask)
+      rec(
+        npth ? 367 : it.drill ? 317 : 327,
+        npth && !it.net ? 'N/C' : netField(it.net),
+        it.ref ?? '',
+        it.num || it.name || '',
+        false,
+        drill,
+        access,
+        it.at[0],
+        it.at[1],
+        it.size[0],
+        it.size[1],
+        it.rot,
+        mask,
+      )
     } else if (it.kind === 'via') {
       const blind = it.layers[0] !== cu[0] || it.layers[1] !== cu[cu.length - 1]
       rec(317, netField(it.net), 'VIA', '', true, `D${size4(it.drill)}P`, blind ? cu.indexOf(it.layers[0]) + 1 : 0, it.at[0], it.at[1], it.size, it.size, 0, 0)

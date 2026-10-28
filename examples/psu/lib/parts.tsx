@@ -13,7 +13,14 @@ function MKDS2Footprint(props: FootprintProps) {
       {tht(1, 0, 0, 2.6, 1.3, { shape: 'rect' })}
       {tht(2, 5.08, 0, 2.6, 1.3)}
       {fab(-2.54, -5.2, 10.16, 9.8)}
-      {silkOutline(10.16, 9.8, { cx: 2.54, cy: -0.3, pads: [{ x: 0, y: 0, w: 2.6, h: 2.6 }, { x: 5.08, y: 0, w: 2.6, h: 2.6 }] })}
+      {silkOutline(10.16, 9.8, {
+        cx: 2.54,
+        cy: -0.3,
+        pads: [
+          { x: 0, y: 0, w: 2.6, h: 2.6 },
+          { x: 5.08, y: 0, w: 2.6, h: 2.6 },
+        ],
+      })}
       {courtyard(10.66, 10.3, 2.54, -0.3)}
       {children}
     </footprint>
@@ -45,7 +52,14 @@ function TO220V2Footprint(props: FootprintProps) {
       {tht(1, 0, 0, 2, 1.1, { name: 'K', shape: 'rect' })}
       {tht(2, 5.08, 0, 2, 1.1, { name: 'A' })}
       {fab(-2.46, -3.15, 10, 4.4)}
-      {silkOutline(10, 4.4, { cx: 2.54, cy: -0.95, pads: [{ x: 0, y: 0, w: 2, h: 2 }, { x: 5.08, y: 0, w: 2, h: 2 }] })}
+      {silkOutline(10, 4.4, {
+        cx: 2.54,
+        cy: -0.95,
+        pads: [
+          { x: 0, y: 0, w: 2, h: 2 },
+          { x: 5.08, y: 0, w: 2, h: 2 },
+        ],
+      })}
       {courtyard(10.5, 4.9, 2.54, -0.95)}
       {children}
     </footprint>
@@ -79,7 +93,12 @@ function SRR1260Footprint(props: FootprintProps) {
       {smd(1, -4.85, 0, 2.9, 5.4, { shape: 'rect' })}
       {smd(2, 4.85, 0, 2.9, 5.4, { shape: 'rect' })}
       {fab(-6.25, -6.25, 12.5, 12.5)}
-      {silkOutline(12.5, 12.5, { pads: [{ x: -4.85, y: 0, w: 2.9, h: 5.4 }, { x: 4.85, y: 0, w: 2.9, h: 5.4 }] })}
+      {silkOutline(12.5, 12.5, {
+        pads: [
+          { x: -4.85, y: 0, w: 2.9, h: 5.4 },
+          { x: 4.85, y: 0, w: 2.9, h: 5.4 },
+        ],
+      })}
       {courtyard(13, 13, 0, 0)}
       {children}
     </footprint>
@@ -92,7 +111,12 @@ export const SRR1260 = defineFootprint(SRR1260Footprint, { pins: ['1', '2'], pre
 // top and bottom rows, PGND and SW as long bars, VIN as a bar with three fingers at +x, BOOT at the bottom right.
 function RPA10Footprint(props: FootprintProps) {
   const { children, ...rest } = props
-  const row = [['EN', -0.75], ['FB', -0.25], ['AGND', 0.25], ['PG', 0.75]] as const
+  const row = [
+    ['EN', -0.75],
+    ['FB', -0.25],
+    ['AGND', 0.25],
+    ['PG', 0.75],
+  ] as const
   return (
     <footprint id="psu:TI_VQFN-HR-10_RPA0010A" value="TPS56637" height={1} {...rest}>
       {row.map(([name, y], i) => smd(i + 1, -1.41, y, 0.6, 0.25, { name }))}
@@ -112,5 +136,8 @@ function RPA10Footprint(props: FootprintProps) {
   )
 }
 export const TPS56637 = defineFootprint(RPA10Footprint, {
-  pins: ['EN', 'FB', 'AGND', 'PG', 'SW', 'BOOT', 'VIN', 'PGND', 'MODE'], nc: ['NC'], prefix: 'U', id: 'psu:TI_VQFN-HR-10_RPA0010A',
+  pins: ['EN', 'FB', 'AGND', 'PG', 'SW', 'BOOT', 'VIN', 'PGND', 'MODE'],
+  nc: ['NC'],
+  prefix: 'U',
+  id: 'psu:TI_VQFN-HR-10_RPA0010A',
 })

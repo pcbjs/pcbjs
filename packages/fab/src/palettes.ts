@@ -2,8 +2,15 @@
 import type { Finish } from '@pcbjs/core/types'
 
 export const HEX = {
-  Green: '#1b5e20', Red: '#8a1c1c', Yellow: '#c9a400', Blue: '#173a7a', White: '#ececec', Black: '#1a1a1a',
-  Purple: '#4b1f6f', 'Matte Black': '#202020', 'Matte Green': '#2a5a2c',
+  Green: '#1b5e20',
+  Red: '#8a1c1c',
+  Yellow: '#c9a400',
+  Blue: '#173a7a',
+  White: '#ececec',
+  Black: '#1a1a1a',
+  Purple: '#4b1f6f',
+  'Matte Black': '#202020',
+  'Matte Green': '#2a5a2c',
 } as const
 
 type Name = keyof typeof HEX

@@ -3,10 +3,17 @@ import type { Board, DrcMarker, Footprint, Pt, Ratsnest, RoutingReport } from '.
 import type { ModelSpec, Rules, Src, Stackup, StepModelSpec } from './types.js'
 
 export interface SiteFootprint {
-  ref: string; value: string; id: string; at: [number, number]; rot: number; side: 'F' | 'B'; bom: boolean
+  ref: string
+  value: string
+  id: string
+  at: [number, number]
+  rot: number
+  side: 'F' | 'B'
+  bom: boolean
   /** do not populate: the viewer draws the footprint hatched */
   dnp?: boolean
-  fields: Record<string, string>; description?: string
+  fields: Record<string, string>
+  description?: string
   /** the placement: the outermost call that placed the footprint, as `Footprint.src` */
   src?: { file: string; line: number; col: number; endLine?: number; endCol?: number; abs: string }
   /** the innermost call site with a range, normally the `<footprint>` element; absent when it is the placement */
@@ -37,9 +44,18 @@ export interface SiteStep {
   issue?: string
 }
 /** KiCad's model transform: offset in mm, rotate in degrees about x, y and z, scale per axis. */
-export interface StepTransform { offset: [number, number, number]; rotate: [number, number, number]; scale: [number, number, number] }
+export interface StepTransform {
+  offset: [number, number, number]
+  rotate: [number, number, number]
+  scale: [number, number, number]
+}
 export interface SiteData {
-  name: string; title: string; revision: string; copper: number; thickness: number; rules: Rules
+  name: string
+  title: string
+  revision: string
+  copper: number
+  thickness: number
+  rules: Rules
   /** top to bottom, with the finish and the mask and silk colours */
   stackup: Stackup
   viewBox: [number, number, number, number]
@@ -97,10 +113,30 @@ export interface SiteData {
 }
 
 /** One route as the viewer reports it: `length` in mm, of the longer track for a pair; `skew` longer minus shorter; `nets` every net of a pair's group, both sides of a series part; `call` where a helper was called; `path` the instance whose layout made it. */
-export interface RouteInfo { id: string; net: string; pair?: string; nets?: string[]; length: number; target?: { min: number; max: number } | null; group?: string; skew?: number; src?: Src; call?: Src; path?: string }
+export interface RouteInfo {
+  id: string
+  net: string
+  pair?: string
+  nets?: string[]
+  length: number
+  target?: { min: number; max: number } | null
+  group?: string
+  skew?: number
+  src?: Src
+  call?: Src
+  path?: string
+}
 
 /** A hard keepout as the site carries it; `src` is relative to the root. */
-export interface SiteKeepout { layers: string[]; outline: [number, number][][]; tracks: boolean; vias: boolean; pours: boolean; ref?: string; src?: { file: string; line: number; col: number } }
+export interface SiteKeepout {
+  layers: string[]
+  outline: [number, number][][]
+  tracks: boolean
+  vias: boolean
+  pours: boolean
+  ref?: string
+  src?: { file: string; line: number; col: number }
+}
 
 /** A DRC or ERC marker: `src` of the first involved item, relative to the root; `path` the instance paths of its parts, such as `CH2/R`. */
 export type SiteMarker = DrcMarker & { src?: { file: string; line: number; col: number }; path?: string[] }
@@ -141,9 +177,19 @@ export interface VariantInfo {
   fab?: string
 }
 
-export interface SchematicPin { name: string; net: string | null; nc: boolean }
+export interface SchematicPin {
+  name: string
+  net: string | null
+  nc: boolean
+}
 export interface SchematicPart {
-  ref: string; value: string; footprint: string; prefix: string; pins: SchematicPin[]; placed: boolean; src?: { file: string; line: number; col: number }
+  ref: string
+  value: string
+  footprint: string
+  prefix: string
+  pins: SchematicPin[]
+  placed: boolean
+  src?: { file: string; line: number; col: number }
   /** owning instance path, outermost first, [] at the board level */
   path: string[]
   /** the key in its circuit, "R1" for Buck1.R1; the ref at the board level */
@@ -151,7 +197,14 @@ export interface SchematicPart {
   /** its export in the `<PCB schematic>` module, the module relative to the project root */
   export?: { name: string; module?: string }
 }
-export interface SchematicNet { name: string; class?: string; local: boolean; pins: string[] /* "R1.2" */; path?: string[] /* owning circuit instance of a private net */; export?: { name: string; module?: string } }
+export interface SchematicNet {
+  name: string
+  class?: string
+  local: boolean
+  pins: string[] /* "R1.2" */
+  path?: string[] /* owning circuit instance of a private net */
+  export?: { name: string; module?: string }
+}
 export interface SchematicCircuit {
   /** outermost first */
   path: string[]
@@ -165,7 +218,9 @@ export interface SchematicCircuit {
   placed: boolean
 }
 export interface Schematic {
-  parts: SchematicPart[]; nets: SchematicNet[]; circuits: SchematicCircuit[]
+  parts: SchematicPart[]
+  nets: SchematicNet[]
+  circuits: SchematicCircuit[]
   /** the schematic picture in sheet mm, see docs/schematic-graphic.md */
   drawing?: import('./sch-model.js').SchDrawing
   /** the picture as SVG elements coloured by `--sch-*` variables, its stylesheet and each theme's values of the variables; the viewBox is the drawing's `page` */

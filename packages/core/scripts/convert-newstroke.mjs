@@ -19,17 +19,27 @@ const FIX = { 0x7e: s => s.slice(0, 2) + [...s.slice(2)].map((c, i) => (i % 2 &&
 
 /** [advance, x1, y1, ...] in font units, y up from the baseline, -1, -1 lifting the pen. */
 function decode(s) {
-  const x0 = s.charCodeAt(0) - 82, x1 = s.charCodeAt(1) - 82
+  const x0 = s.charCodeAt(0) - 82,
+    x1 = s.charCodeAt(1) - 82
   const out = [x1 - x0]
   for (let i = 2; i + 1 < s.length; i += 2) {
-    if (s[i] === ' ' && s[i + 1] === 'R') { out.push(-1, -1); continue }
-    const x = s.charCodeAt(i) - 82 - x0, y = 9 - (s.charCodeAt(i + 1) - 82)
+    if (s[i] === ' ' && s[i + 1] === 'R') {
+      out.push(-1, -1)
+      continue
+    }
+    const x = s.charCodeAt(i) - 82 - x0,
+      y = 9 - (s.charCodeAt(i + 1) - 82)
     if (x === -1 && y === -1) throw new Error(`vertex -1, -1 in ${JSON.stringify(s)}`)
     out.push(x, y)
   }
   return out
 }
-const glyph = cp => { let s = at(cp); if (s === undefined || s === BOX || s.length < 2) return null; if (FIX[cp]) s = FIX[cp](s); return decode(s) }
+const glyph = cp => {
+  let s = at(cp)
+  if (s === undefined || s === BOX || s.length < 2) return null
+  if (FIX[cp]) s = FIX[cp](s)
+  return decode(s)
+}
 const show = cp => JSON.stringify(String.fromCodePoint(cp)).replace(/[\u007f-￿]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
 
 const extra = []
@@ -60,7 +70,10 @@ for (let c = 0x20; c <= 0x7e; c++) lines.push(`  /* ${show(c).padEnd(4)} */ [${g
 lines.push(']', '')
 lines.push('/** Glyphs beyond ASCII, by character. */')
 lines.push('export const NEWSTROKE_EXTRA: Readonly<Record<string, readonly number[]>> = {')
-for (const c of extra) { const g = glyph(c); if (g) lines.push(`  ${show(c)}: [${g.join(',')}],`) }
+for (const c of extra) {
+  const g = glyph(c)
+  if (g) lines.push(`  ${show(c)}: [${g.join(',')}],`)
+}
 lines.push('}', '')
 lines.push(`/** Characters drawn with another glyph: the ohm sign is the capital omega, as in KiCad; tab is a space. */
 export const NEWSTROKE_ALIAS: Readonly<Record<string, string>> = { '\\u2126': '\\u03a9', '\\t': ' ' }`)

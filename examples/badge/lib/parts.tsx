@@ -31,7 +31,9 @@ function CR2032Footprint(props: FootprintProps) {
       <circle layer="F.CrtYd" r={11} width={0.05} />
       <circle layer="Dwgs.User" r={10} />
       <circle layer="F.Fab" r={10} />
-      <text layer="F.SilkS" at="12.6 -3.6" size={1.2}>+</text>
+      <text layer="F.SilkS" at="12.6 -3.6" size={1.2}>
+        +
+      </text>
       {children}
     </footprint>
   )

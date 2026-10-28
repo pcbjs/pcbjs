@@ -8,17 +8,27 @@ import * as L from '@pcbjs/lib'
 import { compileBoard } from '@pcbjs/compile'
 import { inspectBoard } from '@pcbjs/cli/inspect'
 
-const board = (...kids) => compileBoard(h(PCB, { name: 'C', rules: { clearance: 0.2, minTrackWidth: 0.2 } }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 40, h: 40 }), ...kids), { routeCache: false })
+const board = (...kids) =>
+  compileBoard(h(PCB, { name: 'C', rules: { clearance: 0.2, minTrackWidth: 0.2 } }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 40, h: 40 }), ...kids), { routeCache: false })
 const open = p => p.connect(Object.fromEntries(p.pins.map(n => [n, NC])))
 const pads = (b, ref) => b.items.filter(i => i.kind === 'pad' && (!ref || i.ref === ref))
 
 test('connectors: every family makes a part in one call, with a value or an options object', () => {
   const forms = [
-    [L.PinHeader(3), 3], [L.PinHeader(3, 'PZ254V-11-03P'), 3, 'PZ254V-11-03P'], [L.PinHeader(20, { rows: 2, value: 'GPIO' }), 40, 'GPIO'],
-    [L.PinSocket(4), 4], [L.PinSocket(20, { rows: 2, value: 'GPIO 2x20' }), 40, 'GPIO 2x20'], [L.PinSocket(2, 'S'), 2, 'S'],
-    [L.JST_PH(2), 2], [L.JST_PH(6, 'side', 'S6B-PH-K-S'), 6, 'S6B-PH-K-S'], [L.JST_PH(2, { value: 'B2B' }), 2, 'B2B'],
-    [L.JST_XH(3, { value: 'B3B-XH-A', source: { MPN: 'B3B-XH-A(LF)(SN)' } }), 3, 'B3B-XH-A'], [L.JST_XH(4, 'B4B-XH-A'), 4, 'B4B-XH-A'],
-    [L.USBC(), 9], [L.USBC('power6', 'TYPE-C-31-M-17'), 5, 'TYPE-C-31-M-17'], [L.USBC({ value: 'X' }), 9, 'X'],
+    [L.PinHeader(3), 3],
+    [L.PinHeader(3, 'PZ254V-11-03P'), 3, 'PZ254V-11-03P'],
+    [L.PinHeader(20, { rows: 2, value: 'GPIO' }), 40, 'GPIO'],
+    [L.PinSocket(4), 4],
+    [L.PinSocket(20, { rows: 2, value: 'GPIO 2x20' }), 40, 'GPIO 2x20'],
+    [L.PinSocket(2, 'S'), 2, 'S'],
+    [L.JST_PH(2), 2],
+    [L.JST_PH(6, 'side', 'S6B-PH-K-S'), 6, 'S6B-PH-K-S'],
+    [L.JST_PH(2, { value: 'B2B' }), 2, 'B2B'],
+    [L.JST_XH(3, { value: 'B3B-XH-A', source: { MPN: 'B3B-XH-A(LF)(SN)' } }), 3, 'B3B-XH-A'],
+    [L.JST_XH(4, 'B4B-XH-A'), 4, 'B4B-XH-A'],
+    [L.USBC(), 9],
+    [L.USBC('power6', 'TYPE-C-31-M-17'), 5, 'TYPE-C-31-M-17'],
+    [L.USBC({ value: 'X' }), 9, 'X'],
   ]
   for (const [p, n, v] of forms) {
     assert.equal(p.$$, 'part')
@@ -36,7 +46,12 @@ test('connectors: every family makes a part in one call, with a value or an opti
 })
 
 test('connectors: .footprint gives the memoised factory the parts are made from, for JSX, withPins and source()', () => {
-  const cases = [[() => L.JST_XH.footprint(3), () => L.JST_XH(3)], [() => L.JST_PH.footprint(2, 'side'), () => L.JST_PH(2, 'side')], [() => L.PinSocket.footprint(2, { rows: 2 }), () => L.PinSocket(2, { rows: 2 })], [() => L.USBC.footprint('power6'), () => L.USBC('power6')]]
+  const cases = [
+    [() => L.JST_XH.footprint(3), () => L.JST_XH(3)],
+    [() => L.JST_PH.footprint(2, 'side'), () => L.JST_PH(2, 'side')],
+    [() => L.PinSocket.footprint(2, { rows: 2 }), () => L.PinSocket(2, { rows: 2 })],
+    [() => L.USBC.footprint('power6'), () => L.USBC('power6')],
+  ]
   for (const [ff, mk] of cases) {
     const f = ff()
     assert.equal(typeof f, 'function')
@@ -63,21 +78,42 @@ test('connectors: .footprint gives the memoised factory the parts are made from,
 test('connectors: drill and pad options, datasheet defaults, a house variant gets its own id', () => {
   const ph = b => pads(b).map(p => [p.size, p.drill])
   const stock = board(h(open(L.JST_PH(6, 'side')), { at: '20 20' }))
-  assert.deepEqual(ph(stock)[1], [[1.2, 1.75], [0.75, 0.75]])
+  assert.deepEqual(ph(stock)[1], [
+    [1.2, 1.75],
+    [0.75, 0.75],
+  ])
   const house = board(h(open(L.JST_PH(6, 'side', { drill: 0.8 })), { at: '20 20' }))
-  assert.deepEqual(ph(house)[1], [[1.2, 1.75], [0.8, 0.8]])
+  assert.deepEqual(ph(house)[1], [
+    [1.2, 1.75],
+    [0.8, 0.8],
+  ])
   assert.match(house.footprints[0].id, /_Drill0\.8mm$/)
   assert.doesNotMatch(stock.footprints[0].id, /Drill/)
   const xh = board(h(open(L.JST_XH(2, { drill: 1.0, pad: [1.8, 2.1] })), { at: '20 20' }))
-  assert.deepEqual(ph(xh)[0], [[1.8, 2.1], [1.0, 1.0]])
-  assert.deepEqual(ph(board(h(open(L.JST_XH(2)), { at: '20 20' })))[0], [[1.7, 1.95], [0.95, 0.95]])
+  assert.deepEqual(ph(xh)[0], [
+    [1.8, 2.1],
+    [1.0, 1.0],
+  ])
+  assert.deepEqual(ph(board(h(open(L.JST_XH(2)), { at: '20 20' })))[0], [
+    [1.7, 1.95],
+    [0.95, 0.95],
+  ])
   const sock = board(h(open(L.PinSocket(2, { drill: 1.1, pad: 1.8 })), { at: '20 20' }))
-  assert.deepEqual(ph(sock)[1], [[1.8, 1.8], [1.1, 1.1]])
+  assert.deepEqual(ph(sock)[1], [
+    [1.8, 1.8],
+    [1.1, 1.1],
+  ])
   const hdr = board(h(open(L.PinHeader(2, { drill: 1.1, pad: 1.9 })), { at: '20 20' }))
-  assert.deepEqual(ph(hdr)[1], [[1.9, 1.9], [1.1, 1.1]])
+  assert.deepEqual(ph(hdr)[1], [
+    [1.9, 1.9],
+    [1.1, 1.1],
+  ])
   assert.match(hdr.footprints[0].id, /_Drill1\.1mm_Pad1\.9x1\.9mm$/)
   const fine = board(h(open(L.PinHeader(2, { pitch: 1.27 })), { at: '20 20' }))
-  assert.deepEqual(ph(fine)[1], [[1, 1], [0.6, 0.6]])
+  assert.deepEqual(ph(fine)[1], [
+    [1, 1],
+    [0.6, 0.6],
+  ])
   assert.throws(() => L.JST_PH(2, 'top', { drill: 1.2 }), /JST_PH: a 1.2 x 1.75 mm pad around a 1.2 mm drill leaves less than a 0.1 mm ring/)
   assert.throws(() => L.JST_XH(2, { drill: '0.8' }), /JST_XH: drill must be a positive number of mm/)
   assert.throws(() => L.PinHeader(2, { pad: [1.7] }), /PinHeader: pad must be a size in mm/)
@@ -96,9 +132,14 @@ test('inspect: pad sizes in board axes, the footprint axes under footprintSize i
 })
 
 test('text: width stretches the glyphs across the baseline, size keeps the cap height', () => {
-  const T = (w) => board(h('text', { layer: 'F.SilkS', at: '20 20', size: 1.25, ...(w ? { width: w } : {}), anchor: 'start' }, 'H')).items.find(i => i.kind === 'text')
-  const ext = t => { const xs = t.strokes.flat().map(q => q[0]), ys = t.strokes.flat().map(q => q[1]); return [Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)] }
-  const [w0, h0] = ext(T()), [w1, h1] = ext(T(1.35))
+  const T = w => board(h('text', { layer: 'F.SilkS', at: '20 20', size: 1.25, ...(w ? { width: w } : {}), anchor: 'start' }, 'H')).items.find(i => i.kind === 'text')
+  const ext = t => {
+    const xs = t.strokes.flat().map(q => q[0]),
+      ys = t.strokes.flat().map(q => q[1])
+    return [Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)]
+  }
+  const [w0, h0] = ext(T()),
+    [w1, h1] = ext(T(1.35))
   assert.ok(Math.abs(h1 - h0) < 1e-6 && Math.abs(h0 - 1.25) < 1e-6)
   assert.ok(Math.abs(w1 / w0 - 1.35 / 1.25) < 1e-6)
   assert.equal(T(1.35).width, 1.35)

@@ -16,10 +16,25 @@ export const IO = Object.fromEntries([...TOP_IO, ...BOTTOM_IO].map(p => [p, io[p
 
 export const U1 = STM32F103C8('STM32F103C8T6').connect({
   ...IO,
-  VBAT: V3V3, VDDA: V3V3, VDD_1: V3V3, VDD_2: V3V3, VDD_3: V3V3,
-  VSSA: GND, VSS_1: GND, VSS_2: GND, VSS_3: GND,
-  OSC_IN, OSC_OUT, PC14: OSC32_IN, PC15: OSC32_OUT, NRST, BOOT0,
-  PA11: USB_DN, PA12: USB_DP, PA13: SWDIO, PA14: SWCLK,
+  VBAT: V3V3,
+  VDDA: V3V3,
+  VDD_1: V3V3,
+  VDD_2: V3V3,
+  VDD_3: V3V3,
+  VSSA: GND,
+  VSS_1: GND,
+  VSS_2: GND,
+  VSS_3: GND,
+  OSC_IN,
+  OSC_OUT,
+  PC14: OSC32_IN,
+  PC15: OSC32_OUT,
+  NRST,
+  BOOT0,
+  PA11: USB_DN,
+  PA12: USB_DP,
+  PA13: SWDIO,
+  PA14: SWCLK,
 })
 
 // power, clocks and USB
@@ -27,7 +42,7 @@ export const USB = usbc({ VBUS, DP: USB_DP, DN: USB_DN, GND }, 'USB')
 export const LDO = ldo({ VIN: VBUS, VOUT: V3V3, GND }, 'LDO')
 export const HSE = hse({ XIN: OSC_IN, XOUT: OSC_OUT, GND }, 'HSE')
 export const LSE = lse({ XIN: OSC32_IN, XOUT: OSC32_OUT, GND }, 'LSE')
-export const R_DP = R0603('1k5').connect(V3V3, USB_DP)   // full-speed pull-up on D+
+export const R_DP = R0603('1k5').connect(V3V3, USB_DP) // full-speed pull-up on D+
 
 // one 100 nF per supply pin, on the back under the package
 export const C_VBAT = C0603('100n').connect(V3V3, GND)

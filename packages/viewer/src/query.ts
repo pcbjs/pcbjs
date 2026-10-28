@@ -25,7 +25,10 @@ export function parseViewQuery(search: string): ViewQuery {
   const n = e === null || e.trim() === '' ? NaN : Number(e)
   const t = q.get('theme')?.toLowerCase()
   const sd = q.get('side')?.toLowerCase()
-  const str = (k: string) => { const s = q.get(k)?.trim(); return s ? s : null }
+  const str = (k: string) => {
+    const s = q.get(k)?.trim()
+    return s ? s : null
+  }
   return {
     view: v === '2d' || v === '3d' || v === 'sch' ? v : null,
     explode: Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : null,
@@ -42,8 +45,20 @@ export const hasViewQuery = (q: ViewQuery): boolean => q.view !== null || q.expl
 export const queryMode = (q: ViewQuery): '2d' | '3d' | 'sch' | null => q.view ?? (q.explode !== null ? '3d' : null)
 
 const ALIASES: Record<string, string> = {
-  top: 'F.Cu', front: 'F.Cu', bottom: 'B.Cu', back: 'B.Cu', silk: 'F.SilkS', 'f.silk': 'F.SilkS', 'f.silkscreen': 'F.SilkS',
-  'b.silk': 'B.SilkS', 'b.silkscreen': 'B.SilkS', 'f.courtyard': 'F.CrtYd', 'b.courtyard': 'B.CrtYd', edge: 'Edge.Cuts', outline: 'Edge.Cuts', 'edge.cut': 'Edge.Cuts',
+  top: 'F.Cu',
+  front: 'F.Cu',
+  bottom: 'B.Cu',
+  back: 'B.Cu',
+  silk: 'F.SilkS',
+  'f.silk': 'F.SilkS',
+  'f.silkscreen': 'F.SilkS',
+  'b.silk': 'B.SilkS',
+  'b.silkscreen': 'B.SilkS',
+  'f.courtyard': 'F.CrtYd',
+  'b.courtyard': 'B.CrtYd',
+  edge: 'Edge.Cuts',
+  outline: 'Edge.Cuts',
+  'edge.cut': 'Edge.Cuts',
 }
 
 /** The id of the layer a name means: an id or a rail name in any case, or an alias of the layer table; null for none. */

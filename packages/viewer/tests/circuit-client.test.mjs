@@ -1,11 +1,33 @@
 // The viewer's circuit helpers: the instance tree, its filter and the parts and nets of one instance, imported straight from the client TypeScript.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ancestorKeys, buildTree, enclosingRange, filterTree, findInstance, hasCircuits, instanceNets, instanceNodes, instanceRefs, netLabel, partPathLinks, refsBox } from '../src/circuits.ts'
+import {
+  ancestorKeys,
+  buildTree,
+  enclosingRange,
+  filterTree,
+  findInstance,
+  hasCircuits,
+  instanceNets,
+  instanceNodes,
+  instanceRefs,
+  netLabel,
+  partPathLinks,
+  refsBox,
+} from '../src/circuits.ts'
 import { orderNets } from '../src/schematic.ts'
 
 const pin = (name, net) => ({ name, net, nc: false })
-const part = (ref, value, path = [], local = ref, nets = []) => ({ ref, value, footprint: 'lib:F', prefix: ref[0], placed: true, pins: nets.map((n, i) => pin(String(i + 1), n)), path, local })
+const part = (ref, value, path = [], local = ref, nets = []) => ({
+  ref,
+  value,
+  footprint: 'lib:F',
+  prefix: ref[0],
+  placed: true,
+  pins: nets.map((n, i) => pin(String(i + 1), n)),
+  path,
+  local,
+})
 const sch = {
   parts: [
     part('J1', 'header', [], 'J1', ['VCC', 'GND']),
@@ -41,7 +63,14 @@ test('without circuits the tree is the flat part list in ref order', () => {
 test('board-level parts first, then the top-level instances with their parts and child instances', () => {
   const t = buildTree(sch)
   assert.deepEqual(shape(t), ['J1', { Buck1: ['R10', 'U1', { 'Buck1/Soft': ['R2'] }] }, { CH1: ['D1'] }])
-  assert.deepEqual(instanceNodes(t).map(n => [n.key, n.refs]), [['Buck1', ['R2', 'R10', 'U1']], ['Buck1/Soft', ['R2']], ['CH1', ['D1']]])
+  assert.deepEqual(
+    instanceNodes(t).map(n => [n.key, n.refs]),
+    [
+      ['Buck1', ['R2', 'R10', 'U1']],
+      ['Buck1/Soft', ['R2']],
+      ['CH1', ['D1']],
+    ],
+  )
   assert.deepEqual(instanceRefs(sch, 'Buck1'), ['R2', 'R10', 'U1'])
   assert.equal(findInstance(sch, 'Buck1/Soft').circuit, 'softStart')
   assert.deepEqual(ancestorKeys(['Buck1', 'Soft']), ['Buck1', 'Buck1/Soft'])
@@ -71,27 +100,48 @@ test('the filter keeps matching rows, opens the instances above them, and keeps 
 })
 
 test('an instance owns its local nets, shown as "Buck1 / FB"', () => {
-  assert.deepEqual(instanceNets(sch, ['Buck1']).map(n => n.name), ['Buck1/FB'])
+  assert.deepEqual(
+    instanceNets(sch, ['Buck1']).map(n => n.name),
+    ['Buck1/FB'],
+  )
   assert.deepEqual(instanceNets(sch, []), [])
   assert.deepEqual(netLabel(sch.nets[1]), { prefix: 'Buck1 / ', name: 'FB' })
   assert.deepEqual(netLabel(sch.nets[2]), { prefix: 'Buck1 / Soft / ', name: 'SS' })
   assert.deepEqual(netLabel({ name: 'VCC' }), { prefix: '', name: 'VCC' })
   assert.deepEqual(netLabel({ name: 'odd', path: ['X'] }), { prefix: 'X / ', name: 'odd' })
-  assert.deepEqual(orderNets([], sch).map(n => n.path ?? null), [null, ['Buck1'], ['Buck1', 'Soft'], ['CH1']])
+  assert.deepEqual(
+    orderNets([], sch).map(n => n.path ?? null),
+    [null, ['Buck1'], ['Buck1', 'Soft'], ['CH1']],
+  )
 })
 
 test('the Path line links each instance and ends with the local key', () => {
-  assert.deepEqual(partPathLinks(sch.parts[3]), { links: [{ name: 'Buck1', key: 'Buck1' }, { name: 'Soft', key: 'Buck1/Soft' }], local: 'R1' })
+  assert.deepEqual(partPathLinks(sch.parts[3]), {
+    links: [
+      { name: 'Buck1', key: 'Buck1' },
+      { name: 'Soft', key: 'Buck1/Soft' },
+    ],
+    local: 'R1',
+  })
   assert.equal(partPathLinks(sch.parts[0]), null)
   assert.equal(partPathLinks({ ref: 'R1' }), null)
   assert.equal(partPathLinks(null), null)
 })
 
 test('the box of an instance and the innermost range that made all its parts', () => {
-  const fps = [{ ref: 'R1', at: [0, 0], bbox: { x: 0, y: 0, w: 2, h: 1 } }, { ref: 'D1', at: [5, 5], bbox: { x: 4, y: 4, w: 2, h: 2 } }]
+  const fps = [
+    { ref: 'R1', at: [0, 0], bbox: { x: 0, y: 0, w: 2, h: 1 } },
+    { ref: 'D1', at: [5, 5], bbox: { x: 4, y: 4, w: 2, h: 2 } },
+  ]
   assert.deepEqual(refsBox(fps, ['R1', 'D1']), { at: [3, 3], w: 6, h: 6 })
   assert.equal(refsBox(fps, ['X']), null)
-  const sources = { 'a.tsx': [{ start: [1, 1], end: [9, 1], ids: [], refs: ['D1', 'R1', 'U1'] }, { start: [2, 1], end: [3, 1], ids: [], refs: ['D1', 'R1'] }, { start: [2, 1], end: [2, 9], ids: [], refs: ['R1'] }] }
+  const sources = {
+    'a.tsx': [
+      { start: [1, 1], end: [9, 1], ids: [], refs: ['D1', 'R1', 'U1'] },
+      { start: [2, 1], end: [3, 1], ids: [], refs: ['D1', 'R1'] },
+      { start: [2, 1], end: [2, 9], ids: [], refs: ['R1'] },
+    ],
+  }
   assert.deepEqual(enclosingRange(sources, ['R1', 'D1']).range.start, [2, 1])
   assert.equal(enclosingRange(sources, ['Z']), null)
   assert.equal(enclosingRange(undefined, ['R1']), null)

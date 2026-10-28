@@ -14,8 +14,10 @@ const repo = resolve(here, '..', '..', '..')
 const skills = join(repo, 'packages', 'skills')
 const scripts = new Set(['ts', 'tsx', 'js', 'mjs'])
 
-const markdown = dir => readdirSync(dir, { withFileTypes: true }).flatMap(d =>
-  d.isDirectory() ? (d.name === 'node_modules' ? [] : markdown(join(dir, d.name))) : d.name.endsWith('.md') ? [join(dir, d.name)] : [])
+const markdown = dir =>
+  readdirSync(dir, { withFileTypes: true }).flatMap(d =>
+    d.isDirectory() ? (d.name === 'node_modules' ? [] : markdown(join(dir, d.name))) : d.name.endsWith('.md') ? [join(dir, d.name)] : [],
+  )
 
 /** The fenced blocks of a markdown file: `{ lang, file, code, line }`, line the 1-based line of the first code line. */
 function samples(text) {
@@ -34,32 +36,52 @@ test('skills: every TypeScript and JavaScript sample type checks', async () => {
   try {
     for (const md of markdown(skills)) {
       const dir = join(work, relative(skills, md).replace(/[\\/.]/g, '_'))
-      samples(readFileSync(md, 'utf8')).filter(s => scripts.has(s.lang)).forEach((s, i) => {
-        const file = join(dir, s.file ?? `sample${i}.${s.lang}`)
-        mkdirSync(dirname(file), { recursive: true })
-        writeFileSync(file, s.code)
-        origin.set(file, { md: relative(repo, md), line: s.line })
-      })
+      samples(readFileSync(md, 'utf8'))
+        .filter(s => scripts.has(s.lang))
+        .forEach((s, i) => {
+          const file = join(dir, s.file ?? `sample${i}.${s.lang}`)
+          mkdirSync(dirname(file), { recursive: true })
+          writeFileSync(file, s.code)
+          origin.set(file, { md: relative(repo, md), line: s.line })
+        })
     }
     assert.ok(origin.size > 10, `only ${origin.size} samples found`)
     const options = {
-      strict: true, noEmit: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler, jsx: ts.JsxEmit.ReactJSX, jsxImportSource: '@pcbjs/core',
-      allowJs: true, checkJs: false, allowImportingTsExtensions: true, skipLibCheck: true, types: ['node'],
+      strict: true,
+      noEmit: true,
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      jsx: ts.JsxEmit.ReactJSX,
+      jsxImportSource: '@pcbjs/core',
+      allowJs: true,
+      checkJs: false,
+      allowImportingTsExtensions: true,
+      skipLibCheck: true,
+      types: ['node'],
     }
     const { host, injections } = scopeHost(options, work)
     const program = ts.createProgram([...origin.keys()], options, host)
-    const errors = ts.getPreEmitDiagnostics(program).filter(d => d.file && origin.has(resolve(d.file.fileName))).map(d => {
-      const { md, line } = origin.get(resolve(d.file.fileName))
-      const at = sourcePosition(d, injections) ?? { line: 1, col: 1 }
-      return `${md}:${line + at.line - 1}:${at.col}: TS${d.code} ${ts.flattenDiagnosticMessageText(d.messageText, '\n')}`
-    })
+    const errors = ts
+      .getPreEmitDiagnostics(program)
+      .filter(d => d.file && origin.has(resolve(d.file.fileName)))
+      .map(d => {
+        const { md, line } = origin.get(resolve(d.file.fileName))
+        const at = sourcePosition(d, injections) ?? { line: 1, col: 1 }
+        return `${md}:${line + at.line - 1}:${at.col}: TS${d.code} ${ts.flattenDiagnosticMessageText(d.messageText, '\n')}`
+      })
     assert.deepEqual(errors, [])
-  } finally { rmSync(work, { recursive: true, force: true }) }
+  } finally {
+    rmSync(work, { recursive: true, force: true })
+  }
 })
 
 test('skills: every Python sample parses', t => {
-  const blocks = markdown(skills).flatMap(md => samples(readFileSync(md, 'utf8')).filter(s => s.lang === 'python').map(s => ({ ...s, md })))
+  const blocks = markdown(skills).flatMap(md =>
+    samples(readFileSync(md, 'utf8'))
+      .filter(s => s.lang === 'python')
+      .map(s => ({ ...s, md })),
+  )
   const probe = spawnSync('python3', ['-c', 'pass'])
   if (probe.status !== 0) return t.skip('no python3')
   for (const s of blocks) {

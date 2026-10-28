@@ -14,7 +14,10 @@ const host = process.env.PCBJS_SITE_URL ?? 'https://pcbjs.dev'
 const base = process.env.PCBJS_SITE_BASE ?? '/'
 const root = `${host}${base}`
 // the schematic SVGs colour themselves from --sch-*: the exporter's light and dark themes, switched with VitePress's .dark
-const schVars = (theme: keyof typeof SCH_THEMES) => Object.entries(SCH_THEMES[theme]).map(([k, v]) => `--sch-${k}:${v}`).join(';')
+const schVars = (theme: keyof typeof SCH_THEMES) =>
+  Object.entries(SCH_THEMES[theme])
+    .map(([k, v]) => `--sch-${k}:${v}`)
+    .join(';')
 const schThemes = `:root{${schVars('light')}}.dark{${schVars('dark')}}`
 
 /** Serves and emits site/brand/* at /brand/, so the logo worker's files need no copy in public/. */
@@ -95,7 +98,11 @@ export default defineConfig({
       },
     },
     socialLinks: [{ icon: 'github', link: github }],
-    editLink: { pattern: ({ filePath, params }) => `https://github.com/pcbjs/pcbjs/edit/main/${params?.topic ? `docs/${params.topic}.md` : params?.page === "agents" ? "README.md" : params?.page === "changelog" ? "CHANGELOG.md" : `site/${filePath}`}`, text: 'Edit this page on GitHub' },
+    editLink: {
+      pattern: ({ filePath, params }) =>
+        `https://github.com/pcbjs/pcbjs/edit/main/${params?.topic ? `docs/${params.topic}.md` : params?.page === 'agents' ? 'README.md' : params?.page === 'changelog' ? 'CHANGELOG.md' : `site/${filePath}`}`,
+      text: 'Edit this page on GitHub',
+    },
     outline: { level: [2, 3] },
     footer: { message: 'MIT licensed. A proof of concept, pre 0.1.', copyright: 'pcbjs contributors' },
   },

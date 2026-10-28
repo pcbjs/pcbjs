@@ -9,7 +9,8 @@ import { JLCPCB_4L_7628 } from '@pcbjs/lib/stackups'
 import './sdram.sourcing'
 import * as sch from './sdram.sch'
 
-const W = 55, H = 45
+const W = 55,
+  H = 45
 const STUB = 0.25
 
 // MCU local frame, before its 90 degree turn: pin n sits on side L, B, R or T at position t along that side
@@ -21,19 +22,38 @@ function pinSide(n: number): [Side, number] {
   return ['T', 8.75 - (n - 109) * 0.5]
 }
 // a point at distance r from the centre, inward of side s at t
-const at = (s: Side, t: number, r: number) => { const [x, y] = s === 'L' ? [-r, t] : s === 'B' ? [t, r] : s === 'R' ? [r, t] : [t, -r]; return `${x} ${y}` as `${number} ${number}` }
+const at = (s: Side, t: number, r: number) => {
+  const [x, y] = s === 'L' ? [-r, t] : s === 'B' ? [t, r] : s === 'R' ? [r, t] : [t, -r]
+  return `${x} ${y}` as `${number} ${number}`
+}
 // a 0402 on the back, radial, pad 1 outward: side B mirrors pad 1 to +x first
 const capRot: Record<Side, number> = { L: 180, R: 0, T: 90, B: -90 }
 
-const R_VDD = 9.25, R_GND = 9.25 - 0.96
+const R_VDD = 9.25,
+  R_GND = 9.25 - 0.96
 // supply pins with a capacitor: the pin, its capacitor, and the VSS pin beside it whose via lands on the capacitor's ground pad
-const MCU_CAPS: [number, number | null][] = [[6, null], [17, 16], [30, 31], [33, null], [39, 38], [52, 51], [62, 61], [72, null], [84, 83], [95, 94], [108, 107], [121, 120], [131, 130], [144, null]]
+const MCU_CAPS: [number, number | null][] = [
+  [6, null],
+  [17, 16],
+  [30, 31],
+  [33, null],
+  [39, 38],
+  [52, 51],
+  [62, 61],
+  [72, null],
+  [84, 83],
+  [95, 94],
+  [108, 107],
+  [121, 120],
+  [131, 130],
+  [144, null],
+]
 
 function mcuDecoupling() {
   const out: any[] = []
   MCU_CAPS.forEach(([pin, vss], i) => {
     const [s, t0] = pinSide(pin)
-    const t = pin === 33 ? t0 - 0.25 : t0              // VREF+ and VDDA share one via between their pads
+    const t = pin === 33 ? t0 - 0.25 : t0 // VREF+ and VDDA share one via between their pads
     const C = C_MCU[i]
     // the 3V3 via leans away from the VSS stub beside it, which keeps it 0.28 mm clear of the via hole
     const tv = vss ? pinSide(vss)[1] : t
@@ -41,16 +61,20 @@ function mcuDecoupling() {
     out.push(<C at={`${at(s, t, (R_VDD + R_GND) / 2)} ${capRot[s]}deg`} side="B" />)
     out.push(route(U1.pad(String(pin)), at(s, tp, R_VDD), `L ${at(s, t, R_VDD + 0.3)} Z`).width(STUB), via(V3V3, at(s, tp, R_VDD)))
     if (vss) {
-      const tg = t + 0.45 * Math.sign(tv - t)            // on the edge of the capacitor's ground pad
+      const tg = t + 0.45 * Math.sign(tv - t) // on the edge of the capacitor's ground pad
       out.push(route(U1.pad(String(vss)), at(s, tg, R_GND), 'Z').width(STUB), via(GND, at(s, tg, R_GND)))
     } else out.push(via(GND, at(s, t, R_GND)))
   })
   out.push(route(U1.pad('32'), at('L', 7.0, R_VDD), 'Z').width(STUB))
-  out.push(route(U1.pad('143'), U1.pad('144'), 'Z').width(STUB))      // PDR_ON high: the internal reset on
+  out.push(route(U1.pad('143'), U1.pad('144'), 'Z').width(STUB)) // PDR_ON high: the internal reset on
   // VCAP1 and VCAP2: in, then diagonal to a 2.2 uF on the back
-  for (const [pin, t, C, net] of [[71, 7.4, C_VCAP1, VCAP1], [106, -6.9, C_VCAP2, VCAP2]] as const) {
+  for (const [pin, t, C, net] of [
+    [71, 7.4, C_VCAP1, VCAP1],
+    [106, -6.9, C_VCAP2, VCAP2],
+  ] as const) {
     const [s, t0] = pinSide(pin)
-    const [x0, y0] = at(s, t0, 9.5).split(' ').map(Number), [x1, y1] = at(s, t, 8.65).split(' ').map(Number)
+    const [x0, y0] = at(s, t0, 9.5).split(' ').map(Number),
+      [x1, y1] = at(s, t, 8.65).split(' ').map(Number)
     out.push(<C at={`${at(s, t, 8.65 - 0.48)} ${capRot[s]}deg`} side="B" />)
     out.push(route(U1.pad(String(pin)), at(s, t, 8.65), `L ${x0} ${y0} L ${x1} ${y1} Z`).width(STUB), via(net, at(s, t, 8.65)), via(GND, at(s, t, 8.65 - 0.96)))
   }
@@ -58,12 +82,29 @@ function mcuDecoupling() {
 }
 
 // SDRAM supply pins, in its own frame: each one in to a via under the body, a 100 nF on the back for each 3V3 pin
-const RAM_VDD: [number, number][] = [[1, -10.4], [3, -8.8], [9, -4.0], [14, 0], [27, 10.4], [43, -1.6], [49, -6.4]]
-const RAM_VSS: [number, number][] = [[6, -6.4], [12, -1.6], [28, 10.4], [41, 0], [46, -4.0], [52, -8.8], [54, -10.4]]
+const RAM_VDD: [number, number][] = [
+  [1, -10.4],
+  [3, -8.8],
+  [9, -4.0],
+  [14, 0],
+  [27, 10.4],
+  [43, -1.6],
+  [49, -6.4],
+]
+const RAM_VSS: [number, number][] = [
+  [6, -6.4],
+  [12, -1.6],
+  [28, 10.4],
+  [41, 0],
+  [46, -4.0],
+  [52, -8.8],
+  [54, -10.4],
+]
 function ramDecoupling() {
   const out: any[] = []
   RAM_VDD.forEach(([pin, y], i) => {
-    const sx = pin <= 27 ? -1 : 1, C = C_RAM[i]
+    const sx = pin <= 27 ? -1 : 1,
+      C = C_RAM[i]
     out.push(<C at={`${sx * (3.85 - 0.825)} ${y} ${sx < 0 ? 180 : 0}deg`} side="B" />)
     out.push(route(U2.pad(String(pin)), `${sx * 3.85} ${y}`, 'Z').width(STUB), via(V3V3, `${sx * 3.85} ${y}`), via(GND, `${sx * (3.85 - 1.65)} ${y}`))
   })
@@ -77,25 +118,46 @@ function ramDecoupling() {
 // the SDRAM bus: MCU pin, SDRAM pin. DATA is the 16 data lines, FMC bit order, and both byte masks; ADDR the address, bank
 // and command lines. The data bits land on the SDRAM pins of RAM_DQ in sdram.sch.ts, which uncrosses each byte lane.
 const FMC_D = ['PD14', 'PD15', 'PD0', 'PD1', 'PE7', 'PE8', 'PE9', 'PE10', 'PE11', 'PE12', 'PE13', 'PE14', 'PE15', 'PD8', 'PD9', 'PD10'] as const
-const DATA: [string, string][] = [
-  ...FMC_D.map((p, bit): [string, string] => [p, `DQ${RAM_DQ.indexOf(bit as any)}`]),
-  ['PE0', 'LDQM'], ['PE1', 'UDQM'],
-]
+const DATA: [string, string][] = [...FMC_D.map((p, bit): [string, string] => [p, `DQ${RAM_DQ.indexOf(bit as any)}`]), ['PE0', 'LDQM'], ['PE1', 'UDQM']]
 const ADDR: [string, string][] = [
-  ['PF0', 'A0'], ['PF1', 'A1'], ['PF2', 'A2'], ['PF3', 'A3'], ['PF4', 'A4'], ['PF5', 'A5'], ['PF12', 'A6'], ['PF13', 'A7'],
-  ['PF14', 'A8'], ['PF15', 'A9'], ['PG0', 'A10'], ['PG1', 'A11'], ['PG2', 'A12'], ['PG4', 'BA0'], ['PG5', 'BA1'],
-  ['PF11', 'RAS'], ['PG15', 'CAS'], ['PC0', 'WE'], ['PC2', 'CS'], ['PC3', 'CKE'],
+  ['PF0', 'A0'],
+  ['PF1', 'A1'],
+  ['PF2', 'A2'],
+  ['PF3', 'A3'],
+  ['PF4', 'A4'],
+  ['PF5', 'A5'],
+  ['PF12', 'A6'],
+  ['PF13', 'A7'],
+  ['PF14', 'A8'],
+  ['PF15', 'A9'],
+  ['PG0', 'A10'],
+  ['PG1', 'A11'],
+  ['PG2', 'A12'],
+  ['PG4', 'BA0'],
+  ['PG5', 'BA1'],
+  ['PF11', 'RAS'],
+  ['PG15', 'CAS'],
+  ['PC0', 'WE'],
+  ['PC2', 'CS'],
+  ['PC3', 'CKE'],
 ]
 const pin = (p: any, name: string) => p[name]
 // the SDRAM, turned 90 degrees at (42, 24): pins 1 to 27 along the bottom row at y 29.3 from x 31.6, 28 to 54 back
 // along the top row at y 18.7
-const RAM_X0 = 31.6, RAM_PITCH = 0.8
-const ramPad = (name: string) => { const n = 1 + (TSOP54 as readonly string[]).indexOf(name); return n <= 27 ? { x: RAM_X0 + (n - 1) * RAM_PITCH, top: false } : { x: RAM_X0 + (54 - n) * RAM_PITCH, top: true } }
+const RAM_X0 = 31.6,
+  RAM_PITCH = 0.8
+const ramPad = (name: string) => {
+  const n = 1 + (TSOP54 as readonly string[]).indexOf(name)
+  return n <= 27 ? { x: RAM_X0 + (n - 1) * RAM_PITCH, top: false } : { x: RAM_X0 + (54 - n) * RAM_PITCH, top: true }
+}
 // every bus line enters its pad straight from outside the package, through a waypoint 2.7 mm out from the pad row
-const approach = (name: string) => { const p = ramPad(name); return `X ${p.x.toFixed(2)} ${p.top ? 16.0 : 32.0} XZ` }
+const approach = (name: string) => {
+  const p = ramPad(name)
+  return `X ${p.x.toFixed(2)} ${p.top ? 16.0 : 32.0} XZ`
+}
 // lines too short for their group: a waypoint first, into free board where the tuner has room; WE and A3 into the bottom right corner, A7, A8, A9, A11 into the top right one
-const DETOUR: Record<string, string> = { RAS: "X 50 38 ", CS: "X 47 39 ", WE: "X 50 41 ", A3: "X 45 42 ", A9: "X 50 6 ", A7: "X 53 12 ", A11: "X 47 10 ", A8: "X 52 9 " }
-const busPath = (name: string) => (DETOUR[name] ?? "") + approach(name)
+const DETOUR: Record<string, string> = { RAS: 'X 50 38 ', CS: 'X 47 39 ', WE: 'X 50 41 ', A3: 'X 45 42 ', A9: 'X 50 6 ', A7: 'X 53 12 ', A11: 'X 47 10 ', A8: 'X 52 9 ' }
+const busPath = (name: string) => (DETOUR[name] ?? '') + approach(name)
 
 // the SDRAM clock length in mm: longer than every data line, so data settles before the clock edge arrives
 const CLK_LEN = 62
@@ -112,15 +174,20 @@ const toVia = (pad: any, net: any, x: number, y: number, w = 0.3) => [route(pad,
 // JLCPCB impedance calculator's 4-layer 1.6 mm JLC04161H-3313 build, read 2026-10.
 const JLC_3313 = {
   ...JLCPCB_4L_7628,
-  layers: JLCPCB_4L_7628.layers.map(l => l.type === 'prepreg' ? { ...l, material: '3313', thickness: 0.0994, er: 4.1 } : l.type === 'core' ? { ...l, thickness: 1.265 } : l),
+  layers: JLCPCB_4L_7628.layers.map(l => (l.type === 'prepreg' ? { ...l, material: '3313', thickness: 0.0994, er: 4.1 } : l.type === 'core' ? { ...l, thickness: 1.265 } : l)),
 }
 
 const Hole = MountingHole(2.2)
 
 export default (
-  <PCB name="sdram" revision="0.1.0" schematic={sch} stackup={JLC_3313}
+  <PCB
+    name="sdram"
+    revision="0.1.0"
+    schematic={sch}
+    stackup={JLC_3313}
     classes={{ sdram: { impedance: 50, autoroute: { tune: { amplitude: 5, spacing: 0.25 } } }, usb: { gap: 0.15, skew: 0.1, uncoupled: 6 } }}
-    autoroute={{ layers: ['F.Cu', 'B.Cu'] }}>
+    autoroute={{ layers: ['F.Cu', 'B.Cu'] }}
+  >
     <path layer="Edge.Cuts" d={roundedRect(W, H, 1.5)} />
 
     <J1 at="9.5 3.4 180deg" />
@@ -148,12 +215,24 @@ export default (
     {/* USB-C: the pair from the B6 and B7 contacts, which sit P left and N right like PA12 and PA11, at 90 ohm */}
     {route([J1.pad('B6'), J1.pad('B7')], [U1.PA12, U1.PA11]).impedance(90)}
     {/* the A6 and A7 contacts join their nets on B.Cu under the receptacle */}
-    {([['B6', USB_DP, 8.75, 6.2], ['A6', USB_DP, 9.75, 6.2], ['A7', USB_DN, 9.25, 5.4], ['B7', USB_DN, 10.25, 5.4]] as const).map(([pad, net, x, y]) =>
-      [route(J1.pad(pad), `${x} ${y}`, 'Z').width(0.2), via(net, `${x} ${y}`, SMALL)])}
+    {(
+      [
+        ['B6', USB_DP, 8.75, 6.2],
+        ['A6', USB_DP, 9.75, 6.2],
+        ['A7', USB_DN, 9.25, 5.4],
+        ['B7', USB_DN, 10.25, 5.4],
+      ] as const
+    ).map(([pad, net, x, y]) => [route(J1.pad(pad), `${x} ${y}`, 'Z').width(0.2), via(net, `${x} ${y}`, SMALL)])}
     {route('8.75 6.2 B.Cu', '9.75 6.2 B.Cu', 'Z').net(USB_DP).width(0.2)}
     {route('9.25 5.4 B.Cu', '10.25 5.4 B.Cu', 'Z').net(USB_DN).width(0.2)}
-    {([['B1', GND, 6.25], ['B4', VBUS, 7.05], ['A4', VBUS, 11.95], ['A1', GND, 12.75]] as const).map(([pad, net, x]) =>
-      [route(J1.pad(pad), `${x} 8.75`, 'Z').width(0.3), via(net, `${x} 8.75`, SMALL)])}
+    {(
+      [
+        ['B1', GND, 6.25],
+        ['B4', VBUS, 7.05],
+        ['A4', VBUS, 11.95],
+        ['A1', GND, 12.75],
+      ] as const
+    ).map(([pad, net, x]) => [route(J1.pad(pad), `${x} 8.75`, 'Z').width(0.3), via(net, `${x} 8.75`, SMALL)])}
     {route('7.05 8.75 B.Cu', '11.95 8.75 B.Cu', 'Z').net(VBUS).width(0.4)}
     {route(J1.CC1, R_CC1[1]).width(0.2)}
     {route(J1.CC2, R_CC2[1]).width(0.2)}
@@ -203,8 +282,12 @@ export default (
     {pour(GND, 'In1.Cu', rect(W, H))}
     {pour(V3V3, 'In2.Cu', rect(W, H))}
 
-    <text layer="F.SilkS" at="44 41" size={1}>sdram</text>
-    <text layer="F.SilkS" at="44 42.8" size={0.7}>rev 0.1.0</text>
+    <text layer="F.SilkS" at="44 41" size={1}>
+      sdram
+    </text>
+    <text layer="F.SilkS" at="44 42.8" size={0.7}>
+      rev 0.1.0
+    </text>
     <Brand at="41.7 3.5" height={4.5} />
   </PCB>
 )

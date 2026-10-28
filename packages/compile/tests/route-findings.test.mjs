@@ -20,11 +20,18 @@ const insideRect = ([x, y], x0, y0, x1, y1) => x > x0 && x < x1 && y > y0 && y <
 
 test('route-failed: a leg that cannot be routed is a finding with its source, leg, ends, layers and blockers, and the compile goes on', () => {
   const ring = h('track', { net: 'B', layer: 'F.Cu', width: 0.5, d: 'M3 3 L7 3 L7 7 L3 7 Z' })
-  const b = compileBoard(board(
-    smd('J1', 5, 5, 'SIG'), smd('J2', 15, 5, 'SIG'), ring,
-    route('J1.1', 'J2.1', 'XZ', { __src: src }).layers(['F.Cu']),
-    smd('K1', 10, 1.5, 'OK'), smd('K2', 17, 1.5, 'OK'), route('K1.1', 'K2.1'),
-  ), opts)
+  const b = compileBoard(
+    board(
+      smd('J1', 5, 5, 'SIG'),
+      smd('J2', 15, 5, 'SIG'),
+      ring,
+      route('J1.1', 'J2.1', 'XZ', { __src: src }).layers(['F.Cu']),
+      smd('K1', 10, 1.5, 'OK'),
+      smd('K2', 17, 1.5, 'OK'),
+      route('K1.1', 'K2.1'),
+    ),
+    opts,
+  )
   const [f] = rule(b, 'route-failed')
   assert.equal(rule(b, 'route-failed').length, 1)
   assert.equal(f.severity, 'error')
@@ -37,7 +44,10 @@ test('route-failed: a leg that cannot be routed is a finding with its source, le
   for (const id of f.items) assert.notEqual(byId.get(id).net, 'SIG', 'blockers are items of other nets')
   assert.equal(byId.get(f.items[0]).net, 'B', 'the enclosing ring is the nearest blocker')
   assert.match(f.message, /cannot route net SIG from \(5, 5\) on F\.Cu to \(15, 5\) on F\.Cu, layers F\.Cu: no path found; nearest obstacles: track \(B\)/)
-  assert.ok(b.ratsnest.some(r => r.net === 'SIG'), 'the ratsnest keeps the connection')
+  assert.ok(
+    b.ratsnest.some(r => r.net === 'SIG'),
+    'the ratsnest keeps the connection',
+  )
   assert.equal(tracks(b, 'OK').length >= 1, true, 'the other route is placed')
   assert.equal(b.routing.failed, 1)
   assert.equal(b.routing.legs, 2)
@@ -51,8 +61,16 @@ test('route-failed: a keepout that cuts the line on every layer tried is named w
   const [f] = rule(b, 'route-failed')
   assert.match(f.message, /: no path found[^;]*; blocked by the keepout \(main\.tsx:9:3\) on F\.Cu(; nearest obstacles: |$)/, f.message)
   // a keepout on one layer of two does not explain a failure the other layer could route round
-  const both = compileBoard(board(...parts, keepout('F.Cu', cut, { __src: wall }), h('track', { net: 'B', layer: 'B.Cu', width: 0.5, d: 'M3 3 L7 3 L7 7 L3 7 Z' }),
-    h('track', { net: 'B', layer: 'F.Cu', width: 0.5, d: 'M3 3 L7 3 L7 7 L3 7 Z' }), route('J1.1', 'J2.1', 'XZ', { __src: src }).layers(['F.Cu', 'B.Cu'])), opts)
+  const both = compileBoard(
+    board(
+      ...parts,
+      keepout('F.Cu', cut, { __src: wall }),
+      h('track', { net: 'B', layer: 'B.Cu', width: 0.5, d: 'M3 3 L7 3 L7 7 L3 7 Z' }),
+      h('track', { net: 'B', layer: 'F.Cu', width: 0.5, d: 'M3 3 L7 3 L7 7 L3 7 Z' }),
+      route('J1.1', 'J2.1', 'XZ', { __src: src }).layers(['F.Cu', 'B.Cu']),
+    ),
+    opts,
+  )
   const [g] = rule(both, 'route-failed')
   assert.ok(g, 'the ring still blocks J1')
   assert.doesNotMatch(g.message, /blocked by the keepout/)
@@ -63,15 +81,23 @@ test('route-failed: a keepout that cuts the line on every layer tried is named w
 
 test('route-failed: strict turns the finding back into a CompileError pointing at the route', () => {
   const ring = h('track', { net: 'B', layer: 'F.Cu', width: 0.5, d: 'M3 3 L7 3 L7 7 L3 7 Z' })
-  assert.throws(() => compileBoard(h(PCB, { name: 'Findings', strict: true }, edge(), smd('J1', 5, 5, 'SIG'), smd('J2', 15, 5, 'SIG'), ring,
-    route('J1.1', 'J2.1', 'XZ', { __src: src }).layers(['F.Cu'])), opts),
-  e => e instanceof CompileError && /cannot route net SIG/.test(e.message) && e.src?.line === 12)
+  assert.throws(
+    () =>
+      compileBoard(
+        h(PCB, { name: 'Findings', strict: true }, edge(), smd('J1', 5, 5, 'SIG'), smd('J2', 15, 5, 'SIG'), ring, route('J1.1', 'J2.1', 'XZ', { __src: src }).layers(['F.Cu'])),
+        opts,
+      ),
+    e => e instanceof CompileError && /cannot route net SIG/.test(e.message) && e.src?.line === 12,
+  )
   assert.throws(() => compileBoard(h(PCB, { name: 'Findings', strict: 'yes' }, edge()), opts), /strict must be true or false/)
 })
 
 test('route-failed: a whole-net track reports the line it cannot route and connects the rest', () => {
   const ring = h('track', { net: 'B', layer: 'F.Cu', width: 0.5, d: 'M13 3 L17 3 L17 7 L13 7 Z' })
-  const b = compileBoard(board(smd('J1', 3, 5, 'A'), smd('J2', 8, 5, 'A'), smd('J3', 15, 5, 'A'), ring, h('track', { net: 'A', layer: 'F.Cu', width: 0.2, layers: ['F.Cu'] })), opts)
+  const b = compileBoard(
+    board(smd('J1', 3, 5, 'A'), smd('J2', 8, 5, 'A'), smd('J3', 15, 5, 'A'), ring, h('track', { net: 'A', layer: 'F.Cu', width: 0.2, layers: ['F.Cu'] })),
+    opts,
+  )
   assert.equal(rule(b, 'route-failed').length, 1)
   assert.equal(b.unconnected, 1)
   assert.ok(tracks(b, 'A').length >= 1, 'J1 and J2 are joined')
@@ -88,7 +114,10 @@ test('keepout: the router keeps tracks out on the keepout layers and goes straig
   assert.deepEqual(errors(b), [])
   const other = compileBoard(board(...parts, keepout('B.Cu', area0), route('J1.1', 'J2.1').width(0.2).layers(['F.Cu'])), opts)
   assert.equal(tracks(other, 'A')[0].pts.length, 2, 'a B.Cu keepout leaves F.Cu alone')
-  assert.deepEqual(other.keepouts.map(k => k.layers), [['B.Cu']])
+  assert.deepEqual(
+    other.keepouts.map(k => k.layers),
+    [['B.Cu']],
+  )
   const all = compileBoard(board(...parts, keepout('all', area0)), opts)
   assert.deepEqual(all.keepouts[0].layers, ['F.Cu', 'B.Cu'])
   assert.deepEqual([all.keepouts[0].tracks, all.keepouts[0].vias, all.keepouts[0].pours], [true, true, true])
@@ -102,7 +131,13 @@ test('keepout: vias stay out of a vias keepout, tracks may cross it when it allo
 })
 
 test('keepout: a pour is cut by a keepout on its layer unless the keepout allows pours', () => {
-  const cut = 'M5 2 H10 V6 H5 Z', box = [[5, 2], [10, 2], [10, 6], [5, 6]]
+  const cut = 'M5 2 H10 V6 H5 Z',
+    box = [
+      [5, 2],
+      [10, 2],
+      [10, 6],
+      [5, 6],
+    ]
   const filled = b => b.items.find(i => i.kind === 'zone')
   const inBox = z => area(polysToRings(intersection(polysToRings(z.fill), [box])))
   const pour = (net, layer, d) => pourFn(net, layer, d, { islands: 'keep' })
@@ -123,7 +158,11 @@ test('keepout: a pour the keepout leaves with no fill is a pour-in-keepout warni
   assert.equal(w[0].severity, 'warning')
   assert.match(w[0].message, /^pour of GND \(main\.tsx:12:5\) on B\.Cu has no fill: the keepout \(main\.tsx:20:5\) forbids pours there$/)
   assert.deepEqual(rule(compileBoard(board(pour('GND', 'B.Cu', 'M6 3 H9 V5 H6 Z'), keepout('B.Cu', 'M5 2 H10 V6 H5 Z', { pours: false })), opts), 'pour-in-keepout'), [])
-  assert.deepEqual(rule(compileBoard(board(pour('GND', 'B.Cu', 'M0 0 H20 V10 H0 Z'), keepout('B.Cu', 'M5 2 H10 V6 H5 Z')), opts), 'pour-in-keepout'), [], 'a pour the keepout only cuts')
+  assert.deepEqual(
+    rule(compileBoard(board(pour('GND', 'B.Cu', 'M0 0 H20 V10 H0 Z'), keepout('B.Cu', 'M5 2 H10 V6 H5 Z')), opts), 'pour-in-keepout'),
+    [],
+    'a pour the keepout only cuts',
+  )
 })
 
 test('keepout: the DRC flags tracks and vias drawn inside a keepout of their kind', () => {
@@ -164,11 +203,16 @@ test('keepout: except lets the listed nets in, in the DRC, the pours and the rou
   assert.equal(rule(b, 'route-failed')[0].route.net, 'B')
   assert.deepEqual(rule(b, 'keepout'), [])
   // drawn copper: A inside is fine, B is a finding
-  const drawn = (net) => h('track', { net, layer: 'F.Cu', width: 0.2, d: 'M2 5 L18 5' })
+  const drawn = net => h('track', { net, layer: 'F.Cu', width: 0.2, d: 'M2 5 L18 5' })
   assert.deepEqual(rule(compileBoard(board(drawn('A'), keepout('F.Cu', wall, { except: ['A'] })), opts), 'keepout'), [])
   assert.equal(rule(compileBoard(board(drawn('B'), keepout('F.Cu', wall, { except: ['A'] })), opts), 'keepout').length, 1)
   // a pour of an exempt net fills the keepout
-  const box = [[9, 0], [11, 0], [11, 10], [9, 10]]
+  const box = [
+    [9, 0],
+    [11, 0],
+    [11, 10],
+    [9, 10],
+  ]
   const inBox = z => area(polysToRings(intersection(polysToRings(z.fill), [box])))
   const zoneOf = c => c.items.find(i => i.kind === 'zone')
   const gnd = compileBoard(board(pourFn('GND', 'B.Cu', 'M0 0 H20 V10 H0 Z', { islands: 'keep' }), keepout('B.Cu', wall, { except: ['GND'] })), opts)

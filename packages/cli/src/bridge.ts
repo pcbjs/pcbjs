@@ -6,10 +6,24 @@ import launch from 'launch-editor'
 import type { Connect, ViteDevServer, WebSocketClient } from 'vite'
 import { helloWarning, parseHello, type HostClient, type HostHello } from './host-client.js'
 
-export interface CursorEvent { file: string; line: number; col: number; target?: CursorTarget }
+export interface CursorEvent {
+  file: string
+  line: number
+  col: number
+  target?: CursorTarget
+}
 /** What the code under the cursor names, per board, from the language server; absent without one. */
-export interface CursorTarget { kind: string; boards: { board: string; ids: number[]; refs: string[]; points?: [number, number][]; reference?: string; name: string }[] }
-export interface SelectEvent { file: string; line: number; col: number; endLine: number; endCol: number }
+export interface CursorTarget {
+  kind: string
+  boards: { board: string; ids: number[]; refs: string[]; points?: [number, number][]; reference?: string; name: string }[]
+}
+export interface SelectEvent {
+  file: string
+  line: number
+  col: number
+  endLine: number
+  endCol: number
+}
 
 /** A path as given by an editor or the viewer, absolute or relative to the root, both ways. */
 export function normalizeFile(root: string, file: string): { abs: string; rel: string } {
@@ -26,7 +40,13 @@ function readBody(req: IncomingMessage, limit = 64 * 1024): Promise<string> {
   return new Promise((ok, fail) => {
     let size = 0
     const chunks: Buffer[] = []
-    req.on('data', (c: Buffer) => { size += c.length; if (size > limit) { fail(new Error('body too large')); req.destroy() } else chunks.push(c) })
+    req.on('data', (c: Buffer) => {
+      size += c.length
+      if (size > limit) {
+        fail(new Error('body too large'))
+        req.destroy()
+      } else chunks.push(c)
+    })
     req.on('end', () => ok(Buffer.concat(chunks).toString('utf8')))
     req.on('error', fail)
   })
@@ -75,7 +95,9 @@ export function ideBridge(server: ViteDevServer, rootOf: string | (() => string)
       if (w) server.config.logger.warn(w, { timestamp: true })
     }
   })
-  server.ws.on('pcbjs:ide:bye', (_data: unknown, client: WebSocketClient) => { bridges.delete(client.socket) })
+  server.ws.on('pcbjs:ide:bye', (_data: unknown, client: WebSocketClient) => {
+    bridges.delete(client.socket)
+  })
   server.ws.on('pcbjs:ide:cursor', (data: any) => {
     if (data && typeof data.file === 'string') broadcastCursor(data.file, data.line, data.col)
   })
@@ -95,32 +117,65 @@ export function ideBridge(server: ViteDevServer, rootOf: string | (() => string)
     if (p === '/__pcbjs/ide') {
       res.setHeader('content-type', 'application/json')
       const host = opts.host?.()
-      res.end(JSON.stringify({
-        connected: bridges.size, clients: [...bridges.values()].map(b => ({ name: b.name, version: b.version, protocol: b.protocol, major: b.major })),
-        host: host ? { connected: host.connected(), ...(host.hello() ?? {}) } : null,
-      }))
+      res.end(
+        JSON.stringify({
+          connected: bridges.size,
+          clients: [...bridges.values()].map(b => ({ name: b.name, version: b.version, protocol: b.protocol, major: b.major })),
+          host: host ? { connected: host.connected(), ...(host.hello() ?? {}) } : null,
+        }),
+      )
       return
     }
     if (p === '/__pcbjs/cursor') {
-      if (req.method !== 'POST') { res.statusCode = 405; res.setHeader('allow', 'POST'); res.end(); return }
-      readBody(req).then(text => {
-        const body = JSON.parse(text || '{}')
-        if (typeof body.file !== 'string' || !body.file) { res.statusCode = 400; res.end('file required'); return }
-        broadcastCursor(body.file, body.line, body.col)
-        res.statusCode = 204; res.end()
-      }).catch(e => { res.statusCode = 400; res.end(String(e?.message ?? e)) })
+      if (req.method !== 'POST') {
+        res.statusCode = 405
+        res.setHeader('allow', 'POST')
+        res.end()
+        return
+      }
+      readBody(req)
+        .then(text => {
+          const body = JSON.parse(text || '{}')
+          if (typeof body.file !== 'string' || !body.file) {
+            res.statusCode = 400
+            res.end('file required')
+            return
+          }
+          broadcastCursor(body.file, body.line, body.col)
+          res.statusCode = 204
+          res.end()
+        })
+        .catch(e => {
+          res.statusCode = 400
+          res.end(String(e?.message ?? e))
+        })
       return
     }
     if (p === '/__pcbjs/open') {
       const q = url.searchParams
       const f = q.get('file')
-      if (!f) { res.statusCode = 400; res.end('file required'); return }
+      if (!f) {
+        res.statusCode = 400
+        res.end('file required')
+        return
+      }
       const { abs } = normalizeFile(root(), f)
-      if (!allowed(abs) || !existsSync(abs)) { res.statusCode = 404; res.end('not found'); return }
-      const line = int(q.get('line'), 1), col = int(q.get('col'), 1)
+      if (!allowed(abs) || !existsSync(abs)) {
+        res.statusCode = 404
+        res.end('not found')
+        return
+      }
+      const line = int(q.get('line'), 1),
+        col = int(q.get('col'), 1)
       // a pad goes to its key in the part's connect call when the language server finds one
       const pad = /^(.+)\.([^.]+)$/.exec(q.get('pad') ?? '')
-      const sel: SelectEvent = (pad && opts.lsp?.padSource?.(q.get('board') ?? '', pad[1], pad[2])) || { file: abs, line, col, endLine: int(q.get('endLine'), line), endCol: int(q.get('endCol'), col) }
+      const sel: SelectEvent = (pad && opts.lsp?.padSource?.(q.get('board') ?? '', pad[1], pad[2])) || {
+        file: abs,
+        line,
+        col,
+        endLine: int(q.get('endLine'), line),
+        endCol: int(q.get('endCol'), col),
+      }
       // the editor host first, then clients on the Vite socket, then launch-editor
       const host = opts.host?.()
       const lspKeys = (opts.lsp?.keys() ?? []).filter(k => k !== 'host' && !bridges.has(k as WebSocketClient['socket']))
@@ -137,7 +192,8 @@ export function ideBridge(server: ViteDevServer, rootOf: string | (() => string)
         })
         res.setHeader('x-pcbjs-opened', 'editor')
       }
-      res.statusCode = 204; res.end()
+      res.statusCode = 204
+      res.end()
       return
     }
     next()

@@ -1,5 +1,29 @@
 import { h } from './jsx-runtime.js'
-import type { At, IslandMode, AutoRouteParams, BoardProps, Child, KeepoutProps, Length, LengthSpec, NeckSpec, NetLike, TeardropSpec, PcbNode, PinRef, Pos, RouteBuilder, RouteFn, Src, StitchProps, ThermalConnection, TrackProps, ViaNode, ViaProps, ZoneProps } from './types.js'
+import type {
+  At,
+  IslandMode,
+  AutoRouteParams,
+  BoardProps,
+  Child,
+  KeepoutProps,
+  Length,
+  LengthSpec,
+  NeckSpec,
+  NetLike,
+  TeardropSpec,
+  PcbNode,
+  PinRef,
+  Pos,
+  RouteBuilder,
+  RouteFn,
+  Src,
+  StitchProps,
+  ThermalConnection,
+  TrackProps,
+  ViaNode,
+  ViaProps,
+  ZoneProps,
+} from './types.js'
 import { isNC, isNet, isPinRef, schematicRegistry } from './schematic.js'
 import { mm } from './units.js'
 import type { RouteStep } from './model.js'
@@ -53,8 +77,18 @@ export interface RouteOptions {
   auto?: Partial<AutoRouteParams>
   points?: At[]
 }
-export interface PourOptions { clearance?: Length; priority?: number; minWidth?: Length; connect?: ThermalConnection; islands?: IslandMode }
-export interface ViaOptions { drill?: Length; size?: Length; layers?: [string, string] }
+export interface PourOptions {
+  clearance?: Length
+  priority?: number
+  minWidth?: Length
+  connect?: ThermalConnection
+  islands?: IslandMode
+}
+export interface ViaOptions {
+  drill?: Length
+  size?: Length
+  layers?: [string, string]
+}
 export type StitchOptions = Omit<StitchProps, 'net'>
 
 const isProps = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !isNet(v)
@@ -64,10 +98,17 @@ export const isViaNode = (v: unknown): v is ViaNode => !!v && typeof v === 'obje
 const isOptions = (v: unknown): v is Record<string, any> => isProps(v) && !Array.isArray(v) && !isPinRef(v) && !isViaNode(v) && !('at' in v)
 /** The `__src` the source-range transform adds to the last object argument, or to a trailing argument of its own. */
 function takeSrc(args: unknown[]): { __src?: unknown } {
-  for (let i = args.length - 1; i >= 0; i--) { const a = args[i] as any; if (a && typeof a === 'object' && a.__src) return { __src: a.__src } }
+  for (let i = args.length - 1; i >= 0; i--) {
+    const a = args[i] as any
+    if (a && typeof a === 'object' && a.__src) return { __src: a.__src }
+  }
   return {}
 }
-const strip = (o: unknown): Record<string, any> => { if (!isProps(o)) return {}; const { __src: _, ...rest } = o; return rest }
+const strip = (o: unknown): Record<string, any> => {
+  if (!isProps(o)) return {}
+  const { __src: _, ...rest } = o
+  return rest
+}
 /** A position without the `__src` the transform may have put into it. */
 const bare = (v: unknown): unknown => (isProps(v) && !Array.isArray(v) && !isPinRef(v) && !isViaNode(v) && '__src' in v ? strip(v) : v)
 
@@ -80,7 +121,8 @@ function callSite(src: unknown): Frame | undefined {
   const s = src as { file?: unknown; line?: unknown; endLine?: unknown; fn?: { line?: unknown; endLine?: unknown } } | undefined
   const map = schematicRegistry().mapSrc
   if (!map || !s || typeof s.file !== 'string' || typeof s.line !== 'number') return undefined
-  const first = s.line, last = typeof s.endLine === 'number' ? s.endLine : first
+  const first = s.line,
+    last = typeof s.endLine === 'number' ? s.endLine : first
   const fn = s.fn && typeof s.fn.line === 'number' && typeof s.fn.endLine === 'number' ? { line: s.fn.line, endLine: s.fn.endLine } : undefined
   const limit = Error.stackTraceLimit
   Error.stackTraceLimit = 60
@@ -96,24 +138,44 @@ function callSite(src: unknown): Frame | undefined {
   const at = (k: number): Frame | undefined => {
     if (k >= raw.length) return undefined
     let v = mapped.get(k)
-    if (!v) { try { v = map(raw[k]) } catch { v = raw[k] } mapped.set(k, v) }
+    if (!v) {
+      try {
+        v = map(raw[k])
+      } catch {
+        v = raw[k]
+      }
+      mapped.set(k, v)
+    }
     return v
   }
   // a file outside the root, `../lib/wire.ts`, leaves the root unknown, so the call site keeps its absolute path
   const rel = s.file.replace(/^(?:\.\.\/)+/, '')
   const outside = rel !== s.file
   let i = 0
-  for (; i < Math.min(raw.length, 4); i++) { const f = at(i)!; if (f.file.replace(/\\/g, '/').endsWith('/' + rel) && f.line >= first && f.line <= last) break }
+  for (; i < Math.min(raw.length, 4); i++) {
+    const f = at(i)!
+    if (f.file.replace(/\\/g, '/').endsWith('/' + rel) && f.line >= first && f.line <= last) break
+  }
   if (i >= Math.min(raw.length, 4)) return undefined
-  const own = at(i)!, root = outside ? '\0' : own.file.slice(0, own.file.length - rel.length)
+  const own = at(i)!,
+    root = outside ? '\0' : own.file.slice(0, own.file.length - rel.length)
   const entry = at(raw.length - 1)!.file
   let up: Frame | undefined
   for (let k = i + 1; k < raw.length && k < i + 24; k++) {
     const f = at(k)!
-    if (f.file !== own.file) { up = f; break }
+    if (f.file !== own.file) {
+      up = f
+      break
+    }
     if (own.file !== entry) continue
     // in the entry, frames inside the helper are its callbacks; the first one outside is the call
-    if (fn) { if (f.line < fn.line || f.line > fn.endLine) { up = f; break } continue }
+    if (fn) {
+      if (f.line < fn.line || f.line > fn.endLine) {
+        up = f
+        break
+      }
+      continue
+    }
     // no function around the call: an inline route in a .map or JSX is no helper
     break
   }
@@ -130,18 +192,40 @@ function withCall(src: { __src?: unknown }): { __src?: unknown } {
 function builder(node: PcbNode): RouteBuilder {
   const p = node.props
   const def = (name: string, f: (...a: any[]) => void) =>
-    Object.defineProperty(node, name, { value: (...a: any[]) => { f(...a); return node }, enumerable: false, configurable: true })
-  def('width', (w: Length) => { p.width = w })
-  def('layer', (l: string) => { p.layer = l })
-  def('layers', (ls: string[]) => { if (!Array.isArray(ls)) throw new TypeError('route().layers() takes a list of layer names'); p.layers = [...ls] })
+    Object.defineProperty(node, name, {
+      value: (...a: any[]) => {
+        f(...a)
+        return node
+      },
+      enumerable: false,
+      configurable: true,
+    })
+  def('width', (w: Length) => {
+    p.width = w
+  })
+  def('layer', (l: string) => {
+    p.layer = l
+  })
+  def('layers', (ls: string[]) => {
+    if (!Array.isArray(ls)) throw new TypeError('route().layers() takes a list of layer names')
+    p.layers = [...ls]
+  })
   def('vias', (v: boolean | { drill?: Length; size?: Length }) => {
     if (v === false) p.auto = { ...(p.auto ?? {}), maxVias: 0 }
-    else if (v === true) { if (p.auto) { const { maxVias: _, ...r } = p.auto; p.auto = r } }
-    else if (v && typeof v === 'object') p.via = { ...v }
+    else if (v === true) {
+      if (p.auto) {
+        const { maxVias: _, ...r } = p.auto
+        p.auto = r
+      }
+    } else if (v && typeof v === 'object') p.via = { ...v }
     else throw new TypeError('route().vias() takes true, false or { drill, size }')
   })
-  def('rules', (r: Partial<AutoRouteParams>) => { p.auto = { ...(p.auto ?? {}), ...(r ?? {}) } })
-  def('priority', (n: number) => { p.auto = { ...(p.auto ?? {}), priority: n } })
+  def('rules', (r: Partial<AutoRouteParams>) => {
+    p.auto = { ...(p.auto ?? {}), ...(r ?? {}) }
+  })
+  def('priority', (n: number) => {
+    p.auto = { ...(p.auto ?? {}), priority: n }
+  })
   def('net', (n: NetLike, nN?: NetLike) => {
     if (nN !== undefined && !p.pair) throw new TypeError('route().net(P, N) takes a second net for a differential pair only, a route with array ends')
     p.net = n
@@ -154,7 +238,11 @@ function builder(node: PcbNode): RouteBuilder {
     p.neck = { ...spec }
   })
   def('teardrops', (on: boolean | TeardropSpec) => {
-    try { checkTeardrops(on, 'route().teardrops()') } catch (e) { throw new TypeError((e as Error).message) }
+    try {
+      checkTeardrops(on, 'route().teardrops()')
+    } catch (e) {
+      throw new TypeError((e as Error).message)
+    }
     p.teardrops = typeof on === 'boolean' ? on : { ...on }
   })
   def('corner', (r: Length | 'none') => {
@@ -162,10 +250,22 @@ function builder(node: PcbNode): RouteBuilder {
     p.corner = r
   })
   for (const k of ['lock', 'direct', 'loop'] as const)
-    def(k, (on: boolean = true) => { if (typeof on !== 'boolean') throw new TypeError(`route().${k}() takes true or false`); if (on) p[k] = true; else delete p[k] })
-  const pairOnly = (m: string) => { if (!p.pair) throw new TypeError(`route().${m}() is for a differential pair, a route with array ends such as route([J1.DP, J1.DN], [U1.DP, U1.DN])`) }
-  def('gap', (g: Length) => { pairOnly('gap'); p.gap = g })
-  def('skew', (s: Length) => { pairOnly('skew'); p.skew = s })
+    def(k, (on: boolean = true) => {
+      if (typeof on !== 'boolean') throw new TypeError(`route().${k}() takes true or false`)
+      if (on) p[k] = true
+      else delete p[k]
+    })
+  const pairOnly = (m: string) => {
+    if (!p.pair) throw new TypeError(`route().${m}() is for a differential pair, a route with array ends such as route([J1.DP, J1.DN], [U1.DP, U1.DN])`)
+  }
+  def('gap', (g: Length) => {
+    pairOnly('gap')
+    p.gap = g
+  })
+  def('skew', (s: Length) => {
+    pairOnly('skew')
+    p.skew = s
+  })
   def('impedance', (z: number) => {
     if (typeof z !== 'number' || !Number.isFinite(z) || z <= 0) throw new TypeError(`route().impedance() takes a positive number of ohms, got ${JSON.stringify(z)}`)
     p.impedance = z
@@ -176,7 +276,8 @@ function builder(node: PcbNode): RouteBuilder {
       const bad = keys.find(k => !['min', 'max', 'target', 'tolerance'].includes(k))
       if (bad) throw new TypeError(`route().length() takes a length or { min?, max?, target?, tolerance? }, got the field ${JSON.stringify(bad)}`)
       if (!keys.some(k => k !== 'tolerance')) throw new TypeError('route().length({ ... }) needs min, max or target')
-      if ('target' in spec && spec.target !== undefined && (spec.min !== undefined || spec.max !== undefined)) throw new TypeError('route().length({ ... }) takes target with tolerance, or min and max, not both')
+      if ('target' in spec && spec.target !== undefined && (spec.min !== undefined || spec.max !== undefined))
+        throw new TypeError('route().length({ ... }) takes target with tolerance, or min and max, not both')
       p.length = { ...spec }
     } else if (typeof spec === 'number' || typeof spec === 'string') {
       if (typeof spec === 'number' && !(Number.isFinite(spec) && spec > 0)) throw new TypeError(`route().length() takes a positive length in mm, got ${JSON.stringify(spec)}`)
@@ -209,7 +310,11 @@ function chain(node: PcbNode, def: (name: string, f: (...a: any[]) => void) => v
   }
   const len = (name: string, v: unknown, what: string): number => {
     let x = NaN
-    try { x = mm(v as Length) } catch { /* reported below */ }
+    try {
+      x = mm(v as Length)
+    } catch {
+      /* reported below */
+    }
     if (!Number.isFinite(x)) throw new TypeError(`route().${name}() takes ${what}, a length in mm or with a unit such as '10mil', got ${JSON.stringify(v)}`)
     return x
   }
@@ -228,16 +333,24 @@ function chain(node: PcbNode, def: (name: string, f: (...a: any[]) => void) => v
     if (typeof layer !== 'string' || !layer.trim()) throw new TypeError(`route().cross() takes the layer the pair continues on, such as 'B.Cu', got ${JSON.stringify(layer)}`)
     push('cross', { op: 'U', layer, cross: true })
   })
-  for (const [name, auto] of [['Z', false], ['X', true]] as const) def(name, (target: unknown, ...more: unknown[]) => {
-    if (target === undefined || more.some(m => !(isProps(m) && Object.keys(m).length === 1 && '__src' in m))) throw new TypeError(`route().${name}() takes one target: a pin or pad handle, a via, a "REF.PAD" string or a position such as '5 16' or [5, 16]`)
-    push(name, { op: 'to', auto, target: Array.isArray(target) && pairEnds(target, 'chain') ? target.map(bare) : bare(target) })
-  })
+  for (const [name, auto] of [
+    ['Z', false],
+    ['X', true],
+  ] as const)
+    def(name, (target: unknown, ...more: unknown[]) => {
+      if (target === undefined || more.some(m => !(isProps(m) && Object.keys(m).length === 1 && '__src' in m)))
+        throw new TypeError(`route().${name}() takes one target: a pin or pad handle, a via, a "REF.PAD" string or a position such as '5 16' or [5, 16]`)
+      push(name, { op: 'to', auto, target: Array.isArray(target) && pairEnds(target, 'chain') ? target.map(bare) : bare(target) })
+    })
   // the transform appends `.__at({ file, line, col, endLine, endCol })` after each command
   def('__at', (src: unknown) => {
     const cmds: ChainCommand[] | undefined = p.chain
     const s = src as Src | undefined
     if (cmds?.length && s && typeof s.file === 'string' && typeof s.line === 'number' && typeof s.col === 'number')
-      cmds[cmds.length - 1] = { ...cmds[cmds.length - 1], src: { file: s.file, line: s.line, col: s.col, ...(typeof s.endLine === 'number' && typeof s.endCol === 'number' ? { endLine: s.endLine, endCol: s.endCol } : {}) } }
+      cmds[cmds.length - 1] = {
+        ...cmds[cmds.length - 1],
+        src: { file: s.file, line: s.line, col: s.col, ...(typeof s.endLine === 'number' && typeof s.endCol === 'number' ? { endLine: s.endLine, endCol: s.endCol } : {}) },
+      }
   })
 }
 
@@ -254,7 +367,11 @@ function stepSite(own: unknown, name: string): Src | undefined {
     const m = FRAME.exec(l)
     if (!m || !userFrame(m[1])) continue
     let f: Frame = { file: m[1], line: +m[2], col: +m[3] }
-    try { f = map(f) } catch { /* keep the raw frame */ }
+    try {
+      f = map(f)
+    } catch {
+      /* keep the raw frame */
+    }
     if (!f.file.replace(/\\/g, '/').endsWith('/' + rel)) return undefined
     return { file: rel, line: f.line, col: f.col, endLine: f.line, endCol: f.col + name.length - 1 }
   }
@@ -270,7 +387,10 @@ function pairEnds(v: unknown, which: string): unknown[] | null {
   const ends = v.map(bare)
   const n = ends.filter(isEnd).length
   if (n === 2) return ends
-  if (n === 1) throw new TypeError(`route(a, b): the ${which} end ${JSON.stringify(v.map(e => (isPinRef(e) ? `pin ${e.pin}` : e)))} mixes a position and a length; a pair end is [P, N], two positions, and a coordinate is [x, y, layer?]`)
+  if (n === 1)
+    throw new TypeError(
+      `route(a, b): the ${which} end ${JSON.stringify(v.map(e => (isPinRef(e) ? `pin ${e.pin}` : e)))} mixes a position and a length; a pair end is [P, N], two positions, and a coordinate is [x, y, layer?]`,
+    )
   return null
 }
 
@@ -300,9 +420,13 @@ export function route(a: unknown, ...rest: unknown[]): PcbNode {
   }
   if (args.length > 2) throw new TypeError('route(a, b, path?) takes two ends and an optional route path')
   const path = args[1]
-  if (path !== undefined && typeof path !== 'string') throw new TypeError('route(a, b, path?): the route path must be a string such as \'V 14 U B.Cu XZ\'')
-  const pa = pairEnds(a, 'first'), pb = pairEnds(args[0], 'second')
-  if (!!pa !== !!pb) throw new TypeError(`route(a, b): ${pa ? 'a' : 'b'} is a pair end [P, N] but ${pa ? 'b' : 'a'} is a single end; a differential pair has arrays at both ends, route([aP, aN], [bP, bN], path?)`)
+  if (path !== undefined && typeof path !== 'string') throw new TypeError("route(a, b, path?): the route path must be a string such as 'V 14 U B.Cu XZ'")
+  const pa = pairEnds(a, 'first'),
+    pb = pairEnds(args[0], 'second')
+  if (!!pa !== !!pb)
+    throw new TypeError(
+      `route(a, b): ${pa ? 'a' : 'b'} is a pair end [P, N] but ${pa ? 'b' : 'a'} is a single end; a differential pair has arrays at both ends, route([aP, aN], [bP, bN], path?)`,
+    )
   if (pa && pb) return builder(h('track', { from: pa, to: pb, pair: true, ...(path !== undefined ? { path } : {}), ...src }))
   return builder(h('track', { from: bare(a), to: bare(args[0]), ...(path !== undefined ? { path } : {}), ...src }))
 }
@@ -353,11 +477,12 @@ export function via(net: NetLike | PinRef, at: At, opts?: ViaOptions): ViaNode
 export function via(a: NetLike | PinRef | ViaProps, ...rest: unknown[]): ViaNode {
   if (isProps(a) && !isPinRef(a) && !rest.length) return h('via', ((a as any).__src ? { ...a, ...withCall({ __src: (a as any).__src }) } : a) as any) as ViaNode
   const [at, opts] = rest
-  if (at === undefined || isProps(at) && !Array.isArray(at)) throw new TypeError('via(net, at, opts?) needs a position')
+  if (at === undefined || (isProps(at) && !Array.isArray(at))) throw new TypeError('via(net, at, opts?) needs a position')
   let net: unknown = a
   if (isPinRef(a)) {
     net = a.net
-    if (isNC(net)) throw new TypeError(`via(${a.pad ?? a.pin}, at): the ${a.pad !== undefined ? 'pad' : 'pin'} is connected to NC, so the via has no net; give the net, via(net, at)`)
+    if (isNC(net))
+      throw new TypeError(`via(${a.pad ?? a.pin}, at): the ${a.pad !== undefined ? 'pad' : 'pin'} is connected to NC, so the via has no net; give the net, via(net, at)`)
   }
   return h('via', { ...strip(opts), net, at, ...withCall(takeSrc(rest)) }) as ViaNode
 }
@@ -371,7 +496,12 @@ export function stitch(a: NetLike | StitchProps, ...rest: unknown[]): PcbNode {
   return h('stitch', { ...strip(rest[0]), net: a, ...takeSrc(rest) })
 }
 
-export interface KeepoutOptions { tracks?: boolean; vias?: boolean; pours?: boolean; except?: NetLike[] }
+export interface KeepoutOptions {
+  tracks?: boolean
+  vias?: boolean
+  pours?: boolean
+  except?: NetLike[]
+}
 
 /** A hard keepout: `keepout('B.Cu', d)`, `keepout('all', d, { pours: false })`; `except` lets those nets in. */
 export function keepout(props: KeepoutProps): PcbNode

@@ -6,19 +6,72 @@ import { LQFP, Crystal3225 as Crystal3225Lib, Crystal3215 as Crystal3215Lib, wit
 
 // STM32F103C8 pin names in pin order, from the datasheet's LQFP48 pinout; supply pins get a suffix so every name is unique.
 export const STM32F103_LQFP48_PINS = [
-  'VBAT', 'PC13', 'PC14', 'PC15', 'OSC_IN', 'OSC_OUT', 'NRST', 'VSSA', 'VDDA', 'PA0', 'PA1', 'PA2',
-  'PA3', 'PA4', 'PA5', 'PA6', 'PA7', 'PB0', 'PB1', 'PB2', 'PB10', 'PB11', 'VSS_1', 'VDD_1',
-  'PB12', 'PB13', 'PB14', 'PB15', 'PA8', 'PA9', 'PA10', 'PA11', 'PA12', 'PA13', 'VSS_2', 'VDD_2',
-  'PA14', 'PA15', 'PB3', 'PB4', 'PB5', 'PB6', 'PB7', 'BOOT0', 'PB8', 'PB9', 'VSS_3', 'VDD_3',
+  'VBAT',
+  'PC13',
+  'PC14',
+  'PC15',
+  'OSC_IN',
+  'OSC_OUT',
+  'NRST',
+  'VSSA',
+  'VDDA',
+  'PA0',
+  'PA1',
+  'PA2',
+  'PA3',
+  'PA4',
+  'PA5',
+  'PA6',
+  'PA7',
+  'PB0',
+  'PB1',
+  'PB2',
+  'PB10',
+  'PB11',
+  'VSS_1',
+  'VDD_1',
+  'PB12',
+  'PB13',
+  'PB14',
+  'PB15',
+  'PA8',
+  'PA9',
+  'PA10',
+  'PA11',
+  'PA12',
+  'PA13',
+  'VSS_2',
+  'VDD_2',
+  'PA14',
+  'PA15',
+  'PB3',
+  'PB4',
+  'PB5',
+  'PB6',
+  'PB7',
+  'BOOT0',
+  'PB8',
+  'PB9',
+  'VSS_3',
+  'VDD_3',
 ] as const
 export const STM32F103C8 = LQFP(48, 7, 0.5, { pinNames: STM32F103_LQFP48_PINS })
 
 // USB-C 2.0 receptacle, HRO TYPE-C-31-M-12 style. The mouth is at -y; place it at -90deg to face +x.
 // Pad x positions along the row; B-side pads carry the "2" suffix.
 const USBC_ROW = [
-  ['A1B12', 'GND_A', -3.2, 0.6], ['A4B9', 'VBUS_A', -2.4, 0.6], ['B8', 'SBU2', -1.75, 0.3], ['A5', 'CC1', -1.25, 0.3],
-  ['B7', 'DN2', -0.75, 0.3], ['A6', 'DP1', -0.25, 0.3], ['A7', 'DN1', 0.25, 0.3], ['B6', 'DP2', 0.75, 0.3],
-  ['A8', 'SBU1', 1.25, 0.3], ['B5', 'CC2', 1.75, 0.3], ['B4A9', 'VBUS_B', 2.4, 0.6], ['B1A12', 'GND_B', 3.2, 0.6],
+  ['A1B12', 'GND_A', -3.2, 0.6],
+  ['A4B9', 'VBUS_A', -2.4, 0.6],
+  ['B8', 'SBU2', -1.75, 0.3],
+  ['A5', 'CC1', -1.25, 0.3],
+  ['B7', 'DN2', -0.75, 0.3],
+  ['A6', 'DP1', -0.25, 0.3],
+  ['A7', 'DN1', 0.25, 0.3],
+  ['B6', 'DP2', 0.75, 0.3],
+  ['A8', 'SBU1', 1.25, 0.3],
+  ['B5', 'CC2', 1.75, 0.3],
+  ['B4A9', 'VBUS_B', 2.4, 0.6],
+  ['B1A12', 'GND_B', 3.2, 0.6],
 ] as const
 function USBCFootprint(props: FootprintProps) {
   const { children, ...rest } = props
@@ -37,7 +90,10 @@ function USBCFootprint(props: FootprintProps) {
   )
 }
 export const USBC = defineFootprint(USBCFootprint, {
-  pins: [...USBC_ROW.map(r => r[1]), 'SH1', 'SH2', 'SH3', 'SH4'], prefix: 'J', id: 'pcbjs:USB_C_Receptacle_HRO_TYPE-C-31-M-12', name: 'USBC',
+  pins: [...USBC_ROW.map(r => r[1]), 'SH1', 'SH2', 'SH3', 'SH4'],
+  prefix: 'J',
+  id: 'pcbjs:USB_C_Receptacle_HRO_TYPE-C-31-M-12',
+  name: 'USBC',
 })
 
 // SOT-23 regulator such as the XC6206: 1 VSS, 2 VOUT, 3 VIN.

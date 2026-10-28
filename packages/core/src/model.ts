@@ -13,10 +13,13 @@ export type Ring = Pt[]
 /** A segment or an arc of less than a full turn in board mm; `cw` is clockwise seen from the top, SVG sweep flag 1. */
 export type Prim = { kind: 'line'; from: Pt; to: Pt } | { kind: 'arc'; from: Pt; to: Pt; center: Pt; cw: boolean }
 /** A polygon with holes, as Clipper returns it. */
-export interface Poly { outer: Ring; holes: Ring[] }
+export interface Poly {
+  outer: Ring
+  holes: Ring[]
+}
 
 export interface LayerDef {
-  id: string           // canonical KiCad name: F.Cu, B.SilkS, Edge.Cuts ...
+  id: string // canonical KiCad name: F.Cu, B.SilkS, Edge.Cuts ...
   name: string
   kind: 'copper' | 'mask' | 'paste' | 'silkscreen' | 'fab' | 'courtyard' | 'edge' | 'user'
   side: 'front' | 'back' | 'inner' | 'both'
@@ -26,9 +29,18 @@ export interface LayerDef {
 }
 
 /** `src` made the item; `chain` lists the enclosing call sites, components, groups and footprint, outermost first. */
-interface ItemBase { id: number; layer: string; net?: string; ref?: string; src?: Src; chain?: Src[] }
+interface ItemBase {
+  id: number
+  layer: string
+  net?: string
+  ref?: string
+  src?: Src
+  chain?: Src[]
+}
 export interface Track extends ItemBase {
-  kind: 'track'; pts: Ring; width: number
+  kind: 'track'
+  pts: Ring
+  width: number
   /** the pair id shared by the P and N tracks of a pair route */
   pair?: string
   /** P from the first end of the array, N from the second */
@@ -39,16 +51,31 @@ export interface Track extends ItemBase {
   prims?: Prim[]
 }
 export interface Via extends ItemBase {
-  kind: 'via'; at: Pt; drill: number; size: number; layers: [string, string]
+  kind: 'via'
+  at: Pt
+  drill: number
+  size: number
+  layers: [string, string]
   /** the route id of the route call that placed it, see Track.route */
   route?: string
   /** placed by stitch() from the pour fill */
   stitch?: true
 }
 export interface Pad extends ItemBase {
-  kind: 'pad'; num: string; name: string; at: Pt; rot: number
-  shape: PadShape; size: [number, number]; drill: [number, number] | null; type: PadType
-  layers: string[]; poly: Ring; maskExpansion?: number; paste: boolean; mirrored: boolean
+  kind: 'pad'
+  num: string
+  name: string
+  at: Pt
+  rot: number
+  shape: PadShape
+  size: [number, number]
+  drill: [number, number] | null
+  type: PadType
+  layers: string[]
+  poly: Ring
+  maskExpansion?: number
+  paste: boolean
+  mirrored: boolean
   /** how the pad joins a pour of its net, over the pour's connect; absent means the pour's */
   thermal?: ThermalConnection
   /** the spoke angle of its thermal relief, from the pad or its part, over the rules' thermal.angle */
@@ -79,7 +106,13 @@ export type PadTypeClearanceMM = { tht?: number; smd?: number }
 export type PadOverrideKey = 'clearance' | 'holeClearance' | 'edgeClearance' | 'trackWidth' | 'pasteShrink'
 /** `prims` lists each outline ring as lines and arcs, present only when a ring holds an arc. */
 export interface Zone extends ItemBase {
-  kind: 'zone'; outline: Ring[]; clearance?: number; priority: number; minWidth?: number; fill: Poly[]; prims?: Prim[][]
+  kind: 'zone'
+  outline: Ring[]
+  clearance?: number
+  priority: number
+  minWidth?: number
+  fill: Poly[]
+  prims?: Prim[][]
   /** how same-net pads join the fill; absent means 'thermal' */
   connect?: ThermalConnection
   /** the pour's own island mode, over the rules' */
@@ -88,12 +121,28 @@ export interface Zone extends ItemBase {
   islandsRemoved?: { count: number; area: number }
 }
 /** `paths` are the flattened polylines the checks use; `prims` the lines and arcs for the exporters when a path holds an arc. */
-export interface Graphic extends ItemBase { kind: 'graphic'; paths: Ring[]; closed: boolean[]; width: number; fill: boolean; prims?: Prim[][]
+export interface Graphic extends ItemBase {
+  kind: 'graphic'
+  paths: Ring[]
+  closed: boolean[]
+  width: number
+  fill: boolean
+  prims?: Prim[][]
   /** a teardrop the compiler drew, with the ids of the pad and the track it joins */
-  teardrop?: { pad: number; track: number } }
+  teardrop?: { pad: number; track: number }
+}
 /** Laid out text in board mm: stroke font polylines `thickness` wide, or an outline font's `polys` with `thickness` 0; `at` is the block's vertical centre. */
 export interface Text extends ItemBase {
-  kind: 'text'; at: Pt; rot: number; size: number; thickness: number; /** glyph width, when it differs from size */ width?: number; text: string; anchor: 'start' | 'middle' | 'end'; mirrored: boolean; strokes: Ring[]
+  kind: 'text'
+  at: Pt
+  rot: number
+  size: number
+  thickness: number
+  /** glyph width, when it differs from size */ width?: number
+  text: string
+  anchor: 'start' | 'middle' | 'end'
+  mirrored: boolean
+  strokes: Ring[]
   /** "Family Style" of an outline font, "newstroke", or absent for Hershey Simplex */
   font?: string
   /** the filled glyphs of an outline font, contours unioned, holes as holes */
@@ -102,8 +151,16 @@ export interface Text extends ItemBase {
 export type Item = Track | Via | Pad | Zone | Graphic | Text
 
 export interface Footprint {
-  ref: string; value: string; id: string; at: Pt; rot: number; side: 'F' | 'B'
-  fields: Record<string, string>; bom: boolean; pos: boolean; description?: string
+  ref: string
+  value: string
+  id: string
+  at: Pt
+  rot: number
+  side: 'F' | 'B'
+  fields: Record<string, string>
+  bom: boolean
+  pos: boolean
+  description?: string
   /** do not populate: on the board and in the DRC, out of the BOM and placement file */
   dnp?: boolean
   pads: number[]
@@ -119,7 +176,10 @@ export interface Footprint {
   netTie?: string[][]
 }
 
-export interface Net { id: number; name: string }
+export interface Net {
+  id: number
+  name: string
+}
 
 /** One command of a route path, coordinates in the frame of the enclosing group, layers resolved. */
 export type RouteStep = (
@@ -300,10 +360,20 @@ export interface DrcMarker {
   route?: { net?: string; leg: number; legs: number; from: ResolvedPos; to: ResolvedPos; layers: string[] }
 }
 
-export interface BoardSchematicPin { name: string; net: string | null; nc: boolean }
+export interface BoardSchematicPin {
+  name: string
+  net: string | null
+  nc: boolean
+}
 /** One part of the netlist; `src` is where it was declared, or for a plain footprint placed. */
 export interface BoardSchematicPart {
-  ref: string; value: string; footprint: string; prefix: string; pins: BoardSchematicPin[]; placed: boolean; src?: Src
+  ref: string
+  value: string
+  footprint: string
+  prefix: string
+  pins: BoardSchematicPin[]
+  placed: boolean
+  src?: Src
   /** the circuit instance path that owns the part, outermost first, [] at the board level */
   path: string[]
   /** the part's key in its circuit instance, `R1` for Buck1.R1; the ref at the board level */
@@ -312,12 +382,24 @@ export interface BoardSchematicPart {
   export?: SchematicExport
 }
 /** Where a part or net is declared by name: an export of the schematic module. */
-export interface SchematicExport { name: string; module?: string }
+export interface SchematicExport {
+  name: string
+  module?: string
+}
 /** One net with its placed pins as "REF.PIN"; `path` is the instance owning a private net. */
-export interface BoardSchematicNet { name: string; class?: string; local: boolean; pins: string[]; path?: string[]; export?: SchematicExport }
+export interface BoardSchematicNet {
+  name: string
+  class?: string
+  local: boolean
+  pins: string[]
+  path?: string[]
+  export?: SchematicExport
+}
 /** One circuit instance on the board. */
 export interface BoardSchematicCircuit {
-  path: string[]; name: string; circuit: string
+  path: string[]
+  name: string
+  circuit: string
   /** the layout that placed it */
   layout?: string
   /** refs of its own parts, in key order */
@@ -328,12 +410,18 @@ export interface BoardSchematicCircuit {
   placed: boolean
 }
 export interface BoardSchematic {
-  parts: BoardSchematicPart[]; nets: BoardSchematicNet[]; circuits: BoardSchematicCircuit[]
+  parts: BoardSchematicPart[]
+  nets: BoardSchematicNet[]
+  circuits: BoardSchematicCircuit[]
   /** the schematic picture, see docs/schematic-graphic.md; set by every compile */
   drawing?: import('./sch-model.js').SchDrawing
 }
 
-export interface Ratsnest { net: string; from: Pt; to: Pt }
+export interface Ratsnest {
+  net: string
+  from: Pt
+  to: Pt
+}
 
 export interface Board {
   name: string

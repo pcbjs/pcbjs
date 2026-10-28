@@ -21,15 +21,28 @@ export interface CreateOptions {
   log?: (line: string) => void
 }
 
-export interface CreateResult { dir: string; name: string; template: string; files: string[] }
+export interface CreateResult {
+  dir: string
+  name: string
+  template: string
+  files: string[]
+}
 
 export function templates(): string[] {
-  return existsSync(TEMPLATES_DIR) ? readdirSync(TEMPLATES_DIR).filter(f => statSync(join(TEMPLATES_DIR, f)).isDirectory()).sort() : []
+  return existsSync(TEMPLATES_DIR)
+    ? readdirSync(TEMPLATES_DIR)
+        .filter(f => statSync(join(TEMPLATES_DIR, f)).isDirectory())
+        .sort()
+    : []
 }
 
 /** A board name from a directory name: letters, digits, dot, dash and underscore, anything else as a dash. */
 export function boardName(dir: string): string {
-  return basename(resolve(dir)).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[-.]+|-+$/g, '') || 'board'
+  return (
+    basename(resolve(dir))
+      .replace(/[^A-Za-z0-9._-]+/g, '-')
+      .replace(/^[-.]+|-+$/g, '') || 'board'
+  )
 }
 
 /** An npm package name from a board name: lowercase, no leading dot or underscore. */
@@ -38,10 +51,12 @@ function packageName(name: string): string {
 }
 
 function walk(dir: string, base = dir): string[] {
-  return readdirSync(dir).sort().flatMap(f => {
-    const p = join(dir, f)
-    return statSync(p).isDirectory() ? walk(p, base) : [relative(base, p)]
-  })
+  return readdirSync(dir)
+    .sort()
+    .flatMap(f => {
+      const p = join(dir, f)
+      return statSync(p).isDirectory() ? walk(p, base) : [relative(base, p)]
+    })
 }
 
 export function create(opts: CreateOptions): CreateResult {

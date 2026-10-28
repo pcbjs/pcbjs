@@ -12,9 +12,9 @@ const shown = computed(() => ({
   name: v ? loadName(v.load, v.boot?.project ?? null) : 'pcbjs',
   text: v ? loadText(v.load) : '',
   busy: v ? loadBusy(v.load) : true,
-  state: v ? loadScreenState(v.load) : 'loading' as const,
+  state: v ? loadScreenState(v.load) : ('loading' as const),
   progress: v ? loadProgress(v.load) : null,
-  hint: v && loadScreenState(v.load) === 'idle' ? props.hint ?? '' : '',
+  hint: v && loadScreenState(v.load) === 'idle' ? (props.hint ?? '') : '',
 }))
 // rendered once, then filled in place so the dots' waves and the spinner run on
 const inner = screenInner({ mark, actions: props.actions })

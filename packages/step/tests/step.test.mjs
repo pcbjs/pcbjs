@@ -15,8 +15,18 @@ test('a STEP pin converts to millimetres with its colour, normals and indices', 
   assert.equal(m.indices.length % 3, 0)
   for (const i of m.indices) assert.ok(i < m.positions.length / 3)
   const b = bounds(model)
-  for (const [k, want] of [[0, -1], [1, -1], [2, 0]]) assert.ok(Math.abs(b.min[k] - want) < 0.02, `min ${k} ${b.min[k]}`)
-  for (const [k, want] of [[0, 1], [1, 1], [2, 5]]) assert.ok(Math.abs(b.max[k] - want) < 0.02, `max ${k} ${b.max[k]}`)
+  for (const [k, want] of [
+    [0, -1],
+    [1, -1],
+    [2, 0],
+  ])
+    assert.ok(Math.abs(b.min[k] - want) < 0.02, `min ${k} ${b.min[k]}`)
+  for (const [k, want] of [
+    [0, 1],
+    [1, 1],
+    [2, 5],
+  ])
+    assert.ok(Math.abs(b.max[k] - want) < 0.02, `max ${k} ${b.max[k]}`)
   // COLOUR_RGB 0.8 0.6 0.2 in the file, linear in the mesh
   assert.ok(m.color[0] > m.color[1] && m.color[1] > m.color[2] && m.color[0] < 0.8, `colour ${m.color}`)
 })
@@ -26,7 +36,10 @@ test('the default deflection keeps a 2 mm pin round', async () => {
   const angles = new Set()
   for (let i = 0; i < m.positions.length; i += 3) {
     const [x, y, z] = [m.positions[i], m.positions[i + 1], m.positions[i + 2]]
-    if (Math.abs(z) < 1e-6) { assert.ok(Math.abs(Math.hypot(x, y) - 1) < 1e-4 || Math.hypot(x, y) < 1); if (Math.hypot(x, y) > 0.999) angles.add(Math.round(Math.atan2(y, x) * 1000)) }
+    if (Math.abs(z) < 1e-6) {
+      assert.ok(Math.abs(Math.hypot(x, y) - 1) < 1e-4 || Math.hypot(x, y) < 1)
+      if (Math.hypot(x, y) > 0.999) angles.add(Math.round(Math.atan2(y, x) * 1000))
+    }
   }
   assert.ok(angles.size >= 16, `${angles.size} sides`)
   // the largest gap between neighbouring rim points stays below 0.4 mm on a 1 mm radius
@@ -49,13 +62,15 @@ test('the binary round trip keeps positions and indices exactly and normals to a
   // smaller than three float arrays of the same mesh
   assert.ok(bin.byteLength < a.positions.byteLength + a.normals.byteLength + a.indices.byteLength)
   // a Node Buffer at an odd offset decodes too
-  const shifted = Buffer.alloc(bin.byteLength + 1); shifted.set(bin, 1)
+  const shifted = Buffer.alloc(bin.byteLength + 1)
+  shifted.set(bin, 1)
   assert.deepEqual([...meshFromBinary(shifted.subarray(1)).meshes[0].indices], [...a.indices])
 })
 
 test('a mesh with more than 65535 vertices keeps 32-bit indices', () => {
   const n = 70000
-  const positions = new Float32Array(n * 3).map((_, i) => i * 0.001), normals = new Float32Array(n * 3).fill(0)
+  const positions = new Float32Array(n * 3).map((_, i) => i * 0.001),
+    normals = new Float32Array(n * 3).fill(0)
   for (let i = 2; i < normals.length; i += 3) normals[i] = 1
   const indices = new Uint32Array([0, 1, n - 1])
   const back = meshFromBinary(meshToBinary({ meshes: [{ positions, normals, indices, color: [1, 0, 0] }] }))
@@ -70,7 +85,8 @@ test('meshFromBinary rejects other data', () => {
 })
 
 test('the key changes with the content and the options, not with anything else', () => {
-  const a = new TextEncoder().encode('ISO-10303-21; a'), b = new TextEncoder().encode('ISO-10303-21; b')
+  const a = new TextEncoder().encode('ISO-10303-21; a'),
+    b = new TextEncoder().encode('ISO-10303-21; b')
   assert.match(meshKey(a), /^[0-9a-f]{64}$/)
   assert.equal(meshKey(a), meshKey(a, {}))
   assert.equal(meshKey(a), meshKey(a, { linearDeflection: 0.02 }))

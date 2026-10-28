@@ -60,7 +60,20 @@ export const R1 = R0603('330').connect(VCC, GND)
 export const Rpull = R0603('10k').connect(VCC, GND)
 export const D1 = LED0603('red').connect({ A: VCC, K: GND })
 `
-const TSCONFIG = { compilerOptions: { target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', jsx: 'react-jsx', jsxImportSource: '@pcbjs/core', strict: true, noEmit: true, skipLibCheck: true, types: [] }, include: ['*.ts', '*.tsx'] }
+const TSCONFIG = {
+  compilerOptions: {
+    target: 'ES2022',
+    module: 'ESNext',
+    moduleResolution: 'Bundler',
+    jsx: 'react-jsx',
+    jsxImportSource: '@pcbjs/core',
+    strict: true,
+    noEmit: true,
+    skipLibCheck: true,
+    types: [],
+  },
+  include: ['*.ts', '*.tsx'],
+}
 
 function project(files) {
   const dir = mkdtempSync(join(tmpdir(), 'pcbjs-scope-'))
@@ -74,7 +87,8 @@ function project(files) {
 const run = (dir, ...args) => spawnSync(process.execPath, [cli, ...args], { cwd: dir, encoding: 'utf8' })
 
 test('schematic scope: a bare-form board compiles through the CLI, and findings and inspect use the export name', () => {
-  const dir = project({ 'pcb.tsx': `import PCB from '@pcbjs/core'
+  const dir = project({
+    'pcb.tsx': `import PCB from '@pcbjs/core'
 import * as sch from './board.sch'
 export default <PCB name="Scope" schematic={sch}>
   <rect layer="Edge.Cuts" x={0} y={0} w={20} h={10} />
@@ -82,7 +96,8 @@ export default <PCB name="Scope" schematic={sch}>
   <Rpull at="10 5" />
   <sch.D1 at="15 5" />
 </PCB>
-` })
+`,
+  })
   try {
     const c = run(dir, 'check')
     assert.doesNotMatch(c.stdout + c.stderr, /compile error/)
@@ -91,23 +106,32 @@ export default <PCB name="Scope" schematic={sch}>
     assert.match(c.stdout, /typecheck {2}ok/)
     const i = run(dir, 'inspect', 'Rpull')
     assert.match(i.stdout, /^R2 \(Rpull\) {2}10k/m)
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('schematic scope: the type check binds the bare names and maps positions back, a free name that is no export stays an error', () => {
-  const dir = project({ 'pcb.tsx': `import PCB from '@pcbjs/core'
+  const dir = project({
+    'pcb.tsx': `import PCB from '@pcbjs/core'
 import * as sch from './board.sch'; const bad: number = 'x'
 export default <PCB name="Scope" schematic={sch}>
   <Rpull at="10 5" wrong />
   <R9 at="1 1" />
 </PCB>
-` })
+`,
+  })
   try {
     const c = run(dir, 'check')
     const lines = c.stdout.split('\n').filter(l => l.startsWith('error    typecheck'))
-    assert.deepEqual(lines.map(l => / pcb\.tsx:(\d+:\d+): (TS\d+)/.exec(l).slice(1).join(' ')), ['2:43 TS2322', '4:20 TS2322', '5:4 TS2304'])
+    assert.deepEqual(
+      lines.map(l => / pcb\.tsx:(\d+:\d+): (TS\d+)/.exec(l).slice(1).join(' ')),
+      ['2:43 TS2322', '4:20 TS2322', '5:4 TS2304'],
+    )
     assert.match(lines[2], /Cannot find name 'R9'/)
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('schematic scope: <sch.U1 /> with a member tag type-checks with typed pads, and the JSX factory gets the part itself', async () => {
@@ -125,11 +149,16 @@ export default <PCB name="M" schematic={sch}>{tag}</PCB>
     const diags = ts.getPreEmitDiagnostics(program).filter(d => d.file && !d.file.fileName.includes('node_modules'))
     const where = diags.map(d => `${d.file.fileName.endsWith('bad.tsx') ? 'bad' : 'pcb'}:${sourcePosition(d, injections).line} TS${d.code}`)
     assert.deepEqual(where.sort(), ['bad:2 TS2322', 'bad:3 TS2339'])
-    writeFileSync(join(dir, 'tag.mjs'), ts.transpileModule(code, { compilerOptions: { ...opts, module: ts.ModuleKind.ESNext }, fileName: 'pcb.tsx' }).outputText.replace("'./board.sch'", "'./board.sch.mjs'"))
+    writeFileSync(
+      join(dir, 'tag.mjs'),
+      ts.transpileModule(code, { compilerOptions: { ...opts, module: ts.ModuleKind.ESNext }, fileName: 'pcb.tsx' }).outputText.replace("'./board.sch'", "'./board.sch.mjs'"),
+    )
     writeFileSync(join(dir, 'board.sch.mjs'), ts.transpileModule(SCH, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText)
     const mod = await import(pathToFileURL(join(dir, 'tag.mjs')).href)
     const sch = await import(pathToFileURL(join(dir, 'board.sch.mjs')).href)
     assert.equal(mod.tag.type, sch.R1)
     assert.equal(mod.pad.net.name, 'VCC')
-  } finally { rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

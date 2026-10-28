@@ -16,15 +16,16 @@ export interface Load {
   attempts: number
 }
 
-export type LoadEvent =
-  | { kind: 'status'; status: ServerStatus }
-  | { kind: 'drawn' }
-  | { kind: 'lost' }
-  | { kind: 'retry' }
-  | { kind: 'boards'; count: number }
+export type LoadEvent = { kind: 'status'; status: ServerStatus } | { kind: 'drawn' } | { kind: 'lost' } | { kind: 'retry' } | { kind: 'boards'; count: number }
 
 /** What the page inlines: the project, where to start the server, and the status when the page was served. */
-export interface Boot { project: string; root: string; devJson: string; command: string; status?: ServerStatus }
+export interface Boot {
+  project: string
+  root: string
+  devJson: string
+  command: string
+  status?: ServerStatus
+}
 
 export function initialLoad(status?: ServerStatus | null): Load {
   return step({ phase: 'starting', status: null, shown: false, attempts: 0 }, status ? { kind: 'status', status } : null)
@@ -40,9 +41,12 @@ export function step(s: Load, e: LoadEvent | null): Load {
       if (st.phase === 'idle') return { ...s, status: null, phase: s.shown ? 'ready' : s.phase === 'empty' ? 'empty' : 'rendering' }
       return { ...s, status: st, phase: 'compiling' }
     }
-    case 'drawn': return { ...s, shown: true, phase: s.phase === 'compiling' ? 'compiling' : 'ready' }
-    case 'lost': return { ...s, phase: 'gone', attempts: 0 }
-    case 'retry': return s
+    case 'drawn':
+      return { ...s, shown: true, phase: s.phase === 'compiling' ? 'compiling' : 'ready' }
+    case 'lost':
+      return { ...s, phase: 'gone', attempts: 0 }
+    case 'retry':
+      return s
     case 'boards':
       if (e.count) return s.phase === 'empty' ? { ...s, phase: 'rendering' } : s
       return s.shown || s.phase === 'compiling' ? s : { ...s, status: null, phase: 'empty' }
@@ -53,11 +57,16 @@ export function step(s: Load, e: LoadEvent | null): Load {
 export function loadText(s: Load): string {
   const st = s.status
   switch (s.phase) {
-    case 'starting': return 'starting the dev server'
-    case 'rendering': return 'rendering'
-    case 'ready': return ''
-    case 'empty': return 'Select a board file to get started'
-    case 'gone': return s.attempts ? `reconnecting, attempt ${s.attempts}` : 'the dev server stopped'
+    case 'starting':
+      return 'starting the dev server'
+    case 'rendering':
+      return 'rendering'
+    case 'ready':
+      return ''
+    case 'empty':
+      return 'Select a board file to get started'
+    case 'gone':
+      return s.attempts ? `reconnecting, attempt ${s.attempts}` : 'the dev server stopped'
     case 'compiling':
       if (!st) return 'compiling'
       if (st.phase === 'routing' && st.legs) return `routing ${st.legs} ${st.legs === 1 ? 'leg' : 'legs'}${st.round ? `, round ${st.round}` : ''}`

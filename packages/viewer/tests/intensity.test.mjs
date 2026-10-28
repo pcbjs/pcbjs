@@ -36,7 +36,15 @@ test('strength steps', () => {
 })
 
 test('ring areas: a square, a hole winding against it, a hole winding with it, two islands', () => {
-  const sq = (x, y, w, cw = false) => { const r = [[x, y], [x + w, y], [x + w, y + w], [x, y + w]]; return cw ? r.reverse() : r }
+  const sq = (x, y, w, cw = false) => {
+    const r = [
+      [x, y],
+      [x + w, y],
+      [x + w, y + w],
+      [x, y + w],
+    ]
+    return cw ? r.reverse() : r
+  }
   assert.equal(ringsArea([sq(0, 0, 10)]), 100)
   assert.equal(ringsArea([sq(0, 0, 10, true)]), 100)
   assert.equal(ringsArea([sq(0, 0, 10), sq(2, 2, 2, true)]), 96)

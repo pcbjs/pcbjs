@@ -34,27 +34,57 @@ export function fabDate(date?: string, env: Record<string, string | undefined> =
 
 /** Every other file of a fab set with its size in bytes and sha256, in name order. */
 export function fabManifest(board: Board, files: Record<string, string>, date: string): string {
-  const list = Object.keys(files).filter(n => n !== 'manifest.json').sort().map(name => {
-    const bytes = strToU8(files[name])
-    return { name, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }
-  })
-  return JSON.stringify({ board: board.name, revision: board.revision || null, ...(board.variant ? { target: board.variant.name } : {}), generator: `pcbjs ${VERSION}`, date, files: list }, null, 2) + '\n'
+  const list = Object.keys(files)
+    .filter(n => n !== 'manifest.json')
+    .sort()
+    .map(name => {
+      const bytes = strToU8(files[name])
+      return { name, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }
+    })
+  return (
+    JSON.stringify(
+      { board: board.name, revision: board.revision || null, ...(board.variant ? { target: board.variant.name } : {}), generator: `pcbjs ${VERSION}`, date, files: list },
+      null,
+      2,
+    ) + '\n'
+  )
 }
 
-export interface FabSet { files: Record<string, string>; zipName: string; readme: string; date: string }
+export interface FabSet {
+  files: Record<string, string>
+  zipName: string
+  readme: string
+  date: string
+}
 
 const FAB_LAYERS = (board: Board) => [...copperLayers(board.copper), 'F.Mask', 'B.Mask', 'F.Paste', 'B.Paste', 'F.SilkS', 'B.SilkS', 'Edge.Cuts']
 
 const RULE_LABELS: [keyof Rules, string][] = [
-  ['clearance', 'copper clearance'], ['minTrackWidth', 'track width'], ['edgeClearance', 'copper to edge'],
-  ['holeClearance', 'hole to copper'], ['minHoleToHole', 'hole to hole'], ['minDrill', 'drill'],
-  ['minViaDrill', 'via drill'], ['minViaDiameter', 'via diameter'], ['minAnnularRing', 'via annular ring'],
-  ['minPadAnnularRing', 'pad annular ring'], ['maskExpansion', 'mask expansion'], ['pasteShrink', 'paste shrink'],
-  ['zoneMinWidth', 'zone min width'], ['silkMinWidth', 'silk width'], ['silkToPad', 'silk to pad'], ['maskWeb', 'mask web'],
+  ['clearance', 'copper clearance'],
+  ['minTrackWidth', 'track width'],
+  ['edgeClearance', 'copper to edge'],
+  ['holeClearance', 'hole to copper'],
+  ['minHoleToHole', 'hole to hole'],
+  ['minDrill', 'drill'],
+  ['minViaDrill', 'via drill'],
+  ['minViaDiameter', 'via diameter'],
+  ['minAnnularRing', 'via annular ring'],
+  ['minPadAnnularRing', 'pad annular ring'],
+  ['maskExpansion', 'mask expansion'],
+  ['pasteShrink', 'paste shrink'],
+  ['zoneMinWidth', 'zone min width'],
+  ['silkMinWidth', 'silk width'],
+  ['silkToPad', 'silk to pad'],
+  ['maskWeb', 'mask web'],
 ]
 const FINISH_TEXT: Record<Finish, string> = {
-  HASL: 'HASL', LeadFreeHASL: 'lead-free HASL', ENIG: 'ENIG', ImmersionSilver: 'immersion silver',
-  ImmersionTin: 'immersion tin', OSP: 'OSP', HardGold: 'hard gold',
+  HASL: 'HASL',
+  LeadFreeHASL: 'lead-free HASL',
+  ENIG: 'ENIG',
+  ImmersionSilver: 'immersion silver',
+  ImmersionTin: 'immersion tin',
+  OSP: 'OSP',
+  HardGold: 'hard gold',
 }
 
 export function stackupLines(board: Board): string[] {
@@ -62,7 +92,8 @@ export function stackupLines(board: Board): string[] {
   const t = (v: number | undefined) => (v === undefined ? '' : ` ${Math.round(v * 1e4) / 1e4} mm`)
   const lines = s.layers.map(l => {
     if (l.type === 'copper') return `  ${l.name.padEnd(8)} copper${t(l.thickness)}${l.weight !== undefined ? `, ${l.weight} oz` : ''}`
-    if (l.type === 'core' || l.type === 'prepreg') return `  ${''.padEnd(8)} ${l.type} ${l.material ?? 'FR4'}${t(l.thickness)}${l.er !== undefined ? `, er ${l.er}` : ''}${l.lossTangent !== undefined ? `, tan d ${l.lossTangent}` : ''}`
+    if (l.type === 'core' || l.type === 'prepreg')
+      return `  ${''.padEnd(8)} ${l.type} ${l.material ?? 'FR4'}${t(l.thickness)}${l.er !== undefined ? `, er ${l.er}` : ''}${l.lossTangent !== undefined ? `, tan d ${l.lossTangent}` : ''}`
     if (!('side' in l)) return ''
     const color = l.color ?? (l.type === 'mask' ? s.maskColor : l.type === 'silk' ? s.silkColor : undefined)
     return `  ${`${l.side}.${l.type === 'silk' ? 'SilkS' : l.type === 'mask' ? 'Mask' : 'Paste'}`.padEnd(8)} ${l.type}${t(l.thickness)}${color ? `, ${color.toLowerCase()}` : ''}`
@@ -76,19 +107,30 @@ export function stackupLines(board: Board): string[] {
 
 // as docs/fonts.md gives it; the notice travels with the font data
 const STROKE_FONTS: Record<string, { name: string; notice: string }> = {
-  hershey: { name: 'Hershey Simplex', notice: 'The Hershey fonts were created by Dr. A. V. Hershey at the U.S. National Bureau of Standards; the data format by James Hurt, Cognition, Inc.; converted from Paul Bourke\'s "Hershey Vector Font" page; free to use for any purpose.' },
+  hershey: {
+    name: 'Hershey Simplex',
+    notice:
+      'The Hershey fonts were created by Dr. A. V. Hershey at the U.S. National Bureau of Standards; the data format by James Hurt, Cognition, Inc.; converted from Paul Bourke\'s "Hershey Vector Font" page; free to use for any purpose.',
+  },
   newstroke: { name: 'NewStroke', notice: 'NewStroke is by Vladimir Uryvaev, made for KiCad, released under CC0 1.0.' },
 }
 
 // one per font the text uses, stroke fonts first
 export function fontNotes(board: Board): string[] {
-  const stroke = new Map<string, { n: number; widths: Set<number> }>(), outline = new Map<string, number>()
+  const stroke = new Map<string, { n: number; widths: Set<number> }>(),
+    outline = new Map<string, number>()
   for (const it of board.items) {
     if (it.kind !== 'text') continue
-    if (it.polys) { const f = it.font ?? 'an outline font'; outline.set(f, (outline.get(f) ?? 0) + 1); continue }
+    if (it.polys) {
+      const f = it.font ?? 'an outline font'
+      outline.set(f, (outline.get(f) ?? 0) + 1)
+      continue
+    }
     const k = it.font === 'newstroke' ? 'newstroke' : 'hershey'
     const s = stroke.get(k) ?? { n: 0, widths: new Set<number>() }
-    s.n++; s.widths.add(it.thickness); stroke.set(k, s)
+    s.n++
+    s.widths.add(it.thickness)
+    stroke.set(k, s)
   }
   if (!stroke.size && !outline.size) return ['  No text items.']
   const items = (n: number) => `${n} text item${n === 1 ? '' : 's'}`
@@ -100,7 +142,10 @@ export function fontNotes(board: Board): string[] {
   }
   for (const [f, n] of [...outline].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
     const o = board.outlineFonts?.[f]
-    const notice = [o?.copyright, o?.license ? `Licence: ${o.license}${o.licenseURL ? ` ${o.licenseURL}` : ''}` : o?.licenseURL ? `Licence: ${o.licenseURL}` : undefined].filter(Boolean).map(s => s!.replace(/\s+/g, ' ').trim()).map(s => (/[.!]$/.test(s) ? s : `${s}.`))
+    const notice = [o?.copyright, o?.license ? `Licence: ${o.license}${o.licenseURL ? ` ${o.licenseURL}` : ''}` : o?.licenseURL ? `Licence: ${o.licenseURL}` : undefined]
+      .filter(Boolean)
+      .map(s => s!.replace(/\s+/g, ' ').trim())
+      .map(s => (/[.!]$/.test(s) ? s : `${s}.`))
     out.push(`  Text is filled regions in the outline font ${f}: ${items(n)}.${notice.length ? ` ${notice.join(' ')}` : ' The font file names no copyright or licence.'}`)
   }
   return out
@@ -116,13 +161,29 @@ export function buildFab(board: Board, date = fabDate(), opts: { root?: string; 
   for (const layer of FAB_LAYERS(board)) {
     if (!known.has(layer)) continue
     const g = gerberLayer(board, layer, date, { nest: opts.nest })
-    if (g && g.empty && layer.endsWith('.Paste')) { noPaste.push(layer); continue }
-    if (g) { gerbers.push(g); files[g.name] = g.text }
+    if (g && g.empty && layer.endsWith('.Paste')) {
+      noPaste.push(layer)
+      continue
+    }
+    if (g) {
+      gerbers.push(g)
+      files[g.name] = g.text
+    }
   }
-  const pth = excellon(board, true, date), npth = excellon(board, false, date)
-  const drills: DrillFile[] = [], sets: DrillSet[] = []
-  if (pth) { files[`${board.name}-PTH.drl`] = pth.text; drills.push({ name: `${board.name}-PTH.drl`, plated: true }); sets.push({ name: `${board.name}-PTH.drl`, plated: true, table: pth }) }
-  if (npth) { files[`${board.name}-NPTH.drl`] = npth.text; drills.push({ name: `${board.name}-NPTH.drl`, plated: false }); sets.push({ name: `${board.name}-NPTH.drl`, plated: false, table: npth }) }
+  const pth = excellon(board, true, date),
+    npth = excellon(board, false, date)
+  const drills: DrillFile[] = [],
+    sets: DrillSet[] = []
+  if (pth) {
+    files[`${board.name}-PTH.drl`] = pth.text
+    drills.push({ name: `${board.name}-PTH.drl`, plated: true })
+    sets.push({ name: `${board.name}-PTH.drl`, plated: true, table: pth })
+  }
+  if (npth) {
+    files[`${board.name}-NPTH.drl`] = npth.text
+    drills.push({ name: `${board.name}-NPTH.drl`, plated: false })
+    sets.push({ name: `${board.name}-NPTH.drl`, plated: false, table: npth })
+  }
   for (const s of sets) files[mapName(board, s)] = drillMapSvg(board, s)
   files[`${board.name}-drill-report.txt`] = drillReport(board, sets, date)
   files[`${board.name}-job.gbrjob`] = gerberJob(board, gerbers, date, drills)
@@ -142,13 +203,18 @@ export function buildFab(board: Board, date = fabDate(), opts: { root?: string; 
   const warnings = board.drc.filter(d => d.severity === 'warning')
   const ercErrors = board.erc.filter(d => d.severity === 'error')
   const ercWarnings = board.erc.filter(d => d.severity === 'warning')
-  const bom = bomRows(board), tags = board.sourcingTags ?? []
+  const bom = bomRows(board),
+    tags = board.sourcingTags ?? []
   const dnp = board.footprints.filter(fp => fp.dnp).map(fp => fp.ref)
   const models = countModels(board.footprints.map(fp => ({ model: fp.model, height: fp.height ?? (bareHole(board, fp) ? 0 : 1) })))
   const sourcing = `Sourcing: ${tags.length ? `tags ${tags.join(', ')}` : 'no tags, MPN only'}; ${bom.length} row${bom.length === 1 ? '' : 's'}, ${bom.filter(r => r.sourcing.mpn === null).length} without a part number`
   const readme = [
     `${board.name}${board.revision ? ` ${board.revision}` : ''}: fabrication set (pcbjs)`,
-    ...(board.variant ? [`Target ${board.variant.name}${board.variant.fab ? `, fab ${board.variant.fab}` : ''}, ${board.variant.index + 1} of ${board.variant.names.length}: ${board.variant.names.join(', ')}`] : []),
+    ...(board.variant
+      ? [
+          `Target ${board.variant.name}${board.variant.fab ? `, fab ${board.variant.fab}` : ''}, ${board.variant.index + 1} of ${board.variant.names.length}: ${board.variant.names.join(', ')}`,
+        ]
+      : []),
     `Generated ${date} by pcbjs ${VERSION}`,
     '',
     `STATUS: ${errors.length || board.unconnected || ercErrors.length ? `NOT ORDERABLE, ${errors.length} DRC errors, ${board.unconnected} unconnected, ${ercErrors.length} ERC errors; the list is under Checks` : 'ORDERABLE'}`,
@@ -166,7 +232,9 @@ export function buildFab(board: Board, date = fabDate(), opts: { root?: string; 
     '',
     'Rules (mm)',
     ...RULE_LABELS.filter(([k]) => board.rules[k] !== undefined).map(([k, name]) => {
-      const r = board.rules, hc = r.holeClearanceBy, hh = r.minHoleToHoleBy
+      const r = board.rules,
+        hc = r.holeClearanceBy,
+        hh = r.minHoleToHoleBy
       return `  ${name.padEnd(18)} ${k === 'holeClearance' && hc ? `outer ${hc.outer}, inner ${hc.inner}${hc.via !== undefined ? `, via hole ${hc.via}` : ''}` : k === 'minHoleToHole' && hh ? `pad ${hh.pad}, via to via ${hh.via}` : k === 'maskWeb' && board.stackup?.maskColor ? `${r[k]}, ${board.stackup.maskColor.toLowerCase()} mask` : r[k]}`
     }),
     '',
@@ -177,7 +245,11 @@ export function buildFab(board: Board, date = fabDate(), opts: { root?: string; 
     'Checks',
     `  DRC: ${errors.length} errors, ${warnings.length} warnings, ${board.unconnected} unconnected`,
     `  ERC: ${ercErrors.length} errors, ${ercWarnings.length} warnings`,
-    ...(selfCheck ? [`  Gerber self check: ${selfCheck.findings.length ? `FAILED, ${selfCheck.findings.length} fab-mismatch error${selfCheck.findings.length === 1 ? '' : 's'}` : 'passed'}, ${selfCheck.layers.length} copper and outline files read back and compared with the board`] : []),
+    ...(selfCheck
+      ? [
+          `  Gerber self check: ${selfCheck.findings.length ? `FAILED, ${selfCheck.findings.length} fab-mismatch error${selfCheck.findings.length === 1 ? '' : 's'}` : 'passed'}, ${selfCheck.layers.length} copper and outline files read back and compared with the board`,
+        ]
+      : []),
     ...formatFindings([{ findings: boardFindings(board, opts.root ?? '') }], { all: true }),
     '',
     'Files',
@@ -192,7 +264,9 @@ export function buildFab(board: Board, date = fabDate(), opts: { root?: string; 
     ...(noPaste.length ? [`  No paste file for ${noPaste.map(l => (l.startsWith('F.') ? 'the top' : 'the bottom')).join(' or ')}: no SMD pads with paste on that side.`] : []),
     ...fontNotes(board),
     '',
-  ].filter(l => l !== null).join('\n')
+  ]
+    .filter(l => l !== null)
+    .join('\n')
   files['README-fab.txt'] = readme
   files['manifest.json'] = fabManifest(board, files, date)
   const label = (board.revision || 'dev').replace(/[^\w.+-]+/g, '_')

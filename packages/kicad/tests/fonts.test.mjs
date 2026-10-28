@@ -31,21 +31,32 @@ test('fonts: KiCad size 2 is a cap height of 1.4 x 2 x capHeight / unitsPerEm, t
   assert.equal(m.dy, Math.round((0.83 - m.size / 2) * 1e6) / 1e6)
 })
 
-test('import: Roboto Slab text is copied, licensed, named in fonts and lands on KiCad\'s ink', () => {
+test("import: Roboto Slab text is copied, licensed, named in fonts and lands on KiCad's ink", () => {
   const res = importBoard(board, { schematic: false, fontDirs: [fontDir] })
   assert.deepEqual([...res.copies.keys()], ['fonts/RobotoSlab-subset.ttf'])
   assert.match(res.files.get('fonts/LICENSES.md'), /RobotoSlab-subset\.ttf`: Roboto Slab, Copyright 2018 .*Apache License, Version 2\.0/)
   const pcb = res.files.get('pcb.tsx')
   assert.match(pcb, /fonts=\{\{ 'roboto-slab-bold': \{ file: '\.\/fonts\/RobotoSlab-subset\.ttf', weight: 700 \} \}\}/)
   assert.match(pcb, /<text layer="F\.SilkS" at="0 2\.374687" size=\{1\.990625\} font="roboto-slab-bold">© 2025 Yuxuan Zhang<\/text>/)
-  assert.match(pcb, /\{\/\* KiCad font "No Such Face" is not installed here: drawn in Hershey \*\/\}\n\s*<text layer="F\.SilkS" at="0 6" size=\{1\} thickness=\{0\.15\}>NOT HERE<\/text>/)
+  assert.match(
+    pcb,
+    /\{\/\* KiCad font "No Such Face" is not installed here: drawn in Hershey \*\/\}\n\s*<text layer="F\.SilkS" at="0 6" size=\{1\} thickness=\{0\.15\}>NOT HERE<\/text>/,
+  )
   assert.ok(res.notes.some(n => /"No Such Face" is drawn in Hershey/.test(n)))
 
   // the imported props compiled: the ink box of KiCad 9's render cache of the same text, within 0.03 mm
-  const b = compileBoard(h(PCB, { name: 'T', fonts: { 'roboto-slab-bold': { file: fontDir + 'RobotoSlab-subset.ttf', weight: 700 } } },
-    h('text', { layer: 'F.SilkS', at: '0 2.374687', size: 1.990625, font: 'roboto-slab-bold' }, '© 2025 Yuxuan Zhang'),
-    h('text', { layer: 'B.SilkS', at: '0 9.884281', size: 1.393438, font: 'roboto-slab-bold' }, 'V')))
-  const box = t => { const p = t.polys.flatMap(q => q.outer); return [Math.min(...p.map(q => q[0])), Math.max(...p.map(q => q[0])), Math.min(...p.map(q => q[1])), Math.max(...p.map(q => q[1]))] }
+  const b = compileBoard(
+    h(
+      PCB,
+      { name: 'T', fonts: { 'roboto-slab-bold': { file: fontDir + 'RobotoSlab-subset.ttf', weight: 700 } } },
+      h('text', { layer: 'F.SilkS', at: '0 2.374687', size: 1.990625, font: 'roboto-slab-bold' }, '© 2025 Yuxuan Zhang'),
+      h('text', { layer: 'B.SilkS', at: '0 9.884281', size: 1.393438, font: 'roboto-slab-bold' }, 'V'),
+    ),
+  )
+  const box = t => {
+    const p = t.polys.flatMap(q => q.outer)
+    return [Math.min(...p.map(q => q[0])), Math.max(...p.map(q => q[0])), Math.min(...p.map(q => q[1])), Math.max(...p.map(q => q[1]))]
+  }
   const [copy, stamp] = b.items.filter(i => i.kind === 'text')
   box(copy).forEach((v, i) => assert.ok(Math.abs(v - [-14.639915, 14.70635, 1.236294, 3.971814][i]) < 0.03, `© text ${i}: ${v}`))
   // the V of KiCad's "V0.1.2 | DEV" at size 1.4 on the back, mirrored as KiCad's (justify mirror): cap line and baseline
@@ -69,7 +80,10 @@ test('import: KiCad stroke text is font="newstroke", its at moved so the ink lan
   assert.equal(t.font, 'newstroke')
   const stem = t.strokes[0]
   const base = 5 + 0.415 * 1.2 - 0.052 * 0.25 + 1.2 / 21
-  assert.ok(Math.abs(stem[0][0] - (10 - 1.4 * 22 / 21 / 2 + 1.4 * 5 / 21)) < 1e-6 && Math.abs(stem[0][1] - base) < 1e-6 && Math.abs(stem[1][1] - (base - 1.2)) < 1e-6, JSON.stringify(stem))
+  assert.ok(
+    Math.abs(stem[0][0] - (10 - (1.4 * 22) / 21 / 2 + (1.4 * 5) / 21)) < 1e-6 && Math.abs(stem[0][1] - base) < 1e-6 && Math.abs(stem[1][1] - (base - 1.2)) < 1e-6,
+    JSON.stringify(stem),
+  )
   const l = compiled(left).strokes[0]
-  assert.ok(Math.abs(l[0][0] - (10 + 0.25 / 1.52 + 1.4 * 5 / 21)) < 1e-6 && Math.abs(l[0][1] - (5 + 1.2 + 1.2 / 21 - 0.013)) < 1e-6, JSON.stringify(l))
+  assert.ok(Math.abs(l[0][0] - (10 + 0.25 / 1.52 + (1.4 * 5) / 21)) < 1e-6 && Math.abs(l[0][1] - (5 + 1.2 + 1.2 / 21 - 0.013)) < 1e-6, JSON.stringify(l))
 })

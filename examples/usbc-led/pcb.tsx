@@ -30,13 +30,11 @@ export default (
   <PCB name="usbc-led" revision="0.1.0">
     {/* outline: 25 x 20 mm, 1 mm corners */}
     <path layer="Edge.Cuts" d={roundedRect(W, H, 1)} />
-
     {/* mounting holes, M2, one per corner */}
     <MountingHole ref="H1" at="2.5 2.5" />
     <MountingHole ref="H2" at="22.5 2.5" />
     <MountingHole ref="H3" at="2.5 17.5" />
     <MountingHole ref="H4" at="22.5 17.5" />
-
     {/* power in: USB-C on the top edge, CC pull-downs just below its pads */}
     <J1 at="12.5 3.65" />
     {/* GND and VBUS sit 0.15 mm apart at each end of the row, too close for a mask dam: one gang opening per pair */}
@@ -44,26 +42,22 @@ export default (
     <rect layer="F.Mask" x={13.6} y={6.95} w={1.95} h={1.4} fill />
     <R1 at="11.6 10.8 270deg" />
     <R2 at="13.4 10.8 270deg" />
-
     {/* 3.3 V regulator with its input and output caps */}
     <U1 at="12.5 14.5" />
     <C1 at="9 15 270deg" />
     <C2 at="16 15 270deg" />
-
     {/* indicators: red on 5 V, green on 3.3 V, left column */}
     <R3 at="5 6.5" />
     <D1 at="5 8.6" />
     <R4 at="5 10.9" />
     <D2 at="5 13" />
-
     {/* breakout: 1 3V3, 2 GND, 3 and 4 spare */}
     <J2 at="21.5 6" />
-
     {/* routes: VBUS by hand from the USB-C pad down to the LDO input, the rest autorouted */}
     {route(J1.VBUS, C1[1], 'V 8.8 H 9 Z').width(0.4)}
     {route('J1.A9', 'J1.B4', 'V 8.8 @B.Cu H 14 @F.Cu Z').width(0.4)}
     {route(U1.VIN, C1[1]).width(0.4)}
-    {route(U1.VIN, U1.EN).width(0.25).direct()}  {/* pin to pin, so the GND pin between them keeps its pour */}
+    {route(U1.VIN, U1.EN).width(0.25).direct()} {/* pin to pin, so the GND pin between them keeps its pour */}
     {route(J1.VBUS, R3[1]).width(0.3)}
     {route(R3[2], D1.A).width(0.25)}
     {route(U1.VOUT, C2[1]).width(0.4)}
@@ -72,18 +66,26 @@ export default (
     {route(R4[2], D2.A).width(0.25)}
     {route(J1.CC1, R1[1]).width(0.25)}
     {route(J1.CC2, R2[1]).width(0.25)}
-
     {/* ground: pours on both layers */}
     {/* laid out for solid pours: the regulator's ground pin sits inside a VBUS loop and would starve a thermal relief */}
     {pour(GND, 'F.Cu', rect(W, H), { connect: 'solid' })}
     {pour(GND, 'B.Cu', rect(W, H), { connect: 'solid' })}
-
     {/* silk */}
-    <text layer="F.SilkS" at="18.9 6" size={0.7}>3V3</text>
-    <text layer="F.SilkS" at="18.9 8.54" size={0.7}>GND</text>
-    <text layer="F.SilkS" at="7.6 8.6" size={0.7}>5V</text>
-    <text layer="F.SilkS" at="7.6 13" size={0.7}>3V3</text>
-    <text layer="F.SilkS" at="12.5 18.6" size={0.8}>usbc-led</text>
+    <text layer="F.SilkS" at="18.9 6" size={0.7}>
+      3V3
+    </text>
+    <text layer="F.SilkS" at="18.9 8.54" size={0.7}>
+      GND
+    </text>
+    <text layer="F.SilkS" at="7.6 8.6" size={0.7}>
+      5V
+    </text>
+    <text layer="F.SilkS" at="7.6 13" size={0.7}>
+      3V3
+    </text>
+    <text layer="F.SilkS" at="12.5 18.6" size={0.8}>
+      usbc-led
+    </text>
     <Brand at="10 13" height={4.5} layer="B.SilkS" />
   </PCB>
 )

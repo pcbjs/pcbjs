@@ -80,7 +80,14 @@ for (const dir of dirs) {
     failed++
     console.log(`FAIL  ${name}  ${secs} s`)
     for (const p of problems) console.log(`      ${p}`)
-    console.log(text.trim().split('\n').slice(-30).map(l => `      | ${l}`).join('\n'))
+    console.log(
+      text
+        .trim()
+        .split('\n')
+        .slice(-30)
+        .map(l => `      | ${l}`)
+        .join('\n'),
+    )
   } else console.log(`ok    ${name}  ${secs} s`)
 }
 

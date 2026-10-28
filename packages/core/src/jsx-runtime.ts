@@ -24,14 +24,26 @@ const ANCHORED = Symbol.for('pcbjs.model.anchored')
 function nodePath(): typeof import('node:path') | null {
   const p = (globalThis as any).process
   if (!p || typeof p.getBuiltinModule !== 'function') return null
-  try { return p.getBuiltinModule('node:path') } catch { return null }
+  try {
+    return p.getBuiltinModule('node:path')
+  } catch {
+    return null
+  }
 }
 
 /** True for a model file spec with a relative path that no file has claimed yet; a fetched source, `kicad:`, `lcsc:`, a URL or a KiCad variable, is no path. */
 function needsAnchor(m: unknown): boolean {
   if (!m || typeof m !== 'object' || (m as any)[ANCHORED]) return false
-  const k = (m as any).kind, f = (m as any).file ?? (m as any).step
-  return (k === undefined || k === 'step') && typeof f === 'string' && !!f.trim() && !f.startsWith('file:') && !/^([\\/]|[A-Za-z]:[\\/])/.test(f) && !/^(kicad:|lcsc:|https?:\/\/|\$\{)/i.test(f)
+  const k = (m as any).kind,
+    f = (m as any).file ?? (m as any).step
+  return (
+    (k === undefined || k === 'step') &&
+    typeof f === 'string' &&
+    !!f.trim() &&
+    !f.startsWith('file:') &&
+    !/^([\\/]|[A-Za-z]:[\\/])/.test(f) &&
+    !/^(kicad:|lcsc:|https?:\/\/|\$\{)/i.test(f)
+  )
 }
 
 /** A model spec anchored like an import: `file` keeps the path as written, `step` the absolute path; anything else unchanged. */
@@ -92,14 +104,21 @@ export function childList(c: unknown): readonly unknown[] | null {
   if (c === null || typeof c !== 'object' || isNode(c) || typeof (c as any)[Symbol.iterator] !== 'function') return null
   if (typeof (c as any).next !== 'function') return [...(c as Iterable<unknown>)]
   let got = READ.get(c)
-  if (!got) { got = [...(c as Iterable<unknown>)]; READ.set(c, got) }
+  if (!got) {
+    got = [...(c as Iterable<unknown>)]
+    READ.set(c, got)
+  }
   return got
 }
 
 export namespace JSX {
   export type Element = PcbNode
   export interface IntrinsicElements extends Intrinsics {}
-  export interface ElementChildrenAttribute { children: {} }
+  export interface ElementChildrenAttribute {
+    children: {}
+  }
   /** accepted on every element for list rendering; pcbjs ignores it */
-  export interface IntrinsicAttributes { key?: string | number }
+  export interface IntrinsicAttributes {
+    key?: string | number
+  }
 }

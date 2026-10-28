@@ -16,7 +16,11 @@ export const previewDir = (rel: string): string => `/__pcbjs/preview/${encodeURI
 export function previewRoute(path: string): { rel: string; file: string } | null {
   const m = /^preview\/([^/]+)\/(.+)$/.exec(path)
   if (!m) return null
-  try { return { rel: decodeURIComponent(m[1]), file: decodeURIComponent(m[2]) } } catch { return null }
+  try {
+    return { rel: decodeURIComponent(m[1]), file: decodeURIComponent(m[2]) }
+  } catch {
+    return null
+  }
 }
 
 /** What a default export is, for the preview. */
@@ -45,7 +49,9 @@ export function instantiate(def: any): unknown {
   const ports: Record<string, unknown> = {}
   const pool = nets()
   for (let i = 0; i < 64; i++) {
-    try { return def(ports) } catch (e: any) {
+    try {
+      return def(ports)
+    } catch (e: any) {
       const m = /the port (\w+) is not connected/.exec(String(e?.message ?? ''))
       if (!m || m[1] in ports) throw e
       ports[m[1]] = pool[m[1]]
@@ -85,8 +91,10 @@ export function previewRoot(exports: Record<string, unknown>, related: Record<st
 /** The same wrapped root with a rectangular Edge.Cuts outline `margin` mm around `bbox`, so the preview has a board to sit on. */
 export function withOutline(root: Child, bbox: { x: number; y: number; w: number; h: number }, margin = 2): Child {
   const node = root as any
-  const x0 = +(bbox.x - margin).toFixed(3), y0 = +(bbox.y - margin).toFixed(3)
-  const x1 = +(bbox.x + bbox.w + margin).toFixed(3), y1 = +(bbox.y + bbox.h + margin).toFixed(3)
+  const x0 = +(bbox.x - margin).toFixed(3),
+    y0 = +(bbox.y - margin).toFixed(3)
+  const x1 = +(bbox.x + bbox.w + margin).toFixed(3),
+    y1 = +(bbox.y + bbox.h + margin).toFixed(3)
   const edge = h('path', { layer: 'Edge.Cuts', d: `M ${x0} ${y0} H ${x1} V ${y1} H ${x0} Z` })
   return { ...node, children: [...node.children, edge] }
 }

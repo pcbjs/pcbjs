@@ -4,7 +4,8 @@ import * as THREE from 'three'
 export type Pose = { target: THREE.Vector3; r: number; polar: number; azimuth: number }
 
 export function poseOf(target: THREE.Vector3, position: THREE.Vector3): Pose {
-  const off = position.clone().sub(target), r = off.length() || 1
+  const off = position.clone().sub(target),
+    r = off.length() || 1
   return { target: target.clone(), r, polar: Math.acos(Math.max(-1, Math.min(1, off.z / r))), azimuth: Math.atan2(off.y, off.x) }
 }
 
@@ -16,17 +17,24 @@ export function positionOf(p: Pose): THREE.Vector3 {
 /** A fit that follows the separation from s0 to s1: at s1 the camera stands at `to`; a slider drag or a camera grab drops it. */
 export class StackFit {
   private move: { from: Pose; to: Pose; s0: number; s1: number } | null = null
-  get active() { return this.move !== null }
+  get active() {
+    return this.move !== null
+  }
   /** False when the separation does not move, so there is nothing to follow. */
   start(from: Pose, to: Pose, s0: number, s1: number): boolean {
-    if (s0 === s1) { this.move = null; return false }
+    if (s0 === s1) {
+      this.move = null
+      return false
+    }
     let az = to.azimuth
     while (az - from.azimuth > Math.PI) az -= 2 * Math.PI
     while (az - from.azimuth < -Math.PI) az += 2 * Math.PI
     this.move = { from, to: { ...to, azimuth: az }, s0, s1 }
     return true
   }
-  stop() { this.move = null }
+  stop() {
+    this.move = null
+  }
   /** The pose at separation s; the move ends when s reaches its target. */
   at(s: number): Pose | null {
     const m = this.move

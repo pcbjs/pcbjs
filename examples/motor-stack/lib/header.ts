@@ -8,25 +8,15 @@ export const ROWS = 10
 export const PITCH = 2.54
 
 // net per header pin, pin 1 first; odd pins are the first row
-export const B2B: readonly Net[] = [
-  V5, V5,
-  GND, GND,
-  nHA, nLA,
-  nHB, nLB,
-  nHC, nLC,
-  GND, GND,
-  ISA, ISB,
-  ISC, VSNS,
-  nFAULT, SD,
-  GND, GND,
-]
+export const B2B: readonly Net[] = [V5, V5, GND, GND, nHA, nLA, nHB, nLB, nHC, nLC, GND, GND, ISA, ISB, ISC, VSNS, nFAULT, SD, GND, GND]
 
 // Pin 1 of the driver header sits here, in the frame both boards share. Rows run along +y, the second column at +x.
 export const HEADER_AT = [8, 11] as const
 
 // The socket pin that lands on header pin n when the socket sits on the back, rotated 180deg, with its pin 1 at the header's last row.
 export function mate(n: number): number {
-  const r = Math.floor((n - 1) / 2), c = (n - 1) % 2
+  const r = Math.floor((n - 1) / 2),
+    c = (n - 1) % 2
   return 2 * (ROWS - 1 - r) + c + 1
 }
 
@@ -36,13 +26,17 @@ export const DRIVER_HEADER_AT = `${HEADER_AT[0]} ${HEADER_AT[1]}`
 
 export function driverHeader() {
   const pins: Record<number, Net> = {}
-  B2B.forEach((net, i) => { pins[i + 1] = net })
+  B2B.forEach((net, i) => {
+    pins[i + 1] = net
+  })
   return PinHeader(ROWS, { rows: 2, value: 'TSW-110-07-G-D', source: { MPN: 'TSW-110-07-G-D', Manufacturer: 'Samtec' } }).connect(pins)
 }
 
 export function controllerSocket() {
   const pins: Record<number, Net> = {}
-  B2B.forEach((net, i) => { pins[mate(i + 1)] = net })
+  B2B.forEach((net, i) => {
+    pins[mate(i + 1)] = net
+  })
   return PinSocket(ROWS, { rows: 2, value: 'SSW-110-01-G-D' }).source({ MPN: 'SSW-110-01-G-D', Manufacturer: 'Samtec' }).connect(pins)
 }
 

@@ -16,9 +16,14 @@ export default (
 )
 `
 const run = (code = fixture, id = '/p/main.tsx', file = 'main.tsx') => transformSourceRanges(code, id, file)
-const src = (file, line, col, endLine, endCol, lit) => `{ file: ${JSON.stringify(file)}, line: ${line}, col: ${col}, endLine: ${endLine}, endCol: ${endCol}${lit ? `, lit: { line: ${lit[0]}, col: ${lit[1]} }, raw: true` : ''} }`
+const src = (file, line, col, endLine, endCol, lit) =>
+  `{ file: ${JSON.stringify(file)}, line: ${line}, col: ${col}, endLine: ${endLine}, endCol: ${endCol}${lit ? `, lit: { line: ${lit[0]}, col: ${lit[1]} }, raw: true` : ''} }`
 // the `__src` objects of the output, in source order
-const srcs = code => [...code.matchAll(/\{ file: "([^"]+)", line: (\d+), col: (\d+), endLine: (\d+), endCol: (\d+)(?:, lit: \{ line: \d+, col: \d+ \}(?:, raw: true)?)? \}/g)].map(m => [m[1], ...m.slice(2).map(Number)])
+const srcs = code =>
+  [...code.matchAll(/\{ file: "([^"]+)", line: (\d+), col: (\d+), endLine: (\d+), endCol: (\d+)(?:, lit: \{ line: \d+, col: \d+ \}(?:, raw: true)?)? \}/g)].map(m => [
+    m[1],
+    ...m.slice(2).map(Number),
+  ])
 
 test('source ranges: a self-closing element gets __src as its last attribute', () => {
   const { code } = run()
@@ -115,7 +120,7 @@ test('source ranges: the output still compiles with the automatic JSX runtime, a
   assert.ok(r.map.mappings.length > 0)
 })
 
-const git = answers => (args) => answers[args.join(' ')] ?? null
+const git = answers => args => answers[args.join(' ')] ?? null
 
 test('repo: kind inferred from the host', () => {
   assert.equal(repoKind('https://github.com/org/x'), 'github')
@@ -136,16 +141,23 @@ test('repo: URLs normalised', () => {
 
 test('repo: ref and dir from the options win over git', () => {
   const g = git({ 'rev-parse --abbrev-ref HEAD': 'dev', 'rev-parse --show-prefix': 'hw/board/' })
-  assert.deepEqual(resolveRepo({ url: 'https://github.com/o/x', ref: 'v1.0', dir: './boards/a' }, '/p', g),
-    { url: 'https://github.com/o/x', kind: 'github', ref: 'v1.0', dir: 'boards/a/' })
-  assert.deepEqual(resolveRepo({ url: 'https://example.com/x', kind: 'gitea', dir: '' }, '/p', g),
-    { url: 'https://example.com/x', kind: 'gitea', ref: 'dev', dir: '' })
+  assert.deepEqual(resolveRepo({ url: 'https://github.com/o/x', ref: 'v1.0', dir: './boards/a' }, '/p', g), {
+    url: 'https://github.com/o/x',
+    kind: 'github',
+    ref: 'v1.0',
+    dir: 'boards/a/',
+  })
+  assert.deepEqual(resolveRepo({ url: 'https://example.com/x', kind: 'gitea', dir: '' }, '/p', g), { url: 'https://example.com/x', kind: 'gitea', ref: 'dev', dir: '' })
 })
 
 test('repo: ref from git is the branch, else the sha, else main; dir from the work tree prefix', () => {
   const sha = 'a'.repeat(40)
-  assert.deepEqual(resolveRepo('https://github.com/o/x', '/p', git({ 'rev-parse --abbrev-ref HEAD': 'feat', 'rev-parse --show-prefix': 'hw/' })),
-    { url: 'https://github.com/o/x', kind: 'github', ref: 'feat', dir: 'hw/' })
+  assert.deepEqual(resolveRepo('https://github.com/o/x', '/p', git({ 'rev-parse --abbrev-ref HEAD': 'feat', 'rev-parse --show-prefix': 'hw/' })), {
+    url: 'https://github.com/o/x',
+    kind: 'github',
+    ref: 'feat',
+    dir: 'hw/',
+  })
   assert.equal(resolveRepo('https://github.com/o/x', '/p', git({ 'rev-parse --abbrev-ref HEAD': 'HEAD', 'rev-parse HEAD': sha })).ref, sha)
   assert.equal(resolveRepo('https://github.com/o/x', '/p', git({})).ref, 'main')
   assert.equal(resolveRepo(undefined, '/p', git({})), undefined)

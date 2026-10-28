@@ -5,8 +5,16 @@ import { strokeText } from './text.js'
 export type PinSide = 'left' | 'right' | 'top' | 'bottom'
 
 /** One pin of a symbol: `end` is where a wire connects, `side` the way the pin points out of the body. */
-export interface SymbolPin { name: string; end: Pt; side: PinSide; length: number }
-export interface SymbolShape { d: string; fill?: boolean }
+export interface SymbolPin {
+  name: string
+  end: Pt
+  side: PinSide
+  length: number
+}
+export interface SymbolShape {
+  d: string
+  fill?: boolean
+}
 /** A resolved symbol, grid units in its own frame. */
 export interface SymbolDef {
   $$: 'symbol'
@@ -20,7 +28,11 @@ export interface SymbolDef {
   names: boolean
 }
 
-export interface SymbolPinSpec { side: PinSide; at: number; length?: number }
+export interface SymbolPinSpec {
+  side: PinSide
+  at: number
+  length?: number
+}
 /** `defineSymbol` input: pins on the sides of a box `size` units large, `at` counted from its top or left corner. */
 export interface SymbolSpec<P extends string = string> {
   pins: { readonly [K in P]: SymbolPinSpec }
@@ -68,12 +80,18 @@ export function defineSymbol<const P extends string>(spec: SymbolSpec<P>): Symbo
     const end: Pt = p.side === 'left' ? [-l, p.at] : p.side === 'right' ? [w + l, p.at] : p.side === 'top' ? [p.at, -l] : [p.at, h + l]
     return { name, end, side: p.side, length: l }
   })
-  const body = box ? [{ d: `M0 0H${w}V${h}H0Z` }] : (typeof spec.body === 'string' ? [spec.body] : [...spec.body as readonly string[]]).map(d => ({ d }))
+  const body = box ? [{ d: `M0 0H${w}V${h}H0Z` }] : (typeof spec.body === 'string' ? [spec.body] : [...(spec.body as readonly string[])]).map(d => ({ d }))
   return { $$: 'symbol', kind: box ? 'box' : 'custom', pins: out, body, box: [0, 0, w, h], names }
 }
 
 /** What the default symbol of a part goes by. */
-export interface SymbolPart { prefix: string; pins: readonly string[]; id?: string; value?: string; name?: string }
+export interface SymbolPart {
+  prefix: string
+  pins: readonly string[]
+  id?: string
+  value?: string
+  name?: string
+}
 
 const GROUND = /^(A|D|P|S|C)?GND\w*$|^GND[A-Z]?$|^VSS\w*$|^V-$|^0V$|^EP$|^PAD$|^SHIELD$|^MH\d*$/i
 const POWER = /^(VCC|VDD|VBUS|VBAT|VIN|VSYS|VREG|VIO|VCORE|VPP|VREF|VUSB|AVDD|DVDD|IOVDD|V\+|\+)\w*$|^V(CC|DD)\w*$|^\+?\d+V\d*$|^\d+V\d+$|^3V3$|^VDD\w*$|^V\d+V\d*$/i
@@ -98,7 +116,7 @@ export function boxSymbol(pins: readonly string[]): SymbolDef {
   } else {
     for (const p of pins) sides[pinSide(p)].push(p)
     // a lopsided box is tall and thin: move the tail of the longer side across
-    const [a, b] = sides.left.length >= sides.right.length ? ['left', 'right'] as const : ['right', 'left'] as const
+    const [a, b] = sides.left.length >= sides.right.length ? (['left', 'right'] as const) : (['right', 'left'] as const)
     if (sides[a].length > 2 * sides[b].length + 2) {
       const move = Math.floor((sides[a].length - sides[b].length) / 2)
       sides[b].push(...sides[a].splice(sides[a].length - move))
@@ -112,11 +130,17 @@ export function boxSymbol(pins: readonly string[]): SymbolDef {
   const across = Math.max(sides.top.length, sides.bottom.length)
   const w = Math.max(4, across + 1, Math.ceil(wide('left') + wide('right') + 1.6))
   const spec: Record<string, SymbolPinSpec> = {}
-  sides.left.forEach((p, i) => { spec[p] = { side: 'left', at: top0 + 1 + i } })
-  sides.right.forEach((p, i) => { spec[p] = { side: 'right', at: top0 + 1 + i } })
+  sides.left.forEach((p, i) => {
+    spec[p] = { side: 'left', at: top0 + 1 + i }
+  })
+  sides.right.forEach((p, i) => {
+    spec[p] = { side: 'right', at: top0 + 1 + i }
+  })
   const spread = (list: string[], side: PinSide) => {
     const x0 = Math.floor((w - (list.length - 1)) / 2)
-    list.forEach((p, i) => { spec[p] = { side, at: x0 + i } })
+    list.forEach((p, i) => {
+      spec[p] = { side, at: x0 + i }
+    })
   }
   spread(sides.top, 'top')
   spread(sides.bottom, 'bottom')
@@ -126,7 +150,9 @@ export function boxSymbol(pins: readonly string[]): SymbolDef {
 /** A connector as one column of pins pointing right, in pin order. */
 export function rowSymbol(pins: readonly string[]): SymbolDef {
   const spec: Record<string, SymbolPinSpec> = {}
-  pins.forEach((p, i) => { spec[p] = { side: 'right', at: i + 1 } })
+  pins.forEach((p, i) => {
+    spec[p] = { side: 'right', at: i + 1 }
+  })
   const w = Math.max(2, Math.ceil(Math.max(...pins.map(p => textUnits(p))) + 1))
   return { ...defineSymbol({ pins: spec, size: [w, pins.length + 1] }), kind: 'connector' }
 }
@@ -145,31 +171,52 @@ export const SYMBOLS = {
   capacitor: (a: string, b: string) => twoPin('capacitor', a, b, [{ d: 'M-1 0H-0.2M0.2 0H1M-0.2 -0.8V0.8M0.2 -0.8V0.8' }]),
   inductor: (a: string, b: string) => twoPin('inductor', a, b, [{ d: 'M-1 0A0.25 0.25 0 0 1 -0.5 0A0.25 0.25 0 0 1 0 0A0.25 0.25 0 0 1 0.5 0A0.25 0.25 0 0 1 1 0' }]),
   diode: (anode: string, cathode: string) => twoPin('diode', anode, cathode, [{ d: 'M-1 0H1' }, { d: 'M-0.5 -0.6L0.5 0L-0.5 0.6Z', fill: true }, { d: 'M0.5 -0.6V0.6' }]),
-  led: (anode: string, cathode: string) => twoPin('led', anode, cathode, [{ d: 'M-1 0H1' }, { d: 'M-0.5 -0.6L0.5 0L-0.5 0.6Z', fill: true }, { d: 'M0.5 -0.6V0.6' }, { d: ARROWS }]),
+  led: (anode: string, cathode: string) =>
+    twoPin('led', anode, cathode, [{ d: 'M-1 0H1' }, { d: 'M-0.5 -0.6L0.5 0L-0.5 0.6Z', fill: true }, { d: 'M0.5 -0.6V0.6' }, { d: ARROWS }]),
   crystal: (a: string, b: string, gnd?: string): SymbolDef => {
     const s = twoPin('crystal', a, b, [{ d: 'M-1 0H-0.6M0.6 0H1M-0.6 -0.8V0.8M0.6 -0.8V0.8M-0.35 -1H0.35V1H-0.35Z' }])
-    if (gnd) { s.pins.push(pin(gnd, [0, 2], 'bottom', 1)); s.box = [-1, -1, 1, 1] }
+    if (gnd) {
+      s.pins.push(pin(gnd, [0, 2], 'bottom', 1))
+      s.box = [-1, -1, 1, 1]
+    }
     return s
   },
-  switch: (a: string, b: string) => twoPin('switch', a, b, [{ d: 'M-1 0H-0.8M0.8 0H1M-0.6 0L0.6 -0.7' }, { d: 'M-0.6 0m-0.2 0a0.2 0.2 0 1 0 0.4 0a0.2 0.2 0 1 0 -0.4 0M0.8 0m-0.2 0a0.2 0.2 0 1 0 0.4 0a0.2 0.2 0 1 0 -0.4 0' }]),
+  switch: (a: string, b: string) =>
+    twoPin('switch', a, b, [
+      { d: 'M-1 0H-0.8M0.8 0H1M-0.6 0L0.6 -0.7' },
+      { d: 'M-0.6 0m-0.2 0a0.2 0.2 0 1 0 0.4 0a0.2 0.2 0 1 0 -0.4 0M0.8 0m-0.2 0a0.2 0.2 0 1 0 0.4 0a0.2 0.2 0 1 0 -0.4 0' },
+    ]),
   battery: (plus: string, minus: string): SymbolDef => ({
-    $$: 'symbol', kind: 'battery', names: false, box: [-0.8, -1, 0.8, 1],
+    $$: 'symbol',
+    kind: 'battery',
+    names: false,
+    box: [-0.8, -1, 0.8, 1],
     pins: [pin(plus, [0, -2], 'top', 1), pin(minus, [0, 2], 'bottom', 1)],
     body: [{ d: 'M0 -1V-0.25M0 0.25V1M-0.8 -0.25H0.8M-0.4 0.25H0.4M-0.25 -0.75H0.25M0 -1V-0.5' }],
   }),
   npn: (b: string, c: string, e: string): SymbolDef => ({
-    $$: 'symbol', kind: 'npn', names: false, box: [-1, -1.2, 1.4, 1.2],
+    $$: 'symbol',
+    kind: 'npn',
+    names: false,
+    box: [-1, -1.2, 1.4, 1.2],
     pins: [pin(b, [-2, 0], 'left', 2), pin(c, [1, -2], 'top', 1), pin(e, [1, 2], 'bottom', 1)],
     body: [{ d: 'M0 -0.7V0.7M0 -0.3L1 -1M0 0.3L1 1M1.4 0A1.2 1.2 0 1 0 1.4 0.001' }, { d: 'M1 1L0.55 0.95L0.8 0.6Z', fill: true }],
   }),
   nfet: (g: string, d: string, s: string): SymbolDef => ({
-    $$: 'symbol', kind: 'nfet', names: false, box: [-0.2, -1, 1, 1],
+    $$: 'symbol',
+    kind: 'nfet',
+    names: false,
+    box: [-0.2, -1, 1, 1],
     pins: [pin(g, [-2, 0], 'left', 1.8), pin(d, [1, -2], 'top', 1), pin(s, [1, 2], 'bottom', 1)],
     body: [{ d: 'M-0.2 -0.6V0.6M0.1 -0.7V-0.3M0.1 -0.2V0.2M0.1 0.3V0.7M0.1 -0.5H1V-1M0.1 0.5H1V1M0.1 0H1V0.5' }, { d: 'M0.1 0L0.5 -0.2V0.2Z', fill: true }],
   }),
   testpoint: (a: string): SymbolDef => ({
-    $$: 'symbol', kind: 'testpoint', names: false, box: [-0.4, -0.8, 0.4, 0],
-    pins: [pin(a, [0, 1], 'bottom', 1)], body: [{ d: 'M0 0m-0.4 -0.4a0.4 0.4 0 1 0 0.8 0a0.4 0.4 0 1 0 -0.8 0' }],
+    $$: 'symbol',
+    kind: 'testpoint',
+    names: false,
+    box: [-0.4, -0.8, 0.4, 0],
+    pins: [pin(a, [0, 1], 'bottom', 1)],
+    body: [{ d: 'M0 0m-0.4 -0.4a0.4 0.4 0 1 0 0.8 0a0.4 0.4 0 1 0 -0.8 0' }],
   }),
 } as const
 
@@ -177,7 +224,8 @@ const by = (pins: readonly string[], re: RegExp) => pins.find(p => re.test(p))
 
 /** The default symbol of a part: by its prefix, pin names and footprint, else a generic box. */
 export function autoSymbol(p: SymbolPart): SymbolDef {
-  const pins = p.pins, n = pins.length
+  const pins = p.pins,
+    n = pins.length
   const prefix = p.prefix.toUpperCase()
   const tag = `${p.id ?? ''} ${p.name ?? ''}`
   if (n === 2) {
@@ -194,14 +242,21 @@ export function autoSymbol(p: SymbolPart): SymbolDef {
     }
     if (prefix === 'BT') {
       const plus = by(pins, /^(\+|P|POS|VBAT|1)$/i) ?? a
-      return SYMBOLS.battery(plus, pins.find(x => x !== plus)!)
+      return SYMBOLS.battery(
+        plus,
+        pins.find(x => x !== plus)!,
+      )
     }
   }
   if (n === 3 && prefix === 'Q') {
     const role = (re: RegExp) => by(pins, re)
-    const g = role(/^G(ATE)?$/i), d = role(/^D(RAIN)?$/i), s = role(/^S(OURCE)?$/i)
+    const g = role(/^G(ATE)?$/i),
+      d = role(/^D(RAIN)?$/i),
+      s = role(/^S(OURCE)?$/i)
     if (g && d && s) return SYMBOLS.nfet(g, d, s)
-    const b = role(/^B(ASE)?$/i), c = role(/^C(OLLECTOR)?$/i), e = role(/^E(MITTER)?$/i)
+    const b = role(/^B(ASE)?$/i),
+      c = role(/^C(OLLECTOR)?$/i),
+      e = role(/^E(MITTER)?$/i)
     if (b && c && e) return SYMBOLS.npn(b, c, e)
     // SOT-23 numbering: 1 base or gate, 2 emitter or source, 3 collector or drain
     if (pins.includes('1') && pins.includes('2') && pins.includes('3'))
@@ -209,7 +264,10 @@ export function autoSymbol(p: SymbolPart): SymbolDef {
   }
   if (n === 3 && (prefix === 'Y' || prefix === 'X')) {
     const g = by(pins, GROUND)
-    if (g) { const [a, b] = pins.filter(x => x !== g); return SYMBOLS.crystal(a, b, g) }
+    if (g) {
+      const [a, b] = pins.filter(x => x !== g)
+      return SYMBOLS.crystal(a, b, g)
+    }
   }
   if (n === 1 && (prefix === 'TP' || prefix === 'H' || prefix === 'MH')) return SYMBOLS.testpoint(pins[0])
   if ((prefix === 'J' || prefix === 'P' || prefix === 'CN' || prefix === 'TP') && pins.every(x => /^\d+$/.test(x))) return rowSymbol(pins)

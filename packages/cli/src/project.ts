@@ -42,7 +42,14 @@ export function importedFiles(server: ViteDevServer, file: string): Set<string> 
   return seen
 }
 
-export interface Compiled { entry: Entry; board: Board; fab: FabSet; site: SiteData; svg: string; ms: number }
+export interface Compiled {
+  entry: Entry
+  board: Board
+  fab: FabSet
+  site: SiteData
+  svg: string
+  ms: number
+}
 
 /** The path segments of a board's own directory: `[name]`, or `[name, slug]` for one target of a board with variants. */
 export function boardDir(board: Pick<Board, 'name' | 'variant'>): string[] {
@@ -69,7 +76,14 @@ function phaseSum(b: Board): number {
 }
 
 /** Compile one entry: one Compiled per fab target, a single one for a board without variants. A `draft` leaves the route files as they are; `progress` follows the router. */
-export async function compileEntry(server: ViteDevServer, cfg: ResolvedConfig, entry: Entry, dev: boolean, draft = false, progress?: CompileOptions['progress']): Promise<Compiled[]> {
+export async function compileEntry(
+  server: ViteDevServer,
+  cfg: ResolvedConfig,
+  entry: Entry,
+  dev: boolean,
+  draft = false,
+  progress?: CompileOptions['progress'],
+): Promise<Compiled[]> {
   const t0 = performance.now()
   setSourceMapper(sourceMapper(server))
   const mod = await server.ssrLoadModule(entry.file, { fixStacktrace: true })
@@ -78,7 +92,13 @@ export async function compileEntry(server: ViteDevServer, cfg: ResolvedConfig, e
   root = await root
   if (!root) throw new CompileError(`${entry.rel} has no default export (export default <PCB …>)`)
   const t1 = performance.now()
-  const boards = compileBoards(root, { files: importedFiles(server, entry.file), routeCache: { dir: join(cfg.root, '.pcbjs', 'routes'), draft }, references: referenceResolver(cfg.root, entry.file), modelBox: modelBoxLoader(cfg.root), progress })
+  const boards = compileBoards(root, {
+    files: importedFiles(server, entry.file),
+    routeCache: { dir: join(cfg.root, '.pcbjs', 'routes'), draft },
+    references: referenceResolver(cfg.root, entry.file),
+    modelBox: modelBoxLoader(cfg.root),
+    progress,
+  })
   const t2 = performance.now()
   // shared routing runs on the lead target alone, so only loading and flattening are split evenly between targets
   const phases = boards.map(b => phaseSum(b))
@@ -90,8 +110,11 @@ export async function compileEntry(server: ViteDevServer, cfg: ResolvedConfig, e
     const errors = board.drc.filter(d => d.severity === 'error').length + board.erc.filter(d => d.severity === 'error').length
     const urls = boardUrls(board.name, fab.zipName, dev, boardDir(board)[1])
     const site = siteData(board, {
-      root: cfg.root, dev,
-      fabUrl: urls.fab, fabName: fab.zipName, fabFiles: Object.keys(fab.files).sort(),
+      root: cfg.root,
+      dev,
+      fabUrl: urls.fab,
+      fabName: fab.zipName,
+      fabFiles: Object.keys(fab.files).sort(),
       fabStatus: errors || board.unconnected ? 'incomplete' : 'ok',
       svgUrl: urls.svg,
       bom: bomRows(board),
@@ -109,7 +132,12 @@ export async function compileEntry(server: ViteDevServer, cfg: ResolvedConfig, e
 }
 
 /** A transient board: the isolated preview of a file no board imports, the first target only. */
-export interface Preview { file: string; rel: string; kind: PreviewKind; compiled: Compiled }
+export interface Preview {
+  file: string
+  rel: string
+  kind: PreviewKind
+  compiled: Compiled
+}
 
 /** Compile a file's default export as the board `preview:<rel>`; null when previewRoot cannot show it. */
 export async function compilePreview(server: ViteDevServer, cfg: ResolvedConfig, file: string, rel: string): Promise<Preview | null> {
@@ -120,7 +148,11 @@ export async function compilePreview(server: ViteDevServer, cfg: ResolvedConfig,
   const related: Record<string, unknown>[] = []
   for (const f of importedFiles(server, file)) {
     if (f === file || !f.startsWith(cfg.root) || f.includes('/node_modules/')) continue
-    try { related.push(await server.ssrLoadModule(f)) } catch { /* not needed */ }
+    try {
+      related.push(await server.ssrLoadModule(f))
+    } catch {
+      /* not needed */
+    }
   }
   const found = previewRoot(mod as Record<string, unknown>, related)
   if (!found) return null
@@ -134,8 +166,11 @@ export async function compilePreview(server: ViteDevServer, cfg: ResolvedConfig,
   const dir = previewDir(rel)
   const errors = board.drc.filter(d => d.severity === 'error').length + board.erc.filter(d => d.severity === 'error').length
   const site = siteData(board, {
-    root: cfg.root, dev: true,
-    fabUrl: `${dir}/fab/${encodeURIComponent(fab.zipName)}`, fabName: fab.zipName, fabFiles: Object.keys(fab.files).sort(),
+    root: cfg.root,
+    dev: true,
+    fabUrl: `${dir}/fab/${encodeURIComponent(fab.zipName)}`,
+    fabName: fab.zipName,
+    fabFiles: Object.keys(fab.files).sort(),
     fabStatus: errors || board.unconnected ? 'incomplete' : 'ok',
     svgUrl: `${dir}/board.pcb.svg`,
     bom: bomRows(board),
@@ -150,7 +185,10 @@ export async function compilePreview(server: ViteDevServer, cfg: ResolvedConfig,
 export function writeFab(c: Compiled, dir: string): string[] {
   mkdirSync(dir, { recursive: true })
   const names: string[] = []
-  for (const [name, text] of Object.entries(c.fab.files)) { writeFileSync(join(dir, name), text); names.push(name) }
+  for (const [name, text] of Object.entries(c.fab.files)) {
+    writeFileSync(join(dir, name), text)
+    names.push(name)
+  }
   writeFileSync(join(dir, c.fab.zipName), zipFab(c.fab))
   names.push(c.fab.zipName)
   return names
