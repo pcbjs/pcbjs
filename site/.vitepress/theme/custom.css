@@ -3,7 +3,6 @@
   --vp-c-brand-2: #26915c;
   --vp-c-brand-3: #2aa366;
   --vp-c-brand-soft: rgba(42, 163, 102, 0.14);
-  --vp-home-hero-name-color: transparent;
   --vp-home-hero-name-background: linear-gradient(120deg, #1f7a4d 20%, #c9a227);
 }
 .dark {
@@ -17,35 +16,4 @@
 :root {
   --pcb-canvas: var(--vp-c-bg-alt);
   --pcb-substrate: #1b2129;
-}
-.board-pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  margin: 24px 0;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid var(--vp-c-divider);
-  background: var(--vp-c-divider);
-}
-.board-pair > * {
-  background: var(--pcb-canvas);
-}
-@media (max-width: 640px) {
-  .board-pair {
-    grid-template-columns: 1fr;
-  }
-}
-.VPHero .hero-board {
-  --pcb-canvas: transparent;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 320px;
-}
-@media (min-width: 960px) {
-  .VPHero .hero-board {
-    width: 400px;
-  }
 }

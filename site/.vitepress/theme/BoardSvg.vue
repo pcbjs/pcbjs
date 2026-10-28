@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { defineAsyncComponent, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
-import { data as projects, type View } from '../../examples.data'
+import { data as aspects } from '../../aspects.data'
+import type { View } from '../../examples.data'
 
 const props = defineProps<{ id: string; view: View; label: string; lazy?: boolean }>()
 
@@ -8,7 +9,7 @@ const props = defineProps<{ id: string; view: View; label: string; lazy?: boolea
 const svgs = import.meta.glob<{ default: Component }>('../../.gallery/*.svg')
 const load = svgs[`../../.gallery/${props.id}-${props.view}.svg`]
 const svg = load ? defineAsyncComponent(load) : null
-const aspect = projects.flatMap(p => p.boards).find(b => b.id === props.id)?.aspect[props.view] ?? 1
+const aspect = aspects[props.id]?.[props.view] ?? 1
 
 // a lazy board is a sized placeholder on the server and until it nears the viewport
 const root = ref<HTMLElement | null>(null)

@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@zhangyx1998/svg-loader": "^0.0.3",
+    "shiki": "^2.5.0",
     "vitepress": "^1.6.4"
   }
 }

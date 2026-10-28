@@ -8,6 +8,7 @@ const LABEL = { '2d': '2D', sch: 'Schematic' } as const
 const shown = (id: string) => view[id] ?? '2d'
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const seconds = (ms: number) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`)
+const first = (s: string) => /^.*?\.(?=\s|$)/.exec(s)?.[0] ?? s
 const md = (s: string) =>
   s
     .replace(/&/g, '&amp;')
@@ -20,8 +21,8 @@ const md = (s: string) =>
     <h2 :id="p.project.replace('/', '-')">
       <a :href="p.source" target="_blank" rel="noreferrer">examples/{{ p.project }}</a>
     </h2>
-    <p v-if="p.about" class="about" v-html="md(p.about)" />
-    <p v-if="p.known && p.known !== 'none'" class="known"><strong>Known findings:</strong> <span v-html="md(p.known)" /></p>
+    <p v-if="p.about" class="about" v-html="md(first(p.about))" />
+    <p v-if="p.known && p.known !== 'none'" class="known"><strong>Known findings:</strong> <span v-html="md(first(p.known))" /></p>
     <div class="cards">
       <article v-for="b in p.boards" :key="b.id" class="card">
         <div class="shot">

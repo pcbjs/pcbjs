@@ -1,36 +1,76 @@
 // Compiles the project in the working directory as `pcbjs check` does and writes, for the gallery, report.json and each board's SVGs, named in its `svg`.
-// Usage: node compile.mjs <out>; boards.mjs runs it once per project, since a project's defaults live on globalThis.
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+// With --map <entry>, that board keeps its item ids in the SVGs and gets <n>.map.json, its source ranges with a chip label each, and its fab file list.
+// Usage: node compile.mjs <out> [--map <entry>]...; boards.mjs runs it once per project, since a project's defaults live on globalThis.
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join, relative, resolve } from 'node:path'
 import { resolveConfig } from '@pcbjs/cli/config'
 import { pluginState } from '@pcbjs/cli/plugin'
 import { compileServer, compileSlots, reportOf } from '@pcbjs/cli/check'
 import { boardSvg } from '@pcbjs/export/svg'
+import { sourceIndex } from '@pcbjs/export/site-data'
+import { buildFab } from '@pcbjs/export/fab'
 import { schematicMarkup, schematicStyle } from '@pcbjs/export/sch-svg'
 
-const out = resolve(process.argv[2])
+const [dir, ...rest] = process.argv.slice(2)
+const out = resolve(dir)
+const mapped = new Set(rest.filter((a, i) => rest[i - 1] === '--map'))
 // the layers of a top view; the rest of the board SVG is for tools, not for the gallery
 const SHOWN = new Set(['B.Cu', 'F.Cu', 'F.SilkS', 'Edge.Cuts', 'holes'])
 // 0.01 mm is below a pixel at any size the site draws a board
 const coarse = svg => svg.replace(/-?\d+\.\d{3,}/g, n => String(Math.round(Number(n) * 100) / 100))
 
-/** The board in CSS variables, its top view only, without the metadata, the pcb: namespace and the data attributes. */
-function pcbSvg(board) {
+/** The board in CSS variables, its top view only, without the metadata, the pcb: namespace and the data attributes; `ids` keeps data-id, data-ref and data-pad. */
+function pcbSvg(board, ids) {
+  const kept = ids ? /^data-(?:id|ref|pad)$/ : /^$/
   return coarse(boardSvg(board, { vars: true }))
     .replace(/^<\?xml[^>]*>\n/, '')
     .replace(/\s*<metadata>[\s\S]*?<\/metadata>/, '')
     .replace(/\s*<g pcb:layer="([^"]+)"[^>]*>[\s\S]*?<\/g>/g, (g, id) => (SHOWN.has(id) ? g : ''))
-    .replace(/ (?:pcb:[a-z]+|data-[a-z]+|xmlns:pcb)="[^"]*"/g, '')
+    .replace(/ (pcb:[a-z]+|data-[a-z]+|xmlns:pcb)="[^"]*"/g, (a, name) => (kept.test(name) ? a : ''))
     .replace(/ width="[^"]*mm" height="[^"]*mm"/, '')
     .replace(/\n\s*\n/g, '\n')
 }
 
-/** The schematic in `--sch-*` variables, which the site's themes set. */
-function schSvg(board) {
+/** The schematic in `--sch-*` variables, which the site's themes set; `ids` keeps each symbol's data-ref. */
+function schSvg(board, ids) {
   const d = board.schematic.drawing
   const [x0, y0, x1, y1] = d.page
-  const markup = schematicMarkup(d, board).replace(/ data-[a-z]+="[^"]*"/g, '')
+  const marked = ids ? schematicMarkup(d, board).replace(/(<g class="sch-sym"[^>]*?) data-ref=/g, '$1 sym-ref=') : schematicMarkup(d, board)
+  const markup = marked.replace(/ data-[a-z]+="[^"]*"/g, '').replace(/ sym-ref=/g, ' data-ref=')
   return coarse(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" class="sch-board">\n<style>${schematicStyle()}</style>\n${markup}\n</svg>\n`)
+}
+
+/** What the editor's chip would name a source range: the part, the path command or the kind of item and its net. */
+function chip(r, board, text) {
+  const items = r.ids.map(id => board.items[id - 1]).filter(Boolean)
+  const net = items.find(it => it.net)?.net
+  const zone = items.find(it => it.kind === 'zone')
+  if (r.seg) return `route ${net} · ${r.seg}`
+  if (r.refs.length) return r.refs.join(', ')
+  const tag = /^<([A-Z]\w*)/.exec(text)?.[1]
+  if (tag) return tag
+  if (/^route\(/.test(text)) return `route ${net}`
+  if (/^via\(/.test(text)) return `via ${net}`
+  if (zone) return `pour ${net} ${zone.layer}`
+  if (items.every(it => it.kind === 'track' || it.kind === 'via')) return `route ${net} · ${text}`
+  if (items.every(it => it.kind === 'text')) return `text ${items[0].text}`
+  if (items.every(it => it.layer === 'Edge.Cuts')) return 'outline'
+  return [...new Set(items.map(it => it.kind))].join(', ')
+}
+
+/** The ranges of the entry file itself, each with its source text's chip; 1-based lines, columns end inclusive. */
+function sourceMap(board, entry, root) {
+  const file = relative(root, entry)
+  const lines = readFileSync(entry, 'utf8').split('\n')
+  const textOf = r => (r.start[0] === r.end[0] ? lines[r.start[0] - 1].slice(r.start[1] - 1, r.end[1]) : lines[r.start[0] - 1].slice(r.start[1] - 1))
+  const ranges = sourceIndex(board, p => relative(root, resolve(root, p)))[file] ?? []
+  return { file, ranges: ranges.map(r => ({ start: r.start, end: r.end, ids: r.ids, refs: r.refs, chip: chip(r, board, textOf(r)) })) }
+}
+
+/** The fab set's file names and the STATUS line of its README. */
+function fabList(board) {
+  const fab = buildFab(board, '2026-01-01')
+  return { files: Object.keys(fab.files).sort(), zip: fab.zipName, status: /STATUS: .*/.exec(fab.readme)?.[0] ?? '' }
 }
 
 const cfg = await resolveConfig([], 'build', undefined, process.cwd(), () => {})
@@ -47,9 +87,11 @@ try {
       const board = s.compiled?.[i]?.board
       if (!board) return boards.push(r)
       const n = boards.length
-      writeFileSync(join(out, `${n}.pcb.svg`), pcbSvg(board))
-      if (board.schematic.drawing) writeFileSync(join(out, `${n}.sch.svg`), schSvg(board))
-      boards.push({ ...r, svg: { '2d': `${n}.pcb.svg`, ...(board.schematic.drawing ? { sch: `${n}.sch.svg` } : {}) } })
+      const ids = mapped.has(s.entry.rel)
+      writeFileSync(join(out, `${n}.pcb.svg`), pcbSvg(board, ids))
+      if (board.schematic.drawing) writeFileSync(join(out, `${n}.sch.svg`), schSvg(board, ids))
+      if (ids) writeFileSync(join(out, `${n}.map.json`), JSON.stringify({ ...sourceMap(board, s.entry.file, cfg.root), fab: fabList(board) }))
+      boards.push({ ...r, svg: { '2d': `${n}.pcb.svg`, ...(board.schematic.drawing ? { sch: `${n}.sch.svg` } : {}) }, ...(ids ? { map: `${n}.map.json` } : {}) })
     })
   }
   writeFileSync(join(out, 'report.json'), JSON.stringify({ boards }))

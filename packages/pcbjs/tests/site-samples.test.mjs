@@ -1,5 +1,5 @@
 // Every TypeScript sample on the docs site's own pages in site/ type checks as a module of its own, as the skill samples do.
-// The README's example, the home page and Getting started show the `example` region of the demo's Blinky files.
+// The README's example and Getting started show the `example` region of Blinky's layout; the home page takes it in scripts/boards.mjs.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -70,12 +70,10 @@ test('site: every TypeScript sample on a site page type checks', async () => {
 const region = file => /^\/\/ #region example\n([\s\S]*?)^\/\/ #endregion example$/m.exec(readFileSync(join(repo, file), 'utf8'))?.[1]
 const include = file => `<<< @/../${file}#example{tsx}`
 
-test('site: the README, the home page and Getting started show the Blinky region', () => {
-  const layout = region('examples/demo/blinky.pcb.tsx'),
-    sch = region('examples/demo/blinky.sch.tsx')
-  assert.ok(layout && sch, 'a Blinky file has no example region')
+test('site: the README and Getting started show the Blinky region', () => {
+  const layout = region('examples/demo/blinky.pcb.tsx')
+  assert.ok(layout, 'blinky.pcb.tsx has no example region')
   assert.equal(samples(readFileSync(join(repo, 'README.md'), 'utf8')).find(s => s.lang === 'tsx')?.code, layout)
   const page = file => readFileSync(join(site, file), 'utf8').split('\n')
-  assert.ok(page('index.md').includes(include('examples/demo/blinky.pcb.tsx')))
-  for (const f of ['blinky.sch.tsx', 'blinky.pcb.tsx']) assert.ok(page('getting-started.md').includes(include(`examples/demo/${f}`)), f)
+  assert.ok(page('getting-started.md').includes(include('examples/demo/blinky.pcb.tsx')))
 })

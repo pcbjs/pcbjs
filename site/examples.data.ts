@@ -17,6 +17,8 @@ export interface Board {
   hash?: string
   packages?: string
   aspect: Partial<Record<View, number>>
+  /** a board of site/demos, drawn on the home page and not in the gallery */
+  site?: boolean
 }
 export interface Card extends Board {
   summary: string
@@ -72,7 +74,7 @@ export default {
     const text = readme()
     const order = [...text.keys()]
     const projects = new Map<string, Project>()
-    for (const b of boards) {
+    for (const b of boards.filter(b => !b.site)) {
       const top = b.project.split('/')[0]
       const p = projects.get(b.project) ?? {
         project: b.project,
