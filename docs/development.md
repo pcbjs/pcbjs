@@ -86,13 +86,13 @@ The packages are published from this repository with Changesets as linked trains
 
 ## Not there yet
 
-- No schematic drawing. The schematic is a netlist in code, with no symbols or sheets.
+- The schematic drawing has no electrical pin roles, so ERC checks connectivity and cannot check drivers against loads or power sources; schematic-graphic.md has what it draws and findings.md the `sch-*` rules.
 - No synthetic bold or italics: a bold or italic outline font needs its own file, and stroke text has no italic slant.
 - Thermal relief gaps are 16-sided polygons around the pad, not round, and spokes never join two pads of the net without the fill between them.
 - Bezier curves, elliptical arcs and zone fills reach the Gerbers as segments; only circular arcs stay arcs.
 - No interactive routing. Negotiation moves only automatic legs of `route()`, rerouting them whole: it never moves locked routes, manual stretches, drawn tracks or whole-net tracks, never shoves a track sideways, and stops after `ripup` rounds, so routes that cannot all fit still need a waypoint, a layer or a manual stretch. A tangled breakout can take ten seconds or more the first time; the cache makes the next compile instant.
 - Length tuning is single sided serpentines of U bumps spliced into the segments of a route, after routing, and cannot add less than the smallest U bump: it never reroutes a route to make room, never shortens a route that is too long, and the meanders of neighbouring routes take their room in document order rather than sharing it.
-- No KiCad export. The importer, import.md, carries no `.kicad_dru` custom rules or per-pad clearances, and recomputes zone fills.
+- No KiCad export. The importer converts the `.kicad_dru` rules it can and lists the rest as notes, import.md, and recomputes zone fills.
 - No code pane in the browser. Source links open the editor or the repository host.
 - The 3D view does not export 3D.
 - `silkToPad` is listed for the fab but not checked. There is no courtyard-over-edge check.
