@@ -2,7 +2,7 @@
 import { createSSRApp } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import App from './App.vue'
-import { createStore, STORE, type SiteState } from './state'
+import { STORE, configure, createViewer, type SiteState } from '@pcbjs/ui'
 
 export interface Rendered {
   html: string
@@ -14,7 +14,8 @@ const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 
 /** Render the page at `path`, an absolute URL path under the site's base, from the site data. */
 export async function render(path: string, data: SiteState): Promise<Rendered> {
-  const store = createStore({ ...data, path })
+  configure({ base: import.meta.env.BASE_URL, dev: false })
+  const store = createViewer({ ...data, path })
   store.setPath(path)
   const app = createSSRApp(App)
   app.provide(STORE, store)
@@ -25,7 +26,7 @@ export async function render(path: string, data: SiteState): Promise<Rendered> {
       store.route.value.page === 'home'
         ? `${store.cards.value.length} boards`
         : b
-          ? `${b.title || b.name}${b.revision ? ` rev ${b.revision}` : ''}: ${b.copper} layers, ${+b.bbox.w.toFixed(2)} × ${+b.bbox.h.toFixed(2)} mm`
+          ? `${b.title || b.name}${b.rev ? ` rev ${b.rev}` : ''}: ${b.copper} layers, ${+b.bbox.w.toFixed(2)} × ${+b.bbox.h.toFixed(2)} mm`
           : ''
     const head = description ? `<meta name="description" content="${esc(description)}">` : ''
     return { html, title: store.pageTitle.value, head }

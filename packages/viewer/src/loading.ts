@@ -1,8 +1,7 @@
 // the dev server's loading state, free of Vue and the DOM so Node imports it in the tests
+import type { LoadStatus, StageState } from '@pcbjs/core/protocol'
 
-/** `pcbjs:status` as the dev server sends it, see LoadStatus in the CLI's plugin. */
-export type Compile = { phase: 'compiling' | 'routing'; entry: string; name: string | null; done: number; total: number; routed?: number; legs?: number; round?: number }
-export type ServerStatus = { phase: 'starting' | 'idle' } | Compile
+type Compile = Extract<LoadStatus, { phase: 'compiling' | 'routing' }>
 
 /** starting: no word from the server yet; compiling: a compile runs; rendering: the board is in, the view draws; empty: the server answered with no board to show; gone: the server stopped. */
 export type Phase = 'starting' | 'compiling' | 'rendering' | 'ready' | 'empty' | 'gone'
@@ -16,7 +15,7 @@ export interface Load {
   attempts: number
 }
 
-export type LoadEvent = { kind: 'status'; status: ServerStatus } | { kind: 'drawn' } | { kind: 'lost' } | { kind: 'retry' } | { kind: 'boards'; count: number }
+export type LoadEvent = { kind: 'status'; status: LoadStatus } | { kind: 'drawn' } | { kind: 'lost' } | { kind: 'retry' } | { kind: 'boards'; count: number }
 
 /** What the page inlines: the project, where to start the server, and the status when the page was served. */
 export interface Boot {
@@ -24,10 +23,10 @@ export interface Boot {
   root: string
   devJson: string
   command: string
-  status?: ServerStatus
+  status?: LoadStatus
 }
 
-export function initialLoad(status?: ServerStatus | null): Load {
+export function initialLoad(status?: LoadStatus | null): Load {
   return step({ phase: 'starting', status: null, shown: false, attempts: 0 }, status ? { kind: 'status', status } : null)
 }
 
@@ -39,7 +38,7 @@ export function step(s: Load, e: LoadEvent | null): Load {
       const st = e.status
       if (st.phase === 'starting') return { ...s, status: null, phase: s.shown ? s.phase : 'starting' }
       if (st.phase === 'idle') return { ...s, status: null, phase: s.shown ? 'ready' : s.phase === 'empty' ? 'empty' : 'rendering' }
-      return { ...s, status: st, phase: 'compiling' }
+      return { ...s, status: st as Compile, phase: 'compiling' }
     }
     case 'drawn':
       return { ...s, shown: true, phase: s.phase === 'compiling' ? 'compiling' : 'ready' }
@@ -93,4 +92,13 @@ export function loadProgress(s: Load): number | null {
 export function loadName(s: Load, project: string | null): string {
   const st = s.status
   return st?.name || project || 'pcbjs'
+}
+
+/** One segment per stage of the progress bar, each filled 0 to 1: a hit full at once, a running stage by its units, else unknown as -1. */
+export function stageSegments(st: LoadStatus | null): { name: string; state: StageState['state']; fill: number }[] {
+  return (st?.stages ?? []).map(g => ({
+    name: g.name,
+    state: g.state,
+    fill: g.state === 'done' || g.state === 'hit' ? 1 : g.state === 'running' ? (g.units && g.units[1] ? Math.min(1, g.units[0] / g.units[1]) : -1) : 0,
+  }))
 }

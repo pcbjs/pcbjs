@@ -2,12 +2,10 @@
 // a workspace dev server with several projects lists the projects instead
 import { computed } from 'vue'
 import type { SiteData } from '@pcbjs/core/site-data'
-import { checkSummary, useStore } from './state'
-import { targetName, worstTarget } from './variants'
-import { unsourcedCount, type BomRow } from './sourcing'
+import { checkSummary, targetName, unsourcedCount, useShell, worstTarget } from '@pcbjs/ui'
 import Menu from './Menu.vue'
 
-const { asset, boardHref, cards, workspaceHome, scopeCards } = useStore()
+const { asset, boardHref, cards, workspaceHome, scopeCards } = useShell()
 const scopePill = (s: { status: string; stale: boolean }) =>
   s.status === 'unloaded'
     ? { cls: 'dim', text: 'not loaded' }
@@ -38,8 +36,7 @@ const list = computed(() =>
     const targets = multi ? c.targets.map(t => ({ name: targetName(t) ?? t.name, board: t, drc: checkSummary(t) })) : []
     const drc = shown ? checkSummary(shown) : null
     const title = multi ? targets.map(t => `${t.name}: ${t.drc.text}`).join('\n') : (drc?.title ?? '')
-    // old data without sourcing falls back to the MPN field
-    const unsourced = shown ? unsourcedCount(shown.bom as BomRow[]) : 0
+    const unsourced = shown ? unsourcedCount(shown.bom) : 0
     return { ...c, drc, targets, title, unsourced }
   }),
 )
@@ -90,11 +87,11 @@ const list = computed(() =>
             <a v-if="c.board" class="title stretch" :href="boardHref(c.board.name)">{{ c.board.title || c.board.name }}</a>
             <span v-else class="title">{{ c.entry }}</span>
             <span v-if="c.error" class="pill sm err">compile error</span>
-            <span v-else-if="c.drc" class="pill sm" :class="c.drc.state" :title="c.title">{{ c.drc.erc ? c.drc.label : c.drc.state === 'ok' ? 'DRC ok' : c.drc.text }}</span>
+            <span v-else-if="c.drc" class="pill sm" :class="c.drc.state" :title="c.title">{{ c.drc.label }}</span>
           </div>
           <div v-if="c.board" class="card-meta">
             <span v-if="c.board.title && c.board.title !== c.board.name">{{ c.board.name }}</span>
-            <span v-if="c.board.revision">rev {{ c.board.revision }}</span>
+            <span v-if="c.board.rev">rev {{ c.board.rev }}</span>
             <span>{{ mm(c.board.bbox.w) }} × {{ mm(c.board.bbox.h) }} mm</span>
             <span>{{ c.board.copper }} copper</span>
             <span>{{ c.board.stats.footprints }} parts</span>

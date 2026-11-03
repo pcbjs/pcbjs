@@ -1,0 +1,40 @@
+// @pcbjs/ui: the views, the chip, the findings list and the panels as Vue components, the viewer store and what the app shell builds on.
+// docs/ui.md has the components; the helpers of base.ts are the viewer app's and its tests', not a stable surface.
+import './style.css'
+export { default as View2D } from './View2D.vue'
+export { default as View3D } from './View3D.vue'
+export { default as ChecksView } from './ChecksView.vue'
+export { default as SchView } from './SchView.vue'
+export { default as PcbViewer } from './PcbViewer.vue'
+export { default as PathChip } from './PathChip.vue'
+export { default as FindingsList } from './FindingsList.vue'
+export { default as LayersPanel } from './LayersPanel.vue'
+export { default as BoardPanel } from './BoardPanel.vue'
+export { default as StackupPanel } from './StackupPanel.vue'
+export { default as SheetPanel } from './SheetPanel.vue'
+export { default as SchematicPanel } from './SchematicPanel.vue'
+export { default as BomPanel } from './BomPanel.vue'
+export { default as NetsPanel } from './NetsPanel.vue'
+export { default as CircuitPanel } from './CircuitPanel.vue'
+export { default as PartPanel } from './PartPanel.vue'
+export { default as BoardPage } from './BoardPage.vue'
+export { default as Canvas2D } from './Canvas2D.vue'
+export { default as CanvasSch } from './CanvasSch.vue'
+export { default as ClientOnly } from './ClientOnly.vue'
+export { default as Palette } from './Palette.vue'
+export { KEYS, keysMarkdown, commandOf, search as searchCommands, type KeyDef } from './keys'
+/** The 3D canvas without a store, loaded on first use with three.js. */
+export const loadCanvas3D = () => import('./Canvas3D.vue').then(m => m.default)
+/** A referenced board's mesh as the 3D view builds it, loaded with three.js; the CLI caches it per reference. */
+export const loadReferenceMesh = () => import('./scene/reference').then(m => m.referenceMesh)
+
+export * from './base'
+export { drcPill, useStatus } from './use/status'
+export { mm } from './format'
+export { findingLines, findingNotes, type FindingLine, type FindingNote } from './finding-marks'
+export { lengthStatus, netLengths, pairNets, pairOf, routeHover, routesOf, targetText } from './routes'
+export { highlightLabel, rangeFor, resolveCursor, sourceTarget } from './source'
+export { stackupRows } from './stackup'
+export { parseAgents, sendNotice } from './agents'
+export { targetName, worstTarget } from './variants'
+export { unsourcedCount } from './sourcing'

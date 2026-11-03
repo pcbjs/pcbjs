@@ -1,0 +1,908 @@
+{
+  "version": 1,
+  "scope": "UI, including shared KEYS editor bindings; VS Code actions have a separate inventory",
+  "note": "Registry completeness and source references do not establish runtime acceptance.",
+  "operations": [
+    {
+      "id": "NAV01",
+      "title": "select view",
+      "context": "2D/3D/Schematic/DRC-ERC buttons, V cycle",
+      "result": "one active drawing or checks view, matching pressed button, ready signal cleared then restored",
+      "boundary": "V; retain per-board state",
+      "unavailable": "no schematic drawing message; 3D local failure/loading",
+      "commands": [
+        "view",
+        "open2DBeside",
+        "open2DNew",
+        "open3DBeside",
+        "open3DNew",
+        "openSchematicBeside",
+        "openSchematicNew",
+        "openChecksBeside",
+        "openChecksNew"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/BoardFrame.vue",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/components.test.mjs"
+      ],
+      "missingAcceptance": "components, sch-view; installed pane view parity"
+    },
+    {
+      "id": "NAV02",
+      "title": "fit",
+      "context": "F or fit control, mounted view",
+      "result": "board/sheet framed, 3D exploded extent included",
+      "boundary": "V; no source undo",
+      "unavailable": "empty view safe no-op",
+      "commands": [
+        "fit"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/viewbox.ts",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/fit.test.mjs"
+      ],
+      "missingAcceptance": "fit, explode-fit; actual viewport screenshot"
+    },
+    {
+      "id": "NAV03",
+      "title": "zoom",
+      "context": "wheel, +/=/-",
+      "result": "zoom around defined cursor/center, readout and grid adapt",
+      "boundary": "V",
+      "unavailable": "clamp at limits",
+      "commands": [
+        "zoomIn",
+        "zoomOut"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/viewbox.ts",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/fit.test.mjs"
+      ],
+      "missingAcceptance": "fit; trackpad/wheel/keyboard across views"
+    },
+    {
+      "id": "NAV04",
+      "title": "pan/orbit",
+      "context": "background drag in 2D/sch; 3D camera gestures",
+      "result": "camera changes; no accidental selection/edit",
+      "boundary": "V; release ends gesture",
+      "unavailable": "pointer cancellation restores idle",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/viewbox.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/gesture.test.mjs"
+      ],
+      "missingAcceptance": "tools3d, gesture; exact mouse-button/trackpad/drag-threshold public table missing"
+    },
+    {
+      "id": "NAV05",
+      "title": "grid",
+      "context": "G/button",
+      "result": "grid visibility changes in mounted views",
+      "boundary": "V, distinct from placement grid/snapping",
+      "unavailable": "no edit capability implied",
+      "commands": [
+        "grid"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/Canvas2D.vue",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/grid.test.mjs"
+      ],
+      "missingAcceptance": "grid, snap; hidden grid still predictable snapping"
+    },
+    {
+      "id": "NAV06",
+      "title": "ratsnest",
+      "context": "N/button",
+      "result": "connection indicators and ratsnest toggle",
+      "boundary": "V",
+      "unavailable": "schematic relevance must be explicit",
+      "commands": [
+        "ratsnest"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/Canvas2D.vue",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/indicators.test.mjs"
+      ],
+      "missingAcceptance": "indicators; all-view N feedback"
+    },
+    {
+      "id": "NAV07",
+      "title": "side/mirror",
+      "context": "front/back view and mirror controls",
+      "result": "side stacking or camera bottom; 2D mirror",
+      "boundary": "V; distinct from anchor L flip",
+      "unavailable": "control applicability by view",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/Canvas2D.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/sides.test.mjs"
+      ],
+      "missingAcceptance": "sides; B view vs B source flip acceptance"
+    },
+    {
+      "id": "NAV08",
+      "title": "layers",
+      "context": "rail click hide, double-click solo; Front/Back/All/Copper presets",
+      "result": "visibility plus outline, active preset",
+      "boundary": "V",
+      "unavailable": "selected hidden geometry must remain discoverable",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/LayersPanel.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/sides.test.mjs"
+      ],
+      "missingAcceptance": "sides, paint; double-click intermediate toggle and hidden selection"
+    },
+    {
+      "id": "NAV09",
+      "title": "schematic layers/split",
+      "context": "category rail, Board split",
+      "result": "symbols/wires/labels/power/sheets/text/findings hide/solo; board beside sheet",
+      "boundary": "V",
+      "unavailable": "missing drawing explanation",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/CanvasSch.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/sch-view.test.mjs"
+      ],
+      "missingAcceptance": "sch-view; split and hidden hit testing"
+    },
+    {
+      "id": "NAV10",
+      "title": "3D appearance",
+      "context": "fade toggle, opacity, mono, shaded/edges, grouped/stacked",
+      "result": "only intended focus/background presentation changes",
+      "boundary": "V",
+      "unavailable": "usable fallback without WebGL",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/Canvas3D.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/focus-look.test.mjs"
+      ],
+      "missingAcceptance": "focus-look, intensity, components; visual material acceptance"
+    },
+    {
+      "id": "NAV11",
+      "title": "explode",
+      "context": "toggle and separation slider",
+      "result": "layer separation, bodies aligned, fitting correct",
+      "boundary": "V",
+      "unavailable": "only in 3D",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/Canvas3D.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/explode-fit.test.mjs"
+      ],
+      "missingAcceptance": "explode-fit, board-scene; picking at exploded heights"
+    },
+    {
+      "id": "NAV12",
+      "title": "theme/reload",
+      "context": "theme control; pane reload",
+      "result": "theme immediate, reload recovers current pane",
+      "boundary": "V; reload must not write or lose editor buffer",
+      "unavailable": "failure/reconnect state",
+      "commands": [
+        "restartClean"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/BoardFrame.vue",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/components.test.mjs"
+      ],
+      "missingAcceptance": "components, sync; installed reload preservation"
+    },
+    {
+      "id": "SEL01",
+      "title": "hover",
+      "context": "all entities and same modifiers as click",
+      "result": "exact prospective selection lights, readout clears on leave, no editor movement",
+      "boundary": "V transient",
+      "unavailable": "stale geometry unpickable",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/selection.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/hover-focus.test.mjs"
+      ],
+      "missingAcceptance": "interaction, hover-focus, paint; modifier pointer refresh across all three views"
+    },
+    {
+      "id": "SEL02",
+      "title": "part/pad",
+      "context": "ordinary body/pad click; Mod pad deep select",
+      "result": "part or pad, one chip and source reveal; copper-only context",
+      "boundary": "V; Escape clear/up",
+      "unavailable": "absent placement falls back declaration",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/selection.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/interaction.test.mjs"
+      ],
+      "missingAcceptance": "interaction, selection; actual editor range/focus"
+    },
+    {
+      "id": "SEL03",
+      "title": "instance",
+      "context": "click member, click already selected instance, double-click",
+      "result": "whole instance including routes/silk; enter definition with clicked member",
+      "boundary": "V",
+      "unavailable": "eligibility/reach explained",
+      "commands": [
+        "enter"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/selection.ts",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/interaction.test.mjs"
+      ],
+      "missingAcceptance": "interaction, isolation-chip; nested/B-side/lone-part coordinates"
+    },
+    {
+      "id": "SEL04",
+      "title": "route/leg/point",
+      "context": "track/via ordinary click, Mod automatic leg, double-click route",
+      "result": "route or leaf/nearest point, correct chain reveal and context",
+      "boundary": "V",
+      "unavailable": "automatic route no writable chain has no edit tool",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/selection.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/interaction.test.mjs"
+      ],
+      "missingAcceptance": "interaction, route-ends; 3D nearest/depth/end picking"
+    },
+    {
+      "id": "SEL05",
+      "title": "plane/text/graphic",
+      "context": "click or hover",
+      "result": "item geometry only, no unrelated net context",
+      "boundary": "V",
+      "unavailable": "source-only general graphics editing limit",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/paint.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/merged-highlight.test.mjs"
+      ],
+      "missingAcceptance": "interaction, merged-highlight; overlapping pour/text hit precedence"
+    },
+    {
+      "id": "SEL06",
+      "title": "net/finding",
+      "context": "ratsnest/wire/label, finding dot/line or panel row",
+      "result": "net context; canonical finding focus frames applicable views and opens structured temporary native editor; hover shows rule and reason",
+      "boundary": "V",
+      "unavailable": "no source range safe fallback",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/selection.ts",
+        "packages/ui/src/board-store.ts",
+        "packages/ui/src/pane.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/finding-marks.test.mjs",
+        "packages/cli/tests/finding-focus.test.mjs"
+      ],
+      "missingAcceptance": "finding-marks, indicators, sch-view; schematic label hover and click agreement"
+    },
+    {
+      "id": "SEL07",
+      "title": "modifiers",
+      "context": "Shift toggle, Mod deep, Alt definition",
+      "result": "ordered members/anchor; no ancestor+descendant; Alt keeps selection and reveals definition",
+      "boundary": "V",
+      "unavailable": "absent definition reported",
+      "commands": [
+        "extend",
+        "deep",
+        "definition"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/selection.ts",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/selection.test.mjs"
+      ],
+      "missingAcceptance": "selection, interaction; combinations across physical OS modifiers"
+    },
+    {
+      "id": "SEL08",
+      "title": "clear/ascend",
+      "context": "empty click, Escape, path segment/remove chip",
+      "result": "empty clears members keeps isolation; Escape first cancels then ascends/leaves",
+      "boundary": "V; no design undo",
+      "unavailable": "no current state safe no-op",
+      "commands": [
+        "up"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/selection.ts",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/selection.test.mjs"
+      ],
+      "missingAcceptance": "selection, isolation-chip; nested Escape precedence with assist/modal"
+    },
+    {
+      "id": "SEL09",
+      "title": "isolation",
+      "context": "I/chip or repeated entity click; synchronized instance/library layout choice and values picker",
+      "result": "explicit instance or library layout; choice mirrored in 2D/3D and ignored by schematic; local frame and reach count",
+      "boundary": "V until W edit",
+      "unavailable": "own placement/shared loop reason",
+      "commands": [
+        "isolate"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/use/chip.ts",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/isolation-chip.test.mjs"
+      ],
+      "missingAcceptance": "isolation-chip and finding-focus cover synchronized choice/cancel; edit-path-isolate; B side and single placement context"
+    },
+    {
+      "id": "SEL10",
+      "title": "multi-selection tools",
+      "context": "Shift multiple then M/R/L",
+      "result": "One per-tool target set supplies toolbar labels, transaction refs, pivot and preview geometry; move/rotate eligible placements, side only layered members, point anchor route; automatic and isolated own placements excluded",
+      "boundary": "W one source transaction; non-placement members stay selected without writes; group turn uses placement-origin midpoint",
+      "unavailable": "capability reason",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/gesture.ts",
+        "packages/ui/src/EditBar.vue",
+        "packages/cli/src/session/edit.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/gesture.test.mjs",
+        "packages/ui/tests/editbar.test.mjs",
+        "packages/cli/tests/session-edit.test.mjs"
+      ],
+      "missingAcceptance": "Installed browser multi-placement drag, ring, side, cancellation and chronological editor undo with mixed eligible selection"
+    },
+    {
+      "id": "EDIT01",
+      "title": "move and placement coordinates",
+      "context": "eligible placement; drag or source-frame X/Y fields with units",
+      "result": "one transaction, source-frame fields and compass agree with world geometry",
+      "boundary": "W placement at instantiation; instance isolation creates overrides, library isolation writes definition; Escape no write, undo one step",
+      "unavailable": "edit-client reason and failed/stale message",
+      "commands": [
+        "move"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/gesture.ts",
+        "packages/ui/src/keys.ts",
+        "packages/ui/src/EditBar.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/drag-txn.test.mjs",
+        "packages/pcbjs/tests/edit-path-toolbar.test.mjs",
+        "packages/cli/tests/session-edit.test.mjs",
+        "packages/ui/tests/edit-toolbar.test.mjs"
+      ],
+      "missingAcceptance": "gesture, drag-txn, edit-path-gestures/grids; real installed source/undo/delayed facets"
+    },
+    {
+      "id": "EDIT02",
+      "title": "move modifiers",
+      "context": "Shift drag free, Mod drag dominant axis",
+      "result": "preview and written coordinates agree; no grid means unsnapped",
+      "boundary": "W as EDIT01",
+      "unavailable": "no shared literal overwrite",
+      "commands": [
+        "fine",
+        "free"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/snap.ts",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/snap.test.mjs"
+      ],
+      "missingAcceptance": "Installed pointer move and point drags: Shift free, Mod axis, both free plus axis; preview coordinates match source writes"
+    },
+    {
+      "id": "EDIT03",
+      "title": "rotate",
+      "context": "R, compass ring or degree field",
+      "result": "shared grid pivot or placement origin; numeric source-frame rotation",
+      "boundary": "W third at value; Escape ring cancel, one undo",
+      "unavailable": "unsupported node explanation",
+      "commands": [
+        "rotate"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/gesture.ts",
+        "packages/ui/src/keys.ts",
+        "packages/ui/src/EditBar.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/ring.test.mjs",
+        "packages/pcbjs/tests/edit-path-toolbar.test.mjs",
+        "packages/cli/tests/session-edit.test.mjs",
+        "packages/ui/tests/edit-toolbar.test.mjs"
+      ],
+      "missingAcceptance": "ring, gesture; R currently no held pose, zero angle formatting"
+    },
+    {
+      "id": "EDIT04",
+      "title": "flip",
+      "context": "L or Front/Back placement selector",
+      "result": "physical side attribute; camera-side controls remain separate",
+      "boundary": "W one undo; no transient preview currently",
+      "unavailable": "no layered capability reason",
+      "commands": [
+        "side"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/gesture.ts",
+        "packages/ui/src/keys.ts",
+        "packages/ui/src/EditBar.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/gesture.test.mjs",
+        "packages/pcbjs/tests/edit-path-toolbar.test.mjs",
+        "packages/cli/tests/session-edit.test.mjs",
+        "packages/ui/tests/edit-toolbar.test.mjs"
+      ],
+      "missingAcceptance": "gesture, edit-path-gestures; visual final B/origin and delayed compilation"
+    },
+    {
+      "id": "EDIT05",
+      "title": "trace navigation and insertion",
+      "context": "Trace primitive/case/layer selectors, previous/next or interior focused-segment click",
+      "result": "exact primitive source range; case preserves endpoints; insertion splits focused segment, snaps when enabled and preserves downstream endpoints",
+      "boundary": "W; reroute patch only required non-source copper; Escape cancel",
+      "unavailable": "no writable chain reason",
+      "commands": [
+        "points"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/gesture.ts",
+        "packages/ui/src/keys.ts",
+        "packages/ui/src/EditBar.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/gesture.test.mjs",
+        "packages/pcbjs/tests/edit-path-toolbar.test.mjs",
+        "packages/cli/tests/session-edit.test.mjs",
+        "packages/ui/tests/edit-toolbar.test.mjs"
+      ],
+      "missingAcceptance": "gesture, route-ends, edit-path-gestures; bound vs automatic route exact source"
+    },
+    {
+      "id": "EDIT06",
+      "title": "delete trace segment",
+      "context": "Delete icon or Delete/Backspace on selected primitive",
+      "result": "remove one primitive; skip modifiers and compensate following relative/axis commands without moving their endpoint",
+      "boundary": "W; one undo",
+      "unavailable": "cannot delete general part/net/graphic; make this discoverable",
+      "commands": [
+        "delete"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/gesture.ts",
+        "packages/ui/src/keys.ts",
+        "packages/ui/src/EditBar.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/gesture.test.mjs",
+        "packages/pcbjs/tests/edit-path-toolbar.test.mjs",
+        "packages/cli/tests/session-edit.test.mjs",
+        "packages/ui/tests/edit-toolbar.test.mjs"
+      ],
+      "missingAcceptance": "gesture; keyboard field protection and point endpoint boundaries"
+    },
+    {
+      "id": "EDIT07",
+      "title": "undo/redo",
+      "context": "Mod Z / Mod Shift Z",
+      "result": "Source document native chronological undo/redo with an editor, including later code and other-pane edits; standalone conflict-checked per-client history",
+      "boundary": "W; editor request names one document, multiple distinct documents refused before undo; standalone refuses intervening source conflicts",
+      "unavailable": "Explain multi-file refusal, conflict or disconnected holder; source editor available for individual histories",
+      "commands": [
+        "undo",
+        "redo"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/undo.ts",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/undo.test.mjs"
+      ],
+      "missingAcceptance": "undo; CLI session-edit; patches file creation/removal, editor grouping"
+    },
+    {
+      "id": "ROUTE01",
+      "title": "assist",
+      "context": "open H/V/L/X/empty at source slot; hover/click dot/end",
+      "result": "typed preview, clearance, eligible endpoint, one argument/handle write, cursor advance",
+      "boundary": "W versioned slot; Escape leaves without write",
+      "unavailable": "scope and writable-slot reason",
+      "commands": [
+        "pick"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/Canvas2D.vue",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/route-ends.test.mjs"
+      ],
+      "missingAcceptance": "dots, route-ends; LSP assist; actual installed 2D/3D route write including isolated mapped endpoint"
+    },
+    {
+      "id": "ROUTE02",
+      "title": "assist Shift",
+      "context": "Shift exposes all dots",
+      "result": "expected l vs X choice shown, no accidental ordinary selection",
+      "boundary": "W on pick only",
+      "unavailable": "no slot no assist action",
+      "commands": [
+        "allDots"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/Canvas2D.vue",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/dots.test.mjs"
+      ],
+      "missingAcceptance": "dots, snap; completion clearing on Escape and part/pad/net slots"
+    },
+    {
+      "id": "DRAW01",
+      "title": "general draw/route-start",
+      "context": "no general draw or free-standing toolbar router found",
+      "result": "no implied promise of arbitrary canvas drawing; source-driven assist only",
+      "boundary": "unsupported, no mutation",
+      "unavailable": "document supported boundary beside tools",
+      "commands": [],
+      "support": "unsupported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/EditBar.vue"
+      ],
+      "tests": [],
+      "missingAcceptance": "source inventory only; acceptance must assert unsupported commands absent"
+    },
+    {
+      "id": "MEASURE01",
+      "title": "measurement",
+      "context": "no distance/angle measurement command/control found",
+      "result": "coordinate/readout is inspection, no two-point measurement tool",
+      "boundary": "unsupported, no mutation",
+      "unavailable": "public feature boundary absent",
+      "commands": [],
+      "support": "unsupported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [],
+      "missingAcceptance": "no dedicated test; do not invent shortcut or tool"
+    },
+    {
+      "id": "PANEL01",
+      "title": "board/rules/stackup",
+      "context": "tabs/rail",
+      "result": "correct current board counts/rules/layers/material thickness",
+      "boundary": "V",
+      "unavailable": "empty/loading/stale state",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/BoardPanel.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/components.test.mjs"
+      ],
+      "missingAcceptance": "components, board-index; actual target identity"
+    },
+    {
+      "id": "PANEL02",
+      "title": "BOM/net/part/circuit",
+      "context": "rows/filter, pin/pad net native buttons",
+      "result": "corresponding selection and details, keyboard equals pointer",
+      "boundary": "V; source jump rules apply",
+      "unavailable": "NC/unconnected rows not actionable",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/PartPanel.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/components.test.mjs"
+      ],
+      "missingAcceptance": "interaction, circuit-client, THIRD native-button harness; hidden-layer selection framing"
+    },
+    {
+      "id": "PANEL03",
+      "title": "DRC/ERC",
+      "context": "DRC/ERC view; findings list toggle, row, previous/next, entity references and Copy as Markdown",
+      "result": "canonical finding and entity selection; navigation keeps the live frame; full messages only in checks details; copy writes a structured Markdown snapshot",
+      "boundary": "V: list expansion local, finding/entity selection shared; copy changes clipboard only; previous/next disabled at list ends",
+      "unavailable": "empty or pending findings show explicit state; no current finding disables copy; clipboard failure is announced",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/ChecksView.vue",
+        "packages/ui/src/use/findings.ts",
+        "packages/ui/src/finding-details.ts",
+        "packages/ui/src/finding-markdown.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/checks-view.test.mjs",
+        "packages/ui/tests/checks-integration.test.mjs",
+        "packages/ui/tests/finding-marks.test.mjs",
+        "packages/vscode/tests/installed-host/suite.cjs"
+      ],
+      "missingAcceptance": "stale-recompile fingerprint reconciliation across independently delayed snapshots"
+    },
+    {
+      "id": "PANEL04",
+      "title": "source links",
+      "context": "click/Alt or placement/definition chip buttons",
+      "result": "reveal correct view-origin range without stealing preview focus",
+      "boundary": "V source navigation",
+      "unavailable": "buttons without attached editor; missing range graceful",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/use/chip.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/source-client.test.mjs"
+      ],
+      "missingAcceptance": "source-client, ide-client; edit-path-jumps; actual installed editor focus"
+    },
+    {
+      "id": "PANEL05",
+      "title": "chip context menu",
+      "context": "right-click chip, Send to agent, choose/comment/Send/Cancel",
+      "result": "explicit selected refs sent to chosen attached agent only on Send",
+      "boundary": "external message boundary; Cancel none",
+      "unavailable": "disabled no attached agent",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/PathChip.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/agents-client.test.mjs"
+      ],
+      "missingAcceptance": "agents-client; keyboard/context-menu focus and recipient ownership"
+    },
+    {
+      "id": "MODAL01",
+      "title": "palette/help",
+      "context": "/ or ?, search/arrows/Enter, Tab cycle, Escape",
+      "result": "modal owns focus; explicit command runs; focus restored",
+      "boundary": "V except explicitly chosen W",
+      "unavailable": "unavailable palette command must show eligibility",
+      "commands": [
+        "palette",
+        "help"
+      ],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/Palette.vue",
+        "packages/ui/src/keys.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/keys.test.mjs"
+      ],
+      "missingAcceptance": "keys, THIRD modal harness; every edit command while overlay open"
+    },
+    {
+      "id": "STATE01",
+      "title": "load/stale/error",
+      "context": "first meta, invalidation, facet updates, disconnect, resync/reload",
+      "result": "loading vs stale board distinguishable; stale entities unpickable; error/reason accessible",
+      "boundary": "V; stale W refused",
+      "unavailable": "read-only target/session/version explanation",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/sync.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/sync.test.mjs"
+      ],
+      "missingAcceptance": "live, transport, sync, source-client; late facet/failed edit/reconnect full matrix"
+    },
+    {
+      "id": "STATE02",
+      "title": "responsive drawers",
+      "context": "Layers/Details, scrim, narrow viewport",
+      "result": "one usable rail/drawer, no canvas hit-through",
+      "boundary": "V; close scrim/Escape policy",
+      "unavailable": "narrow layout availability",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/BoardFrame.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/components.test.mjs"
+      ],
+      "missingAcceptance": "components; keyboard focus, Escape and mobile screenshots missing"
+    },
+    {
+      "id": "SITE01",
+      "title": "board/variant/home/download",
+      "context": "picker/card/link",
+      "result": "selected scope/board/target in URL and model; SVG/zip intended board",
+      "boundary": "V / artifact download, source unchanged",
+      "unavailable": "non-default target read-only explanation",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/BoardFrame.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/board-choice.test.mjs"
+      ],
+      "missingAcceptance": "board-choice, variants-client; two-project two-target navigation/write refusal"
+    },
+    {
+      "id": "SITE02",
+      "title": "URL/embed",
+      "context": "view/selection/isolation/layer/side/mirror params; parent messages",
+      "result": "initialize once and frame explicitly; ready after paint",
+      "boundary": "V; no design write",
+      "unavailable": "invalid ref warning",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/refs.ts",
+        "packages/ui/src/ide.ts",
+        "packages/ui/src/shell.ts"
+      ],
+      "tests": [
+        "packages/ui/tests/refs-client.test.mjs",
+        "packages/ui/tests/ide-client.test.mjs",
+        "packages/ui/tests/board-choice.test.mjs"
+      ],
+      "missingAcceptance": "refs-client, raw-boards; restore isolation frame, static parity"
+    },
+    {
+      "id": "DEV01",
+      "title": "UI inspector",
+      "context": "Live preview inspector button or development editor command",
+      "result": "Local visible-element hierarchy, component labels, properties, parent/children, bounds and preview state; picking highlights without editing; copy exports JSON",
+      "boundary": "Close inspector; no source or canonical selection mutation",
+      "unavailable": "No inspector on built static pages",
+      "commands": [],
+      "support": "supported",
+      "coverage": "source-only",
+      "sources": [
+        "packages/ui/src/DevToolsOverlay.vue",
+        "packages/ui/src/devtools.ts",
+        "packages/ui/src/BoardFrame.vue"
+      ],
+      "tests": [
+        "packages/ui/tests/devtools.test.mjs"
+      ],
+      "missingAcceptance": "Full installed-editor command invocation is a separate acceptance gate"
+    }
+  ]
+}

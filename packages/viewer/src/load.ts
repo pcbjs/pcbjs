@@ -1,7 +1,8 @@
-// the browser side of the loading state: the dev server's events in, a reactive Load out
+// the browser side of the loading state: the session's events in, a reactive Load out
 import { inject, reactive, type InjectionKey } from 'vue'
-import { initialLoad, step, type Boot, type Load, type LoadEvent, type ServerStatus } from './loading'
-import type { Hot } from './sync'
+import type { LoadStatus } from '@pcbjs/core/protocol'
+import { initialLoad, step, type Boot, type Load, type LoadEvent } from './loading'
+import type { Transport } from '@pcbjs/ui'
 
 export interface LoadView {
   load: Load
@@ -14,8 +15,8 @@ export const useLoad = () => inject(LOAD, null)
 /** ms between two tries to reach a server that went */
 export const RETRY_MS = 2000
 
-/** Follow the dev server: its status, the first drawn view, and its going away, after which it is tried every RETRY_MS until the page reloads. */
-export function startLoad(hot: Hot, boot: Boot | null): LoadView {
+/** Follow the session: its status, the first drawn view, and its going away, after which the server is tried every RETRY_MS until the page reloads. */
+export function startLoad(t: Transport, boot: Boot | null): LoadView {
   const v = reactive<LoadView>({ load: initialLoad(boot?.status), boot })
   const on = (e: LoadEvent) => {
     v.load = step(v.load, e)
@@ -24,10 +25,9 @@ export function startLoad(hot: Hot, boot: Boot | null): LoadView {
   addEventListener('pagehide', () => {
     leaving = true
   })
-  hot.on('pcbjs:status', (st: ServerStatus) => on({ kind: 'status', status: st }))
-  hot.on('vite:ws:connect', () => hot.send('pcbjs:viewer:status', {}))
-  hot.send('pcbjs:viewer:status', {})
-  hot.on('vite:ws:disconnect', () => {
+  // the session's first frames after the hello: the status, and the first compile when nothing started it
+  t.on('pcbjs:status', (st: LoadStatus) => on({ kind: 'status', status: st }))
+  t.closed(() => {
     if (leaving || v.load.phase === 'gone') return
     on({ kind: 'lost' })
     setInterval(() => {
