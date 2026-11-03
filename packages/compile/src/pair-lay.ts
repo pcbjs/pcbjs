@@ -1,10 +1,11 @@
 // Board mm, y down; the board is reached only through the IsFree tests of the context.
-import type { Pad, Pt } from '@pcbjs/core/model'
+import type { Item, Pad, Pt, Track, Via } from '@pcbjs/core/model'
+import type { Src } from '@pcbjs/core/internal/types'
 import type { IsFree } from './length.js'
 import type { Prim } from '@pcbjs/core/model'
 import { pairPaths, PairGeometryError, cleanPolyline, turn, leftNormal, pairEnds, pairVias, type PairPaths } from './pair.js'
 import { neckLength, neckOf, neckPrims, padReach, type Neck } from './neck.js'
-import { flatten, linesOf, primsLength, tidyPrims } from './round.js'
+import { flatten, linesOf, primsLength, tidyPrims, trackShape } from './round.js'
 
 export interface PairJob {
   id: string
@@ -679,4 +680,50 @@ export function pairStub(
     if (ok) return e
   }
   return at(sq, s0Of(sq))
+}
+
+/** A pair laid out as the router hands it to the tuner, data only: `at` its index in board.pairs, `ids` its copper's ids now, `pool` every id it has had, taken back in order when it is laid again; `next` the index of the id counter in the tuning that new ids come from. */
+export interface TunePair {
+  at: number
+  laid: PairLaid
+  ids: number[]
+  pool: number[]
+  id: string
+  /** [P, N] */
+  nets: [string, string]
+  via: { drill: number; size: number }
+  ref?: string
+  route?: string
+  src?: Src
+  chain?: Src[]
+  next: number
+}
+
+const nm = (v: number) => Math.round(v * 1e6) / 1e6
+
+/** The pair's tracks and vias as board items, `take` giving each its id; `cu` orders a via's span. */
+export function pairItems(p: TunePair, cu: string[], take: () => number): Item[] {
+  const own = { ref: p.ref, ...(p.src ? { src: p.src } : {}), ...(p.chain ? { chain: p.chain } : {}), ...(p.route !== undefined ? { route: p.route } : {}) }
+  const net = (role: 'P' | 'N') => (role === 'P' ? p.nets[0] : p.nets[1])
+  const out: Item[] = []
+  for (const t of p.laid.tracks) {
+    const id = take()
+    const sh = t.prims ? trackShape(t.prims) : { pts: t.pts.map(([x, y]) => [nm(x), nm(y)] as Pt) }
+    out.push({ kind: 'track', id, layer: t.layer, net: net(t.role), ...own, ...sh, width: nm(t.width), pair: p.id, role: t.role } as Track)
+  }
+  for (const v of p.laid.vias) {
+    const id = take()
+    const span = [...v.layers].sort((a, b) => cu.indexOf(a) - cu.indexOf(b)) as [string, string]
+    out.push({ kind: 'via', id, layer: span[0], net: net(v.role), ...own, at: [nm(v.at[0]), nm(v.at[1])], drill: p.via.drill, size: p.via.size, layers: span } as Via)
+  }
+  return out
+}
+
+/** The ids a new layout of the pair takes: its pool's in order, then new ones from `next`. */
+export function idsOf(p: TunePair, next: () => number): () => number {
+  let k = 0
+  return () => {
+    if (k === p.pool.length) p.pool.push(next())
+    return p.pool[k++]
+  }
 }

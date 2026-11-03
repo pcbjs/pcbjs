@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { freeNames, moduleExports, scopeInject, ScopeError, toInjected, toSource } from '@pcbjs/compile/scope'
+import { freeNames, moduleExports, scopeInject, ScopeError, toInjected, toSource } from '../dist/scope.js'
 import ts from 'typescript'
 
 const files = {

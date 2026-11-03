@@ -1,18 +1,8 @@
 import type { Board, Pad, Poly, Ring, Via } from '@pcbjs/core/model'
-import { copperLayers } from '@pcbjs/compile/layers'
-import { copperRings } from '@pcbjs/compile/copper'
-import { difference, orientRings, polysToRings, strokeOpen, union } from '@pcbjs/compile/geom'
-import { circleRing } from '@pcbjs/compile/path'
-
-// mm²
-export function polysArea(ps: Poly[]): number {
-  const ring = (r: Ring) => {
-    let a = 0
-    for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += (r[j][0] + r[i][0]) * (r[j][1] - r[i][1])
-    return Math.abs(a / 2)
-  }
-  return ps.reduce((s, p) => s + ring(p.outer) - p.holes.reduce((h, r) => h + ring(r), 0), 0)
-}
+import { copperLayers } from '@pcbjs/compile/internal/layers'
+import { copperRings } from '@pcbjs/compile/internal/copper'
+import { difference, orientRings, polysArea, polysToRings, strokeOpen, union } from '@pcbjs/compile/internal/geom'
+import { circleRing } from '@pcbjs/compile/internal/path'
 
 // a slot as the stroke between its end centres, as the drill file routes it
 function holeRings(it: Pad | Via): Ring[] {

@@ -1,7 +1,7 @@
 // Each tuning step is cached under the route's untuned copper, its aim and the obstacles around it.
-import type { Board, Item, PairInfo, Prim, Pt, RouteRecord, Track } from '@pcbjs/core/model'
-import type { Length, ResolvedRules as Rules, Src } from '@pcbjs/core/types'
-import { mm } from '@pcbjs/core/units'
+import type { Board, Item, Pad, Prim, Pt, RouteRecord, Track } from '@pcbjs/core/model'
+import type { Length, ResolvedRules as Rules, Src } from '@pcbjs/core/internal/types'
+import { mm } from '@pcbjs/core/internal/units'
 import { copperLayersOf } from './copper.js'
 import { copperLayers } from './layers.js'
 import { classOf, CLASS_DEFAULTS, netClearance } from './netclass.js'
@@ -10,6 +10,12 @@ import { meander, meanderCapacity, runPitch, smallestBump, type MeanderMiss, typ
 import { linesOf, primOfSegment, primsOf, trackShape } from './round.js'
 import { hash, type PairState, type TuneEntry } from './route-cache.js'
 import { TuneSpace, type SpaceQuery } from './tune-space.js'
+import { pulse } from './cancel.js'
+import { immutable, replaced } from './items.js'
+import { idsOf, pairItems, type PairLaid, type TunePair } from './pair-lay.js'
+import { tunePairCentre } from './pair-tune.js'
+import { padFreeOf, type Tuning } from './autoroute.js'
+import { ObstacleWorld } from './obstacles.js'
 
 /** Lengths in mm. */
 export interface TuneRoute {
@@ -17,6 +23,9 @@ export interface TuneRoute {
   net?: string
   /** every leg routed and, for a pair, the pair laid out */
   routed: boolean
+  /** RouteRecord.pts and legs */
+  pts?: Pt[]
+  legs?: NonNullable<RouteRecord['legs']>
   length?: { min?: number; max?: number; target?: number; tolerance?: number }
   match?: { group: string; tolerance?: number }
   /** merged from the board, the class and .rules() */
@@ -27,10 +36,8 @@ export interface TuneRoute {
     w: number
     g: number
     skew: number
-    info?: PairInfo
-    lengthen?: (extra: number, tolerance: number, ctx: PairFrees) => { added: number; note?: string }
-    state?: () => PairState
-    restore?: (s: PairState) => void
+    /** the layout of a pair whose legs all routed */
+    laid?: TunePair
   }
   src?: Src
   chain?: Src[]
@@ -49,9 +56,12 @@ export interface TuneStore {
   get(key: string): TuneEntry | undefined
   put(key: string, e: TuneEntry): void
 }
+/** `next`: per routing the next free id, which a pair laid out anew takes its new ids from; `added`: the router's list of its items, kept in step with the board */
 export interface TuneOptions {
   rules?: Rules
   cache?: TuneStore | null
+  next?: number[]
+  added?: Item[]
 }
 
 /** mm */
@@ -99,6 +109,8 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
       ...(r.pair ? { pair: r.pair.id } : {}),
       ...(range ? { target: { min: range.min, ...(Number.isFinite(range.max) ? { max: range.max } : {}) } } : {}),
       ...(r.match ? { group: r.match.group } : {}),
+      ...(r.pts ? { pts: r.pts } : {}),
+      ...(r.legs ? { legs: r.legs } : {}),
       ...(r.src ? { src: r.src } : {}),
       ...(r.chain ? { chain: r.chain } : {}),
     })
@@ -126,6 +138,16 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
   }
   index()
   const copperOf = (id: string) => own.get(id) ?? { tracks: [], vias: [] }
+  // a track tuned takes the old one's place on the board and in the lists that hold it
+  const set = (t: Track, sh: { pts: Pt[]; prims?: Prim[] }, lists: Track[][] = []): Track => {
+    const next = replaced(board, t, { pts: sh.pts, prims: sh.prims })
+    for (const l of [copperOf(t.route ?? '').tracks, ...lists]) {
+      const i = l.indexOf(t)
+      if (i >= 0) l[i] = next
+    }
+    built?.update(next)
+    return next
+  }
   const measure = (r: TuneRoute): number => {
     const { tracks, vias } = copperOf(r.id)
     if (!r.pair) return routeLength(tracks, vias, stack)
@@ -234,13 +256,7 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
     const k = cache ? hash(JSON.stringify([globalKey, key, tracks.map(t => [t.layer, t.width, t.net ?? '', t.pts]), vias.map(v => [v.at, v.layers, v.size])])) : ''
     const e = cache?.get(k)
     if (e && e.tracks.length === tracks.length && obsHash(e.box, skip) === e.obs) {
-      tracks.forEach((t, i) => {
-        t.pts = e.tracks[i].map(([x, y]) => [x, y] as Pt)
-        const p = e.prims?.[i]
-        if (p) t.prims = p
-        else delete t.prims
-        built?.update(t)
-      })
+      for (const [i, t] of [...tracks].entries()) set(t, { pts: e.tracks[i].map(([x, y]) => [x, y] as Pt), prims: e.prims?.[i] ?? undefined }, [tracks])
       cache!.put(k, e)
       return { added: e.added, ...(e.note !== undefined ? { note: e.note } : {}), ...(e.uncoupled !== undefined ? { uncoupled: e.uncoupled } : {}) }
     }
@@ -318,6 +334,7 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
       const out: { room: Room; key: string }[] = []
       for (let i = 0; i + 1 < t.pts.length; i++) {
         if (only && !only(i)) continue
+        pulse()
         for (const side of ['left', 'right'] as Side[]) {
           const key = keyOf(t, i, side)
           let room = store.get(key)
@@ -338,24 +355,15 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
       if (!last) return false
       const res = g.make(last.run.a, last.run.b, last.run.side, last.added + left, last.A)
       if (!res || 'why' in res || res.added < last.added + EPS) return false
-      const cur = { pts: last.t.pts, prims: last.t.prims }
-      last.t.pts = last.pts
-      if (last.prims) last.t.prims = last.prims
-      else delete last.t.prims
-      splice(last.t, last.run.index, res)
       // the room was measured only to the old amplitude
-      if (!res.pts.every(p => segDist(p, last!.run.a, last!.run.b) <= last!.A + 1e-6)) {
-        last.t.pts = cur.pts
-        if (cur.prims) last.t.prims = cur.prims
-        else delete last.t.prims
-        return false
-      }
-      space.get().update(last.t)
+      if (!res.pts.every(p => segDist(p, last!.run.a, last!.run.b) <= last!.A + 1e-6)) return false
+      last.t = set(last.t, spliced({ pts: last.pts, ...(last.prims ? { prims: last.prims } : {}) }, last.run.index, res), [g.tracks])
       left -= res.added - last.added
       last.added = res.added
       return true
     }
     while (left > EPS && guard-- > 0) {
+      pulse()
       let ask = left
       if (left < g.smallest - 1e-9) {
         if (enlarge()) continue
@@ -404,8 +412,7 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
       }
       const pts = res.pts
       last = { t: pick.t, pts: pick.t.pts, ...(pick.t.prims ? { prims: pick.t.prims } : {}), run: pick.run, A: pick.A, added: res.added }
-      splice(pick.t, pick.run.index, res)
-      space.get().update(pick.t)
+      last.t = set(pick.t, spliced(pick.t, pick.run.index, res), [g.tracks])
       left -= res.added
       g.onSplice?.(res)
       const mb = boxOf(pts),
@@ -430,16 +437,13 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
     }
   }
 
-  const splice = (t: Track, index: number, res: MeanderResult) => {
+  /** The shape with a meander spliced into segment `index`. */
+  const spliced = (t: { pts: Pt[]; prims?: Prim[] }, index: number, res: MeanderResult): { pts: Pt[]; prims?: Prim[] } => {
     const prims = primsOf(t),
       { k } = primOfSegment(prims, index),
       q = prims[k]
     const bump = res.prims
-    const next: Prim[] = [...prims.slice(0, k), ...linesOf([q.from, bump[0].from]), ...bump, ...linesOf([bump[bump.length - 1].to, q.to]), ...prims.slice(k + 1)]
-    const sh = trackShape(next)
-    t.pts = sh.pts
-    if (sh.prims) t.prims = sh.prims
-    else delete t.prims
+    return trackShape([...prims.slice(0, k), ...linesOf([q.from, bump[0].from]), ...bump, ...linesOf([bump[bump.length - 1].to, q.to]), ...prims.slice(k + 1)])
   }
   const ampsFrom = (top: number, floor: number) => {
     const out: number[] = []
@@ -480,15 +484,90 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
     }
     return explain(rooms, Math.max(1.2 * pitch, pitch + 0.02), 'beside the centre line')
   }
+  // a pair is laid out anew from its data: its copper off the board, then the new layout in its place under the ids it had
+  const next = [...(opts.next ?? [])]
+  const added = opts.added ?? []
+  const unplace = (tp: TunePair) => {
+    const gone = new Set(tp.ids)
+    for (const list of [board.items, added]) {
+      let w = 0
+      for (const it of list) if (!gone.has(it.id)) list[w++] = it
+      list.length = w
+    }
+    tp.ids = []
+  }
+  const place = (tp: TunePair) => {
+    const items = pairItems(
+      tp,
+      cu,
+      idsOf(tp, () => next[tp.next]++),
+    )
+    tp.ids = items.map(it => it.id)
+    for (const it of items) {
+      board.items.push(immutable(it))
+      added.push(it)
+    }
+  }
+  const relaid = (tp: TunePair, laid: PairLaid) => {
+    tp.laid = laid
+    const info = board.pairs?.[tp.at]
+    if (info) info.uncoupled = laid.uncoupled
+  }
+  let pads: IsFree | undefined
+  const padFree: IsFree = (ly, x, y, n, w) => (pads ??= padFreeOf(new ObstacleWorld(board, rules)))(ly, x, y, n, w)
+  const pairLength = (laid: PairLaid) => {
+    const side = (role: 'P' | 'N') =>
+      routeLength(
+        laid.tracks.filter(t => t.role === role),
+        laid.vias.filter(v => v.role === role),
+        stack,
+      )
+    return Math.max(side('P'), side('N'))
+  }
+  // the tuner meanders a pair in its centre line and lays it out again
+  const tunePair = (r: TuneRoute, tp: TunePair, extra: number, tolerance: number, frees: PairFrees): { added: number; note?: string } => {
+    unplace(tp)
+    const t = r.tune
+    const res = tunePairCentre(tp.laid.job, extra, {
+      pair: { free: frees.free, centreFree: frees.centreFree, padFree },
+      room: frees.room,
+      measure: pairLength,
+      tolerance,
+      ...(frees.over !== undefined ? { over: frees.over } : {}),
+      pads: board.items.filter((i): i is Pad => i.kind === 'pad' && (i.net === tp.nets[0] || i.net === tp.nets[1])),
+      ...(frees.amplitude !== undefined ? { amplitude: frees.amplitude } : t?.amplitude !== undefined ? { amplitude: mm(t.amplitude) } : {}),
+      ...(t?.spacing !== undefined ? { spacing: mm(t.spacing) } : {}),
+    })
+    if (res.added > 1e-6) relaid(tp, res.laid)
+    place(tp)
+    return { added: res.added, ...(res.note ? { note: res.note } : {}) }
+  }
+  const restorePair = (tp: TunePair, s: PairState) => {
+    unplace(tp)
+    const { auto: _auto, radii: _radii, ...job } = tp.laid.job
+    const laid: PairLaid = {
+      ...tp.laid,
+      job: { ...job, centre: s.centre, vias: s.vias, layers: s.layers, ...(s.auto ? { auto: s.auto } : {}), ...(s.radii ? { radii: s.radii } : {}) },
+      tracks: s.tracks,
+      vias: s.pvias,
+      uncoupled: s.uncoupled,
+      lengthP: s.lengthP,
+      lengthN: s.lengthN,
+    }
+    delete laid.clash
+    relaid(tp, laid)
+    place(tp)
+  }
   const lengthen = (r: TuneRoute, extra: number, tolerance: number, group?: string, over = tolerance): { added: number; note?: string } => {
     if (r.pair) {
-      if (!r.pair.lengthen) return { added: 0, note: 'a pair is not length tuned here' }
+      const tp = r.pair.laid
+      if (!tp) return { added: 0, note: 'a pair is not length tuned here' }
       const pass = (x: number, amplitude?: number) => {
         const { tracks, vias } = copperOf(r.id)
         const skip = new Set([...tracks, ...vias].map(i => i.id)),
           twin = r.pair!.netN,
           outer = outerOf(tracks, [r.net, twin])
-        const res = r.pair!.lengthen!(x, tolerance, {
+        const res = tunePair(r, tp, x, tolerance, {
           over: Math.max(0, over - (extra - x)),
           free: (layer, px, py, net, w) => space.get().slack(layer, px, py, w, { ...(net !== undefined ? { net } : {}), skip }) >= 0,
           centreFree: (layer, px, py, net, w) => space.get().slack(layer, px, py, w, { ...(net !== undefined ? { net } : {}), twin: net === twin ? r.net : twin, skip }) >= 0,
@@ -504,24 +583,22 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
         const done = extra - first.added <= tolerance || shape.maxAmplitude <= shape.amplitude + EPS
         const more = done ? { added: 0 } : pass(extra - first.added, shape.maxAmplitude)
         const added = first.added + more.added
-        if (extra - added <= tolerance || !P.state)
-          return { added, ...(!done && 'note' in more && more.note ? { note: more.note } : !done || !first.note ? {} : { note: first.note }) }
+        if (extra - added <= tolerance) return { added, ...(!done && 'note' in more && more.note ? { note: more.note } : !done || !first.note ? {} : { note: first.note }) }
         const floor = smallestBump(Math.max(r.pair!.w, (r.pair!.w + r.pair!.g) / 2))
         if (extra - added < floor - EPS)
           return {
             added,
             note: `pair tuning added ${f2(added)} of ${f2(extra)} mm, ${f2(extra - added)} mm missing, below the smallest pair meander of ${f2(floor)} mm, 2 pi - 4 times the larger of the width and half the pitch, which would overshoot; ${floorFix(group)}`,
           }
-        return { added, note: `pair tuning added ${f2(added)} of ${f2(extra)} mm, ${f2(extra - added)} mm missing: ${pairWhy(r, P.state())}; ${fixFor(group)}` }
+        return { added, note: `pair tuning added ${f2(added)} of ${f2(extra)} mm, ${f2(extra - added)} mm missing: ${pairWhy(r, pairState(tp.laid))}; ${fixFor(group)}` }
       }
-      const P = r.pair
-      if (!cache || !P.state || !P.restore) return run()
+      if (!cache) return run()
       const { tracks, vias } = copperOf(r.id)
       const skip = new Set([...tracks, ...vias].map(i => i.id))
-      const k = hash(JSON.stringify([globalKey, 'pair', r.net ?? '', P.netN, nm(extra), nm(tolerance), shape, P.state()]))
+      const k = hash(JSON.stringify([globalKey, 'pair', r.net ?? '', r.pair.netN, nm(extra), nm(tolerance), shape, pairState(tp.laid)]))
       const e = cache.get(k)
       if (e?.pair && obsHash(e.box, skip) === e.obs) {
-        P.restore(e.pair)
+        restorePair(tp, e.pair)
         index()
         cache.put(k, e)
         return { added: e.added, ...(e.note !== undefined ? { note: e.note } : {}) }
@@ -529,7 +606,7 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
       const box = around(tracks, vias, Math.max(shape.amplitude, shape.maxAmplitude) + 2),
         obs = obsHash(box, skip)
       const out = run()
-      cache.put(k, { obs, box, tracks: [], added: nm(out.added), ...(out.note !== undefined ? { note: out.note } : {}), pair: P.state() })
+      cache.put(k, { obs, box, tracks: [], added: nm(out.added), ...(out.note !== undefined ? { note: out.note } : {}), pair: pairState(tp.laid) })
       return out
     }
     const { tracks, vias } = copperOf(r.id)
@@ -573,6 +650,7 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
 
   // length targets: to the target, else the middle of the range, else the minimum plus half the tolerance
   for (const r of routes) {
+    pulse()
     const range = lengthRange(board, r)
     if (!range || !r.routed) continue
     const L = measure(r)
@@ -585,6 +663,7 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
   const groups = new Map<string, TuneRoute[]>()
   for (const r of routes) if (r.match) groups.set(r.match.group, [...(groups.get(r.match.group) ?? []), r])
   for (const name of [...groups.keys()].sort()) {
+    pulse()
     const members = groups.get(name)!
     const tol = Math.min(...members.map(r => matchTolerance(board, r)))
     for (const r of members) records.get(r.id)!.tolerance = tol
@@ -615,6 +694,7 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
 
   // pair skew: the shorter track gets a meander in a coupled run
   for (const r of routes) {
+    pulse()
     const pr = r.pair
     if (!pr || !r.routed) continue
     const { tracks, vias } = copperOf(r.id)
@@ -672,7 +752,8 @@ export function tuneRoutes(board: Board, routes: TuneRoute[], opts: TuneOptions 
         uncoupled: nm(unc),
       }
     })
-    if (pr.info && res.uncoupled) pr.info.uncoupled = nm(pr.info.uncoupled + res.uncoupled)
+    const info = pr.laid && board.pairs?.[pr.laid.at]
+    if (info && res.uncoupled) info.uncoupled = nm(info.uncoupled + res.uncoupled)
     const rec = records.get(r.id)!
     if (res.added > EPS) rec.tuned = nm((rec.tuned ?? 0) + res.added)
     if (res.note) rec.skewNote = res.note
@@ -738,4 +819,92 @@ function ringDist(r: Pt[], p: Pt): number {
   let d = Infinity
   for (let i = 0, j = r.length - 1; i < r.length; j = i++) d = Math.min(d, segDist(p, r[j], r[i]))
   return d
+}
+
+/** A pair as the route memo keeps a tuning step's result. */
+const pairState = (l: PairLaid): PairState => ({
+  centre: l.job.centre,
+  vias: l.job.vias,
+  layers: l.job.layers,
+  ...(l.job.auto ? { auto: l.job.auto } : {}),
+  ...(l.job.radii ? { radii: l.job.radii } : {}),
+  tracks: l.tracks.map(t => ({ layer: t.layer, role: t.role, pts: t.pts as [number, number][], width: t.width, ...(t.prims ? { prims: t.prims } : {}) })),
+  pvias: l.vias.map(v => ({ role: v.role, at: v.at as [number, number], layers: v.layers })),
+  uncoupled: l.uncoupled,
+  lengthP: l.lengthP,
+  lengthN: l.lengthN,
+})
+
+/** The tune stage: meanders and skew bumps on the routes a routing left, their records; `added`: that routing's list of its items. */
+export function tune(board: Board, t: Tuning, added?: Item[]): RouteRecord[] {
+  const { cache } = t
+  if (!t.routes.length) return []
+  return tuneRoutes(board, t.routes, {
+    rules: t.rules,
+    cache: cache ? { get: k => cache.tune(k), put: (k, e) => cache.putTune(k, e) } : null,
+    next: t.next,
+    ...(added ? { added } : {}),
+  })
+}
+
+type Box4 = [number, number, number, number]
+const boxOfPts = (pts: readonly Pt[], g: number): Box4 => [
+  Math.min(...pts.map(p => p[0])) - g,
+  Math.min(...pts.map(p => p[1])) - g,
+  Math.max(...pts.map(p => p[0])) + g,
+  Math.max(...pts.map(p => p[1])) + g,
+]
+
+/** The drawings a tuning can meet, as one hash: those within reach of a segment or via of a route it lengthens or deskews, since a meander or bump grows from its segment by at most that; so a label edit away from every tuned route keeps the tuning. */
+export function tuneDrawings(board: Board, routes: readonly TuneRoute[]): string {
+  const reach = new Map(routes.filter(r => r.length || r.match || r.pair).map(r => [r.id, reachOf(r) + 2]))
+  if (!reach.size) return ''
+  const segs: [Pt, Pt, number][] = []
+  for (const it of board.items) {
+    const g = (it.kind === 'track' || it.kind === 'via') && it.route !== undefined ? reach.get(it.route) : undefined
+    if (g === undefined) continue
+    if (it.kind === 'via') segs.push([it.at, it.at, g + it.size / 2])
+    else if (it.kind === 'track') for (let i = 1; i < it.pts.length; i++) segs.push([it.pts[i - 1], it.pts[i], g + it.width / 2])
+  }
+  const cu = copperLayers(board.copper)
+  const near: string[] = []
+  for (const it of board.items) {
+    if ((it.kind !== 'graphic' && it.kind !== 'text') || copperLayersOf(it, cu).length) continue
+    const pts = it.kind === 'graphic' ? it.paths.flat() : [...(it.polys ? it.polys.flatMap(q => q.outer) : it.strokes.flat()), it.at]
+    if (!pts.length) continue
+    const b = boxOfPts(pts, it.kind === 'graphic' ? it.width / 2 : it.thickness / 2)
+    if (segs.some(([p, q, g]) => crosses(p, q, [b[0] - g, b[1] - g, b[2] + g, b[3] + g]))) near.push(JSON.stringify(it))
+  }
+  return hash(near.join('\n'))
+}
+
+/** Whether the segment p q meets the box, by clipping it to each side. */
+function crosses(p: Pt, q: Pt, b: Box4): boolean {
+  let lo = 0,
+    hi = 1
+  const d = [q[0] - p[0], q[1] - p[1]]
+  for (const [k, min, max] of [
+    [0, b[0], b[2]],
+    [1, b[1], b[3]],
+  ] as const) {
+    if (Math.abs(d[k]) < 1e-12) {
+      if (p[k] < min || p[k] > max) return false
+      continue
+    }
+    const t0 = (min - p[k]) / d[k],
+      t1 = (max - p[k]) / d[k]
+    lo = Math.max(lo, Math.min(t0, t1))
+    hi = Math.min(hi, Math.max(t0, t1))
+    if (lo > hi) return false
+  }
+  return true
+}
+
+/** How far a tuning of the route reaches from its copper, mm: its largest meander or skew bump. */
+function reachOf(r: TuneRoute): number {
+  const t = r.tune ?? {}
+  const amplitude = t.amplitude !== undefined ? mm(t.amplitude) : TUNE_DEFAULTS.amplitude
+  const max = t.maxAmplitude !== undefined ? mm(t.maxAmplitude) : TUNE_DEFAULTS.maxAmplitude
+  // a length or match grows up to the largest amplitude, a pair's skew bump only to the amplitude or a pitch
+  return Math.max(amplitude, r.length || r.match ? max : 0, r.pair ? r.pair.w + r.pair.g + 0.02 : 0)
 }

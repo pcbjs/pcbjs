@@ -1,6 +1,7 @@
+import { marker } from './messages.js'
 import type { Board, DrcMarker } from '@pcbjs/core/model'
 import type { Sourcing } from '@pcbjs/core/site-data'
-import { resolveSourcing } from '@pcbjs/core/sourcing'
+import { resolveSourcing } from '@pcbjs/core/internal/sourcing'
 
 export interface BomRow {
   refs: string[]
@@ -38,9 +39,8 @@ export function sourcingErc(board: Board): DrcMarker[] {
     const what = `${r.refs.join(' ')}, ${r.value || r.footprint},`
     const keys = Object.keys(r.sourcing.all)
     if (!keys.length) {
-      if (board.rules.requireSourcing) out.push({ severity: 'warning', rule: 'unsourced-part', message: `${what} has no MPN: give it MPN or MPN:<tag> with source()`, at })
-    } else if (tags.length && r.sourcing.mpn === null)
-      out.push({ severity: 'warning', rule: 'unsourced-target', message: `${what} has ${keys.join(', ')} but none for the tags ${tags.join(', ')} and no catch-all MPN`, at })
+      if (board.rules.requireSourcing) out.push(marker({ severity: 'warning', rule: 'unsourced-part', args: { row: what }, refs: r.refs, at }))
+    } else if (tags.length && r.sourcing.mpn === null) out.push(marker({ severity: 'warning', rule: 'unsourced-target', args: { row: what, keys, tags }, refs: r.refs, at }))
   }
   return out
 }

@@ -2,10 +2,10 @@ import type { Board, Item, Ring } from '@pcbjs/core/model'
 import { circleRing } from './path.js'
 import { bbox, offset, polysToRings, strokeClosed, strokeOpen } from './geom.js'
 import { isCopper } from './layers.js'
-import { RingIndex, type Box } from './spatial.js'
+import { EdgeSet, type Box } from './spatial.js'
 
 const cache = new WeakMap<Item, Map<string, Ring[]>>()
-/** Everything derived from an item's copper rings, keyed by kind, layer and distance; cleared with the rings. */
+/** Everything derived from an item's copper rings, keyed by kind, layer and distance; an item is never written, so neither goes stale. */
 const derived = new WeakMap<Item, Map<string, unknown>>()
 
 function memo<T>(it: Item, key: string, make: () => T): T {
@@ -76,19 +76,14 @@ export function copperRings(it: Item, layer: string): Ring[] {
   return rings
 }
 
-export function invalidate(it: Item) {
-  cache.delete(it)
-  derived.delete(it)
-}
-
 /** The bounding box of an item's copper on one layer. */
 export function copperBox(it: Item, layer: string): Box {
   return memo(it, `box:${layer}`, () => bbox(copperRings(it, layer)))
 }
 
-/** An item's copper on one layer with a grid over its rings, so large pours are clipped only near the other shape. */
-export function copperIndex(it: Item, layer: string): RingIndex {
-  return memo(it, `index:${layer}`, () => new RingIndex(copperRings(it, layer)))
+/** An item's copper on one layer with its edges in a grid, for the predicates of spatial.ts; built once, since an item is never written. */
+export function copperSet(it: Item, layer: string): EdgeSet {
+  return memo(it, `edges:${layer}`, () => new EdgeSet(copperRings(it, layer)))
 }
 
 /** An item's copper on one layer offset by `delta` mm, round joins, as rings. */
@@ -96,9 +91,9 @@ export function grownRings(it: Item, layer: string, delta: number): Ring[] {
   return memo(it, `grow:${layer}:${delta}`, () => polysToRings(offset(copperRings(it, layer), delta)))
 }
 
-/** The grown copper of an item with a grid over its rings. */
-export function grownIndex(it: Item, layer: string, delta: number): RingIndex {
-  return memo(it, `growindex:${layer}:${delta}`, () => new RingIndex(grownRings(it, layer, delta)))
+/** The grown copper of an item as an edge set. */
+export function grownSet(it: Item, layer: string, delta: number): EdgeSet {
+  return memo(it, `growedges:${layer}:${delta}`, () => new EdgeSet(grownRings(it, layer, delta)))
 }
 
 /** A round hole of radius `r` at the item's centre, offset by `delta` mm, as rings. */
@@ -109,3 +104,6 @@ export function grownHole(it: Item & { at: [number, number] }, r: number, delta:
 export function copperItemsOn(board: Pick<Board, 'items' | 'copper'>, layer: string, copper: string[]): Item[] {
   return board.items.filter(it => copperLayersOf(it, copper).includes(layer))
 }
+
+/** Two items are on one net only when both have one and it is the same: copper on no net is foreign to everything, itself included. */
+export const sameNet = (a: string | undefined, b: string | undefined): boolean => a !== undefined && a === b

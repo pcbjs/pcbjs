@@ -1,9 +1,10 @@
-// `.pcbjs/routes/<board>.json` v1: { version, board, groups: { <"" or variant slug>: { legs, locks, tunes? } } }
+// `.pcbjs/cache/route/<board>.json` v1: { version, board, groups: { <"" or variant slug>: { legs, tunes? } } }
 // Leg: obs hashes the pass's final copper in box without the leg's own route; a failed leg has result null and the board as box.
 // Tune: obs hashes the copper, holes, courtyards and silk around the meanders when the step ran.
 // Only the entries a compile used are written back.
-import type { RouteResult } from '@pcbjs/core/types'
+import type { RouteResult } from '@pcbjs/core/internal/types'
 import type { Prim } from '@pcbjs/core/model'
+import { platform } from '@pcbjs/core/platform'
 
 /** `narrow`: the end of a joining leg kept off a trunk too narrow for it, see autorouter.md */
 export interface LegEntry {
@@ -12,11 +13,6 @@ export interface LegEntry {
   result: RouteResult | null
   fail?: { reason: string; layers: string[]; ripup: number }
   narrow?: { side: 0 | 1; kept: boolean }
-}
-export interface LockEntry {
-  net?: string
-  path?: string
-  legs: (RouteResult | null)[]
 }
 /** A pair as the tuner leaves it: its centre line and its layout. */
 export interface PairState {
@@ -44,7 +40,6 @@ export interface TuneEntry {
 }
 interface Group {
   legs: Record<string, LegEntry>
-  locks: Record<string, LockEntry>
   tunes?: Record<string, TuneEntry>
 }
 interface CacheFile {
@@ -54,7 +49,7 @@ interface CacheFile {
 }
 
 /** Bumped whenever the router changes what it produces, so old entries are not reused. */
-export const ROUTER_VERSION = 'maze-4'
+export const ROUTER_VERSION = 'maze-5'
 
 const KEY = Symbol.for('pcbjs.routeCache')
 function store(): Map<string, CacheFile> {
@@ -62,27 +57,10 @@ function store(): Map<string, CacheFile> {
   return (g[KEY] ??= new Map())
 }
 
-/** Node's fs and path when running in Node, null in a browser. Loaded lazily so the compiler stays importable anywhere. */
-function nodeApi(): { fs: typeof import('node:fs'); path: typeof import('node:path') } | null {
-  const p = (globalThis as any).process
-  if (!p || typeof p.getBuiltinModule !== 'function') return null
-  try {
-    return { fs: p.getBuiltinModule('node:fs'), path: p.getBuiltinModule('node:path') }
-  } catch {
-    return null
-  }
-}
-
-const CONFIGS = ['pcb.config.ts', 'pcb.config.mts', 'pcb.config.js', 'pcb.config.mjs', 'pcbjs.config.ts', 'pcbjs.config.mts', 'pcbjs.config.js', 'pcbjs.config.mjs']
-
-/** `dir`, else `<cwd>/.pcbjs/routes` in a project with a pcb.config file, else null for a cache in memory only. */
+/** The route memos of a cache dir, `<dir>/route`, in Node; null for memos in memory only. The cli always names the project's cache. */
 export function routesDir(dir?: string | null): string | null {
-  if (dir === null) return null
-  const api = nodeApi()
-  if (!api) return null
-  if (dir) return dir
-  const cwd = (globalThis as any).process.cwd() as string
-  return CONFIGS.some(f => api.fs.existsSync(api.path.join(cwd, f))) ? api.path.join(cwd, '.pcbjs', 'routes') : null
+  const p = platform()
+  return dir && p.store ? p.path.join(dir, 'route') : null
 }
 
 const fileName = (board: string) => `${board.replace(/[^A-Za-z0-9._-]+/g, '_')}.json`
@@ -90,7 +68,7 @@ const fileName = (board: string) => `${board.replace(/[^A-Za-z0-9._-]+/g, '_')}.
 /** One board's cache for one compile: reads what is stored, records what this compile uses, and writes that back on commit. */
 export class RouteCache {
   private file: CacheFile
-  private used: Group = { legs: {}, locks: {} }
+  private used: Group = { legs: {} }
   hits = 0
 
   /** `draft`: a compile of unsaved text, whose entries stay in memory and never reach the file */
@@ -110,18 +88,12 @@ export class RouteCache {
   }
 
   private read(): CacheFile | null {
-    const api = nodeApi()
-    if (!api || !this.dir) return null
-    try {
-      const data = JSON.parse(api.fs.readFileSync(api.path.join(this.dir, fileName(this.board)), 'utf8'))
-      return data && data.version === 1 && data.groups && typeof data.groups === 'object' ? data : null
-    } catch {
-      return null
-    }
+    const p = platform()
+    return p.store && this.dir ? parseMemo(p.text(p.path.join(this.dir, fileName(this.board)))) : null
   }
 
   private get stored(): Group {
-    return this.file.groups[this.group] ?? { legs: {}, locks: {} }
+    return this.file.groups[this.group] ?? { legs: {} }
   }
 
   leg(key: string): LegEntry | undefined {
@@ -130,17 +102,20 @@ export class RouteCache {
   putLeg(key: string, e: LegEntry) {
     this.used.legs[key] = e
   }
-  lock(key: string): LockEntry | undefined {
-    return this.used.locks[key] ?? this.stored.locks[key]
-  }
-  putLock(key: string, e: LockEntry) {
-    this.used.locks[key] = e
-  }
   tune(key: string): TuneEntry | undefined {
     return this.used.tunes?.[key] ?? this.stored.tunes?.[key]
   }
   putTune(key: string, e: TuneEntry) {
     ;(this.used.tunes ??= {})[key] = e
+  }
+
+  /** The stored legs kept, for a compile that took the routing from the stage cache. */
+  keepLegs() {
+    this.used.legs = { ...this.stored.legs }
+  }
+  /** The stored tunes kept, for a compile that took the tuning from the stage cache. */
+  keepTunes() {
+    if (this.stored.tunes) this.used.tunes = { ...this.stored.tunes }
   }
 
   /** Keep what this compile used, in memory and on disk; a draft adds its entries in memory only. */
@@ -149,25 +124,19 @@ export class RouteCache {
       const s = this.stored
       this.file.groups[this.group] = {
         legs: { ...s.legs, ...this.used.legs },
-        locks: { ...s.locks, ...this.used.locks },
         ...(s.tunes || this.used.tunes ? { tunes: { ...s.tunes, ...this.used.tunes } } : {}),
       }
       return
     }
     const before = JSON.stringify(this.file.groups[this.group] ?? null)
     this.file.groups[this.group] = this.used
-    const api = nodeApi()
-    if (!api || !this.dir || JSON.stringify(this.used) === before) return
-    try {
-      api.fs.mkdirSync(this.dir, { recursive: true })
-      api.fs.writeFileSync(api.path.join(this.dir, fileName(this.board)), format(this.file))
-    } catch {
-      /* a read-only project still compiles */
-    }
+    const p = platform()
+    if (!p.store || !this.dir || JSON.stringify(this.used) === before) return
+    p.store.write(p.path.join(this.dir, fileName(this.board)), format(this.file))
   }
 }
 
-/** The file as JSON with one leg or lock per line, so a diff of it shows which routes changed. */
+/** The file as JSON with one leg or tune per line, so a diff of it shows which routes changed. */
 function format(f: CacheFile): string {
   const J = JSON.stringify
   const entries = (o: Record<string, unknown>) =>
@@ -175,12 +144,25 @@ function format(f: CacheFile): string {
       .map(([k, v]) => `    ${J(k)}: ${J(v)}`)
       .join(',\n')
   const groups = Object.entries(f.groups)
-    .map(
-      ([name, g]) =>
-        `  ${J(name)}: {\n   "legs": {\n${entries(g.legs)}\n   },\n   "locks": {\n${entries(g.locks)}\n   }${g.tunes ? `,\n   "tunes": {\n${entries(g.tunes)}\n   }` : ''}\n  }`,
-    )
+    .map(([name, g]) => `  ${J(name)}: {\n   "legs": {\n${entries(g.legs)}\n   }${g.tunes ? `,\n   "tunes": {\n${entries(g.tunes)}\n   }` : ''}\n  }`)
     .join(',\n')
   return `{\n "version": 1,\n "board": ${J(f.board)},\n "groups": {\n${groups}\n }\n}\n`
+}
+
+function parseMemo(text: string | null): CacheFile | null {
+  try {
+    const data = text === null ? null : JSON.parse(text)
+    return data && data.version === 1 && data.groups && typeof data.groups === 'object' ? data : null
+  } catch {
+    return null
+  }
+}
+
+/** A route memo file's text taken into memory for a compile without a cache dir, a browser's; a memo already in memory is kept. */
+export function seedRoutes(board: string, text: string): void {
+  const key = `\u0000${board}`
+  const f = store().has(key) ? null : parseMemo(text)
+  if (f) store().set(key, f)
 }
 
 /** Drop every cached route in memory, for tests. The files stay. */

@@ -1,9 +1,12 @@
-import type { Pt, Ring, Board, Footprint, Pad } from '@pcbjs/core/model'
-import type { Src, StepModelSpec } from '@pcbjs/core/types'
-import type { BoardReference, HeightSource, Mat4, ReferencedBoard, ReferencedFootprint, ReferenceResolver, ReferenceStack } from '@pcbjs/core/reference'
-import { isPinRef, partOf, pinOfPad, type PartState } from '@pcbjs/core/schematic'
-import { mm } from '@pcbjs/core/units'
+import type { Pt, Ring, Board, Footprint, MatePoint, Pad } from '@pcbjs/core/model'
+import type { Src, StepModelSpec } from '@pcbjs/core/internal/types'
+import { isFileModel } from '@pcbjs/core/internal/model-source'
+import type { BoardReference, HeightSource, Mat4, ReferencedBoard, ReferencedFootprint, ReferenceResolver, ReferenceStack } from '@pcbjs/core/internal/reference'
+import { isPinRef } from '@pcbjs/core/internal/nets'
+import { partOf, pinOfPad, type PartState } from '@pcbjs/core/internal/part'
+import { mm } from '@pcbjs/core/internal/units'
 import type { Mat } from './geom.js'
+import { CompileError, type MateJob } from './flatten.js'
 import { bareHole } from './bare.js'
 
 export type { ReferenceResolver }
@@ -14,7 +17,7 @@ export type ModelBoxLoader = (model: StepModelSpec) => { min: [number, number, n
 /** The top of a footprint's model file above the board face, from the loader's box; null without a file, a loader or a box above the face. */
 export function modelTop(fp: Footprint, load?: ModelBoxLoader): number | null {
   const m = fp.model as StepModelSpec | undefined
-  if (!load || !m || m.kind !== 'step' || !m.path) return null
+  if (!load || !isFileModel(m) || !m.path) return null
   let box: ReturnType<ModelBoxLoader> = null
   try {
     box = load(m)
@@ -41,6 +44,7 @@ export interface ReferenceJob {
 }
 
 import { CompileError as ReferenceError, PART_REFS } from './flatten.js'
+import { CycleError } from './deps.js'
 
 // 4x4 matrices, column-major, as @pcbjs/step/place and THREE.Matrix4
 const DEG = Math.PI / 180
@@ -140,7 +144,23 @@ const triple = (v: unknown, what: string, src?: Src): [number, number, number] =
   if (!Array.isArray(v) || v.length < 2 || v.length > 3) throw new ReferenceError(`${what} must be [x, y] or [x, y, z] in mm, got ${JSON.stringify(v)}`, src)
   return [len(v[0], what, src), len(v[1], what, src), v[2] === undefined ? 0 : len(v[2], what, src)]
 }
-const KNOWN = new Set(['path', 'file', 'from', 'mate', 'stack', 'gap', 'at', 'flip', 'rotate', 'offset', 'show'])
+const KNOWN = new Set(['path', 'file', 'from', 'mate', 'side', 'stack', 'gap', 'at', 'flip', 'rotate', 'offset', 'show'])
+
+/** The board's named points at the poses their parts have now; a name twice is a compile error. */
+export function matePoints(jobs: readonly MateJob[]): MatePoint[] {
+  const seen = new Map<string, MateJob>()
+  return jobs.map(j => {
+    const prev = seen.get(j.name)
+    if (prev)
+      throw new CompileError(
+        `two named points are called ${j.name}${prev.src ? `, at ${prev.src.file}:${prev.src.line}` : ''}${j.src ? ` and at ${j.src.file}:${j.src.line}` : ''}`,
+        j.src,
+      )
+    seen.set(j.name, j)
+    const pose = 'fp' in j ? { at: j.fp.at, rot: j.fp.rot, side: j.fp.side, ref: j.fp.ref } : { at: j.at, rot: j.rot, side: j.side }
+    return { name: j.name, ...pose, ...(j.src ? { src: j.src } : {}) }
+  })
+}
 
 /** The short name of an entry for a message: its directory for a pcb.tsx, else its file name without the extension. */
 export function entryLabel(file: string): string {
@@ -190,15 +210,18 @@ function resolveOne(j: ReferenceJob, board: Board, partRefs: Map<PartState, stri
   const fail = (msg: string): never => {
     throw new ReferenceError(`${label}: ${msg}`, src)
   }
-  for (const k of Object.keys(p)) if (!KNOWN.has(k) && k !== '__src') fail(`unknown option ${JSON.stringify(k)}; it takes mate, stack, gap, at, flip, rotate, offset and show`)
+  for (const k of Object.keys(p))
+    if (!KNOWN.has(k) && k !== '__src') fail(`unknown option ${JSON.stringify(k)}; it takes mate, side, stack, gap, at, flip, rotate, offset and show`)
   if (p.mate !== undefined && p.at !== undefined) fail('takes mate or at, not both')
   if (p.mate === undefined && p.at === undefined) fail('needs mate, a mating pair of connectors, or at, an anchor [x, y, z]')
   if (!resolver) fail('references compile through the pcbjs command line; a compile of your own passes CompileOptions.references')
   const file = String(p.file ?? p.path)
   let rb: ReferencedBoard
   try {
-    rb = resolver!.resolve(file)
+    rb = resolver!.resolve(file, src, p.from)
   } catch (e) {
+    const c = e as CycleError
+    if (c?.name === 'CycleError') throw new CycleError(c.code, c.members, `${label}: ${c.prefix}`, src)
     return fail(String((e as Error)?.message ?? e))
   }
   const show = p.show ?? {}
@@ -239,47 +262,52 @@ function resolveOne(j: ReferenceJob, board: Board, partRefs: Map<PartState, stri
       // a pair without its own nets takes the first pair's
       const want = netMap(m.nets !== undefined ? m.nets : list[0]?.nets, fail)
       const local = localPin(m.local, m.pin, board, partRefs, heights, fail)
-      if (typeof m.remote !== 'string' || !m.remote) fail(`${what}.remote must be the ref of the mating part on the other board, such as 'J1'`)
+      if (typeof m.remote !== 'string' || !m.remote) fail(`${what}.remote must be the ref of the mating part on the other board, such as 'J1', or a point it names`)
+      const point = rb.mates?.find(q => q.name === m.remote)
+      if (point) return { local, rfp: pointPart(rb, point), rpad: { num: '', name: point.name, at: point.at }, want, point }
       const rfp = rb.footprints.find(f => f.ref === m.remote)
-      if (!rfp) fail(`${rb.name} has no part ${m.remote}`)
+      if (!rfp) fail(`${rb.name} has no part ${m.remote}${rb.mates?.length ? ` and no point of that name; its points are ${rb.mates.map(q => q.name).join(', ')}` : ''}`)
       const pinKey = String(m.pin ?? (isPinRef(m.local) ? '' : '1')) || '1'
       const rpad = rfp!.pads.find(q => q.num === pinKey) ?? rfp!.pads.find(q => q.name === pinKey)
       if (!rpad) fail(`${rb.name} ${m.remote} has no pin ${pinKey}; its pads are ${[...new Set(rfp!.pads.map(q => q.num))].join(', ')}`)
-      return { local, rfp: rfp!, rpad: rpad!, want }
+      return { local, rfp: rfp!, rpad: rpad!, want, point: undefined }
     })
-    if (p.flip !== undefined) fail('flip goes with at; a mate turns the board by its stack')
-    const stack: ReferenceStack = p.stack ?? 'above'
-    if (stack !== 'above' && stack !== 'below' && stack !== 'coplanar') fail(`stack must be 'above', 'below' or 'coplanar', got ${JSON.stringify(p.stack)}`)
-    const { local, rfp, rpad } = pairs[0]
+    if (p.flip !== undefined) fail('flip goes with at; a mate turns the board by its side')
+    if (p.stack !== undefined && p.stack !== 'coplanar')
+      fail(`stack takes 'coplanar' only; the board lies over the side of the local part, or the side given, side: 'F' or 'B', got ${JSON.stringify(p.stack)}`)
+    if (p.side !== undefined && p.side !== 'F' && p.side !== 'B') fail(`side must be 'F' or 'B', got ${JSON.stringify(p.side)}`)
+    if (p.side !== undefined && p.stack === 'coplanar') fail("side goes with a stacked board; a coplanar one lies in this board's plane")
+    const { local, rfp, rpad, point } = pairs[0]
+    const stack: ReferenceStack = p.stack === 'coplanar' ? 'coplanar' : (p.side ?? local.fp.side) === 'B' ? 'below' : 'above'
     const gap = p.gap === undefined ? local.height : len(p.gap, `${label}: gap`, src)
     const gapFrom = p.gap === undefined ? local.from : 'gap'
     if (stack !== 'coplanar' && gap < 0) fail(`gap must not be negative, got ${gap}`)
     const t = mateTransform({
       local: { side: local.fp.side, rot: local.fp.rot, pin: local.pad.at, thickness: board.thickness },
-      remote: { side: rfp.side, rot: rfp.rot, pin: rpad.at, thickness: rb.thickness },
+      remote: point ? { side: point.side, rot: point.rot, pin: point.at, thickness: rb.thickness } : { side: rfp.side, rot: rfp.rot, pin: rpad.at, thickness: rb.thickness },
       stack,
       gap,
       rotate,
       offset,
     })
     transform = t
-    const mates = pairs.map(({ local: l, rfp: f, rpad: r, want }) => {
+    const mates = pairs.map(({ local: l, rfp: f, rpad: r, want, point: pt }) => {
       const face = f.side === 'F' ? rb.thickness : 0
       return {
         local: { ref: l.fp.ref, pin: l.pad.num, pads: l.pads.map(q => ({ num: q.num, at: q.at, ...(want && q.net ? { net: q.net, want: want(q.net) } : {}) })) },
-        remote: { ref: f.ref, pin: r.num, pads: f.pads.map(q => ({ num: q.num, at: toBoard(t, q.at, face), ...(want && q.net ? { net: q.net } : {}) })) },
+        remote: { ref: pt ? pt.name : f.ref, pin: r.num, pads: f.pads.map(q => ({ num: q.num, at: toBoard(t, q.at, face), ...(want && q.net ? { net: q.net } : {}) })) },
         ...(want ? { nets: true } : {}),
       }
     })
     ref = {
-      anchor: { kind: 'mate', local: `${local.fp.ref}.${local.pad.num}`, remote: `${rfp.ref}.${rpad.num}` },
+      anchor: { kind: 'mate', local: `${local.fp.ref}/${local.pad.num}`, remote: point ? point.name : `${rfp.ref}/${rpad.num}` },
       stack,
       ...(stack !== 'coplanar' ? { gap, gapFrom } : {}),
       mate: mates[0],
       ...(mates.length > 1 ? { mates } : {}),
     }
   } else {
-    for (const k of ['stack', 'gap'] as const) if (p[k] !== undefined) fail(`${k} goes with mate; at places the board by its origin`)
+    for (const k of ['side', 'stack', 'gap'] as const) if (p[k] !== undefined) fail(`${k} goes with mate; at places the board by its origin`)
     const at = triple(p.at, `${label}: at`, src)
     if (p.flip !== undefined && typeof p.flip !== 'boolean') fail('flip must be true or false')
     transform = anchorTransform(j.m, at, rotate, !!p.flip, offset, rb.thickness)
@@ -293,9 +321,25 @@ function resolveOne(j: ReferenceJob, board: Board, partRefs: Map<PartState, stri
     heights,
     outline: rb.outline.map(r => r.map(q => toBoard(transform, q))),
     z: [Math.min(...zs), Math.max(...zs)],
-    holes: rb.drills.map(d => ({ at: toBoard(transform, [d.x, d.y]), d: d.d })),
+    holes: rb.drills.map(d => placedDrill(transform, d)),
     bodies: rb.footprints.filter(f => f.height > 0).map(f => ({ ...body(f, rb.thickness, transform), ...(f.heightFrom ? { from: f.heightFrom } : {}) })),
   }
+}
+
+/** A drill of the referenced board on this one; a slot's axis turns with the board. */
+function placedDrill(w: Mat4, d: ReferencedBoard['drills'][number]): BoardReference['holes'][number] {
+  const [x, y] = toBoard(w, [d.x, d.y])
+  if (d.len === undefined || d.a === undefined) return { x, y, d: d.d }
+  const r = (d.a * Math.PI) / 180,
+    tip = toBoard(w, [d.x + Math.cos(r), d.y + Math.sin(r)])
+  const a = ((((Math.atan2(tip[1] - y, tip[0] - x) * 180) / Math.PI) % 180) + 180) % 180
+  return { x, y, d: d.d, len: d.len, a: Math.round(a * 1e4) / 1e4 }
+}
+
+/** The part a named point sits on, for the pads the net check pairs; a `<mate>` point has none. */
+function pointPart(rb: ReferencedBoard, pt: MatePoint): ReferencedFootprint {
+  const fp = pt.ref ? rb.footprints.find(f => f.ref === pt.ref) : undefined
+  return fp ?? { ref: pt.name, at: pt.at, rot: pt.rot, side: pt.side, height: 0, body: { x: pt.at[0], y: pt.at[1], w: 0, h: 0, rot: pt.rot }, pads: [] }
 }
 
 /** A part's body as a prism in this board's frame: the box corners through the transform, the z range of its two faces. */

@@ -385,20 +385,30 @@ export const toInjected = (inj: Pick<ScopeInjection, 'at' | 'text'> | null | und
 /**
  * A compiler host whose source files under `root` carry their injection; `injections` holds each one by file name, for
  * mapping diagnostics back with `toSource`. A file the injector rejects keeps its text, and its error is in `errors`.
+ * `read` gives a file's text ahead of the disk, such as an editor's unsaved buffer.
  */
-export function scopeHost(options: ts.CompilerOptions, root?: string, base: ts.CompilerHost = ts.createCompilerHost(options, true)) {
+export function scopeHost(options: ts.CompilerOptions, root?: string, read?: (file: string) => string | undefined) {
+  const base = ts.createCompilerHost(options, true)
   const injections = new Map<string, ScopeInjection>()
   const errors = new Map<string, ScopeError>()
   const want = (f: string) => /\.[jt]sx?$/.test(f) && !f.endsWith('.d.ts') && !f.includes('/node_modules/') && (!root || f.startsWith(root.replace(/\/$/, '') + '/'))
+  const readFile = (f: string) => read?.(f) ?? base.readFile(f)
+  const resolveModule: ResolveModule = (spec, from) => {
+    const m = resolveFile(spec, from)
+    return m && { file: m.file, source: read?.(m.file) ?? m.source }
+  }
   const host: ts.CompilerHost = {
     ...base,
+    readFile,
+    fileExists: f => read?.(f) !== undefined || base.fileExists(f),
     getSourceFile(name, lang, onError, fresh) {
-      if (!want(name)) return base.getSourceFile(name, lang, onError, fresh)
-      const text = base.readFile(name)
+      const own = read?.(name)
+      if (!want(name)) return own === undefined ? base.getSourceFile(name, lang, onError, fresh) : ts.createSourceFile(name, own, lang, false)
+      const text = own ?? base.readFile(name)
       if (text === undefined) return base.getSourceFile(name, lang, onError, fresh)
       let inj: ScopeInjection | null = null
       try {
-        inj = scopeInject(text, resolveFile, name)
+        inj = scopeInject(text, resolveModule, name)
       } catch (e) {
         if (e instanceof ScopeError) errors.set(name, e)
         else throw e
@@ -419,4 +429,60 @@ export function sourcePosition(d: ts.Diagnostic, injections: ReadonlyMap<string,
   const text = inj ? d.file.text.slice(0, inj.at) + d.file.text.slice(inj.at + inj.text.length) : d.file.text
   const lines = text.slice(0, start).split('\n')
   return { file: d.file.fileName, start, line: lines.length, col: lines[lines.length - 1].length + 1 }
+}
+
+/** A binding the compiler captures, `const R1 = …`: its names, where each is, the initializer, and whether it sits in a function body. */
+export interface Capture {
+  /** the names and their offsets; one for `const R1 = …`, each name of a destructuring pattern */
+  names: { name: string; pos: number }[]
+  /** the initializer of a plain name, which the transform wraps; absent for a pattern, bound after the statement */
+  init?: { start: number; end: number }
+  /** the end of the statement, where a pattern's names are bound */
+  end: number
+  local: boolean
+}
+
+/** An initializer that may hold a pcbjs value: a call, a name or a member, not a literal, function or object. */
+function mayHold(e: ts.Expression): boolean {
+  while (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isSatisfiesExpression(e) || ts.isNonNullExpression(e)) e = e.expression
+  return (
+    ts.isCallExpression(e) ||
+    ts.isNewExpression(e) ||
+    ts.isIdentifier(e) ||
+    ts.isPropertyAccessExpression(e) ||
+    ts.isElementAccessExpression(e) ||
+    ts.isConditionalExpression(e) ||
+    ts.isBinaryExpression(e) ||
+    ts.isAwaitExpression(e)
+  )
+}
+
+/** Every `const` and `let` binding of a file the compiler captures by name, at the top level and in function bodies; never a loop variable. */
+export function bindingCaptures(sf: ts.SourceFile): Capture[] {
+  const out: Capture[] = []
+  const visit = (n: ts.Node, local: boolean): void => {
+    if (ts.isVariableStatement(n) && n.declarationList.flags & (ts.NodeFlags.Const | ts.NodeFlags.Let) && !has(n, ts.SyntaxKind.DeclareKeyword)) {
+      for (const d of n.declarationList.declarations) {
+        if (!d.initializer || !mayHold(d.initializer)) continue
+        if (ts.isIdentifier(d.name))
+          out.push({ names: [{ name: d.name.text, pos: d.name.getStart(sf) }], init: { start: d.initializer.getStart(sf), end: d.initializer.getEnd() }, end: n.getEnd(), local })
+        else {
+          const names: { name: string; pos: number }[] = []
+          const walk = (b: ts.BindingName) => {
+            if (ts.isIdentifier(b)) names.push({ name: b.text, pos: b.getStart(sf) })
+            else for (const e of b.elements) if (!ts.isOmittedExpression(e) && !e.dotDotDotToken) walk(e.name)
+          }
+          walk(d.name)
+          if (names.length) out.push({ names, end: n.getEnd(), local })
+        }
+      }
+    }
+    if (ts.isFunctionLike(n)) {
+      ts.forEachChild(n, c => visit(c, true))
+      return
+    }
+    ts.forEachChild(n, c => visit(c, local))
+  }
+  sf.statements.forEach(st => visit(st, false))
+  return out
 }

@@ -1,9 +1,9 @@
 import type { Board, Footprint, Pt } from '@pcbjs/core/model'
-import { isMpnKey, mpnTag } from '@pcbjs/core/sourcing'
-import { bomRows } from '@pcbjs/compile/bom'
+import { isMpnKey, mpnTag } from '@pcbjs/core/internal/sourcing'
+import { bomRows } from '@pcbjs/compile/internal/bom'
 
 // the rows and the sourcing ERC are in @pcbjs/compile, which runs the ERC
-export { bomRows, sourcingErc, type BomRow } from '@pcbjs/compile/bom'
+export { bomRows, sourcingErc, type BomRow } from '@pcbjs/compile/internal/bom'
 
 const csv = (rows: string[][]) => rows.map(r => r.map(v => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)).join(',')).join('\n') + '\n'
 const f = (v: number) => (Math.round(v * 1000) / 1000).toFixed(3)

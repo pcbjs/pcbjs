@@ -1,82 +1,76 @@
 import type { Board, DrcMarker, Graphic, Item, Pad, Pt, Ring, Text, Via, Zone } from '@pcbjs/core/model'
-import { bbox, centroid, contactPoint, difference, intersection, offset, overlaps, polysToRings, strokeClosed, strokeOpen } from './geom.js'
+import { area, bbox, centroid, contactPoint, difference, intersection, offset, overlaps, polysToRings, strokeClosed, strokeOpen } from './geom.js'
 import { copperLayers } from './layers.js'
-import { copperBox, copperIndex, copperLayersOf, copperRings, grownIndex } from './copper.js'
-import { joined, netTied, pairKey, type Connectivity } from './connectivity.js'
-import { contactNear, Grid, overlapsNear, RingIndex } from './spatial.js'
-import { clearanceSource, hasPadOverrides, itemClearance, CLASS_DEFAULTS, maxClearance, maxHoleClearance, ownHoleClearance, pairSource } from './netclass.js'
+import { copperBox, copperLayersOf, copperRings, copperSet, grownSet, sameNet } from './copper.js'
+import { joined, netTied, type Connectivity } from './connectivity.js'
+import { contactNear, distance, EdgeSet, gap, Grid, inRings, overlapsNear, ringEdges, ringsGap, segDist } from './spatial.js'
+import { hasPadOverrides, itemClearance, CLASS_DEFAULTS, maxClearance, maxHoleClearance, ownHoleClearance, ownProvenance, pairProvenance, rulesLevel } from './netclass.js'
+import { marker } from './messages.js'
+import type { Quantity } from '@pcbjs/core/finding'
 import { coupledGap, pairsOf, routesCopper } from './pair-info.js'
 import { joinsSolidly, thermalReport } from './zones.js'
-import { copperWeightRule, holeClearanceOn, holeToHole } from '@pcbjs/core/rules'
-import { OZ } from '@pcbjs/core/stackups'
-import { thinInk } from '@pcbjs/core/outline'
+import { copperWeightRule, holeClearanceOn, holeToHole } from '@pcbjs/core/internal/rules'
+import { OZ } from '@pcbjs/core/internal/stackups'
+import { thinInk } from '@pcbjs/core/internal/outline'
 import { referenceDrc } from './drc-reference.js'
 import { loopFindings } from './loops.js'
 import { maskDrawings, padMask } from './mask.js'
-import type { EdgeBand, EdgeBandKind, ResolvedRules as Rules } from '@pcbjs/core/types'
-import { isPinRef, partOf, pinOfPad, type PartState } from '@pcbjs/core/schematic'
+import type { EdgeBand, EdgeBandKind, ResolvedRules as Rules } from '@pcbjs/core/internal/types'
+import { isPinRef } from '@pcbjs/core/internal/nets'
+import { partOf, pinOfPad, type PartState } from '@pcbjs/core/internal/part'
 import { CompileError } from './flatten.js'
+import { pulse } from './cancel.js'
 
 /** Pads of one footprint with the same number are one pad drawn in parts, such as a KiCad padstack with a shape per layer. */
 const onePad = (a: Item, b: Item): boolean => a.kind === 'pad' && b.kind === 'pad' && a.ref !== undefined && a.ref === b.ref && a.num !== '' && a.num === b.num
 
-export function drc(board: Board, conn: Connectivity): DrcMarker[] {
+/** A copper item as findings name it. */
+const label = (it: Item): string => (it.kind === 'pad' ? padLabel(it) : it.ref ? `${it.kind} of ${it.ref}` : `${it.kind}${it.net ? ` ${it.net}` : ''}`)
+
+/** `short` and `clearance`: copper of two nets touching, or nearer than their clearance, over the candidate pairs connectivity found. */
+export function clearanceChecks(board: Board, conn: Connectivity): DrcMarker[] {
   const out: DrcMarker[] = []
   const r = board.rules
-  const cu = copperLayers(board.copper)
-  const label = (it: Item) => (it.kind === 'pad' ? padLabel(it) : it.ref ? `${it.kind} of ${it.ref}` : `${it.kind}${it.net ? ` ${it.net}` : ''}`)
-
-  const shorted = new Set(conn.shorts.map(([a, b]) => `${a.id}:${b.id}`))
-  const apart = conn.apart ?? new Set<string>()
-  // a net pair's clearance is the largest of the rules' and their classes'
-  const reach = maxClearance(board)
-  const classed = reach > r.clearance || hasPadOverrides(board) || !!board.classes
+  const classed = maxClearance(board) > r.clearance || hasPadOverrides(board) || !!board.classes
   // pads of one net tie group touch by design
   const tied = netTied(board)
-  for (const layer of cu) {
-    const on = board.items.filter(it => copperLayersOf(it, cu).includes(layer) && copperRings(it, layer).length)
-    // grid candidates come in the order of a loop over every pair
-    const grid = new Grid(on.map(it => copperBox(it, layer)))
-    for (let i = 0; i < on.length; i++) {
-      const a = on[i]
-      for (const j of grid.query(grid.boxes[i], reach)) {
-        if (j <= i) continue
-        const b = on[j]
-        if (a.net !== undefined && a.net === b.net) continue
-        if (onePad(a, b) || tied?.(a, b)) continue
-        const ca = copperIndex(a, layer),
-          cb = copperIndex(b, layer)
-        if (shorted.has(`${a.id}:${b.id}`) || (!apart.has(pairKey(layer, a, b)) && overlapsNear(ca, cb))) {
-          out.push({
-            severity: 'error',
-            rule: 'short',
-            message: `${label(a)} (${a.net ?? 'no net'}) touches ${label(b)} (${b.net ?? 'no net'}) on ${layer}`,
-            at: contactNear(ca, cb),
-            layer,
-            items: [a.id, b.id],
-          })
-        } else {
-          const c = classed ? itemClearance(board, a, b) : r.clearance,
-            grow = c / 2 - 0.0005
-          const ga = grownIndex(a, layer, grow),
-            gb = grownIndex(b, layer, grow)
-          if (overlapsNear(ga, gb)) {
-            const by = classed ? pairSource(board, a, b) : ''
-            out.push({
-              severity: 'error',
-              rule: 'clearance',
-              message: `${label(a)} (${a.net ?? 'no net'}) is ${f3(ringsGap(copperRings(a, layer), copperRings(b, layer)))} mm from ${label(b)} (${b.net ?? 'no net'}) on ${layer}, closer than ${c} mm${by ? ` (${by})` : ''}`,
-              at: contactNear(ga, gb),
-              layer,
-              items: [a.id, b.id],
-            })
-          }
-        }
-      }
+  for (const { layer, a, b, short } of conn.near) {
+    pulse()
+    if (onePad(a, b) || tied?.(a, b)) continue
+    const args = { a: label(a), an: a.net ?? 'no net', b: label(b), bn: b.net ?? 'no net' }
+    if (short) {
+      const at = contactNear(copperSet(a, layer), copperSet(b, layer))
+      out.push(marker({ severity: 'error', rule: 'short', args, at, layer, items: [a.id, b.id], witness: { layer, points: [at] } }))
+      continue
     }
+    // a net pair's clearance is the largest of the rules' and their classes'
+    const c = classed ? itemClearance(board, a, b) : r.clearance
+    if (!tooClose(a, b, layer, c)) continue
+    const near = gap(copperSet(a, layer), copperSet(b, layer)),
+      g = grownOf(c)
+    out.push(
+      marker({
+        severity: 'error',
+        rule: 'clearance',
+        args,
+        measured: mm(near.d),
+        required: mm(c),
+        provenance: classed ? pairProvenance(board, a, b) : [rulesLevel('clearance', r.clearance)],
+        at: contactNear(grownSet(a, layer, g), grownSet(b, layer, g)),
+        layer,
+        items: [a.id, b.id],
+        witness: { layer, points: near.pts },
+      }),
+    )
   }
 
-  // a track joining a pad with a trackWidth override is held to that width, the larger of two such pads
+  return out
+}
+
+/** `track-width`: a track under the minimum width, or under the trackWidth of a pad it joins. */
+export function trackWidthChecks(board: Board): DrcMarker[] {
+  const out: DrcMarker[] = []
+  const r = board.rules
   const narrow = board.items.filter((p): p is Pad => p.kind === 'pad' && p.trackWidth !== undefined && p.net !== undefined)
   const ngrid = narrow.length ? new Grid(narrow.map(p => bbox([p.poly]))) : null
   for (const it of board.items) {
@@ -88,7 +82,7 @@ export function drc(board: Board, conn: Connectivity): DrcMarker[] {
       for (const e of ends)
         for (const k of ngrid.query({ x: e[0], y: e[1], w: 0, h: 0 }, it.width / 2)) {
           const p = narrow[k]
-          if (p.net !== it.net || !p.layers.includes(it.layer) || !(inside(e, [p.poly]) || ringsGap([p.poly], [[e, e, e]]) <= it.width / 2 + EPS)) continue
+          if (p.net !== it.net || !p.layers.includes(it.layer) || !(inRings(e, [p.poly]) || ringsGap([p.poly], [[e, e, e]]) <= it.width / 2 + EPS)) continue
           if (by === undefined || p.trackWidth! > min) {
             min = p.trackWidth!
             by = p
@@ -96,16 +90,30 @@ export function drc(board: Board, conn: Connectivity): DrcMarker[] {
         }
     }
     if (it.width < min - (by ? EPS : 0))
-      out.push({
-        severity: 'error',
-        rule: 'track-width',
-        message: `track ${it.net ?? ''} is ${it.width} mm wide, minimum ${min} mm${by ? ` (${clearanceSource(board, by, 'trackWidth')}, joining ${padLabel(by)})` : ''}`,
-        at: it.pts[0],
-        layer: it.layer,
-        items: [it.id],
-      })
+      out.push(
+        marker({
+          severity: 'error',
+          rule: 'track-width',
+          args: { net: it.net ?? '', ...(by ? { pad: padLabel(by) } : {}) },
+          measured: mm(it.width),
+          required: mm(min),
+          provenance: by ? ownProvenance(board, by, 'trackWidth', min) : [rulesLevel('minTrackWidth', min)],
+          at: it.pts[0],
+          layer: it.layer,
+          items: [it.id],
+          witness: { layer: it.layer, segments: it.pts.slice(1).map((q, i) => [it.pts[i], q]) },
+        }),
+      )
   }
 
+  return out
+}
+
+/** `edge-clearance` for copper too near the outline, `outline` for a board without one. */
+export function edgeChecks(board: Board): DrcMarker[] {
+  const out: DrcMarker[] = []
+  const cu = copperLayers(board.copper)
+  const r = board.rules
   if (board.outline.length) {
     const insets = new Map<number, Ring[]>()
     const innerOf = (c: number) => {
@@ -120,22 +128,32 @@ export function drc(board: Board, conn: Connectivity): DrcMarker[] {
         if (!rings.length) continue
         const c = it.kind === 'pad' && it.edgeClearance !== undefined ? it.edgeClearance : r.edgeClearance
         const outside = difference(rings, innerOf(c))
-        const by = c !== r.edgeClearance || (it.kind === 'pad' && it.edgeClearance !== undefined) ? clearanceSource(board, it, 'edgeClearance') : ''
+        const own = c !== r.edgeClearance || (it.kind === 'pad' && it.edgeClearance !== undefined)
         if (outside.length)
-          out.push({
-            severity: 'error',
-            rule: 'edge-clearance',
-            message: `${label(it)} is closer than ${c} mm to the board edge on ${layer}${by ? ` (${by})` : ''}`,
-            at: centroid(outside.map(p => p.outer)),
-            layer,
-            items: [it.id],
-          })
+          out.push(
+            marker({
+              severity: 'error',
+              rule: 'edge-clearance',
+              args: { a: label(it) },
+              required: mm(c),
+              provenance: own ? ownProvenance(board, it, 'edgeClearance', c) : [rulesLevel('edgeClearance', c)],
+              at: centroid(outside.map(p => p.outer)),
+              layer,
+              items: [it.id],
+              witness: { layer, rings: polysToRings(outside) },
+            }),
+          )
       }
   } else {
-    out.push({ severity: 'warning', rule: 'outline', message: 'Edge.Cuts does not form a closed outline', at: [0, 0] })
+    out.push(marker({ severity: 'warning', rule: 'outline', at: [0, 0], layer: 'Edge.Cuts' }))
   }
 
-  // courtyards: an overlap under COURTYARD_TOLERANCE deep passes, as KiCad's courtyard check passes it
+  return out
+}
+
+/** `courtyard`: two parts' courtyards overlapping deeper than COURTYARD_TOLERANCE, as KiCad's courtyard check passes it. */
+export function courtyardChecks(board: Board): DrcMarker[] {
+  const out: DrcMarker[] = []
   for (const side of ['F.CrtYd', 'B.CrtYd']) {
     const cy = board.items
       .filter((it): it is Graphic => it.kind === 'graphic' && it.layer === side && !!it.ref)
@@ -144,42 +162,64 @@ export function drc(board: Board, conn: Connectivity): DrcMarker[] {
     const grid = new Grid(cy.map(e => bbox(e.rings)))
     for (let i = 0; i < cy.length; i++)
       for (const j of grid.query(grid.boxes[i]))
-        if (j > i && cy[i].it.ref !== cy[j].it.ref && overlaps(cy[i].rings, cy[j].rings) && deepOverlap(cy[i].rings, cy[j].rings))
-          out.push({
-            severity: 'warning',
-            rule: 'courtyard',
-            message: `courtyards of ${cy[i].it.ref} and ${cy[j].it.ref} overlap`,
-            at: contactPoint(cy[i].rings, cy[j].rings),
-            layer: side,
-            items: [cy[i].it.id, cy[j].it.id],
-          })
+        if (j > i && cy[i].it.ref !== cy[j].it.ref && overlaps(cy[i].rings, cy[j].rings) && deepOverlap(cy[i].rings, cy[j].rings)) {
+          const lap = polysToRings(intersection(cy[i].rings, cy[j].rings))
+          out.push(
+            marker({
+              severity: 'warning',
+              rule: 'courtyard',
+              args: { a: cy[i].it.ref!, b: cy[j].it.ref! },
+              measured: { value: um(Math.abs(area(lap))), unit: 'mm2' },
+              at: contactPoint(cy[i].rings, cy[j].rings),
+              layer: side,
+              items: [cy[i].it.id, cy[j].it.id],
+              witness: { layer: side, rings: lap },
+            }),
+          )
+        }
   }
 
-  thermalChecks(board, out)
-  holeChecks(board, out, label)
-  silkChecks(board, out)
-  maskWebChecks(board, out)
-  pairChecks(board, out)
-  lengthChecks(board, out)
-  silkEdgeChecks(board, out)
-  edgeBandChecks(board, out)
+  return out
+}
 
+/** `unconnected` per ratsnest line, `single-pad` per net with one pad. */
+export function unconnectedChecks(board: Board, conn: Connectivity): DrcMarker[] {
+  const out: DrcMarker[] = []
   conn.ratsnest.forEach((rn, i) => {
     // a split pour names its pieces, so a pad in a cut-off piece can be found
     const w = conn.islands?.[i]
-    out.push({
-      severity: 'error',
-      rule: 'unconnected',
-      message: `net ${rn.net} is not fully connected${w ? `: ${w[0]}, is apart from ${w[1]}` : ''}`,
-      at: [(rn.from[0] + rn.to[0]) / 2, (rn.from[1] + rn.to[1]) / 2],
-      net: rn.net,
-    })
+    const a = padNear(board, rn.net, rn.from),
+      b = padNear(board, rn.net, rn.to)
+    const end = (pad: Pad | undefined, p: Pt) => (pad ? `${pad.ref ? pad.ref + '/' : ''}${pad.num} at ${ptText(p)}` : ptText(p))
+    out.push(
+      marker({
+        severity: 'error',
+        rule: 'unconnected',
+        args: { net: rn.net, ...(w ? { apart: [w[0], w[1]] } : {}), from: end(a, rn.from), to: end(b, rn.to) },
+        refs: [`net:${rn.net}`, ...[a, b].flatMap(p => (p?.ref !== undefined && p.num ? [`${p.ref}/${p.num}`] : []))],
+        at: [(rn.from[0] + rn.to[0]) / 2, (rn.from[1] + rn.to[1]) / 2],
+        witness: { segments: [[rn.from, rn.to]] },
+      }),
+    )
   })
-  for (const net of conn.singles) out.push({ severity: 'warning', rule: 'single-pad', message: `net ${net} has only one pad`, at: anchorOfNet(board, net), net })
+  pulse()
+  for (const net of conn.singles) {
+    const pad = board.items.find((i): i is Pad => i.kind === 'pad' && i.net === net)
+    const refs = [`net:${net}`, ...(pad?.ref !== undefined && pad.num ? [`${pad.ref}/${pad.num}`] : [])]
+    out.push(marker({ severity: 'warning', rule: 'single-pad', args: { net }, refs, at: pad ? pad.at : [0, 0] }))
+  }
 
-  out.push(...referenceDrc(board), ...loopFindings(board))
-  return out.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1))
+  return out
 }
+
+/** A check that writes its findings into `out`, as one list. */
+export const collect =
+  (check: (board: Board, out: DrcMarker[]) => void) =>
+  (board: Board): DrcMarker[] => {
+    const out: DrcMarker[] = []
+    check(board, out)
+    return out
+  }
 
 /** ERC `copper-weight`: copper over 1 oz needs the wider clearance and track width of COPPER_WEIGHT_RULES; one warning per board. */
 export function copperWeightErc(board: Board): DrcMarker[] {
@@ -198,31 +238,71 @@ export function copperWeightErc(board: Board): DrcMarker[] {
       r.minTrackWidth < need.minTrackWidth - 1e-9 ? `minTrackWidth ${r.minTrackWidth} mm` : '',
     ].filter(Boolean)
     if (!low.length) continue
-    out.push({
-      severity: 'warning',
-      rule: 'copper-weight',
-      at: [0, 0],
-      message: `${layers.join(' and ')} ${layers.length > 1 ? 'are' : 'is'} ${oz} oz copper, which fabs make at clearance ${need.clearance} mm and track width ${need.minTrackWidth} mm or more, but the rules have ${low.join(' and ')}; raise them in rules, such as rules={{ clearance: ${need.clearance}, minTrackWidth: ${need.minTrackWidth} }}`,
-    })
+    out.push(
+      marker({
+        severity: 'warning',
+        rule: 'copper-weight',
+        at: [0, 0],
+        args: { layers, oz, clearance: need.clearance, width: need.minTrackWidth, low },
+      }),
+    )
   }
   return out
 }
 
-function anchorOfNet(board: Board, net: string) {
-  const it = board.items.find(i => i.net === net && i.kind === 'pad')
-  return it && it.kind === 'pad' ? it.at : ([0, 0] as [number, number])
+const EPS = 1e-6
+/** Clipper's round offsets fall short of the true arc by up to two and a quarter of their 5 µm chords a side, so in this band under a limit its boolean decides as it always did, mm. */
+const CHORDS = 0.03
+/** Past a limit by more than Clipper's 10 nm rounding reaches, mm. */
+const SLACK = 0.0001
+/** What the clearance test grows each side by: half the clearance less half a micron. */
+const grownOf = (c: number) => c / 2 - 0.0005
+
+/** Whether two items' copper on a layer comes closer than clearance c: grown each by grownOf(c), it would overlap. */
+function tooClose(a: Item, b: Item, layer: string, c: number): boolean {
+  const g = grownOf(c),
+    ca = copperSet(a, layer),
+    cb = copperSet(b, layer)
+  const d = distance(ca, cb, 2 * g + SLACK, 2 * g - CHORDS)
+  if (d < 2 * g - CHORDS) return true
+  if (d >= 2 * g + SLACK) return false
+  return overlapsNear(grownSet(a, layer, g), grownSet(b, layer, g))
 }
 
-const EPS = 1e-6
+/** Whether copper comes within `reach` of a hole's axis: the hole's `keep`, its capsule of that radius, overlaps it. */
+function holeHits(reach: number, axis: EdgeSet, keep: EdgeSet, copper: EdgeSet): boolean {
+  const d = distance(axis, copper, reach + SLACK, reach - CHORDS)
+  if (d < reach - CHORDS) return true
+  if (d >= reach + SLACK) return false
+  return overlapsNear(keep, copper)
+}
 /** How deep two courtyards may overlap before `courtyard` reports them, mm: 10 µm, below which KiCad passes them too. */
 export const COURTYARD_TOLERANCE = 0.01
 /** Whether two sets of rings still overlap once each is shrunk by half the tolerance: the overlap is at least that deep. */
 const deepOverlap = (a: Ring[], b: Ring[]): boolean => overlaps(polysToRings(offset(a, -COURTYARD_TOLERANCE / 2)), polysToRings(offset(b, -COURTYARD_TOLERANCE / 2)))
 const f3 = (v: number) => String(Math.round(v * 1000) / 1000)
+const mm = (value: number): Quantity => ({ value, unit: 'mm' })
+const um = (v: number) => Math.round(v * 1e6) / 1e6
+const ptText = (p: Pt) => `(${(Math.round(p[0] * 100) / 100).toFixed(2)}, ${(Math.round(p[1] * 100) / 100).toFixed(2)})`
+
+/** The pad of a net within half a millimetre of a point, the nearest. */
+function padNear(board: Board, net: string, p: Pt): Pad | undefined {
+  let best: Pad | undefined,
+    d = 0.25
+  for (const it of board.items) {
+    if (it.kind !== 'pad' || it.net !== net) continue
+    const e = (it.at[0] - p[0]) ** 2 + (it.at[1] - p[1]) ** 2
+    if (e < d) {
+      d = e
+      best = it
+    }
+  }
+  return best
+}
 
 /** A pad as findings name it: `pad J1.15`, or an unnumbered hole by its position, `unplated hole of J1 at (3.2, 4)`. */
 /** Thermal reliefs: pads joined to a pour by fewer spokes than minSpokes, and spokes thinner than the zone min width. */
-function thermalChecks(board: Board, out: DrcMarker[]) {
+export function thermalChecks(board: Board, out: DrcMarker[]) {
   const zones = board.items.filter((z): z is Zone => z.kind === 'zone')
   // a through-hole pad another pour joins solidly or through enough spokes is connected whatever this pour does
   const joinedElsewhere = (pad: Pad, z: Zone) =>
@@ -243,66 +323,52 @@ function thermalChecks(board: Board, out: DrcMarker[]) {
     return n
   }
   for (const z of zones) {
+    pulse()
     const t = thermalReport(z)
     if (!t) continue
     const pour = `the ${z.net ?? 'no net'} pour on ${z.layer}`
     if (t.spokeWidth < t.minWidth - 1e-9 && t.pads.some(p => p.spokes > 0))
-      out.push({
-        severity: 'warning',
-        rule: 'thermal-spoke-width',
-        message: `thermal spokes of ${pour} are ${f3(t.spokeWidth)} mm wide, narrower than its min width ${f3(t.minWidth)} mm; they are kept`,
-        at: t.pads[0].pad.at,
-        layer: z.layer,
-        items: [z.id],
-      })
+      out.push(
+        marker({
+          severity: 'warning',
+          rule: 'thermal-spoke-width',
+          args: { pour },
+          measured: mm(t.spokeWidth),
+          required: mm(t.minWidth),
+          at: t.pads[0].pad.at,
+          layer: z.layer,
+          items: [z.id],
+        }),
+      )
     for (const { pad, spokes } of t.pads) {
+      pulse()
       if (!(spokes > 0 && spokes < t.minSpokes)) continue
       const tracks = joining(pad, z.layer)
       if (spokes + tracks >= t.minSpokes || joinedElsewhere(pad, z)) continue
-      out.push({
-        severity: 'warning',
-        rule: 'thermal-spokes',
-        message: `${padLabel(pad)} (${pad.net}) joins ${pour} through ${spokes} of ${t.spokes} thermal spokes${tracks ? ` and ${tracks} track${tracks > 1 ? 's' : ''} or via${tracks > 1 ? 's' : ''}` : ''}, fewer than ${t.minSpokes}`,
-        at: pad.at,
-        layer: z.layer,
-        items: [pad.id, z.id],
-      })
+      out.push(
+        marker({
+          severity: 'warning',
+          rule: 'thermal-spokes',
+          args: { pad: padLabel(pad), net: pad.net ?? '', pour, spokes: t.spokes, tracks },
+          measured: { value: spokes, unit: 'count' },
+          required: { value: t.minSpokes, unit: 'count' },
+          at: pad.at,
+          layer: z.layer,
+          items: [pad.id, z.id],
+        }),
+      )
     }
   }
 }
 
 export const padLabel = (p: Pad): string =>
-  p.num ? `pad ${p.ref ?? ''}.${p.num}` : `${p.type === 'npth' ? 'unplated hole' : 'unnumbered pad'}${p.ref ? ` of ${p.ref}` : ''} at (${f3(p.at[0])}, ${f3(p.at[1])})`
-
-/** Whether a point lies inside a set of rings, even-odd, so the holes of a polygon count as outside. */
-function inside(p: Pt, rings: Ring[]): boolean {
-  let n = false
-  for (const r of rings)
-    for (let i = 0, j = r.length - 1; i < r.length; j = i++)
-      if (r[i][1] > p[1] !== r[j][1] > p[1] && p[0] < ((r[j][0] - r[i][0]) * (p[1] - r[i][1])) / (r[j][1] - r[i][1]) + r[i][0]) n = !n
-  return n
-}
-
-/** The edges of a set of rings, each closed. */
-function* edges(rings: Ring[]): Generator<[Pt, Pt]> {
-  for (const r of rings) for (let i = 0; i < r.length; i++) yield [r[i], r[(i + 1) % r.length]]
-}
-
-/** The measured gap between two copper shapes, edge to edge: 0 when they touch or one contains the other. */
-function ringsGap(a: Ring[], b: Ring[]): number {
-  if (!a.length || !b.length) return 0
-  if ((a[0][0] && inside(a[0][0], b)) || (b[0][0] && inside(b[0][0], a))) return 0
-  let d = Infinity
-  const eb = [...edges(b)]
-  for (const [p, q] of edges(a)) for (const [u, v] of eb) d = Math.min(d, segDist(p, q, u, v))
-  return d === Infinity ? 0 : d
-}
+  p.num ? `pad ${p.ref ?? ''}/${p.num}` : `${p.type === 'npth' ? 'unplated hole' : 'unnumbered pad'}${p.ref ? ` of ${p.ref}` : ''} at (${f3(p.at[0])}, ${f3(p.at[1])})`
 
 /** The gap from the edge of a hole to a copper shape: negative when the copper covers part of the hole. */
 function holeGap(h: { a: Pt; b: Pt; r: number }, rings: Ring[]): number {
-  if (inside(h.a, rings)) return -h.r
+  if (inRings(h.a, rings)) return -h.r
   let d = Infinity
-  for (const [u, v] of edges(rings)) d = Math.min(d, segDist(h.a, h.b, u, v))
+  for (const [u, v] of ringEdges(rings)) d = Math.min(d, segDist(h.a, h.b, u, v))
   return d === Infinity ? 0 : d - h.r
 }
 
@@ -315,102 +381,86 @@ interface Hole {
   name: string
 }
 
+function padCapsule(pad: Pad, [w, h]: [number, number]): Pick<Hole, 'a' | 'b' | 'r'> {
+  const half = Math.abs(w - h) / 2,
+    t = (pad.rot * Math.PI) / 180,
+    c = Math.cos(t),
+    s = Math.sin(t)
+  const d: Pt = w >= h ? [c * half, -s * half] : [s * half, c * half]
+  return { a: [pad.at[0] - d[0], pad.at[1] - d[1]], b: [pad.at[0] + d[0], pad.at[1] + d[1]], r: Math.min(w, h) / 2 }
+}
+
+function padRingWidth(pad: Pad): number {
+  const hole = padCapsule(pad, pad.drill!)
+  if (pad.shape === 'circle' || pad.shape === 'oval') {
+    const d = Math.min(...pad.size)
+    const copper = padCapsule(pad, pad.shape === 'circle' ? [d, d] : pad.size)
+    return copper.r - hole.r - Math.max(segDist(hole.a, hole.a, copper.a, copper.b), segDist(hole.b, hole.b, copper.a, copper.b))
+  }
+  const rings = [pad.poly]
+  if (!inRings(hole.a, rings) || !inRings(hole.b, rings)) return -hole.r
+  let gap = Infinity
+  for (const [a, b] of ringEdges(rings)) gap = Math.min(gap, segDist(hole.a, hole.b, a, b))
+  return gap - hole.r
+}
+
 function holesOf(board: Board, label: (it: Item) => string): Hole[] {
   const out: Hole[] = []
   for (const it of board.items) {
     if (it.kind === 'via') out.push({ it, a: it.at, b: it.at, r: it.drill / 2, name: label(it) })
-    else if (it.kind === 'pad' && it.drill) {
-      const [w, h] = it.drill,
-        r = Math.min(w, h) / 2,
-        half = Math.abs(w - h) / 2
-      // rotated counter-clockwise on screen, y down
-      const t = (it.rot * Math.PI) / 180,
-        c = Math.cos(t),
-        s = Math.sin(t)
-      const d: Pt = w >= h ? [c * half, -s * half] : [s * half, c * half]
-      out.push({ it, a: [it.at[0] - d[0], it.at[1] - d[1]], b: [it.at[0] + d[0], it.at[1] + d[1]], r, name: label(it) })
-    }
+    else if (it.kind === 'pad' && it.drill) out.push({ it, ...padCapsule(it, it.drill), name: label(it) })
   }
   return out
-}
-
-function segDist(p: Pt, q: Pt, a: Pt, b: Pt): number {
-  const pt = (x: Pt, u: Pt, v: Pt) => {
-    const dx = v[0] - u[0],
-      dy = v[1] - u[1],
-      n = dx * dx + dy * dy
-    const t = n ? Math.max(0, Math.min(1, ((x[0] - u[0]) * dx + (x[1] - u[1]) * dy) / n)) : 0
-    return Math.hypot(x[0] - u[0] - t * dx, x[1] - u[1] - t * dy)
-  }
-  const cross = (o: Pt, u: Pt, v: Pt) => (u[0] - o[0]) * (v[1] - o[1]) - (u[1] - o[1]) * (v[0] - o[0])
-  const d1 = cross(a, b, p),
-    d2 = cross(a, b, q),
-    d3 = cross(p, q, a),
-    d4 = cross(p, q, b)
-  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return 0
-  return Math.min(pt(p, a, b), pt(q, a, b), pt(a, p, q), pt(b, p, q))
 }
 
 const holeRing = (h: Hole, grow: number): Ring[] => polysToRings(strokeOpen([h.a, h.b], 2 * (h.r + grow)))
 
 /** Drill sizes, annular rings, hole to hole and hole to copper. */
-function holeChecks(board: Board, out: DrcMarker[], label: (it: Item) => string) {
+export function holeChecks(board: Board, out: DrcMarker[]) {
   const r = board.rules
   const cu = copperLayers(board.copper)
   for (const it of board.items) {
+    pulse()
     if (it.kind === 'via') {
       const ring = (it.size - it.drill) / 2
-      if (it.drill < r.minViaDrill - EPS)
-        out.push({
-          severity: 'error',
-          rule: 'via-drill',
-          message: `${label(it)} has a ${f3(it.drill)} mm drill, minimum via drill ${r.minViaDrill} mm`,
-          at: it.at,
-          layer: it.layers[0],
-          items: [it.id],
-        })
-      else if (it.drill < r.minDrill - EPS)
-        out.push({
-          severity: 'error',
-          rule: 'drill',
-          message: `${label(it)} has a ${f3(it.drill)} mm drill, minimum drill ${r.minDrill} mm`,
-          at: it.at,
-          layer: it.layers[0],
-          items: [it.id],
-        })
-      if (it.size < r.minViaDiameter - EPS)
-        out.push({
-          severity: 'error',
-          rule: 'via-size',
-          message: `${label(it)} is ${f3(it.size)} mm across, minimum via diameter ${r.minViaDiameter} mm`,
-          at: it.at,
-          layer: it.layers[0],
-          items: [it.id],
-        })
-      if (ring < r.minAnnularRing - EPS)
-        out.push({
-          severity: 'error',
-          rule: 'annular-ring',
-          message: `${label(it)} has a ${f3(ring)} mm annular ring (${f3(it.size)} mm copper, ${f3(it.drill)} mm drill), minimum ${r.minAnnularRing} mm`,
-          at: it.at,
-          layer: it.layers[0],
-          items: [it.id],
-        })
+      const of = (rule: string, measured: number, key: keyof Rules & string, args: Record<string, number> = {}) =>
+        out.push(
+          marker({
+            severity: 'error',
+            rule,
+            args: { a: label(it), ...args },
+            measured: mm(measured),
+            required: mm(r[key] as number),
+            provenance: [rulesLevel(key, r[key] as number)],
+            at: it.at,
+            layer: it.layers[0],
+            items: [it.id],
+          }),
+        )
+      if (it.drill < r.minViaDrill - EPS) of('via-drill', it.drill, 'minViaDrill')
+      else if (it.drill < r.minDrill - EPS) of('drill', it.drill, 'minDrill')
+      if (it.size < r.minViaDiameter - EPS) of('via-size', it.size, 'minViaDiameter')
+      if (ring < r.minAnnularRing - EPS) of('annular-ring', ring, 'minAnnularRing', { copper: it.size, drill: it.drill })
     } else if (it.kind === 'pad' && it.drill) {
       const d = Math.min(...it.drill)
-      if (d < r.minDrill - EPS)
-        out.push({ severity: 'error', rule: 'drill', message: `${label(it)} has a ${f3(d)} mm drill, minimum drill ${r.minDrill} mm`, at: it.at, layer: it.layer, items: [it.id] })
-      if (it.type === 'tht' && it.layers.some(l => cu.includes(l))) {
-        const ring = (Math.min(...it.size) - d) / 2
-        if (ring < r.minPadAnnularRing - EPS)
-          out.push({
+      const of = (rule: string, measured: number, key: 'minDrill' | 'minPadAnnularRing', args: Record<string, number | boolean> = {}) =>
+        out.push(
+          marker({
             severity: 'error',
-            rule: 'annular-ring',
-            message: `${label(it)} has a ${f3(ring)} mm annular ring (${f3(Math.min(...it.size))} mm copper, ${f3(d)} mm drill), minimum ${r.minPadAnnularRing} mm for plated pads`,
+            rule,
+            args: { a: label(it), ...args },
+            measured: mm(measured),
+            required: mm(r[key]),
+            provenance: [rulesLevel(key, r[key])],
             at: it.at,
             layer: it.layer,
             items: [it.id],
-          })
+          }),
+        )
+      if (d < r.minDrill - EPS) of('drill', d, 'minDrill')
+      if (it.type === 'tht' && it.layers.some(l => cu.includes(l))) {
+        const ring = padRingWidth(it)
+        if (ring < r.minPadAnnularRing - EPS) of('annular-ring', ring, 'minPadAnnularRing', { copper: Math.min(...it.size), drill: d, plated: true })
       }
     }
   }
@@ -427,6 +477,7 @@ function holeChecks(board: Board, out: DrcMarker[], label: (it: Item) => string)
   )
   for (let i = 0; i < holes.length; i++)
     for (const j of hgrid.query(hgrid.boxes[i])) {
+      pulse()
       if (j <= i) continue
       const a = holes[i],
         b = holes[j]
@@ -437,16 +488,19 @@ function holeChecks(board: Board, out: DrcMarker[], label: (it: Item) => string)
       const min = holeToHole(r, a.it.kind === 'via' ? 'via' : 'pad', b.it.kind === 'via' ? 'via' : 'pad')
       const kind = r.minHoleToHoleBy ? (a.it.kind === 'via' && b.it.kind === 'via' ? ' (via to via)' : ' (pad)') : ''
       if (gap < min - EPS)
-        out.push({
-          severity: 'error',
-          rule: 'hole-to-hole',
-          message:
-            gap < 0
-              ? `holes of ${a.name} and ${b.name} overlap, minimum ${min} mm between hole edges${kind}`
-              : `holes of ${a.name} and ${b.name} are ${f3(gap)} mm apart edge to edge, minimum ${min} mm${kind}`,
-          at: [(a.a[0] + b.a[0]) / 2, (a.a[1] + b.a[1]) / 2],
-          items: [a.it.id, b.it.id],
-        })
+        out.push(
+          marker({
+            severity: 'error',
+            rule: 'hole-to-hole',
+            args: { a: a.name, b: b.name, kind },
+            measured: mm(gap),
+            required: mm(min),
+            provenance: [rulesLevel('minHoleToHole', min)],
+            at: [(a.a[0] + b.a[0]) / 2, (a.a[1] + b.a[1]) / 2],
+            items: [a.it.id, b.it.id],
+            witness: { points: [a.a, b.a] },
+          }),
+        )
     }
 
   const layerGrids = cu.map(layer => {
@@ -457,10 +511,12 @@ function holeChecks(board: Board, out: DrcMarker[], label: (it: Item) => string)
   const hmax = maxHoleClearance(board),
     overridden = hmax !== r.holeClearance || hasPadOverrides(board)
   for (const h of holes) {
-    const keeps = new Map<number, RingIndex>()
+    pulse()
+    const keeps = new Map<number, EdgeSet>(),
+      axis = new EdgeSet([[h.a, h.b]])
     const keepOf = (c: number) => {
       let k = keeps.get(c)
-      if (!k) keeps.set(c, (k = new RingIndex(holeRing(h, c - 0.0005))))
+      if (!k) keeps.set(c, (k = new EdgeSet(holeRing(h, c - 0.0005))))
       return k
     }
     const reach = keepOf(Math.max(ownHoleClearance(h.it, r), hmax))
@@ -471,29 +527,43 @@ function holeChecks(board: Board, out: DrcMarker[], label: (it: Item) => string)
       for (const j of grid.query(reach.box)) {
         const it = on[j]
         if (it === h.it || seen.has(it.id)) continue
-        if (it.net !== undefined && it.net === h.it.net) continue
+        pulse()
+        if (sameNet(it.net, h.it.net)) continue
         if (onePad(it, h.it)) continue
         const c = overridden ? Math.max(own, ownHoleClearance(it, lr)) : lr.holeClearance
         const keep = keepOf(c)
-        const rings = copperIndex(it, layer)
-        if (overlapsNear(keep, rings)) {
+        const rings = copperSet(it, layer)
+        if (holeHits(h.r + c - 0.0005, axis, keep, rings)) {
           seen.add(it.id)
           const gap = holeGap(h, copperRings(it, layer))
-          const by =
-            (overridden ? clearanceSource(board, own >= ownHoleClearance(it, lr) ? h.it : it, 'holeClearance') : '') ||
-            (r.holeClearanceBy
-              ? h.it.kind === 'via' && r.holeClearanceBy.via !== undefined
-                ? 'via hole'
-                : `${layer === 'F.Cu' || layer === 'B.Cu' ? 'outer' : 'inner'} layers`
-              : '')
-          out.push({
-            severity: 'error',
-            rule: 'hole-to-copper',
-            message: `${label(it)} (${it.net ?? 'no net'}) ${gap <= 0 ? 'covers' : `is ${f3(gap)} mm from`} ${h.it.kind === 'pad' && h.it.type === 'npth' ? h.name : `the hole of ${h.name}`} (${h.it.net ?? 'no net'}) on ${layer}, closer than ${c} mm${by ? ` (${by})` : ''}`,
-            at: contactNear(keep, rings),
-            layer,
-            items: [h.it.id, it.id],
-          })
+          const winner = own >= ownHoleClearance(it, lr) ? h.it : it
+          const set = overridden ? ownProvenance(board, winner, 'holeClearance', c) : []
+          const level = r.holeClearanceBy
+            ? h.it.kind === 'via' && r.holeClearanceBy.via !== undefined
+              ? 'via hole'
+              : `${layer === 'F.Cu' || layer === 'B.Cu' ? 'outer' : 'inner'} layers`
+            : undefined
+          const provenance = set.length && set[0].from !== 'rules' ? set : [rulesLevel('holeClearance', lr.holeClearance, level)]
+          const at = contactNear(keep, rings)
+          out.push(
+            marker({
+              severity: 'error',
+              rule: 'hole-to-copper',
+              args: {
+                a: label(it),
+                an: it.net ?? 'no net',
+                hole: h.it.kind === 'pad' && h.it.type === 'npth' ? h.name : `the hole of ${h.name}`,
+                hn: h.it.net ?? 'no net',
+              },
+              measured: mm(gap),
+              required: mm(c),
+              provenance,
+              at,
+              layer,
+              items: [h.it.id, it.id],
+              witness: { layer, points: [h.a, at] },
+            }),
+          )
         }
       }
     }
@@ -504,54 +574,67 @@ function holeChecks(board: Board, out: DrcMarker[], label: (it: Item) => string)
 const GAP_TOLERANCE = 0.01
 
 /** Differential pairs: the gap of the coupled sections, the length difference of the two tracks and the uncoupled length. */
-function pairChecks(board: Board, out: DrcMarker[]) {
+export function pairChecks(board: Board, out: DrcMarker[]) {
   for (const p of pairsOf(board)) {
     if (!p.P.length || !p.N.length) continue
     const name = `pair ${p.nets[0] ?? '?'}/${p.nets[1] ?? '?'} (${p.id})`
     const items = [...p.P, ...p.N].map(t => t.id)
     const rec = board.routes?.find(x => x.pair === p.id),
       rid = rec?.id
+    const track = (t: { pts: Pt[] }) => t.pts.slice(1).map((q, i) => [t.pts[i], q] as [Pt, Pt])
     const base = (at: Pt, layer?: string) => ({
       at,
       ...(layer ? { layer } : {}),
       items,
+      refs: [p.id, ...(rid ? [rid] : []), ...p.nets.flatMap(n => (n ? [`net:${n}`] : []))],
+      args: { pair: name },
       ...(p.info?.src ? { src: p.info.src } : {}),
-      ...(p.nets[0] ? { net: p.nets[0] } : {}),
-      ...(rid ? { routeId: rid } : {}),
     })
     if (p.info) {
       const nets = new Set(p.nets)
       const pads = board.items.flatMap(it => (it.kind === 'pad' && it.net !== undefined && nets.has(it.net) ? [it.at] : []))
       const g = coupledGap(p, p.info.gap, pads)
       if (g && Math.abs(g.gap - p.info.gap) > GAP_TOLERANCE + EPS)
-        out.push({
-          severity: 'error',
-          rule: 'pair-gap',
-          message: `${name}: the coupled tracks are ${f3(g.gap)} mm apart edge to edge, the pair gap is ${f3(p.info.gap)} mm, allowed off by ${GAP_TOLERANCE} mm`,
-          ...base(g.at, g.layer),
-        })
+        out.push(
+          marker({
+            severity: 'error',
+            rule: 'pair-gap',
+            ...base(g.at, g.layer),
+            args: { pair: name, tolerance: GAP_TOLERANCE },
+            measured: mm(g.gap),
+            required: mm(p.info.gap),
+          }),
+        )
     }
     const allowed = p.info?.skew ?? CLASS_DEFAULTS.skew,
       skew = Math.abs(p.lengthP - p.lengthN)
     if (skew > allowed + EPS)
-      out.push({
-        severity: 'error',
-        rule: 'pair-skew',
-        message: `${name}: the tracks differ in length by ${f3(skew)} mm, ${p.nets[0] ?? 'P'} ${f3(p.lengthP)} mm and ${p.nets[1] ?? 'N'} ${f3(p.lengthN)} mm with their vias, allowed ${f3(allowed)} mm${rec?.skewNote ? `; ${rec.skewNote}` : ''}`,
-        ...base(p.P[0].pts[0], p.P[0].layer),
-      })
+      out.push(
+        marker({
+          severity: 'error',
+          rule: 'pair-skew',
+          ...base(p.P[0].pts[0], p.P[0].layer),
+          args: { pair: name, p: p.nets[0] ?? 'P', n: p.nets[1] ?? 'N', lengthP: p.lengthP, lengthN: p.lengthN, ...(rec?.skewNote ? { note: rec.skewNote } : {}) },
+          measured: mm(skew),
+          required: mm(allowed),
+          witness: { segments: [...p.P, ...p.N].flatMap(track) },
+        }),
+      )
     if (p.info && p.info.uncoupled > p.info.maxUncoupled + EPS)
-      out.push({
-        severity: 'warning',
-        rule: 'pair-uncoupled',
-        message: `${name}: ${f3(p.info.uncoupled)} mm of the two tracks run uncoupled at the ends and the vias, allowed ${f3(p.info.maxUncoupled)} mm`,
-        ...base(p.P[0].pts[0], p.P[0].layer),
-      })
+      out.push(
+        marker({
+          severity: 'warning',
+          rule: 'pair-uncoupled',
+          ...base(p.P[0].pts[0], p.P[0].layer),
+          measured: mm(p.info.uncoupled),
+          required: mm(p.info.maxUncoupled),
+        }),
+      )
   }
 }
 
 /** Route lengths: a route outside its .length() range, and a match group whose lengths spread wider than its tolerance. */
-function lengthChecks(board: Board, out: DrcMarker[]) {
+export function lengthChecks(board: Board, out: DrcMarker[]) {
   if (!board.routes?.length) return
   const copper = routesCopper(board)
   const where = (s: { file: string; line: number; col: number } | undefined) => (s ? ` (${s.file.split(/[\\/]/).pop()}:${s.line}:${s.col})` : '')
@@ -565,20 +648,29 @@ function lengthChecks(board: Board, out: DrcMarker[]) {
       ...(t ? { layer: t.layer } : {}),
       items: [...c!.tracks, ...c!.vias].map(i => i.id),
       ...(r.src ? { src: r.src } : {}),
-      ...(r.net !== undefined ? { net: r.net } : {}),
-      routeId: r.id,
+      refs: [r.id, ...(r.net !== undefined ? [`net:${r.net}`] : [])],
+      witness: { segments: c!.tracks.flatMap(x => x.pts.slice(1).map((q, i) => [x.pts[i], q] as [Pt, Pt])) },
     }
   }
   for (const r of board.routes) {
     const c = copper.get(r.id)
     if (!r.target || !c) continue
     if (c.length < r.target.min - EPS || c.length > (r.target.max ?? Infinity) + EPS)
-      out.push({
-        severity: 'error',
-        rule: 'length',
-        message: `${name(r)} is ${f3(c.length)} mm long, allowed ${range(r.target)}${r.tuned ? `, ${f3(r.tuned)} mm of it tuned` : ''}${r.note ? `; ${r.note}` : c.length > (r.target.max ?? Infinity) ? '; a route that is too long is never shortened, shorten its path or move its ends' : ''}`,
-        ...base(c, r),
-      })
+      out.push(
+        marker({
+          severity: 'error',
+          rule: 'length',
+          args: {
+            route: name(r),
+            range: range(r.target),
+            ...(r.tuned ? { tuned: r.tuned } : {}),
+            ...(r.note ? { note: r.note } : c.length > (r.target.max ?? Infinity) ? { long: true } : {}),
+          },
+          measured: mm(c.length),
+          required: mm(c.length < r.target.min ? r.target.min : r.target.max!),
+          ...base(c, r),
+        }),
+      )
   }
   const groups = new Map<string, NonNullable<Board['routes']>>()
   for (const r of board.routes) if (r.group !== undefined && copper.has(r.id)) groups.set(r.group, [...(groups.get(r.group) ?? []), r])
@@ -590,22 +682,36 @@ function lengthChecks(board: Board, out: DrcMarker[]) {
     const tol = lo.tolerance ?? CLASS_DEFAULTS.tolerance,
       spread = len(hi) - len(lo)
     if (spread > tol + EPS)
-      out.push({
-        severity: 'error',
-        rule: 'length-match',
-        message: `match group ${group} spreads ${f3(spread)} mm, allowed ${f3(tol)} mm, ${rs.filter(r => len(r) < len(hi) - tol - EPS).length} of ${rs.length} routes below its window: shortest ${name(lo)} at ${f3(len(lo))} mm${where(lo.src)}, longest ${name(hi)} at ${f3(len(hi))} mm${where(hi.src)}${lo.note ? `; ${lo.note}` : ''}${rs
-          .filter(r => r.caps !== undefined && r !== lo)
-          .map(r => `; ${name(r)} caps the group: its maximum of ${f3(r.target?.max ?? 0)} mm is ${f3(r.caps!)} mm below the longest`)
-          .join('')}`,
-        ...base(copper.get(lo.id), lo),
-        net: undefined,
-        routeId: undefined,
-      })
+      out.push(
+        marker({
+          severity: 'error',
+          rule: 'length-match',
+          args: {
+            group,
+            below: rs.filter(r => len(r) < len(hi) - tol - EPS).length,
+            count: rs.length,
+            lo: name(lo),
+            loLength: len(lo),
+            loAt: where(lo.src),
+            hi: name(hi),
+            hiLength: len(hi),
+            hiAt: where(hi.src),
+            ...(lo.note ? { note: lo.note } : {}),
+            caps: rs
+              .filter(r => r.caps !== undefined && r !== lo)
+              .map(r => `${name(r)} caps the group: its maximum of ${f3(r.target?.max ?? 0)} mm is ${f3(r.caps!)} mm below the longest`),
+          },
+          measured: mm(spread),
+          required: mm(tol),
+          ...base(copper.get(lo.id), lo),
+          refs: [...rs.map(r => (/^route:\d+$/.test(r.id) ? `net:${r.net}` : r.id))],
+        }),
+      )
   }
 }
 
 /** `mask-web`: mask between two pad openings narrower than `maskWeb`; pairs of one part are one finding per part, naming the narrowest. */
-function maskWebChecks(board: Board, out: DrcMarker[]) {
+export function maskWebChecks(board: Board, out: DrcMarker[]) {
   const web = board.rules.maskWeb
   if (!(web !== undefined && web > 0)) return
   for (const side of ['F', 'B'] as const) {
@@ -618,23 +724,30 @@ function maskWebChecks(board: Board, out: DrcMarker[]) {
     const ops: { p: Pad; rings: Ring[] }[] = []
     for (const p of board.items) {
       if (p.kind !== 'pad') continue
+      pulse()
       const rings = padMask(p, side, board.rules)
       if (rings?.length && !ganged(rings)) ops.push({ p, rings })
     }
     const grid = new Grid(ops.map(o => bbox(o.rings)))
     const parts = new Map<string, { a: Pad; b: Pad; gap: number; n: number }>()
     const say = (a: Pad, b: Pad, gap: number, more: string) =>
-      out.push({
-        severity: 'warning',
-        rule: 'mask-web',
-        message: `mask web between ${padLabel(a)} and ${padLabel(b)} on ${layer} is ${f3(gap)} mm, narrower than ${web} mm${more}; the fab merges the openings`,
-        at: [(a.at[0] + b.at[0]) / 2, (a.at[1] + b.at[1]) / 2],
-        layer,
-        items: [a.id, b.id],
-      })
+      out.push(
+        marker({
+          severity: 'warning',
+          rule: 'mask-web',
+          args: { a: padLabel(a), b: padLabel(b), more },
+          measured: mm(gap),
+          required: mm(web),
+          provenance: [rulesLevel('maskWeb', web)],
+          at: [(a.at[0] + b.at[0]) / 2, (a.at[1] + b.at[1]) / 2],
+          layer,
+          items: [a.id, b.id],
+        }),
+      )
     for (let i = 0; i < ops.length; i++)
       for (const j of grid.query(grid.boxes[i], web)) {
         if (j <= i) continue
+        pulse()
         const a = ops[i].p,
           b = ops[j].p
         if (onePad(a, b)) continue
@@ -656,36 +769,47 @@ function maskWebChecks(board: Board, out: DrcMarker[]) {
 }
 
 /** Silkscreen line width, and silk over the mask openings of pads: graphics, stroke-font text and outline text. */
-function silkChecks(board: Board, out: DrcMarker[]) {
+export function silkChecks(board: Board, out: DrcMarker[]) {
   const r = board.rules
   const who = (g: Graphic | Text) => (g.kind === 'text' ? `text "${g.text}"${g.ref ? ` of ${g.ref}` : ''}` : g.ref ? `silk of ${g.ref}` : 'silk graphic')
   for (const it of board.items) {
+    pulse()
     if (!it.layer.endsWith('.SilkS')) continue
     // outline text: filled glyphs thinner than silkMinWidth, found by an opening of the ink
     if (it.kind === 'text' && it.polys) {
       const thin = thinInk(it.polys, r.silkMinWidth - 0.002)
       if (thin)
-        out.push({
-          severity: 'warning',
-          rule: 'silk-width',
-          message: `${who(it)} on ${it.layer} in ${it.font} has strokes ${f3(thin.width)} mm wide, minimum ${r.silkMinWidth} mm; set thicken on the <text>, or use a bolder font or a larger size`,
-          at: thin.at,
-          layer: it.layer,
-          items: [it.id],
-        })
+        out.push(
+          marker({
+            severity: 'warning',
+            rule: 'silk-width',
+            args: { who: who(it), font: it.font ?? '' },
+            measured: mm(thin.width),
+            required: mm(r.silkMinWidth),
+            provenance: [rulesLevel('silkMinWidth', r.silkMinWidth)],
+            at: thin.at,
+            layer: it.layer,
+            items: [it.id],
+          }),
+        )
       continue
     }
     // the compiler raises text thickness to silkMinWidth, so for text this is a guard
     const width = it.kind === 'graphic' && !it.fill ? it.width : it.kind === 'text' ? it.thickness : null
     if (width !== null && width < r.silkMinWidth - EPS)
-      out.push({
-        severity: 'warning',
-        rule: 'silk-width',
-        message: `${who(it as Graphic | Text)} on ${it.layer} is ${f3(width)} mm wide, minimum ${r.silkMinWidth} mm`,
-        at: it.kind === 'text' ? it.at : ((it as Graphic).paths[0]?.[0] ?? [0, 0]),
-        layer: it.layer,
-        items: [it.id],
-      })
+      out.push(
+        marker({
+          severity: 'warning',
+          rule: 'silk-width',
+          args: { who: who(it as Graphic | Text) },
+          measured: mm(width),
+          required: mm(r.silkMinWidth),
+          provenance: [rulesLevel('silkMinWidth', r.silkMinWidth)],
+          at: it.kind === 'text' ? it.at : ((it as Graphic).paths[0]?.[0] ?? [0, 0]),
+          layer: it.layer,
+          items: [it.id],
+        }),
+      )
   }
 
   for (const side of ['F', 'B'] as const) {
@@ -696,6 +820,7 @@ function silkChecks(board: Board, out: DrcMarker[]) {
     if (!openings.length) continue
     const ogrid = new Grid(openings.map(o => o.box))
     for (const g of board.items) {
+      pulse()
       if ((g.kind !== 'graphic' && g.kind !== 'text') || g.layer !== `${side}.SilkS`) continue
       const ink =
         g.kind === 'text'
@@ -713,14 +838,16 @@ function silkChecks(board: Board, out: DrcMarker[]) {
       for (const k of ogrid.query(box)) {
         const o = openings[k]
         if (!overlaps(core, o.rings)) continue
-        out.push({
-          severity: 'warning',
-          rule: 'silk-over-pad',
-          message: `${who(g)} on ${g.layer} runs into the mask opening of ${padLabel(o.p)}; the fab clips it`,
-          at: contactPoint(core, o.rings),
-          layer: g.layer,
-          items: [g.id, o.p.id],
-        })
+        out.push(
+          marker({
+            severity: 'warning',
+            rule: 'silk-over-pad',
+            args: { who: who(g), pad: padLabel(o.p) },
+            at: contactPoint(core, o.rings),
+            layer: g.layer,
+            items: [g.id, o.p.id],
+          }),
+        )
       }
     }
   }
@@ -743,7 +870,7 @@ function toEdge(p: Pt, rings: Ring[]): number {
 }
 
 /** DRC `silk-over-edge`: silkscreen graphics and text whose ink runs past the board outline or into a cutout, which the fab cuts off. */
-function silkEdgeChecks(board: Board, out: DrcMarker[]) {
+export function silkEdgeChecks(board: Board, out: DrcMarker[]) {
   if (!board.outline.length) return
   const who = (g: Graphic | Text) => (g.kind === 'text' ? `text "${g.text}"${g.ref ? ` of ${g.ref}` : ''}` : g.ref ? `silk of ${g.ref}` : 'silk graphic')
   const box = bbox(board.outline)
@@ -755,6 +882,7 @@ function silkEdgeChecks(board: Board, out: DrcMarker[]) {
   const outer = board.outline.reduce((x, y) => (size(y) > size(x) ? y : x))
   const cutouts = board.outline.filter(q => q !== outer)
   for (const g of board.items) {
+    pulse()
     if ((g.kind !== 'graphic' && g.kind !== 'text') || !g.layer.endsWith('.SilkS')) continue
     const ink = silkInk(g)
     if (!ink.length) continue
@@ -784,15 +912,19 @@ function silkEdgeChecks(board: Board, out: DrcMarker[]) {
         )
       : 0
     if (far < 0.01 && across < 0.01) continue
-    const what = far >= 0.01 ? `runs ${f3(far)} mm past the board edge` : `runs ${f3(across)} mm into a cutout`
-    out.push({
-      severity: 'warning',
-      rule: 'silk-over-edge',
-      message: `${who(g)} on ${g.layer} ${what}; the fab cuts it off`,
-      at: centroid((far >= 0.01 ? past : into).map(p => p.outer)),
-      layer: g.layer,
-      items: [g.id],
-    })
+    const pieces = far >= 0.01 ? past : into
+    out.push(
+      marker({
+        severity: 'warning',
+        rule: 'silk-over-edge',
+        args: { who: who(g), ...(far >= 0.01 ? {} : { cutout: true }) },
+        measured: mm(far >= 0.01 ? far : across),
+        at: centroid(pieces.map(p => p.outer)),
+        layer: g.layer,
+        items: [g.id],
+        witness: { layer: g.layer, rings: polysToRings(pieces) },
+      }),
+    )
   }
 }
 
@@ -809,7 +941,7 @@ function silkInk(g: Graphic | Text): Ring[] {
 
 const EDGE_KINDS: readonly EdgeBandKind[] = ['courtyard', 'silk', 'pad']
 
-/** The rules with the edge band's `except` as refs, `J1` or `J1.3`, once refs are final; a ref string naming nothing here throws. */
+/** The rules with the edge band's `except`, parts and pad handles, as refs and `REF.PAD` keys once refs are final. */
 export function resolveEdgeBand(rules: Rules, partRefs: Map<PartState, string>, items: Item[]): Rules {
   const band = rules.edge
   if (!band) return rules
@@ -821,26 +953,10 @@ export function resolveEdgeBand(rules: Rules, partRefs: Map<PartState, string>, 
       l.push(it)
       pads.set(it.ref, l)
     }
-  const refs = new Set(partRefs.values())
-  for (const r of pads.keys()) refs.add(r)
   const except = new Set<string>()
   const padKey = (p: Pad) => `${p.ref}.${p.num}`
   for (const q of band.except ?? []) {
-    if (typeof q === 'string') {
-      if (refs.has(q)) {
-        except.add(q)
-        continue
-      }
-      const dot = q.lastIndexOf('.'),
-        ref = q.slice(0, dot),
-        k = q.slice(dot + 1),
-        list = dot > 0 ? (pads.get(ref) ?? []) : []
-      const hit = list.filter(p => p.num === k)
-      const named = hit.length ? hit : list.filter(p => p.name === k)
-      if (!named.length) throw new CompileError(`rules: edge.except names ${JSON.stringify(q)}, which is no part or pad on this board`)
-      for (const p of named) except.add(padKey(p))
-      continue
-    }
+    if (!isPinRef(q) && !partOf(q)) throw new CompileError(`rules: edge.except takes parts and pad handles, such as J1 or J1[3], got ${JSON.stringify(q)}`)
     const st = partOf(isPinRef(q) ? q.part : q),
       ref = st && partRefs.get(st)
     if (!st || !ref) continue
@@ -857,15 +973,15 @@ export function resolveEdgeBand(rules: Rules, partRefs: Map<PartState, string>, 
         : list.filter(p => pinOfPad(st.pins, p) === q.pin)
     for (const p of hit) except.add(padKey(p))
   }
-  const out: EdgeBand = { width: band.width, kinds: [...new Set(band.kinds ?? EDGE_KINDS)], except: [...except] }
+  const out: EdgeBand = { width: band.width, kinds: [...new Set(band.kinds ?? EDGE_KINDS)], refs: [...except] }
   return { ...rules, edge: out }
 }
 
 /** The distance from a shape to the nearest edge of the outline or a cutout, 0 where it crosses one. */
 function edgeGap(rings: Ring[], outline: Ring[]): number {
   let d = Infinity
-  const eo = [...edges(outline)]
-  for (const [p, q] of edges(rings))
+  const eo = [...ringEdges(outline)]
+  for (const [p, q] of ringEdges(rings))
     for (const [u, v] of eo) {
       d = Math.min(d, segDist(p, q, u, v))
       if (d === 0) return 0
@@ -874,12 +990,12 @@ function edgeGap(rings: Ring[], outline: Ring[]): number {
 }
 
 /** DRC `edge-courtyard`, `edge-silk` and `edge-pad`: courtyards, silk ink and pads within the edge band, except those it lets in. */
-function edgeBandChecks(board: Board, out: DrcMarker[]) {
+export function edgeBandChecks(board: Board, out: DrcMarker[]) {
   const band = board.rules.edge
   if (!band || !(band.width > 0) || !board.outline.length) return
   const w = band.width,
     kinds = new Set(band.kinds ?? EDGE_KINDS)
-  const except = new Set((band.except ?? []).filter((q): q is string => typeof q === 'string'))
+  const except = new Set(band.refs ?? [])
   // a hair less, so a shape just at the band passes
   const inner = polysToRings(offset(board.outline, -w + 0.0005))
   // a band wider than the board leaves no inset
@@ -888,8 +1004,20 @@ function edgeBandChecks(board: Board, out: DrcMarker[]) {
     const past = difference(rings, inner)
     if (!past.length) return true
     const d = edgeGap(shape, board.outline)
-    const where = d < 0.0005 ? 'crosses the board edge' : `is ${f3(d)} mm from the board edge`
-    out.push({ severity: 'error', rule, message: `${what} ${where}, inside the ${w} mm edge band`, at: centroid(past.map(p => p.outer)), ...(layer ? { layer } : {}), items: ids })
+    out.push(
+      marker({
+        severity: 'error',
+        rule,
+        args: { what, ...(d < 0.0005 ? { crosses: true } : {}) },
+        measured: mm(d),
+        required: mm(w),
+        provenance: [rulesLevel('edge', w)],
+        at: centroid(past.map(p => p.outer)),
+        ...(layer ? { layer } : {}),
+        items: ids,
+        witness: { ...(layer ? { layer } : {}), rings: polysToRings(past) },
+      }),
+    )
     return false
   }
   if (kinds.has('courtyard'))

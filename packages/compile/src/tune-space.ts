@@ -1,6 +1,6 @@
 // The tuner's obstacles; the copper rules follow buildLayout's free test, measured exactly instead of on offset polygons. Board mm, y down.
 import type { Board, Item, Pt, Ring } from '@pcbjs/core/model'
-import type { ResolvedRules as Rules } from '@pcbjs/core/types'
+import type { ResolvedRules as Rules } from '@pcbjs/core/internal/types'
 import { Grid, type Box } from './spatial.js'
 import { copperLayers } from './layers.js'
 import { copperLayersOf, copperRings } from './copper.js'

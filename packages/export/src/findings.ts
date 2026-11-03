@@ -1,50 +1,20 @@
 // No Node imports: the viewer shows findings too.
 import type { Board, DrcMarker, Item, Pad, Pt, RoutingReport } from '@pcbjs/core/model'
-import type { Src } from '@pcbjs/core/types'
-import { isOwnFile } from '@pcbjs/core/own-files'
+import type { Src } from '@pcbjs/core/internal/types'
+import type { Finding, Mark, SourceRef } from '@pcbjs/core/finding'
+import { isOwnFile } from '@pcbjs/core/internal/provenance'
+import { boardIndex, isTreeRef, parseRef, refNet, refRoute, resolveRef, type RefIndex } from '@pcbjs/core/ref'
+import type { SiteFinding } from '@pcbjs/core/site-data'
 
-/** A part involved in a finding: its ref and, inside a circuit instance, its instance path such as `CH2/R`. */
-/** A part in a finding; `path` its circuit instance path, `name` its export name in the schematic module where that is not the ref. */
-export interface FindingRef {
-  ref: string
-  path?: string
-  name?: string
-}
+export type { Finding, Mark, SourceRef }
 
-export interface Finding {
-  /** stable across runs of the same design: a hash of the kind, rule, items and position rounded to 0.01 mm, plus the message when there are no items */
-  id: string
-  kind: 'drc' | 'erc'
-  severity: 'error' | 'warning' | 'info'
-  rule: string
-  message: string
-  layer?: string
-  /** board mm; null when the finding has no position, such as a part that is never placed */
-  at: Pt | null
-  /** the item ids the checker named */
-  items: number[]
-  refs: FindingRef[]
-  /** `file:line:col` of the code to change, relative to the project root, when known: for a route made inside a helper, where the helper was called */
-  src?: string
-  /** the route call inside the helper when `src` is the helper's call site, `file:line:col` */
-  via?: string
-  /** the one net the finding concerns, when it concerns one */
-  net?: string
-  /** the one route the finding concerns, `route:<n>`, see `pcbjs inspect --lengths` */
-  route?: string
-  /** the one footprint every involved item belongs to, such as the pads of a header placed over the edge */
-  part?: string
-}
-
-/** What the site data adds to a marker. */
+/** Where a marker points: the code to change, the route call a helper made, and the route. */
 export interface MarkerContext {
   src?: Src
-  refs: FindingRef[]
-  extra?: string
   via?: Src
-  net?: string
   route?: string
-  part?: string
+  /** whether `src` is where the part was placed rather than the item itself */
+  placed?: boolean
 }
 
 const SEV = { error: 'error  ', warning: 'warning', info: 'info   ' } as const
@@ -52,43 +22,28 @@ const r2 = (v: number) => Math.round(v * 100) / 100
 const fmt = (v: number) => r2(v).toFixed(2)
 export const fmtPt = (p: Pt) => `(${fmt(p[0])}, ${fmt(p[1])})`
 
-/** 12 hex digits of two FNV-1a passes, enough to tell findings of one board apart. */
-export function hash(text: string): string {
-  let a = 0x811c9dc5,
-    b = 0x01000193 ^ 0x5bd1e995
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i)
-    a = Math.imul(a ^ c, 0x01000193) >>> 0
-    b = Math.imul(b ^ c, 0x5bd1e995) >>> 0
-    b ^= b >>> 13
-  }
-  return (a >>> 0).toString(16).padStart(8, '0') + (b >>> 0).toString(16).padStart(8, '0').slice(0, 4)
-}
-
-export function findingId(kind: string, m: Pick<DrcMarker, 'rule' | 'items' | 'at' | 'message'>): string {
-  const items = [...(m.items ?? [])].sort((x, y) => x - y)
-  const at = m.at ? `${r2(m.at[0])},${r2(m.at[1])}` : ''
-  return hash(`${kind}|${m.rule}|${items.join(',')}|${at}${items.length ? '' : '|' + m.message}`)
-}
-
 export class BoardIndex {
   readonly items = new Map<number, Item>()
+  /** a part's tree path, `CH2/R01`, for one in an instance or a named <g> */
   readonly paths = new Map<string, string>()
-  readonly names = new Map<string, string>()
   readonly partSrc = new Map<string, Src>()
   readonly fpSrc = new Map<string, Src>()
   readonly refs = new Set<string>()
   readonly routes = new Map<string, NonNullable<Board['routes']>[number]>()
+  /** what references resolve against on this board */
+  readonly refIndex: RefIndex
+  readonly layers: Set<string>
   constructor(
     readonly board: Board,
     readonly root = '',
   ) {
     for (const r of board.routes ?? []) this.routes.set(r.id, r)
+    this.refIndex = boardIndex(board)
+    this.layers = new Set(board.layers.map(l => l.id))
     for (const it of board.items) this.items.set(it.id, it)
     for (const p of board.schematic?.parts ?? []) {
       this.refs.add(p.ref)
       if (p.path?.length) this.paths.set(p.ref, [...p.path, p.local ?? p.ref].join('/'))
-      else if (p.export && p.export.name !== p.ref) this.names.set(p.ref, p.export.name)
       if (p.src) this.partSrc.set(p.ref, p.src)
     }
     for (const f of board.footprints) {
@@ -103,10 +58,14 @@ export class BoardIndex {
   inProject(file: string): boolean {
     return !file.includes('/node_modules/') && !isOwnFile(file) && (!/^([\\/]|[A-Za-z]:)/.test(file) || !this.root || file.startsWith(this.root))
   }
-  refOf(ref: string): FindingRef {
-    const path = this.paths.get(ref),
-      name = this.names.get(ref)
-    return path ? { ref, path } : name ? { ref, name } : { ref }
+  /** The part a reference names or holds a pad of, a declared part never placed by its ref; undefined for any other reference. */
+  partOf(ref: string): string | undefined {
+    try {
+      const r = resolveRef(this.refIndex, ref)
+      return r.kind === 'part' || r.kind === 'pad' ? r.ref : undefined
+    } catch {
+      return this.refs.has(ref) ? ref : undefined
+    }
   }
   // where the footprint was placed, else where the part was declared
   placement(ref: string): Src | undefined {
@@ -114,62 +73,17 @@ export class BoardIndex {
   }
 }
 
-// within half a millimetre
-function padNear(ix: BoardIndex, net: string, p: Pt): Pad | undefined {
-  let best: Pad | undefined,
-    d = 0.25
-  for (const it of ix.board.items) {
-    if (it.kind !== 'pad' || it.net !== net) continue
-    const e = (it.at[0] - p[0]) ** 2 + (it.at[1] - p[1]) ** 2
-    if (e < d) {
-      d = e
-      best = it
-    }
-  }
-  return best
-}
-
 export function markerContext(ix: BoardIndex, m: DrcMarker): MarkerContext {
   const involved: Item[] = (m.items ?? []).map(id => ix.items.get(id)).filter((x): x is Item => !!x)
-  let extra: string | undefined
-  if (m.rule === 'unconnected') {
-    const net = /^net (\S+) /.exec(m.message)?.[1]
-    const rn = ix.board.ratsnest.find(r => r.net === net && Math.abs((r.from[0] + r.to[0]) / 2 - m.at[0]) < 1e-6 && Math.abs((r.from[1] + r.to[1]) / 2 - m.at[1]) < 1e-6)
-    if (rn) {
-      const end = (p: Pt) => {
-        const pad = padNear(ix, rn.net, p)
-        if (pad) involved.push(pad)
-        return pad ? `${pad.ref ? pad.ref + '.' : ''}${pad.num} at ${fmtPt(p)}` : fmtPt(p)
-      }
-      extra = `from ${end(rn.from)} to ${end(rn.to)}`
-    }
-  }
-  // a marker without items placed on a pad, such as a single-pad net: that pad
-  if (!involved.length && (m.at[0] !== 0 || m.at[1] !== 0)) {
-    const pad = ix.board.items.find((it): it is Pad => it.kind === 'pad' && Math.abs(it.at[0] - m.at[0]) < 1e-3 && Math.abs(it.at[1] - m.at[1]) < 1e-3)
-    if (pad) involved.push(pad)
-  }
-  const refs: string[] = []
-  for (const it of involved) if (it.ref && !refs.includes(it.ref)) refs.push(it.ref)
-  if (!refs.length) {
-    for (const t of m.message.match(/[A-Za-z_][\w]*/g) ?? []) if (ix.refs.has(t) && !refs.includes(t)) refs.push(t)
-  }
-  // the net and the route: the marker's own, a route-failed's leg, else what the involved items agree on
-  const own = involved.filter(it => it.kind !== 'pad' || !m.items?.length || m.items.includes(it.id))
   const one = <T>(xs: (T | undefined)[]): T | undefined => {
     const s = new Set(xs.filter((x): x is T => x !== undefined))
     return s.size === 1 ? [...s][0] : undefined
   }
-  let net = m.net ?? m.route?.net ?? (m.rule === 'unconnected' ? /^net (\S+) /.exec(m.message)?.[1] : undefined)
-  let route = m.routeId
-  if (!route && m.rule === 'route-failed' && m.src) {
-    const same = (s?: Src) => !!s && s.file === m.src!.file && s.line === m.src!.line && s.col === m.src!.col
-    route = [...ix.routes.values()].find(r => same(r.src) && (m.route?.net === undefined || r.net === m.route.net))?.id
-  }
-  if (!route && !['route-failed', 'unconnected', 'length-match'].includes(m.rule)) route = one(own.map(it => (it.kind === 'track' || it.kind === 'via' ? it.route : undefined)))
-  if (!net && m.rule !== 'route-failed') net = one(own.map(it => it.net))
-  const part = own.length && own.every(it => it.ref && it.ref === own[0].ref) ? own[0].ref : undefined
+  let route = (m.refs ?? []).map(refRoute).find(r => r !== null) ?? undefined
+  if (!route && !['route-failed', 'unconnected', 'length-match'].includes(m.rule))
+    route = one(involved.map(it => (it.kind === 'track' || it.kind === 'via' ? it.route : undefined)))
   let src: Src | undefined = m.src
+  let placed = false
   // the call chain and the route call it leads to: the route's own, else the chain of the item that gives the source
   const rt = route ? ix.routes.get(route) : undefined
   let chain: Src[] | undefined = rt?.chain
@@ -179,6 +93,7 @@ export function markerContext(ix: BoardIndex, m: DrcMarker): MarkerContext {
       // a pad's own range is inside its footprint's definition, the same for every instance: the placement says which one
       if (it.kind === 'pad' && it.ref && ix.placement(it.ref)) {
         src = ix.placement(it.ref)
+        placed = true
         break
       }
       if (it.src && ix.inProject(it.src.file)) {
@@ -191,31 +106,31 @@ export function markerContext(ix: BoardIndex, m: DrcMarker): MarkerContext {
       }
       if (it.ref && ix.placement(it.ref)) {
         src = ix.placement(it.ref)
+        placed = true
         break
       }
     }
   if (!src)
-    for (const r of refs) {
-      const s = ix.placement(r)
+    for (const r of m.refs ?? []) {
+      const part = ix.partOf(r)
+      const s = part && ix.placement(part)
       if (s) {
         src = s
+        placed = true
         break
       }
     }
   // a route made inside a helper: the helper's call site is the code to change, the route call inside it comes after "via"
   const call = src && callee ? [...(chain ?? [])].reverse().find(c => c.call) : undefined
-  return {
-    src: call ?? src,
-    ...(call ? { via: callee } : {}),
-    refs: refs.map(r => ix.refOf(r)),
-    extra,
-    ...(net ? { net } : {}),
-    ...(route ? { route } : {}),
-    ...(part ? { part } : {}),
-  }
+  return { src: call ?? src, ...(call ? { via: callee } : {}), ...(route ? { route } : {}), ...(placed && !call ? { placed } : {}) }
 }
 
 const srcText = (ix: BoardIndex, s: Src) => `${ix.rel(s.file)}:${s.line}:${s.col}`
+
+/** A source position as a finding's `src` holds it, 1-based, end inclusive. */
+export function sourceRef(ix: BoardIndex, s: Src, role: SourceRef['role']): SourceRef {
+  return { file: ix.rel(s.file), start: [s.line, s.col], end: [s.endLine ?? s.line, s.endCol ?? s.col], role }
+}
 
 /** The source of a route as the src column shows it: `main.tsx:139:6 via main.tsx:93:70` for one made inside a helper. */
 export function routeSrcText(ix: BoardIndex, r: { src?: Src; chain?: Src[] }): string | undefined {
@@ -224,45 +139,121 @@ export function routeSrcText(ix: BoardIndex, r: { src?: Src; chain?: Src[] }): s
   return call ? `${srcText(ix, call)} via ${srcText(ix, r.src)}` : srcText(ix, r.src)
 }
 
+const EPS = 1e-6
+const same = (a: Pt, b: Pt) => Math.abs(a[0] - b[0]) < EPS && Math.abs(a[1] - b[1]) < EPS
+const sameSeg = (a: [Pt, Pt], b: [Pt, Pt]) => (same(a[0], b[0]) && same(a[1], b[1])) || (same(a[0], b[1]) && same(a[1], b[0]))
+const sideOf = (layer: string): 'F' | 'B' => (layer.startsWith('B.') ? 'B' : 'F')
+
+/** A DRC finding's mark: the ratsnest line of its net its evidence lies on, a failed leg's own line when none, else a dot on its layer when the board has it, else on the top copper. */
+export function drcMark(ix: BoardIndex, m: DrcMarker): Mark {
+  const net = (m.refs ?? []).map(refNet).find(n => n !== null)
+  const segs = m.witness?.segments ?? []
+  const rats = ix.board.ratsnest
+  const i = rats.findIndex(r => (!net || r.net === net) && segs.some(s => sameSeg(s, [r.from, r.to])))
+  if (i >= 0) return { line: [rats[i].from, rats[i].to], rats: i, layer: 'F.Cu' }
+  if (m.rule === 'route-failed' && segs.length) return { line: segs[segs.length - 1], rats: null, layer: 'F.Cu' }
+  const layer = [m.layer, m.witness?.layer].find((l): l is string => !!l && ix.layers.has(l)) ?? 'F.Cu'
+  return { at: m.at, layer, side: sideOf(layer) }
+}
+
+/** An ERC finding's mark: on the first pad it names, else the origin of the first part, else its own point; none for a point on the sheet or no point at all. */
+export function ercMark(ix: BoardIndex, m: DrcMarker): Mark {
+  const named = (m.refs ?? []).flatMap(r => {
+    try {
+      const t = resolveRef(ix.refIndex, r)
+      return t.kind === 'pad' || t.kind === 'part' ? [t] : []
+    } catch {
+      return []
+    }
+  })
+  const fp = (ref: string) => ix.refIndex.parts.find(p => p.ref === ref)!.part
+  const pad = named.find(t => t.kind === 'pad')
+  if (pad?.kind === 'pad') return { at: pad.pad.at, layer: `${fp(pad.ref).side}.Cu`, side: fp(pad.ref).side }
+  const part = named.find(t => t.kind === 'part')
+  if (part?.kind === 'part') return { at: part.footprint.at, layer: `${part.footprint.side}.Cu`, side: part.footprint.side }
+  return m.layer !== 'sch' && (m.at[0] || m.at[1]) ? { at: m.at, layer: 'F.Cu', side: 'F' } : null
+}
+
+/** Every DRC and ERC finding of a compiled board in the shape of `check --json`, each with its mark. */
 export function boardFindings(board: Board, root = ''): Finding[] {
   const ix = new BoardIndex(board, root)
-  const one =
-    (kind: 'drc' | 'erc') =>
-    (m: DrcMarker): Finding => {
-      const c = markerContext(ix, m)
-      const noPos = kind === 'erc' && m.at[0] === 0 && m.at[1] === 0 && !m.items?.length
-      return {
-        id: findingId(kind, m),
-        kind,
-        severity: m.severity,
-        rule: m.rule,
-        message: c.extra ? `${m.message}, ${c.extra}` : m.message,
-        ...(m.layer ? { layer: m.layer } : {}),
-        at: noPos ? null : [r2(m.at[0]), r2(m.at[1])],
-        items: [...(m.items ?? [])],
-        refs: c.refs,
-        ...(c.src ? { src: srcText(ix, c.src) } : {}),
-        ...(c.via ? { via: srcText(ix, c.via) } : {}),
-        ...(c.net ? { net: c.net } : {}),
-        ...(c.route ? { route: c.route } : {}),
-        ...(c.part ? { part: c.part } : {}),
-      }
-    }
-  return [...board.drc.map(one('drc')), ...board.erc.map(one('erc'))]
+  return [...board.drc.map(m => findingOf(ix, 'drc', m)), ...board.erc.map(m => findingOf(ix, 'erc', m))]
 }
 
-export function siteMarkers(board: Board, markers: DrcMarker[], root: string): (DrcMarker & { src?: { file: string; line: number; col: number }; path?: string[] })[] {
+function findingOf(ix: BoardIndex, kind: 'drc' | 'erc', m: DrcMarker): Finding {
+  const c = markerContext(ix, m)
+  const noPos = kind === 'erc' && m.at[0] === 0 && m.at[1] === 0 && !m.items?.length
+  const target = ix.board.variant?.name
+  return {
+    id: m.id ?? '',
+    fingerprint: m.fingerprint ?? '',
+    kind,
+    severity: m.severity,
+    rule: m.rule,
+    board: ix.board.name,
+    ...(target !== undefined ? { target } : {}),
+    ...(m.layer ? { layer: m.layer } : {}),
+    at: noPos ? null : [r2(m.at[0]), r2(m.at[1])],
+    refs: [...(m.refs ?? [])],
+    items: (m.items ?? []).flatMap(id => ix.items.get(id)?.uid ?? []),
+    ...(m.measured ? { measured: m.measured } : {}),
+    ...(m.required ? { required: m.required } : {}),
+    ...(m.witness ? { witness: m.witness } : {}),
+    ...(m.provenance ? { provenance: m.provenance } : {}),
+    ...(m.args ? { args: m.args } : {}),
+    src: findingSrc(ix, m, c),
+    message: m.message,
+    ...(c.route ? { route: c.route } : {}),
+    mark: kind === 'drc' ? drcMark(ix, m) : ercMark(ix, m),
+  }
+}
+
+/** The ranges of a finding: the code to change, with a helper's call site first, then the rule levels that set its value. */
+function findingSrc(ix: BoardIndex, m: DrcMarker, c: MarkerContext = markerContext(ix, m)): SourceRef[] {
+  const role = m.rule === 'patch-stale' ? 'patch' : c.via ? 'call' : c.placed ? 'part' : 'item'
+  const src: SourceRef[] = c.src ? [sourceRef(ix, c.src, role)] : []
+  if (c.via) src.push(sourceRef(ix, c.via, 'item'))
+  for (const p of m.provenance ?? []) if (p.src) src.push(p.src)
+  return src
+}
+
+/** The findings as the site carries them, DRC and ERC apart, each with `path` the instance paths of its parts. */
+export function siteFindings(board: Board, root: string): { drc: SiteFinding[]; erc: SiteFinding[] } {
   const ix = new BoardIndex(board, root)
-  return markers.map(m => {
-    const c = markerContext(ix, m)
-    const paths = c.refs.flatMap(r => (r.path ? [r.path] : []))
-    return { ...m, ...(c.src ? { src: { file: ix.rel(c.src.file), line: c.src.line, col: c.src.col } } : {}), ...(paths.length ? { path: paths } : {}) }
-  })
+  const row =
+    (kind: 'drc' | 'erc') =>
+    (m: DrcMarker): SiteFinding => {
+      const f = findingOf(ix, kind, m)
+      const paths = [...new Set(f.refs.flatMap(r => ix.paths.get(ix.partOf(r) ?? '') ?? []))]
+      return paths.length ? { ...f, path: paths } : f
+    }
+  return { drc: board.drc.map(row('drc')), erc: board.erc.map(row('erc')) }
 }
 
-/** The refs column: `R2 (CH2/R), R3 (Rpull), Q1`. */
-export const refsText = (refs: FindingRef[]): string => refs.map(r => ((r.path ?? r.name) ? `${r.ref} (${r.path ?? r.name})` : r.ref)).join(', ')
+/** The one net a finding concerns, from its refs. */
+export const findingNet = (f: Pick<Finding, 'refs'>): string | undefined => {
+  const nets = f.refs.flatMap(r => refNet(r) ?? [])
+  return nets.length === 1 ? nets[0] : undefined
+}
 
+/** The one part every ref of a finding names a pad or drawing of. */
+export const findingPart = (f: Pick<Finding, 'refs'>): string | undefined => {
+  const parts = f.refs.map(r => (isTreeRef(r) ? parseRef(r)[0].value : null))
+  return parts.length && parts.every(p => p && p === parts[0]) ? parts[0]! : undefined
+}
+
+/** `file:line:col` of the code to change, and of the route call a helper made after `via`. */
+export function srcLine(f: Pick<Finding, 'src'>): string | undefined {
+  const at = (s: SourceRef) => `${s.file}:${s.start[0]}:${s.start[1]}`
+  const [a, b] = f.src
+  if (!a) return undefined
+  return a.role === 'call' && b ? `${at(a)} via ${at(b)}` : at(a)
+}
+
+/** The refs column. */
+export const refsText = (refs: readonly string[]): string => refs.join(', ')
+
+/** One finding as `check` prints it, without its id. */
 export function findingLine(f: Finding): string {
   return (
     [
@@ -271,16 +262,13 @@ export function findingLine(f: Finding): string {
       f.layer,
       f.at ? `at ${fmtPt(f.at)}` : undefined,
       f.refs.length ? refsText(f.refs) : undefined,
-      f.route,
-      f.src && f.via ? `${f.src} via ${f.via}` : f.src,
+      f.route && !f.refs.includes(f.route) ? f.route : undefined,
+      srcLine(f),
     ]
       .filter(Boolean)
       .join('  ') + `: ${f.message}`
   )
 }
-
-/** A key that survives unrelated edits, for the diff between two compiles: kind, rule, message and position to 0.1 mm. */
-export const diffKey = (f: Finding): string => `${f.kind}|${f.rule}|${f.message}|${f.at ? f.at.map(v => Math.round(v * 10) / 10).join(',') : ''}`
 
 export interface FindingDiff {
   added: Finding[]
@@ -288,22 +276,33 @@ export interface FindingDiff {
   unchanged: number
 }
 
+const gap = (a: Pt | null, b: Pt | null) => (a && b ? Math.hypot(a[0] - b[0], a[1] - b[1]) : a || b ? Infinity : 0)
+
+/** The findings of two compiles matched by fingerprint, then within a fingerprint by nearest `at`. */
 export function diffFindings(prev: Finding[], next: Finding[]): FindingDiff {
   const left = new Map<string, Finding[]>()
-  for (const f of prev) {
-    const k = diffKey(f)
-    left.set(k, [...(left.get(k) ?? []), f])
-  }
+  for (const f of prev) left.set(f.fingerprint, [...(left.get(f.fingerprint) ?? []), f])
   const added: Finding[] = []
   let unchanged = 0
   for (const f of next) {
-    const l = left.get(diffKey(f))
-    if (l?.length) {
-      l.pop()
-      unchanged++
-    } else added.push(f)
+    const pool = left.get(f.fingerprint)
+    if (!pool?.length) {
+      added.push(f)
+      continue
+    }
+    let k = 0
+    for (let i = 1; i < pool.length; i++) if (gap(pool[i].at, f.at) < gap(pool[k].at, f.at)) k = i
+    pool.splice(k, 1)
+    unchanged++
   }
   return { added, fixed: [...left.values()].flat(), unchanged }
+}
+
+/** The finding of `prev` as `next` reports it, by fingerprint then nearest `at`; null when none matches. */
+export function matchFinding(f: Pick<Finding, 'fingerprint' | 'at'>, next: readonly Finding[]): Finding | null {
+  let best: Finding | null = null
+  for (const x of next) if (x.fingerprint === f.fingerprint && (!best || gap(x.at, f.at) < gap(best.at, f.at))) best = x
+  return best
 }
 
 export const diffText = (added: number, fixed: number, unchanged: number): string => `${added} new, ${fixed} fixed, ${unchanged} unchanged`
@@ -375,15 +374,18 @@ export function formatFindings(targets: TargetFindings[], o: FormatOptions = {})
   if (!o.all) {
     const failed = new Map<string, Set<string>>()
     for (const e of list)
-      if (e.f.kind === 'drc' && e.f.rule === 'route-failed' && e.f.net) {
-        const s = failed.get(e.f.net) ?? new Set<string>()
-        failed.set(e.f.net, s)
+      if (e.f.kind === 'drc' && e.f.rule === 'route-failed' && findingNet(e.f)) {
+        const net = findingNet(e.f)!
+        const s = failed.get(net) ?? new Set<string>()
+        failed.set(net, s)
         s.add(e.f.route ?? '')
       }
     const folded = new Map<string, Line[]>()
     const keyOf = (e: Line): string | null => {
-      if (e.f.kind === 'drc' && e.f.rule === 'unconnected') return e.f.net && failed.has(e.f.net) ? `net|${e.f.net}` : null
-      if (e.f.part && e.f.rule !== 'route-failed') return `part|${e.f.kind}|${e.f.rule}|${e.f.severity}|${e.f.part}`
+      const net = findingNet(e.f),
+        part = findingPart(e.f)
+      if (e.f.kind === 'drc' && e.f.rule === 'unconnected') return net && failed.has(net) ? `net|${net}` : null
+      if (part && e.f.rule !== 'route-failed') return `part|${e.f.kind}|${e.f.rule}|${e.f.severity}|${part}`
       return null
     }
     for (const e of list) {
@@ -405,17 +407,18 @@ export function formatFindings(targets: TargetFindings[], o: FormatOptions = {})
       const targetsOf = new Set(group.flatMap(x => [...x.targets]))
       const f = e.f
       if (k.startsWith('net|')) {
-        const ids = [...failed.get(f.net!)!].filter(Boolean)
-        const msg = `net ${f.net} is not fully connected${n > 1 ? ` in ${n} places` : ''}: ${ids.length > 1 ? `routes ${ids.slice(0, -1).join(', ')} and ${ids.at(-1)}` : ids.length ? `route ${ids[0]}` : 'a route of it'} failed, see route-failed`
-        out.push({ f, n: 1, count: n, targets: targetsOf, text: [SEV[f.severity], f.rule, f.net].join('  ') + `: ${msg}` })
+        const net = findingNet(f)!
+        const ids = [...failed.get(net)!].filter(Boolean)
+        const msg = `net ${net} is not fully connected${n > 1 ? ` in ${n} places` : ''}: ${ids.length > 1 ? `routes ${ids.slice(0, -1).join(', ')} and ${ids.at(-1)}` : ids.length ? `route ${ids[0]}` : 'a route of it'} failed, see route-failed`
+        out.push({ f, n: 1, count: n, targets: targetsOf, text: [SEV[f.severity], f.rule, net].join('  ') + `: ${msg}` })
       } else {
-        const head = [SEV[f.severity], f.kind === 'erc' ? `ERC ${f.rule}` : f.rule, refsText(f.refs), f.src && f.via ? `${f.src} via ${f.via}` : f.src].filter(Boolean).join('  ')
+        const head = [SEV[f.severity], f.kind === 'erc' ? `ERC ${f.rule}` : f.rule, findingPart(f), srcLine(f)].filter(Boolean).join('  ')
         out.push({
           f,
           n: 1,
           count: n,
           targets: targetsOf,
-          text: `${head}: ${n} findings on ${f.part}, the first at ${f.at ? fmtPt(f.at) : '-'}${f.layer ? ` on ${f.layer}` : ''}: ${f.message}`,
+          text: `${head}: ${n} findings on ${findingPart(f)}, the first at ${f.at ? fmtPt(f.at) : '-'}${f.layer ? ` on ${f.layer}` : ''}: ${f.message}`,
         })
       }
     }
@@ -434,7 +437,7 @@ export function formatFindings(targets: TargetFindings[], o: FormatOptions = {})
     } else if (e.f.severity === 'info') g.infos += count
     else g.warnings += count
     const who = all.length > 1 && e.targets.size < all.length ? `  [${all.filter(t => e.targets.has(t)).join(', ')}]` : ''
-    g.lines.push(`${e.text ?? findingLine(e.f)}${!e.text && e.n > 1 ? `  x${e.n}` : ''}${who}`)
+    g.lines.push(`${e.text ?? findingLine(e.f)}${!e.text && e.n > 1 ? `  x${e.n}` : ''}${who}${!e.text && e.f.id ? `  ${e.f.id}` : ''}`)
   }
   const sorted = [...groups.values()].sort((a, b) => ruleRank(a.f) - ruleRank(b.f) || (a.f.kind === b.f.kind ? 0 : a.f.kind === 'drc' ? -1 : 1))
   const out: string[] = []
@@ -493,7 +496,7 @@ export function timingsText(t: unknown): string {
 }
 
 /** `Blinky 0.1.0 [House]`. */
-export const boardLabel = (b: Pick<Board, 'name' | 'revision' | 'variant'>): string => `${b.name}${b.revision ? ' ' + b.revision : ''}${b.variant ? ` [${b.variant.name}]` : ''}`
+export const boardLabel = (b: Pick<Board, 'name' | 'rev' | 'variant'>): string => `${b.name}${b.rev ? ' ' + b.rev : ''}${b.variant ? ` [${b.variant.name}]` : ''}`
 
 const unit = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
 
@@ -504,10 +507,10 @@ export function boardLine(b: Board, entry: string, ms: number): string {
   return `${boardLabel(b)}  ${entry}  ${stats}  ${checkText(b)}${failing(b) ? '  FAIL' : ''}  ${msText(ms)}${t ? `: ${t}` : ''}`
 }
 
-/** `routing 80 legs, 80 routed, 0 failed, 78 cached, 2 locked, 0 ripped, 0 rounds`, or '' for a board the autorouter had nothing to do on. */
+/** `routing 80 legs, 80 routed, 0 failed, 78 cached, 2 held, 0 ripped, 0 rounds`, or '' for a board the autorouter had nothing to do on. */
 export function routingText(r: RoutingReport | undefined): string {
   if (!r || (!r.legs && !r.shared)) return ''
-  return `routing ${unit(r.legs, 'leg')}, ${r.routed} routed, ${r.failed} failed, ${r.cached} cached, ${r.locked} locked, ${r.ripped ?? 0} ripped, ${unit(r.rounds ?? 0, 'round')}`
+  return `routing ${unit(r.legs, 'leg')}, ${r.routed} routed, ${r.failed} failed, ${r.cached} cached, ${r.held} held, ${r.ripped ?? 0} ripped, ${unit(r.rounds ?? 0, 'round')}`
 }
 
 /** `shared rules: clearance 0.2, minTrackWidth 0.15, …` for the targets of a board routed once under the strictest rules. */

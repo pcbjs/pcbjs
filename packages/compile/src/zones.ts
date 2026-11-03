@@ -1,12 +1,14 @@
 import type { Board, Item, Keepout, Pad, Poly, Pt, Ring, Zone } from '@pcbjs/core/model'
-import type { IslandMode, ThermalRules } from '@pcbjs/core/types'
-import { holeClearanceOn, thermalRules } from '@pcbjs/core/rules'
+import type { IslandMode, ThermalRules } from '@pcbjs/core/internal/types'
+import { holeClearanceOn, thermalRules } from '@pcbjs/core/internal/rules'
 import { area, bbox, bboxOverlap, difference, intersection, offset, overlaps, polysToRings, union } from './geom.js'
 import { copperLayers } from './layers.js'
-import { copperBox, copperLayersOf, copperRings, grownHole, grownRings, invalidate } from './copper.js'
-import { EMPTY, Grid, RingIndex, type Box } from './spatial.js'
-import { joined, pieces } from './connectivity.js'
+import { copperBox, copperLayersOf, copperRings, grownHole, grownRings, sameNet } from './copper.js'
+import { replaced } from './items.js'
+import { EdgeSet, EMPTY, Grid, type Box } from './spatial.js'
+import { joined, pieces, recordJoins } from './connectivity.js'
 import { classClearance, maxClassClearance, maxClearance, maxHoleClearance, overrideBetween } from './netclass.js'
+import { pulse } from './cancel.js'
 
 // round offsets have 5 um chords inside the arc and the fill takes three, so the clearance cut gets a margin; the min-width pass does not
 const FILL_MARGIN = 0.02
@@ -32,11 +34,37 @@ export function joinsSolidly(z: Zone, pad: Pad): boolean {
   return c.length > 0 && overlaps(polysToRings(z.fill), c)
 }
 
-/** Fill every pour, highest priority first; with `only`, refill those alone, as stitch() does, the others keeping their fill. */
-export function fillZones(board: Board, only?: ReadonlySet<Zone>): void {
+/** What the last fill of each zone left for the DRC, by item id, so a stored fill restores it. */
+export interface ZoneState {
+  reports: [number, Omit<ThermalReport, 'pads'> & { pads: [number, number][] }][]
+  solids: [number, number[]][]
+}
+
+export function zoneState(board: Board): ZoneState {
+  const out: ZoneState = { reports: [], solids: [] }
+  for (const it of board.items) {
+    if (it.kind !== 'zone') continue
+    const r = reports.get(it)
+    if (r) out.reports.push([it.id, { ...r, pads: r.pads.map(p => [p.pad.id, p.spokes]) }])
+    const s = solids.get(it)
+    if (s) out.solids.push([it.id, [...s].map(p => p.id)])
+  }
+  return out
+}
+
+export function restoreZoneState(board: Board, st: ZoneState): void {
+  const byId = new Map(board.items.map(it => [it.id, it]))
+  const pad = (id: number) => byId.get(id) as Pad
+  for (const [id, r] of st.reports) reports.set(byId.get(id) as Zone, { ...r, pads: r.pads.map(([p, spokes]) => ({ pad: pad(p), spokes })) })
+  for (const [id, ps] of st.solids) solids.set(byId.get(id) as Zone, new Set(ps.map(pad)))
+}
+
+/** Fill every pour, highest priority first and pours on no net last in board order; with `only`, refill those and every pour on no net, as stitch() does, the others keeping their fill. */
+export function fillZones(board: Board, only?: ReadonlySet<Zone>, progress?: (done: number, of: number) => void): void {
   const cu = copperLayers(board.copper)
   const th = thermalRules(board.rules)
-  const zones = board.items.filter((i): i is Zone => i.kind === 'zone').sort((a, b) => b.priority - a.priority)
+  const netless = (z: Zone) => (z.net === undefined ? 1 : 0)
+  const zones = board.items.filter((i): i is Zone => i.kind === 'zone').sort((a, b) => netless(a) - netless(b) || b.priority - a.priority)
   const edgeInner = board.outline.length ? polysToRings(offset(board.outline, -(board.rules.edgeClearance + FILL_MARGIN))) : null
   const filled = new Set<Zone>()
   // a pad's hole clearance override counts where it is larger than the rules'
@@ -50,8 +78,10 @@ export function fillZones(board: Board, only?: ReadonlySet<Zone>): void {
   // zones are left out: their fill changes during this pass
   const grid = new Grid(items.map(it => (it.kind === 'zone' ? EMPTY : itemBox(it, cu))))
   const zoneAt = items.flatMap((it, i) => (it.kind === 'zone' ? [i] : []))
-  for (const z of zones) {
-    if (only && !only.has(z)) {
+  for (const [i, z] of zones.entries()) {
+    pulse()
+    progress?.(i, zones.length)
+    if (only && !only.has(z) && z.net !== undefined) {
       filled.add(z)
       continue
     }
@@ -78,9 +108,11 @@ export function fillZones(board: Board, only?: ReadonlySet<Zone>): void {
       gaps: Ring[] = [],
       solid: Pad[] = []
     for (const it of near) {
+      pulse()
       if (it === z) continue
-      if (it.kind === 'zone' && !filled.has(it)) continue // lower priority zones are filled after this one
-      if (it.net !== undefined && it.net === z.net && it.kind !== 'zone') {
+      // lower priority zones are filled after this one, and a pour on no net after every pour on a net
+      if (it.kind === 'zone' && (!filled.has(it) || (it.net === undefined && z.net !== undefined))) continue
+      if (sameNet(it.net, z.net) && it.kind !== 'zone') {
         // a through-hole pad with no ring on this layer keeps the hole clearance there, see the hole loop below
         if (it.kind !== 'pad' || !copperRings(it, z.layer).length) continue
         const c = it.thermal ?? z.connect ?? 'thermal'
@@ -91,9 +123,9 @@ export function fillZones(board: Board, only?: ReadonlySet<Zone>): void {
         else if (c === 'none') clip.push(...grownRings(it, z.layer, clearance))
         continue
       }
-      if (it.kind === 'zone' && it.net === z.net) continue
+      if (it.kind === 'zone' && sameNet(it.net, z.net)) continue
       if (!copperLayersOf(it, cu).includes(z.layer)) {
-        if (it.kind === 'pad' && it.drill && it.net !== z.net) clip.push(...grownHole(it, Math.max(...it.drill) / 2, holeOf(it, z.layer)))
+        if (it.kind === 'pad' && it.drill && !sameNet(it.net, z.net)) clip.push(...grownHole(it, Math.max(...it.drill) / 2, holeOf(it, z.layer)))
         continue
       }
       const rings = copperRings(it, z.layer)
@@ -104,14 +136,12 @@ export function fillZones(board: Board, only?: ReadonlySet<Zone>): void {
       if (it.kind !== 'pad' && it.kind !== 'via') continue
       const r = it.kind === 'pad' ? (it.drill ? Math.max(...it.drill) / 2 : 0) : it.drill / 2
       if (!r) continue
-      if ((it.kind === 'pad' && it.type === 'npth') || it.net === undefined || it.net !== z.net || (it.kind === 'pad' && !copperRings(it, z.layer).length))
+      if ((it.kind === 'pad' && it.type === 'npth') || !sameNet(it.net, z.net) || (it.kind === 'pad' && !copperRings(it, z.layer).length))
         clip.push(...grownHole(it, r, holeOf(it, z.layer)))
     }
     // keepouts set back by FILL_MARGIN like every cut, so the min-width pass removes a neck between two as KiCad's min thickness does
     for (const k of board.keepouts ?? []) if (k.pours && k.layers.includes(z.layer) && !(z.net !== undefined && k.except?.includes(z.net))) clip.push(...keepoutCut(k))
-    reports.delete(z)
     const report: ThermalReport | undefined = thermal.length ? { pads: [], spokes: th.spokes, minSpokes: th.minSpokes, spokeWidth: th.spokeWidth, minWidth: minW } : undefined
-    if (report) reports.set(z, report)
     let fill = difference(subject, gaps.length ? [...clip, ...gaps] : clip)
     if (report && openW > 0 && th.spokeWidth > minW + 1e-9) {
       // spoke cores shrink and regrow with the fill in its min-width pass
@@ -127,12 +157,13 @@ export function fillZones(board: Board, only?: ReadonlySet<Zone>): void {
         if (pieces.length) fill = union([...rings, ...pieces])
       }
     }
-    z.fill = removeIslands(z, fill, board, filled, cu, islandMode(z, board))
+    const kept = removeIslands(z, fill, board, filled, cu, islandMode(z, board))
+    const next = replaced(board, z, { fill: kept.fill, islandsRemoved: kept.removed })
+    if (kept.joins) recordJoins(next, kept.joins)
+    if (report) reports.set(next, report)
     // so the DRC counts a through-hole pad this fill joins as joined on every layer
-    if (solid.length && fill.length) solids.set(z, new Set(solid))
-    else solids.delete(z)
-    invalidate(z as Item)
-    filled.add(z)
+    if (solid.length && fill.length) solids.set(next, new Set(solid))
+    filled.add(next)
   }
 }
 
@@ -149,10 +180,16 @@ function islandMode(z: Zone, board: Board): IslandMode {
   return z.islands ?? board.rules.islands ?? 'remove'
 }
 
-/** A fill without its islands, as KiCad removes them: a piece stays when connected to its net's pad, via or pour; records the count and area removed. */
-function removeIslands(z: Zone, fill: Poly[], board: Board, filled: Set<Zone>, cu: string[], mode: IslandMode): Poly[] {
-  delete z.islandsRemoved
-  if (mode === 'keep' || fill.length === 0 || z.net === undefined) return fill
+/** A fill without its islands, as KiCad removes them: a piece stays when connected to its net's pad, via or pour; with the count and area removed. */
+function removeIslands(
+  z: Zone,
+  fill: Poly[],
+  board: Board,
+  filled: Set<Zone>,
+  cu: string[],
+  mode: IslandMode,
+): { fill: Poly[]; removed?: Zone['islandsRemoved']; joins?: Map<Item, boolean>[] } {
+  if (mode === 'keep' || fill.length === 0 || z.net === undefined) return { fill }
   const own = pieces({ ...z, fill })
   // pads and vias hold a piece, as do the kept pieces of pours filled before this one
   const others: Item[] = []
@@ -182,10 +219,15 @@ function removeIslands(z: Zone, fill: Poly[], board: Board, filled: Set<Zone>, c
     return i
   }
   const grid = new Grid(nodes.map(it => copperBox(it, z.layer)))
+  // what each piece was tested against, so connectivity reads the verdict instead of testing again
+  const tested = own.map(() => new Map<Item, boolean>())
   for (let i = 0; i < nodes.length; i++)
     for (const j of grid.query(grid.boxes[i], 0.002)) {
       if (j <= i || find(i) === find(j)) continue
-      if (joined(nodes[i], nodes[j], z.layer)) parent[find(i)] = find(j)
+      pulse()
+      const join = joined(nodes[i], nodes[j], z.layer)
+      if (i < own.length) tested[i].set(nodes[j], join)
+      if (join) parent[find(i)] = find(j)
     }
   const held = new Set<number>()
   nodes.forEach((it, i) => {
@@ -195,16 +237,17 @@ function removeIslands(z: Zone, fill: Poly[], board: Board, filled: Set<Zone>, c
   const kept: Poly[] = []
   let count = 0,
     removed = 0
+  const joins: Map<Item, boolean>[] = []
   own.forEach((p, i) => {
     if (held.has(find(i)) || p.piece.area >= minArea) {
       kept.push(fill[i])
+      joins.push(tested[i])
       return
     }
     count++
     removed += p.piece.area
   })
-  if (count) z.islandsRemoved = { count, area: Math.round(removed * 1e4) / 1e4 }
-  return count ? kept : fill
+  return count ? { fill: kept, removed: { count, area: Math.round(removed * 1e4) / 1e4 }, joins } : { fill, joins }
 }
 
 /** The spoke axes of a pad: direction, where it leaves the pad and where it leaves the gap. */
@@ -228,8 +271,8 @@ function spokes(report: ThermalReport, layer: string, fill: Ring[], subject: Rin
     return []
   }
   const inFill = new PointIn(fill),
-    subjIdx = new RingIndex(subject),
-    clipIdx = new RingIndex(clip)
+    subjIdx = new EdgeSet(subject),
+    clipIdx = new EdgeSet(clip)
   const w = th.spokeWidth,
     kept: Ring[] = []
   // a spoke whose far end lies in another pad's spoke is kept after all, as KiCad's filler keeps it

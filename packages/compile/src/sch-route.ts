@@ -2,6 +2,7 @@
 // net's wire at a price, never run along it or meet it at a bend, end or tee. Nets that do not fit negotiate as the board's
 // router does, PathFinder style: shared cells grow dearer each round, by the present factor and a history that stays.
 import type { Pt } from '@pcbjs/core/model'
+import { pulse } from './cancel.js'
 
 /** The negotiation schedule of the board's router, see autoroute.ts. */
 const RIPUP = 12
@@ -267,7 +268,9 @@ export function squareRoute(input: SquareInput): SquareOutput {
       from[st] = -1
       heap.push(hOf(s), st)
     }
+    let steps = 0
     while (heap.size) {
+      if ((++steps & 255) === 0) pulse()
       const st = heap.pop()
       const i = (st / 5) | 0,
         din = st % 5,
@@ -323,6 +326,7 @@ export function squareRoute(input: SquareInput): SquareOutput {
 
   /** Route net k from scratch over what the other nets hold now. */
   const routeNet = (k: number, pres: number): boolean => {
+    pulse()
     for (const e of [...own[k]]) if (!fixed[k].has(e)) dropEdge(k, e)
     const n = nets[k]
     // components: the fixed wires with the pins on them, then each pin on its own
@@ -391,6 +395,7 @@ export function squareRoute(input: SquareInput): SquareOutput {
 
   /** Edges and nodes two nets share in a way that is not a crossing, and the nets involved. */
   const conflicts = (): { edges: number[]; nodes: number[]; nets: Set<number> } => {
+    pulse()
     const edges: number[] = [],
       nodes: number[] = [],
       bad = new Set<number>()

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parsePath, chainRings, padRing, roundedRect } from '../dist/path.js'
-import { bbox } from '../dist/geom.js'
+import { parsePath, chainRings, padRing, roundedRect, circleSegments } from '../dist/path.js'
+import { bbox, placement, apply } from '../dist/geom.js'
 import { near, nearPt } from './helpers.mjs'
 
 test('parsePath: absolute M H V Z gives one closed subpath', () => {
@@ -143,4 +143,15 @@ test('roundedRect: bbox matches w by h, centred', () => {
   near(b.w, 4, 1e-9)
   near(b.h, 2, 1e-9)
   assert.equal(roundedRect(4, 2, 0).length, 4)
+})
+
+
+test('geometry boundaries reject nonfinite tokens, radii and transforms', () => {
+  assert.throws(() => parsePath('M0 0 L1e309 2'), /expected a number/)
+  for (const value of [NaN, Infinity, -Infinity]) {
+    assert.throws(() => circleSegments(value), /finite/)
+    assert.throws(() => placement(0, 0, value, false), /finite/)
+    assert.throws(() => apply([1, 0, 0, 1, 0, 0], [value, 0]), /finite/)
+  }
+  assert.deepEqual(apply(placement(-2, 0, -90, false), [0, 0]), [-2, 0])
 })

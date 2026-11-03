@@ -23,11 +23,6 @@ export function parsePath(d: string): SubPath[] {
   return walkPath(d).subpaths
 }
 
-/** The drawing commands of a path, one per command and implicit repeat, pen moves left out. */
-export function pathCommands(d: string): PathCommand[] {
-  return walkPath(d).cmds.filter(c => c.pts.length >= 2)
-}
-
 function walkPath(d: string): { subpaths: SubPath[]; cmds: PathCommand[] } {
   const out: SubPath[] = []
   const cmds: PathCommand[] = []
@@ -43,7 +38,7 @@ function walkPath(d: string): { subpaths: SubPath[]; cmds: PathCommand[] } {
   let i = 0
   const num = () => {
     const v = toks[i++]?.v
-    if (typeof v !== 'number') throw new Error(`path: expected a number after ${cmd} in ${JSON.stringify(d)}`)
+    if (typeof v !== 'number' || !Number.isFinite(v)) throw new Error(`path: expected a number after ${cmd} in ${JSON.stringify(d)}`)
     return v
   }
   let drawn: Ring = []
@@ -338,7 +333,9 @@ export function roundedRectPrims(w: number, h: number, r: number): Prim[] {
 
 /** Number of segments to draw a full circle of radius r within the chord tolerance. */
 export function circleSegments(r: number): number {
-  return Math.max(16, Math.ceil(Math.PI / Math.acos(Math.max(0, 1 - TOL / Math.max(r, 0.01)))))
+  const n = Math.max(16, Math.ceil(Math.PI / Math.acos(Math.max(0, 1 - TOL / Math.max(r, 0.01)))))
+  if (!Number.isFinite(r) || !Number.isFinite(n)) throw new Error('circle radius exceeds finite geometry')
+  return n
 }
 
 export function circleRing(cx: number, cy: number, r: number, n = circleSegments(r)): Ring {

@@ -11,7 +11,7 @@ const strip = name => ({
   entry: `/stack/${name}/pcb.tsx`,
   name,
   title: name,
-  revision: '1',
+  rev: '1',
   thickness: T,
   outline: [
     [
@@ -31,7 +31,7 @@ const strip = name => ({
 const compile = (ats, rb = strip('strip')) =>
   compileBoard(h(PCB, { name: 'splice' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 80, h: 20 }), ...ats.map(at => reference('../strip/pcb.tsx', { at }))), {
     references: { resolve: () => rb },
-    routeCache: false,
+    cache: false,
   })
 const collisions = b => b.drc.filter(d => d.rule === 'reference-collision').map(d => d.message)
 

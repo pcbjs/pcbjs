@@ -8,4 +8,5 @@ export { bomCsv, bomRows, cplCsv, cplPoint, netlistJson, sourcingErc, type BomRo
 export { boardSvg, layerMarkup, holesMarkup, viewBox, type BoardSvgOptions } from './svg.js'
 export { boardFindings, formatFindings, type Finding } from './findings.js'
 export { siteData, routeInfos, sourceIndex } from './site-data.js'
+export { boardGlb, type GlbInputs } from './board-glb.js'
 export { schematicSvg, schematicMarkup, schematicStyle, SCH_THEMES, type SchTheme } from './sch-svg.js'

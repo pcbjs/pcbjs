@@ -1,23 +1,66 @@
 // The Gerber self check: nested pours at three depths, cutouts drawn either way, and both review bugs caught with their fix off.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h, keepout, nets, pour, resetDefaults } from '@pcbjs/core'
+import PCB, { h, keepout, nets, pour, resetDefaults, route } from '@pcbjs/core'
 import { PinHeader, rect, circle } from '@pcbjs/lib'
+import { fourLayer } from '@pcbjs/lib/stackups'
 import { compileBoard } from '@pcbjs/compile'
-import { fillZones } from '@pcbjs/compile/zones'
-import { area, intersection, polysToRings } from '@pcbjs/compile/geom'
-import { circleRing } from '@pcbjs/compile/path'
+import { fillZones } from '@pcbjs/compile/internal/zones'
+import { area, intersection, polysToRings } from '@pcbjs/compile/internal/geom'
+import { circleRing } from '@pcbjs/compile/internal/path'
 import { buildFab, checkFab, gerberLayer, readGerber, modelCopper } from '../dist/index.js'
+import { fp, N, unfrozen } from './parts.mjs'
 
 const DATE = '2026-01-01T00:00:00.000Z'
 const mismatches = b => b.drc.filter(d => d.rule === 'fab-mismatch')
 
+test('required files: every copper layer and the profile must be present, even when copper is empty', () => {
+  resetDefaults()
+  const b = compileBoard(h(PCB, { name: 'Empty', stackup: fourLayer() }, h('path', { layer: 'Edge.Cuts', d: rect(20, 20) })))
+  const layers = ['F.Cu', 'In1.Cu', 'In2.Cu', 'B.Cu', 'Edge.Cuts']
+  const gerbers = layers.map(layer => gerberLayer(b, layer, DATE))
+  assert.ok(gerbers.slice(0, 4).every(g => g.empty), 'the writer represents unused copper layers as empty Gerbers')
+  assert.deepEqual(checkFab(b, gerbers).findings, [])
+  for (let missing = 0; missing < gerbers.length; missing++) {
+    const found = checkFab(b, gerbers.filter((_, i) => i !== missing)).findings
+    assert.equal(found.length, 1, layers[missing])
+    assert.equal(found[0].layer, layers[missing])
+    assert.equal(found[0].severity, 'error')
+    assert.equal(found[0].rule, 'fab-mismatch')
+    assert.match(found[0].message, /expected Gerber file is missing/)
+  }
+  assert.deepEqual(checkFab(b, []).findings.map(f => f.layer).sort(), [...layers].sort())
+  const fab = buildFab(b, DATE, { check: true })
+  assert.deepEqual(mismatches(b), [])
+  assert.match(fab.readme, /Gerber self check: passed/)
+})
+
+test('required files: a profile without the board copper cannot pass the self check', () => {
+  const b = island()
+  const found = checkFab(b, [gerberLayer(b, 'Edge.Cuts', DATE)]).findings
+  assert.deepEqual(found.map(f => f.layer).sort(), ['B.Cu', 'F.Cu'])
+  assert.ok(found.every(f => f.rule === 'fab-mismatch' && /missing/.test(f.message)))
+})
+
+test('required files: an empty or unclosed profile cannot pass the self check', () => {
+  resetDefaults()
+  const b = compileBoard(h(PCB, { name: 'Profile' }, h('path', { layer: 'Edge.Cuts', d: rect(20, 20) })))
+  const gerbers = ['F.Cu', 'B.Cu', 'Edge.Cuts'].map(layer => gerberLayer(b, layer, DATE))
+  const profile = gerbers[2]
+  for (const text of ['', profile.text.replace(/D01\*/g, 'D02*')]) {
+    const found = checkFab(b, [...gerbers.slice(0, 2), { ...profile, text }]).findings
+    assert.equal(found.length, 1)
+    assert.equal(found[0].layer, 'Edge.Cuts')
+    assert.match(found[0].message, /no closed outline was found|missing format/)
+  }
+})
+
 /** The island board of the PSU review, a VIN pour inside a hole of the GND pour, with two VIN pins the pour alone joins. */
 function island() {
   const { GND, VIN } = nets()
-  const J1 = PinHeader(1).connect(VIN),
-    J2 = PinHeader(1).connect(VIN),
-    J3 = PinHeader(1).connect(GND)
+  const J1 = PinHeader(1)({ ref: 'J1' }).connect({ 1: VIN }),
+    J2 = PinHeader(1)({ ref: 'J2' }).connect({ 1: VIN }),
+    J3 = PinHeader(1)({ ref: 'J3' }).connect({ 1: GND })
   return compileBoard(
     h(
       PCB,
@@ -35,7 +78,7 @@ function island() {
 /** Pours nested three deep: GND around A around B around C, each in a hole of the one outside it. */
 function nested() {
   const { GND, A, B, C } = nets()
-  const J1 = PinHeader(4).connect(GND, A, B, C)
+  const J1 = PinHeader(4)({ ref: 'J1' }).connect({ 1: GND, 2: A, 3: B, 4: C })
   return compileBoard(
     h(
       PCB,
@@ -54,7 +97,7 @@ function nested() {
 /** The cutout board of the PSU review, the 6 mm hole drawn clockwise on screen or, with `ccw`, the other way. */
 function cutout(ccw) {
   const { GND, VIN } = nets()
-  const J1 = PinHeader(2).connect(VIN, GND)
+  const J1 = PinHeader(2)({ ref: 'J1' }).connect({ 1: VIN, 2: GND })
   const hole = ccw ? 'M 7 10 A 3 3 0 0 0 13 10 A 3 3 0 0 0 7 10 Z' : 'M 7 10 A 3 3 0 0 1 13 10 A 3 3 0 0 1 7 10 Z'
   return compileBoard(
     h(PCB, { name: 'Cut' }, h('path', { layer: 'Edge.Cuts', d: rect(20, 20) }), h('path', { layer: 'Edge.Cuts', d: hole }), h(J1, { at: '3 3' }), pour(GND, 'F.Cu', rect(20, 20))),
@@ -107,7 +150,7 @@ test('nesting: written in list order, the old bug, the self check fails with fab
     )
     if (make === island)
       assert.ok(
-        m.some(f => /net VIN: pad J\d\.1 is no longer joined/.test(f.message)),
+        m.some(f => /net VIN: pad J\d\/1 is no longer joined/.test(f.message)),
         m.map(f => f.message).join('\n'),
       )
     assert.match(fab.readme, /STATUS: NOT ORDERABLE/)
@@ -131,7 +174,7 @@ test('cutouts: drawn either way, the copper keeps the same clearance from the ho
 
 test('cutouts: oriented as drawn, the old bug, the self check fails with copper inside the cutout', () => {
   resetDefaults()
-  const b = cutout(false)
+  const b = unfrozen(() => cutout(false))
   // undo the fix: give the cutout the outline's direction again and refill
   const outer = b.outline.reduce((x, y) => (Math.abs(area([y])) > Math.abs(area([x])) ? y : x))
   b.outline = b.outline.map(r => (r === outer || Math.sign(area([r])) === Math.sign(area([outer])) ? r : r.slice().reverse()))
@@ -160,7 +203,7 @@ test('cutouts: a cutout across the outline is a cutout-outside error', () => {
 test('silk: the legend is cleared from the mask openings it overlaps, and only there', () => {
   resetDefaults()
   const { A, B } = nets()
-  const J1 = PinHeader(2).connect(A, B)
+  const J1 = PinHeader(2)({ ref: 'J1' }).connect({ 1: A, 2: B })
   const b = compileBoard(
     h(
       PCB,
@@ -187,7 +230,7 @@ function near(a, b, tol) {
 /** A GND pour on F.Cu split in two by a pour keepout down the middle, a GND pad on the left and, with `right`, one on the right. */
 function split({ right = true, track = null } = {}) {
   resetDefaults()
-  const pad = (ref, x) => h('footprint', { ref, at: `${x} 10`, 'net:1': 'GND' }, h('pad', { num: 1, size: [1, 1] }))
+  const pad = (ref, x) => fp({ ref, at: `${x} 10`, 'net:1': 'GND' }, h('pad', { num: 1, size: [1, 1] }))
   return compileBoard(
     h(
       PCB,
@@ -195,11 +238,11 @@ function split({ right = true, track = null } = {}) {
       h('path', { layer: 'Edge.Cuts', d: rect(20, 20) }),
       pad('U1', 4),
       right ? pad('U2', 16) : null,
-      keepout('F.Cu', rect(2, 20, 9, 0), { tracks: false, vias: false }),
-      track ? h('track', { net: 'GND', layer: 'F.Cu', width: 0.3, d: track }) : null,
-      pour('GND', 'F.Cu', rect(20, 20)),
+      keepout(rect(2, 20, 9, 0), { layers: ['F.Cu'], tracks: false, vias: false }),
+      track ? route(track[0]).net(N.GND).width(0.3).H(track[1]) : null,
+      pour(N.GND, 'F.Cu', rect(20, 20)),
     ),
-    { routeCache: false },
+    { cache: false },
   )
 }
 
@@ -212,7 +255,7 @@ test('pieces: a pour cut in two with a pad in each is unconnected, each piece na
   assert.equal(f.length, 1)
   assert.match(
     f[0].message,
-    /net GND is not fully connected: U\d\.1 in the F\.Cu pour piece at \(\d+\.\d\d, \d+\.\d\d\), \d+\.\d\d mm², is apart from U\d\.1 in the F\.Cu pour piece at/,
+    /net GND is not fully connected: U\d\/1 in the F\.Cu pour piece at \(\d+\.\d\d, \d+\.\d\d\), \d+\.\d\d mm², is apart from U\d\/1 in the F\.Cu pour piece at/,
   )
   // the Gerbers part the two pads as the DRC does: the self check finds nothing to report
   const fab = buildFab(b, DATE, { check: true })
@@ -226,15 +269,49 @@ test('pieces: island removal keeps a piece joined to a pad through a track, drop
   assert.equal(bare.items.find(i => i.kind === 'zone').fill.length, 1)
   assert.equal(bare.unconnected, 0)
   // a GND track from U1 across the keepout into the right piece holds it, and joins it
-  const joined = split({ right: false, track: 'M4 10 H15' })
+  const joined = split({ right: false, track: ['4 10', 15] })
   const z = joined.items.find(i => i.kind === 'zone')
   assert.equal(z.fill.length, 2)
   assert.equal(z.islandsRemoved, undefined)
   assert.equal(joined.unconnected, 0)
   // a track wholly inside the right piece leads to no pad: the piece goes, and the track is a net island of its own
-  const dangling = split({ right: false, track: 'M13 10 H17' })
+  const dangling = split({ right: false, track: ['13 10', 17] })
   const zd = dangling.items.find(i => i.kind === 'zone')
   assert.equal(zd.fill.length, 1)
   assert.equal(zd.islandsRemoved.count, 1)
   assert.equal(dangling.unconnected, 1)
+})
+
+
+test('writer subset rejects truncated structure and residual open profile paths', () => {
+  resetDefaults()
+  const b = compileBoard(h(PCB, { name: 'Structure' }, h('path', { layer: 'Edge.Cuts', d: rect(20, 20) })))
+  const gs = ['F.Cu', 'B.Cu', 'Edge.Cuts'].map(l => gerberLayer(b, l, DATE))
+  assert.deepEqual(checkFab(b, gs).findings, [])
+  for (const [index, mutate] of [
+    [0, () => ''],
+    [2, t => t.replace('M02*', '')],
+    [2, t => t.replace(/%FSLAX[^\n]+\n/, '')],
+    [2, t => t.replace('%MOMM*%', '')],
+    [2, t => t.replace('M02*', 'X5000000Y-5000000D02*\nX15000000Y-15000000D01*\nM02*')],
+    [2, t => t.replace('M02*', 'G36*\nM02*')],
+    [2, t => t.replace(/^D\d+\*\n/gm, '')],
+  ]) {
+    const corrupt = gs.map((g, i) => i === index ? { ...g, text: mutate(g.text) } : g)
+    assert.ok(checkFab(b, corrupt).findings.some(f => f.layer === (index === 2 ? 'Edge.Cuts' : 'F.Cu')))
+  }
+  for (const text of [
+    '%FSLAX46Y46*%\n%MOMM*%\nG36*\nX0Y0D02*\nX100Y0D01*\nX100Y100D01*\nG37*\nM02*',
+    '%FSLAX46Y46*%\n%MOMM*%\nX0Y0D03*\nM02*',
+  ]) assert.throws(() => readGerber(text), /region|aperture/)
+})
+
+
+test('writer subset retains arcs, polarity changes and empty copper', () => {
+  const head = '%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.2*%\n'
+  assert.equal(readGerber(head + 'M02*\n').polys.length, 0)
+  const drawing = 'D10*\nG75*\nX0Y0D02*\nG02X2000000Y0I1000000J0D01*\n%LPC*%\nX0Y0D03*\n%LPD*%\nM02*\n'
+  const read = readGerber(head + drawing)
+  assert.equal(read.paths.length, 1)
+  assert.ok(read.polys.length > 0)
 })

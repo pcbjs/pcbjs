@@ -1,8 +1,9 @@
 // The class table, its checks and merge are in @pcbjs/core, re-exported here.
 import type { Board, Item, KindClearanceMM, Pad } from '@pcbjs/core/model'
-import type { ResolvedNetClass } from '@pcbjs/core/netclass'
+import type { ResolvedNetClass } from '@pcbjs/core/internal/netclass'
+import type { Quantity, RuleProvenance } from '@pcbjs/core/finding'
 
-export { CLASS_DEFAULTS, checkClasses, checkCorner, checkNeck, mergeClasses, resolveClasses, type ResolvedNetClass } from '@pcbjs/core/netclass'
+export { CLASS_DEFAULTS, checkClasses, checkCorner, checkNeck, mergeClasses, resolveClasses, type ResolvedNetClass } from '@pcbjs/core/internal/netclass'
 
 /** net name -> its resolved class, per board, from the netlist's class tags and the board's class table */
 const NET_CLASSES = new WeakMap<Board, Map<string, ResolvedNetClass>>()
@@ -166,29 +167,46 @@ export function ownHoleClearance(it: Ask, rules: { holeClearance: number }): num
   return it.kind === 'pad' && it.holeClearance !== undefined ? it.holeClearance : rules.holeClearance
 }
 
-/** Where an item's clearance comes from, for a finding: `pad override of J1.3`, `part override of J1`, `class power`, or '' for the rules. */
-export function clearanceSource(board: Board, it: Item, key: 'clearance' | 'holeClearance' | 'edgeClearance' | 'trackWidth' = 'clearance'): string {
+type ProvenanceKey = 'clearance' | 'holeClearance' | 'edgeClearance' | 'trackWidth'
+const mmOf = (value: number): Quantity => ({ value, unit: 'mm' })
+
+/** The rules' own level of a value; `name` says which of its scoped values held, such as `via hole`. */
+export const rulesLevel = (rule: string, value: number, name?: string): RuleProvenance => ({ rule, value: mmOf(value), from: 'rules', ...(name ? { name } : {}) })
+
+/** The level that set an item's value, a pad's or part's override, its net class, then the rules', the winner first. */
+export function ownProvenance(board: Board, it: Item, key: ProvenanceKey = 'clearance', value?: number, to?: string): RuleProvenance[] {
+  const rulesKey = key === 'trackWidth' ? 'minTrackWidth' : key
+  const base = board.rules[rulesKey] as number
+  const rules = rulesLevel(key, base)
   if (it.kind === 'pad' && (it[key] !== undefined || (key === 'clearance' && it.clearanceTo))) {
-    const lvl = (it as Pad).override?.[key]
-    return lvl === 'part' ? `part override of ${it.ref ?? 'its part'}` : `pad override of ${it.ref ?? ''}${it.num ? `.${it.num}` : ''}`
+    const part = (it as Pad).override?.[key] === 'part'
+    const v = value ?? (it[key] as number | undefined) ?? base
+    const name = part ? (it.ref ?? 'its part') : `${it.ref ?? ''}${it.num ? `/${it.num}` : ''}`
+    return [{ rule: key, value: mmOf(v), from: part ? 'part' : 'pad', name, ...(to ? { to } : {}) }, rules]
   }
-  if (key !== 'clearance') return ''
   const c = classNameOf(board, it.net)
-  return c !== undefined && classOf(board, it.net)?.clearance !== undefined ? `class ${c}` : ''
+  const v = key === 'clearance' && c !== undefined ? classOf(board, it.net)?.clearance : undefined
+  if (v !== undefined) return [{ rule: key, value: mmOf(value ?? v), from: 'class', name: c!, ...(to ? { to } : {}) }, rules]
+  return [rules]
 }
 
-/** The source of the clearance that holds between two items, see itemClearance; '' when it is the rules'. */
-export function pairSource(board: Board, a: Item, b: Item, rules: { clearance: number } = board.rules): string {
+/** The levels of the clearance that holds between two items, see itemClearance, the winner first. */
+export function pairProvenance(board: Board, a: Item, b: Item, rules: { clearance: number } = board.rules): RuleProvenance[] {
   const oa = overrideToward(board, a, b),
     ob = overrideToward(board, b, a)
   if (oa || ob) {
     const [it, o] = !ob || (oa && oa.v >= ob.v) ? [a, oa!] : [b, ob]
-    const to = o.scope === 'self' ? ', to its own pads' : o.scope ? `, to ${o.scope}s` : ''
-    return (o.from === 'class' ? `class ${classNameOf(board, it.net)}` : clearanceSource(board, it)) + to
+    if (o.from === 'class')
+      return [
+        { rule: 'clearance', value: mmOf(o.v), from: 'class', name: classNameOf(board, it.net)!, ...(o.scope ? { to: o.scope } : {}) },
+        rulesLevel('clearance', rules.clearance),
+      ]
+    return ownProvenance(board, it, 'clearance', o.v, o.scope)
   }
   const ca = ownClearance(board, a, rules),
     cb = ownClearance(board, b, rules)
-  return clearanceSource(board, ca >= cb ? a : b) || (ca === cb ? clearanceSource(board, b) : '')
+  const pa = ownProvenance(board, ca >= cb ? a : b)
+  return pa[0].from === 'rules' && ca === cb ? ownProvenance(board, b) : pa
 }
 
 /** The gap of each differential pair by its two nets, as the router lays them out, per board. */

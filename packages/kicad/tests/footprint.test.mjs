@@ -5,10 +5,12 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { h } from '@pcbjs/core/jsx-runtime'
-import PCB, { defineFootprint } from '@pcbjs/core'
+import PCB, { defineFootprint, nets } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
-import { parseSExpr, readFootprint, readKicadMod, kicadFootprint, kicadModel, installedModels, padOutline, footprintModule, prefixOf } from '../dist/index.js'
+import { kicadModel } from '../dist/library.js'
+import { parseSExpr, readFootprint, readKicadMod, kicadFootprint, installedModels, padOutline, footprintModule, prefixOf } from '../dist/index.js'
 import { FOOTPRINTS, fixtureFootprints } from './helpers.mjs'
+import { withPins } from '@pcbjs/lib'
 
 const saved = {}
 before(() => {
@@ -66,8 +68,8 @@ for (const [id, file] of fixtureFootprints()) {
     ]) {
       const at = [20, 15]
       // KiCad's back flip is top to bottom; pcbjs mirrors left to right, so the angle takes a half turn more
-      const props = side === 'F' ? { ref: 'U1', at: [...at, a] } : { ref: 'U1', at: [...at, a + 180], side: 'B' }
-      const b = compileBoard(h(PCB, { name: 'T' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 40, h: 30 }), h(F, props)))
+      const props = side === 'F' ? { at: `${at[0]} ${at[1]} ${a}` } : { at: `${at[0]} ${at[1]} ${a + 180}`, side: 'B' }
+      const b = compileBoard(h(PCB, { name: 'T' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 40, h: 30 }), h(F({ ref: 'U1' }), props)))
       const pads = b.items.filter(i => i.kind === 'pad')
       assert.ok(pads.length >= kp.length, `${pads.length} pads for ${kp.length} KiCad pads`)
       for (const k of kp) {
@@ -136,7 +138,7 @@ test('kicadFootprint: Lib:Name and bare names resolve, pins from pad numbers, pi
   assert.deepEqual([...S.pins], ['1', '2', '3', '4', '5', '6', '7', '8'])
   assert.equal(S.prefix, 'U')
   assert.equal(kicadFootprint('R_0603_1608Metric').prefix, 'R')
-  const N = kicadFootprint('Package_SO:SOIC-8_3.9x4.9mm_P1.27mm', { pinNames: { 4: 'GND', 8: 'VCC', 5: 'NC' } })
+  const N = withPins(kicadFootprint('Package_SO:SOIC-8_3.9x4.9mm_P1.27mm'), { 4: 'GND', 8: 'VCC', 5: 'NC' })
   assert.ok(N.pins.includes('GND') && N.pins.includes('VCC') && !N.pins.includes('5'))
   assert.deepEqual([...N.nc], ['5'])
   const U = kicadFootprint('Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal')
@@ -151,9 +153,12 @@ test('kicadFootprint: Lib:Name and bare names resolve, pins from pad numbers, pi
 
 test('readFootprint: a part with nets compiles; the cache keys on the content', () => {
   const S = kicadFootprint('Package_SO:SOIC-8_3.9x4.9mm_P1.27mm')
-  assert.equal(kicadFootprint('Package_SO:SOIC-8_3.9x4.9mm_P1.27mm').id, S.id)
-  const b = compileBoard(h(PCB, { name: 'T' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 20 }), h(S, { ref: 'U1', at: [10, 10], nets: { 1: 'A', 8: 'B' } })))
+  assert.deepEqual([...kicadFootprint('Package_SO:SOIC-8_3.9x4.9mm_P1.27mm').pins], [...S.pins])
+  const { A, B } = nets()
+  const U1 = S({ ref: 'U1' }).connect({ 1: A, 8: B })
+  const b = compileBoard(h(PCB, { name: 'T' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 20 }), h(U1, { at: '10 10' })))
   assert.equal(b.items.filter(i => i.kind === 'pad' && i.net === 'A').length, 1)
+  assert.equal(b.footprints[0].id, 'Package_SO:SOIC-8_3.9x4.9mm_P1.27mm')
 })
 
 test('import footprint: the module names its source and licence and carries pads, graphics and the model reference', () => {
@@ -162,7 +167,7 @@ test('import footprint: the module names its source and licence and carries pads
   const m = footprintModule(fp, { source: 'Connector_Molex:Molex_Nano-Fit_105309-xx02_1x02_P2.50mm_Vertical' })
   assert.match(m.code, /^\/\/ Molex_Nano-Fit_105309-xx02_1x02_P2\.50mm_Vertical: imported from Connector_Molex:/)
   assert.match(m.code, /Licence:/)
-  assert.match(m.code, /kicadModel\('\$\{KICAD10_3DMODEL_DIR\}\/Connector_Molex\.3dshapes\//)
+  assert.match(m.code, /model=\{\{ file: 'kicad:Connector_Molex\.3dshapes\/Molex_Nano-Fit_105309-xx02_1x02_P2\.50mm_Vertical\.step' \}\}/)
   assert.match(m.code, /<pad num="1" at="0 0" shape="custom"/)
   assert.match(m.code, /type="npth"/)
   assert.match(m.code, /layer="F\.CrtYd"/)

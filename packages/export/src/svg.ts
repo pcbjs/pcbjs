@@ -1,7 +1,7 @@
 import type { Board, Item, Pad, Prim, Ring } from '@pcbjs/core/model'
-import { polysToRings } from '@pcbjs/compile/geom'
-import { copperLayers } from '@pcbjs/compile/layers'
-import { arcSweep, hasArc } from '@pcbjs/compile/path'
+import { polysToRings } from '@pcbjs/compile/internal/geom'
+import { copperLayers } from '@pcbjs/compile/internal/layers'
+import { arcSweep, hasArc } from '@pcbjs/compile/internal/path'
 import { padMask, padPaste } from './pads.js'
 
 const f = (v: number) => String(Math.round(v * 1e4) / 1e4)
@@ -99,6 +99,25 @@ export function layerMarkup(board: Board, layer: string, doc = false): string {
   return out.join('\n')
 }
 
+const r4 = (v: number) => Math.round(v * 1e4) / 1e4 + 0
+/** The filled shapes of a layer by item, as layerMarkup draws them and at its precision, zones first; a ring under three points is none. */
+export function filledRings(board: Board, layer: string): [number, Ring[]][] {
+  const out: [number, Ring[]][] = []
+  const put = (id: number, rings: Ring[]) => {
+    const rs = rings.filter(r => r.length >= 3).map(r => r.map(([x, y]) => [r4(x), r4(y)] as [number, number]))
+    if (rs.length) out.push([id, rs])
+  }
+  for (const it of board.items) if (it.kind === 'zone' && it.layer === layer && it.fill.length) put(it.id, polysToRings(it.fill))
+  for (const it of board.items) {
+    if (it.kind === 'pad') {
+      const r = padOn(it, layer, board.rules)
+      if (r) put(it.id, r)
+    } else if (it.kind === 'graphic' && it.layer === layer && it.fill) put(it.id, it.paths)
+    else if (it.kind === 'text' && it.layer === layer && it.polys?.length) put(it.id, polysToRings(it.polys))
+  }
+  return out
+}
+
 function spans(ls: [string, string], layer: string, board: Board): boolean {
   const cu = copperLayers(board.copper)
   const a = cu.indexOf(ls[0]),
@@ -149,7 +168,7 @@ export function boardSvg(board: Board, o: BoardSvgOptions = {}): string {
   const vb = viewBox(board).map(f).join(' ')
   const layers = [...board.layers].sort((a, b) => a.order - b.order)
   const meta = [
-    `<pcb:board name="${esc(board.name)}" title="${esc(board.title)}" revision="${esc(board.revision)}" copper="${board.copper}" thickness="${f(board.thickness)}" units="mm"/>`,
+    `<pcb:board name="${esc(board.name)}" title="${esc(board.title)}" rev="${esc(board.rev)}" copper="${board.copper}" thickness="${f(board.thickness)}" units="mm"/>`,
     `<pcb:rules ${Object.entries(board.rules)
       .map(([k, v]) => `${k}="${v && typeof v === 'object' ? esc(JSON.stringify(v)) : v}"`)
       .join(' ')}/>`,

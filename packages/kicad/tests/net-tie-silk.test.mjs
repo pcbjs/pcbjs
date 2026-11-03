@@ -2,7 +2,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { h } from '@pcbjs/core/jsx-runtime'
-import PCB from '@pcbjs/core'
+import PCB, { defineFootprint, nets } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
 import { readKicadMod, readFootprint, kicadFootprint, footprintModule } from '../dist/index.js'
 import { FOOTPRINTS } from './helpers.mjs'
@@ -35,20 +35,15 @@ test('net tie: net_tie_pad_groups is read, written by the importer and compiles 
     ['3', '4'],
   ])
   const { code } = footprintModule(readKicadMod(SHUNT))
-  assert.match(code, /netTie: \[\['1', '2'\], \['3', '4'\]\]/)
+  assert.match(code, /netTie={\[\['1', '2'\], \['3', '4'\]\]}/)
   const def = readFootprint(SHUNT)
-  assert.deepEqual(def.meta.netTie, [
+  assert.deepEqual(def.props.netTie, [
     ['1', '2'],
     ['3', '4'],
   ])
-  const b = compileBoard(
-    h(
-      PCB,
-      { name: 'T' },
-      h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 }),
-      h(def.render, { ref: 'RS1', at: '5 5', 'net:1': 'HI', 'net:2': 'SP', 'net:3': 'SN', 'net:4': 'LO' }),
-    ),
-  )
+  const { HI, SP, SN, LO } = nets()
+  const RS1 = defineFootprint(def.render, def.meta)({ ref: 'RS1' }).connect({ 1: HI, 2: SP, 3: SN, 4: LO })
+  const b = compileBoard(h(PCB, { name: 'T' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 }), h(RS1, { at: '5 5' })))
   assert.deepEqual(
     b.drc.filter(d => d.rule === 'short' || d.rule === 'clearance').map(d => d.message),
     [],
@@ -61,7 +56,7 @@ test('net tie: net_tie_pad_groups is read, written by the importer and compiles 
 
 test('kicadFootprint silk: none drops the footprint silk, full and open keep it', () => {
   const silkOf = F => {
-    const b = compileBoard(h(PCB, { name: 'T' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 }), h(F, { ref: 'R1', at: '5 5', refAt: false })))
+    const b = compileBoard(h(PCB, { name: 'T' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 }), h(F({ ref: 'R1' }), { at: '5 5', 'ref:at': false })))
     return { n: b.items.filter(i => i.layer.endsWith('.SilkS')).length, id: b.footprints[0].id }
   }
   const full = silkOf(kicadFootprint('Resistor_SMD:R_0603_1608Metric'))

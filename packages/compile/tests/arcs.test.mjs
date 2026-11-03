@@ -1,9 +1,9 @@
 // Arcs kept beside the flattened rings: parsing `A`, the transforms of groups, and the items flatten makes.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h } from '@pcbjs/core'
+import PCB, { h, pour, route } from '@pcbjs/core'
 import { compileBoard } from '../dist/index.js'
-import { applyPrims, arcLines, arcSweep, parsePath, pathCommands } from '../dist/path.js'
+import { applyPrims, arcLines, arcSweep, parsePath } from '../dist/path.js'
 import { near, nearPt } from './helpers.mjs'
 
 test('arcs: a circular A command is one arc primitive, clockwise for sweep flag 1', () => {
@@ -45,16 +45,6 @@ test('arcs: Z closes with a line primitive, curves and elliptical arcs become th
   nearPt(big.prims[0].center, [2, 0])
 })
 
-test('arcs: pathCommands carries the primitives of each command', () => {
-  const cmds = pathCommands('M0 0 H5 A2 2 0 0 0 7 2')
-  assert.deepEqual(
-    cmds.map(c => c.prims.map(p => p.kind)),
-    [['line'], ['arc']],
-  )
-  nearPt(cmds[1].prims[0].center, [7, 0])
-  assert.equal(cmds[1].prims[0].cw, false)
-})
-
 test('arcs: rotation keeps the direction, a mirror flips it, a non uniform scale falls back to lines', () => {
   const [sp] = parsePath('M2 0 A1 1 0 0 1 4 0')
   const rot = [0, -1, 1, 0, 10, 0] // 90 degrees, translated
@@ -77,7 +67,7 @@ test('arcs: rotation keeps the direction, a mirror flips it, a non uniform scale
   assert.equal(arcLines(sp.prims[0]).length, scaled.length)
 })
 
-test('arcs: flatten keeps prims on graphics, tracks and zones in board mm, mirrored on the back', () => {
+test('arcs: flatten keeps prims on graphics, chain arcs and pours in board mm, mirrored on the back', () => {
   const b = compileBoard(
     h(
       PCB,
@@ -87,8 +77,8 @@ test('arcs: flatten keeps prims on graphics, tracks and zones in board mm, mirro
       h('circle', { layer: 'F.SilkS', cx: 5, cy: 5, r: 1 }),
       h('rect', { layer: 'F.SilkS', x: 1, y: 1, w: 4, h: 2, rx: 0.5 }),
       h('line', { layer: 'F.SilkS', x1: 0, y1: 0, x2: 1, y2: 1 }),
-      h('track', { layer: 'F.Cu', width: 0.2, d: 'M 5 5 H 8 A 1 1 0 0 1 9 6' }),
-      h('zone', { layer: 'F.Cu', d: 'M 20 5 H 24 A 1 1 0 0 1 24 7 H 20 Z' }),
+      route('5 5').net(null).width(0.2).H(8).A(9, 6, -90),
+      pour(null, 'F.Cu', 'M 20 5 H 24 A 1 1 0 0 1 24 7 H 20 Z'),
     ),
   )
   const gs = b.items.filter(it => it.kind === 'graphic')
@@ -109,6 +99,10 @@ test('arcs: flatten keeps prims on graphics, tracks and zones in board mm, mirro
   const tracks = b.items.filter(it => it.kind === 'track')
   assert.equal(tracks[0].prims, undefined)
   assert.equal(tracks[1].prims[0].kind, 'arc')
+  // a chain arc of -90 degrees turns clockwise on screen about its centre
+  assert.equal(tracks[1].prims[0].cw, true)
+  nearPt(tracks[1].prims[0].center, [8, 6])
+  nearPt(tracks[1].pts.at(-1), [9, 6])
   const zone = b.items.find(it => it.kind === 'zone')
   assert.deepEqual(
     zone.prims[0].map(p => p.kind),

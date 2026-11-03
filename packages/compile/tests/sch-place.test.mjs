@@ -1,24 +1,34 @@
 // Automatic schematic placement: clustering by connectivity, the free page or the paper asked for, determinism and hand placements kept.
 import { test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h, nets, defineFootprint, resetDefaults, Schematic, Sym } from '@pcbjs/core'
-import { autoSymbol } from '@pcbjs/core/sch-symbol'
+import PCB, { h, nets, bindRef, defineFootprint, resetDefaults, Schematic, Place } from '@pcbjs/core'
+import { autoSymbol } from '@pcbjs/core/internal/sch-symbol'
 import { compileBoard } from '../dist/index.js'
 import { clusters, place } from '../dist/sch-place.js'
 
 afterEach(() => resetDefaults())
 
-const pad = (num, x) => h('pad', { num, at: [x, 0], size: [0.8, 0.8] })
+const pad = (num, x) => h('pad', { num, at: `${x} 0`, size: [0.8, 0.8] })
 const Two = prefix => defineFootprint(p => h('footprint', p, pad(1, -1), pad(2, 1)), { pins: ['1', '2'], prefix })
 const R = Two('R'),
   C = Two('C')
 const PINS = ['VDD', 'IN', 'EN', 'OUT', 'FB', 'GND']
-const Chip = defineFootprint(p => h('footprint', p, ...PINS.map((n, i) => h('pad', { num: i + 1, name: n, at: [i * 1.3, 0], size: [0.8, 0.8] }))), { pins: PINS, prefix: 'U' })
+const Chip = defineFootprint(p => h('footprint', p, ...PINS.map((n, i) => h('pad', { num: i + 1, name: n, at: `${i * 1.3} 0`, size: [0.8, 0.8] }))), { pins: PINS, prefix: 'U' })
 const edge = () => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 60, h: 40 })
+/** Each part named as its binding would name it, prefix and number in the order given. */
+const named = parts => {
+  const n = {}
+  return parts.map(p => bindRef(p, `${p.prefix}${(n[p.prefix] = (n[p.prefix] ?? 0) + 1)}`))
+}
 const board = (sch, ...parts) =>
   compileBoard(
-    h(PCB, { name: 'P', silkRefs: false, ...(sch ? { schematic: sch } : {}) }, edge(), ...parts.map((p, i) => h(p, { at: [3 + (i % 10) * 5, 5 + Math.floor(i / 10) * 5] }))),
-    { routeCache: false },
+    h(
+      PCB,
+      { name: 'P', silkRefs: false, ...(sch ? { schematic: { drawing: sch } } : {}) },
+      edge(),
+      ...named(parts).map((p, i) => h(p, { at: `${3 + (i % 10) * 5} ${5 + Math.floor(i / 10) * 5}` })),
+    ),
+    { cache: false },
   )
 const grid = d => s => s.at.map(v => Math.round(v / d.grid))
 const power = n => /^(GND|VCC|V3V3)$/.test(n),
@@ -177,7 +187,7 @@ const design = () => {
   const { A, B, X, VCC, GND } = nets()
   const U1 = Chip('X').connect({ VDD: VCC, IN: A, EN: B, OUT: X, FB: X, GND })
   const U2 = Chip('Y').connect({ VDD: VCC, IN: X, EN: B, OUT: A, FB: A, GND })
-  return [U1, U2, C('100n').connect(VCC, GND), C('1u').connect(VCC, GND), R('10k').connect(B, VCC), R('33').connect(A, X)]
+  return [U1, U2, C('100n').connect({ 1: VCC, 2: GND }), C('1u').connect({ 1: VCC, 2: GND }), R('10k').connect({ 1: B, 2: VCC }), R('33').connect({ 1: A, 2: X })]
 }
 
 test('place: the same input gives the same drawing', () => {
@@ -190,7 +200,7 @@ test('place: the same input gives the same drawing', () => {
 test('place: hand placements stay where they are and the rest packs around them', () => {
   const parts = design()
   const [U1] = parts
-  const b = board(h(Schematic, {}, h(Sym, { part: U1, at: '20 12' })), ...parts)
+  const b = board(h(Schematic, {}, h(Place, { part: U1, at: '20 12' })), ...parts)
   const d = sch(b)
   const hand = d.symbols.find(s => !s.auto)
   assert.deepEqual(grid(d)(hand), [20, 12])

@@ -1,14 +1,16 @@
 // Stitching vias, see stitch() in @pcbjs/core: placed on a lattice after the pours fill, then only the pours a via changes refill.
+import { marker } from './messages.js'
 import type { Board, DrcMarker, Graphic, Item, Poly, Pt, Ring, Via, Zone } from '@pcbjs/core/model'
-import type { Src } from '@pcbjs/core/types'
+import type { Src } from '@pcbjs/core/internal/types'
 import { bbox, intersection, offset, polysToRings, strokeClosed, strokeOpen, union, unionEvenOdd } from './geom.js'
 import { circleRing } from './path.js'
 import { copperLayers } from './layers.js'
 import { copperLayersOf, copperRings, grownRings } from './copper.js'
-import { holeClearanceOn } from '@pcbjs/core/rules'
+import { holeClearanceOn } from '@pcbjs/core/internal/rules'
 import { classClearance, itemClearance, maxClearance, maxHoleClearance, overrideBetween } from './netclass.js'
 import { Grid, type Box } from './spatial.js'
 import { fillZones, inside, PointIn } from './zones.js'
+import { immutable } from './items.js'
 
 /** A stitch() element as flatten records it, lengths in mm, layers resolved, `area` and `origin` in board mm. */
 export interface StitchJob {
@@ -40,14 +42,16 @@ export function stitchBoard(board: Board, jobs: readonly StitchJob[]): DrcMarker
     const vias = placeStitches(board, job)
     added.push(...vias)
     if (!vias.length)
-      out.push({
-        severity: 'info',
-        rule: 'stitch-empty',
-        message: `stitch() of ${job.net} placed no via: ${emptyWhy(board, job)}`,
-        at: job.area ? centre(job.area) : [board.bbox.x + board.bbox.w / 2, board.bbox.y + board.bbox.h / 2],
-        net: job.net,
-        ...(job.src ? { src: job.src } : {}),
-      })
+      out.push(
+        marker({
+          severity: 'info',
+          rule: 'stitch-empty',
+          args: { net: job.net, why: emptyWhy(board, job) },
+          refs: [`net:${job.net}`],
+          at: job.area ? centre(job.area) : [board.bbox.x + board.bbox.w / 2, board.bbox.y + board.bbox.h / 2],
+          ...(job.src ? { src: job.src } : {}),
+        }),
+      )
   }
   if (added.length) {
     const touched = touchedZones(board, added)
@@ -179,7 +183,7 @@ function placeStitches(board: Board, job: StitchJob): Via[] {
         ...(job.chain ? { chain: job.chain } : {}),
       }) as Via,
   )
-  board.items.push(...vias)
+  board.items.push(...vias.map(immutable))
   return vias
 }
 

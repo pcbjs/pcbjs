@@ -1,3 +1,4 @@
+import { fp, P, net } from './parts.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { h } from '@pcbjs/core/jsx-runtime'
@@ -7,9 +8,9 @@ import { netLoops } from '../dist/loops.js'
 import { clearRouteCache } from '../dist/route-cache.js'
 
 const edge = (w = 30, hh = 20) => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w, h: hh })
-const smd = (ref, x, y, net, size = 1) => h('footprint', { ref, at: [x, y], nets: { 1: net } }, h('pad', { num: 1, size, type: 'smd' }))
+const smd = (ref, x, y, net, size = 1) => fp({ ref, at: `${x} ${y}`, nets: { 1: net } }, h('pad', { num: 1, size, type: 'smd' }))
 const board = (props, ...children) => h(PCB, { name: 'Loops', ...props }, edge(), ...children)
-const opts = { routeCache: false }
+const opts = { cache: false }
 const tracks = (b, id) => b.items.filter(i => i.kind === 'track' && (id === undefined || i.route === id))
 const rule = (b, r) => b.drc.filter(d => d.rule === r)
 const same = (p, q, tol = 1e-6) => Math.abs(p[0] - q[0]) <= tol && Math.abs(p[1] - q[1]) <= tol
@@ -36,8 +37,8 @@ test('join: a leg to a pad that already has a track joins that track, a Y and no
       smd('J1', 25, 8, 'DP'),
       smd('U1', 4, 15, 'DP'),
       smd('R1', 8, 4, 'DP'),
-      route('J1.1', 'U1.1', 'H 22 L 13 10 Z').width(0.25),
-      route('R1.1', 'J1.1').width(0.25).layers(['F.Cu']),
+      route(P('J1.1'), P('U1.1')).width(0.25).H(22).L(13, 10).Z(),
+      route(P('R1.1'), P('J1.1')).width(0.25).layers(['F.Cu']),
     ),
     opts,
   )
@@ -56,7 +57,7 @@ test('join: a leg to a pad that already has a track joins that track, a Y and no
 
 test('join: the leg meets the trunk at its cheapest point', () => {
   const b = compileBoard(
-    board({}, smd('A', 5, 12, 'N'), smd('B', 25, 12, 'N'), smd('C', 15, 4, 'N'), route('A.1', 'B.1', 'Z').width(0.3), route('C.1', 'A.1').width(0.3).layers(['F.Cu'])),
+    board({}, smd('A', 5, 12, 'N'), smd('B', 25, 12, 'N'), smd('C', 15, 4, 'N'), route(P('A.1'), P('B.1')).width(0.3).Z(), route(P('C.1'), P('A.1')).width(0.3).layers(['F.Cu'])),
     opts,
   )
   const leg = tracks(b, 'route:2'),
@@ -68,7 +69,14 @@ test('join: the leg meets the trunk at its cheapest point', () => {
 
 test('join: legs of one net route widest first, so the thin one joins the wide one', () => {
   const b = compileBoard(
-    board({}, smd('A', 5, 12, 'N'), smd('B', 25, 12, 'N'), smd('C', 15, 4, 'N'), route('C.1', 'B.1').width(0.2).layers(['F.Cu']), route('A.1', 'B.1').width(0.5).layers(['F.Cu'])),
+    board(
+      {},
+      smd('A', 5, 12, 'N'),
+      smd('B', 25, 12, 'N'),
+      smd('C', 15, 4, 'N'),
+      route(P('C.1'), P('B.1')).width(0.2).layers(['F.Cu']),
+      route(P('A.1'), P('B.1')).width(0.5).layers(['F.Cu']),
+    ),
     opts,
   )
   const wide = tracks(b, 'route:2'),
@@ -88,7 +96,7 @@ test('join: legs of one net route widest first, so the thin one joins the wide o
 
 test('join: a wider leg widens the trunk it joins from its pad to the junction', () => {
   const b = compileBoard(
-    board({}, smd('A', 5, 12, 'N'), smd('B', 25, 12, 'N'), smd('C', 15, 4, 'N'), route('A.1', 'B.1', 'Z').width(0.2), route('C.1', 'B.1').width(0.5).layers(['F.Cu'])),
+    board({}, smd('A', 5, 12, 'N'), smd('B', 25, 12, 'N'), smd('C', 15, 4, 'N'), route(P('A.1'), P('B.1')).width(0.2).Z(), route(P('C.1'), P('B.1')).width(0.5).layers(['F.Cu'])),
     opts,
   )
   const own = tracks(b, 'route:2'),
@@ -116,16 +124,16 @@ test('join: a trunk with no room to widen sends the leg to its pad, with the inf
       smd('C', 15, 4, 'N'),
       smd('X1', 20, 12.85, 'X', 1),
       smd('X2', 20, 11.15, 'Y', 1),
-      route('A.1', 'B.1', 'Z').width(0.2),
-      route('C.1', 'B.1').width(0.5).layers(['F.Cu']),
+      route(P('A.1'), P('B.1')).width(0.2).Z(),
+      route(P('C.1'), P('B.1')).width(0.5).layers(['F.Cu']),
     ),
     opts,
   )
   const [f] = rule(b, 'trunk-narrow')
   assert.ok(f, 'trunk-narrow is reported')
   assert.equal(f.severity, 'info')
-  assert.equal(f.routeId, 'route:2')
-  assert.match(f.message, /route:2 runs to pad B\.1 instead of joining the copper of net N there: widening that copper to 0\.5 mm would break clearance/)
+  assert.ok(f.refs.includes('route:2') && f.refs.includes('net:N'), f.refs.join())
+  assert.match(f.message, /route:2 runs to pad B\/1 instead of joining the copper of net N there: widening that copper to 0\.5 mm would break clearance/)
   assert.ok(same(ends(tracks(b, 'route:2'))[1], [25, 12]), 'the leg reaches B itself')
   assert.deepEqual(
     b.drc.filter(d => d.severity === 'error'),
@@ -134,8 +142,8 @@ test('join: a trunk with no room to widen sends the leg to its pad, with the inf
 })
 
 test('direct: .direct() reaches the pad and never joins the copper on the way', () => {
-  const parts = [smd('A', 5, 12, 'N'), smd('B', 25, 12, 'N'), smd('C', 15, 4, 'N'), route('A.1', 'B.1', 'Z').width(0.3)]
-  const b = compileBoard(board({}, ...parts, route('C.1', 'A.1').width(0.3).layers(['F.Cu']).direct()), opts)
+  const parts = [smd('A', 5, 12, 'N'), smd('B', 25, 12, 'N'), smd('C', 15, 4, 'N'), route(P('A.1'), P('B.1')).width(0.3).Z()]
+  const b = compileBoard(board({}, ...parts, route(P('C.1'), P('A.1')).width(0.3).layers(['F.Cu']).direct()), opts)
   const leg = tracks(b, 'route:2')
   assert.deepEqual(
     ends(leg).map(p => p.map(v => Math.round(v * 1e6) / 1e6)),
@@ -159,8 +167,8 @@ test('fence: copper of the net that joins neither end is an obstacle, so the leg
       smd('B', 25, 10, 'N'),
       smd('D', 15, 6, 'N'),
       smd('E', 15, 14, 'N'),
-      route('D.1', 'E.1', 'Z').width(0.3),
-      route('A.1', 'B.1').width(0.3).layers(['F.Cu']),
+      route(P('D.1'), P('E.1')).width(0.3).Z(),
+      route(P('A.1'), P('B.1')).width(0.3).layers(['F.Cu']),
     ),
     opts,
   )
@@ -176,7 +184,15 @@ test('fence: copper of the net that joins neither end is an obstacle, so the leg
 
 test('join: a leg whose ends the net already joins places nothing', () => {
   const b = compileBoard(
-    board({}, smd('A', 5, 12, 'N'), smd('B', 25, 12, 'N'), smd('C', 15, 4, 'N'), route('A.1', 'B.1').width(0.3), route('B.1', 'C.1').width(0.3), route('C.1', 'A.1').width(0.3)),
+    board(
+      {},
+      smd('A', 5, 12, 'N'),
+      smd('B', 25, 12, 'N'),
+      smd('C', 15, 4, 'N'),
+      route(P('A.1'), P('B.1')).width(0.3),
+      route(P('B.1'), P('C.1')).width(0.3),
+      route(P('C.1'), P('A.1')).width(0.3),
+    ),
     opts,
   )
   assert.equal(tracks(b, 'route:3').length, 0)
@@ -191,15 +207,15 @@ test('net-loop: a hand-routed cycle is a warning naming the net, its segments an
     smd('A', 5, 12, 'N'),
     smd('B', 25, 12, 'N'),
     smd('C', 15, 4, 'N'),
-    route('A.1', 'B.1', 'Z', { __src: src }).width(0.3),
-    route('B.1', 'C.1', 'Z').width(0.3),
-    loop(route('C.1', 'A.1', 'Z').width(0.3)),
+    route(P('A.1'), P('B.1'), { __src: src }).width(0.3).Z(),
+    route(P('B.1'), P('C.1')).width(0.3).Z(),
+    loop(route(P('C.1'), P('A.1')).width(0.3).Z()),
   ]
   const b = compileBoard(board({}, ...ring(r => r)), opts)
   const [f] = rule(b, 'net-loop')
   assert.equal(rule(b, 'net-loop').length, 1)
   assert.equal(f.severity, 'warning')
-  assert.equal(f.net, 'N')
+  assert.ok(f.refs.includes('net:N'))
   assert.equal(f.layer, 'F.Cu')
   assert.deepEqual(f.src, src)
   assert.match(f.message, /net N forms a loop on F\.Cu through .*track route:1.*track route:2.*track route:3/)
@@ -210,16 +226,16 @@ test('net-loop: a hand-routed cycle is a warning naming the net, its segments an
     smd('A', 5, 12, N),
     smd('B', 25, 12, N),
     smd('C', 15, 4, N),
-    route('A.1', 'B.1', 'Z').width(0.3),
-    route('B.1', 'C.1', 'Z').width(0.3),
-    route('C.1', 'A.1', 'Z').width(0.3),
+    route(P('A.1'), P('B.1')).width(0.3).Z(),
+    route(P('B.1'), P('C.1')).width(0.3).Z(),
+    route(P('C.1'), P('A.1')).width(0.3).Z(),
   ]
   assert.deepEqual(rule(compileBoard(board({ classes: { ring: { loops: true } } }, ...tagged), opts), 'net-loop'), [], 'loops: true in the class')
 })
 
 test('net-loop: two paths between the same pads on two layers are a loop through vias', () => {
   const b = compileBoard(
-    board({}, smd('A', 5, 12, 'N'), smd('B', 25, 12, 'N'), route('A.1', 'B.1', 'Z').width(0.3), route('A.1', 'B.1', 'V 16 @B.Cu H 25 @F.Cu Z').width(0.3)),
+    board({}, smd('A', 5, 12, 'N'), smd('B', 25, 12, 'N'), route(P('A.1'), P('B.1')).width(0.3).Z(), route(P('A.1'), P('B.1')).width(0.3).V(16).via('B.Cu').H(25).via('F.Cu').Z()),
     opts,
   )
   const loops = rule(b, 'net-loop')
@@ -228,11 +244,16 @@ test('net-loop: two paths between the same pads on two layers are a loop through
 })
 
 test("net-loop: a pin strap whose loop lies in one part's courtyard is not reported, one that leaves it is", () => {
-  const part = (...pads) => h('footprint', { ref: 'U1', at: [15, 10], nets: { 1: 'N', 2: 'N' } }, h('rect', { layer: 'F.CrtYd', x: -4, y: -3, w: 8, h: 6, width: 0.05 }), ...pads)
-  const pads = [h('pad', { num: 1, at: [-1, 0], size: 0.6, type: 'smd' }), h('pad', { num: 2, at: [1, 0], size: 0.6, type: 'smd' })]
+  const part = (...pads) => fp({ ref: 'U1', at: '15 10', nets: { 1: 'N', 2: 'N' } }, h('rect', { layer: 'F.CrtYd', x: -4, y: -3, w: 8, h: 6, width: 0.05 }), ...pads)
+  const pads = [h('pad', { num: 1, at: '-1 0', size: 0.6, type: 'smd' }), h('pad', { num: 2, at: '1 0', size: 0.6, type: 'smd' })]
   const strap = (low, via = false) =>
     compileBoard(
-      board({}, part(...pads), route('U1.1', 'U1.2', 'V 9 H 16 Z').width(0.2), route('U1.1', 'U1.2', via ? `V ${low} @B.Cu H 16 @F.Cu Z` : `V ${low} H 16 Z`).width(0.2)),
+      board(
+        {},
+        part(...pads),
+        route(P('U1.1'), P('U1.2')).width(0.2).V(9).H(16).Z(),
+        via ? route(P('U1.1'), P('U1.2')).width(0.2).V(low).via('B.Cu').H(16).via('F.Cu').Z() : route(P('U1.1'), P('U1.2')).width(0.2).V(low).H(16).Z(),
+      ),
       opts,
     )
   for (const via of [false, true]) {
@@ -251,12 +272,12 @@ test('join: a warm compile places every joining leg from the cache and gives the
       smd('B', 25, 12, 'N'),
       smd('C', 15, 4, 'N'),
       smd('D', 20, 17, 'N'),
-      route('A.1', 'B.1', 'Z').width(0.2),
-      route('C.1', 'B.1').width(0.4).layers(['F.Cu']),
-      route('D.1', 'A.1').width(0.25).layers(['F.Cu']),
+      route(P('A.1'), P('B.1')).width(0.2).Z(),
+      route(P('C.1'), P('B.1')).width(0.4).layers(['F.Cu']),
+      route(P('D.1'), P('A.1')).width(0.25).layers(['F.Cu']),
     )
-  const cold = compileBoard(make(), { routeCache: { dir: null } })
-  const warm = compileBoard(make(), { routeCache: { dir: null } })
+  const cold = compileBoard(make(), { cache: { dir: null } })
+  const warm = compileBoard(make(), { cache: { dir: null } })
   assert.equal(warm.routing.cached, warm.routing.legs)
   assert.deepEqual(warm.items, cold.items)
   clearRouteCache()

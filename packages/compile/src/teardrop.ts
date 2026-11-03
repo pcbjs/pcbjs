@@ -1,13 +1,15 @@
 // Teardrops as KiCad 7's straight ones, filled graphics of the track's net; one too close to anything shrinks, else is dropped with `teardrop-dropped`.
+import { marker } from './messages.js'
 import type { Board, DrcMarker, Graphic, Item, Pad, Pt, Ring, Track, Via } from '@pcbjs/core/model'
-import type { ResolvedTeardrops, TeardropLevel, TeardropSize } from '@pcbjs/core/teardrop'
+import type { ResolvedTeardrops, TeardropLevel, TeardropSize } from '@pcbjs/core/internal/teardrop'
 import { area, bbox, difference, offset, overlaps, pointInRing, polysToRings } from './geom.js'
 import { copperLayers } from './layers.js'
-import { copperBox, copperLayersOf, copperRings } from './copper.js'
+import { copperBox, copperLayersOf, copperRings, sameNet } from './copper.js'
 import { Grid, type Box } from './spatial.js'
 import { classOf, itemClearance, maxClearance, maxHoleClearance } from './netclass.js'
 import { circleRing } from './path.js'
 import { padLabel } from './drc.js'
+import { immutable } from './items.js'
 
 /** The steps a teardrop that meets something shrinks through: its length, and its width over the track's, times each. */
 const SHRINK = [1, 0.75, 0.5]
@@ -19,7 +21,6 @@ const add = (a: Pt, b: Pt, k = 1): Pt => [a[0] + b[0] * k, a[1] + b[1] * k]
 const dot = (a: Pt, b: Pt) => a[0] * b[0] + a[1] * b[1]
 const len = (a: Pt) => Math.hypot(a[0], a[1])
 const nm = (v: number) => Math.round(v * 1e6) / 1e6
-const f3 = (v: number) => String(Math.round(v * 1000) / 1000)
 const sizeOf = (s: TeardropSize, d: number) => ('ratio' in s ? s.ratio * d : s.mm)
 
 /** Where the polyline from its first point, inside `ring`, crosses out of it: the point, the segment's direction and what is left of it. */
@@ -131,7 +132,7 @@ export function teardrops(board: Board, own: { on: boolean; spec: ResolvedTeardr
       const pad = l.padGrid
         .query({ x: e[0], y: e[1], w: 0, h: 0 })
         .map(k => l.pads[k])
-        .find(p => p.net === t.net && (s.pads === 'all' || p.type === s.pads) && p.type !== 'npth' && pointInRing(e, p.poly))
+        .find(p => sameNet(p.net, t.net) && (s.pads === 'all' || p.type === s.pads) && p.type !== 'npth' && pointInRing(e, p.poly))
       if (!pad) continue
       const d = Math.min(...pad.size)
       if (t.width >= WIDTH_FILTER * d) continue
@@ -161,18 +162,20 @@ export function teardrops(board: Board, own: { on: boolean; spec: ResolvedTeardr
         }
       }
       if (!ring) {
-        out.push({
-          severity: 'info',
-          rule: 'teardrop-dropped',
-          message: `no teardrop where track ${t.net} leaves ${padLabel(pad)} on ${t.layer}: even at ${f3(SHRINK[SHRINK.length - 1] * 100)}% it would meet ${why}`,
-          at: x.at,
-          layer: t.layer,
-          items: [pad.id, t.id],
-        })
+        out.push(
+          marker({
+            severity: 'info',
+            rule: 'teardrop-dropped',
+            args: { net: t.net ?? '', pad: padLabel(pad), percent: SHRINK[SHRINK.length - 1] * 100, why: why ?? '' },
+            at: x.at,
+            layer: t.layer,
+            items: [pad.id, t.id],
+          }),
+        )
         continue
       }
       const g: Graphic = { kind: 'graphic', id: nextId++, layer: t.layer, net: t.net, paths: [ring], closed: [true], width: 0, fill: true, teardrop: { pad: pad.id, track: t.id } }
-      board.items.push(g)
+      board.items.push(immutable(g))
       placed.push(g)
     }
   }

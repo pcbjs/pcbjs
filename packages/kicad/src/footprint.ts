@@ -1,9 +1,8 @@
 // KiCad's frame is pcbjs's: mm, x right, y down, rotation counter-clockwise on screen.
-import { readFileSync } from 'node:fs'
-import { basename } from 'node:path'
+import { basename, readText as readFile } from './host.js'
 import { atom, atoms, child, children, flag, head, isList, num, nums, parseSExpr, type SExpr, type SList } from './sexpr.js'
 import { arcPoints, circlePoints, fmt, nm, normAngle, rotate, same, svgArcTo, type Pt } from './geom.js'
-import { offset as offsetPolys, polysToRings, strokeOpen, union } from '@pcbjs/compile/geom'
+import { offset as offsetPolys, polysToRings, strokeOpen, union } from '@pcbjs/compile/internal/geom'
 
 export type KPadKind = 'smd' | 'thru_hole' | 'np_thru_hole' | 'connect'
 export type KPadShape = 'circle' | 'rect' | 'oval' | 'roundrect' | 'trapezoid' | 'custom'
@@ -546,7 +545,7 @@ function toOwnFrame(fp: KFootprint): void {
 /** Read a `.kicad_mod`, its text or a path. */
 export function readKicadMod(source: string): KFootprint {
   const isText = source.trimStart().startsWith('(')
-  const text = isText ? source : readFileSync(source, 'utf8')
+  const text = isText ? source : readFile(source)
   const l = parseSExpr(text)
   if (head(l) !== 'footprint' && head(l) !== 'module') throw new Error(`${isText ? 'the text' : source} is not a KiCad footprint: it starts with (${head(l)} …)`)
   const fp = readFootprintList(l, isText ? {} : { file: source })
@@ -933,8 +932,7 @@ export function padSpecs(
   const cu = p.layers.filter(l => COPPER.test(l))
   if (p.kind !== 'np_thru_hole' && !cu.length) return []
   const props: Record<string, unknown> = { num: p.num }
-  const at = p.rot ? [nm(p.at[0]), nm(p.at[1]), nm(p.rot)] : [nm(p.at[0]), nm(p.at[1])]
-  props.at = at
+  props.at = p.rot ? `${fmt(nm(p.at[0]))} ${fmt(nm(p.at[1]))} ${fmt(nm(p.rot))}deg` : `${fmt(nm(p.at[0]))} ${fmt(nm(p.at[1]))}`
   // the pad's own shape is its front, unless the padstack lists F.Cu: a back part's stack was flipped
   const stackF = p.stack?.find(s => s.layer === 'F.Cu'),
     stackB = p.stack?.find(s => s.layer === 'B.Cu'),
@@ -984,7 +982,7 @@ export function padSpecs(
   }
   if (!split) return [{ type: 'pad', props }]
   // the hole joins every layer, so the back shape stays on all of them and the front shape is added on F.Cu
-  const front: Record<string, unknown> = { num: p.num, at, ...shapeProps(frontShape), paste: false }
+  const front: Record<string, unknown> = { num: p.num, at: props.at, ...shapeProps(frontShape), paste: false }
   if (props.maskExpansion !== undefined) front.maskExpansion = props.maskExpansion
   if (props.thermal !== undefined) front.thermal = props.thermal
   if (props.clearance !== undefined) front.clearance = props.clearance
@@ -1045,6 +1043,7 @@ export function refAtOf(fp: KFootprint): string | false | undefined {
   return `${fmt(r.at[0])} ${fmt(r.at[1])} ${fmt(normAngle(r.rot))}`
 }
 
+/** Keepout zones as `keepout` specs: `d` is the area, the rest its options, `layers` left out for every copper layer. */
 export function zoneSpecs(zones: KZone[], copper: string[]): ElementSpec[] {
   const out: ElementSpec[] = []
   for (const z of zones) {
@@ -1052,9 +1051,8 @@ export function zoneSpecs(zones: KZone[], copper: string[]): ElementSpec[] {
     const layers = z.layers.flatMap(l => (l === '*.Cu' || l === 'F&B.Cu' ? copper : COPPER.test(l) ? [l] : []))
     if (!layers.length) continue
     for (const poly of z.polygons) {
-      const props: Record<string, unknown> =
-        layers.length === copper.length && copper.every(c => layers.includes(c)) ? { layers: 'all' } : layers.length === 1 ? { layer: layers[0] } : { layers }
-      props.d = polyPath(poly)
+      const props: Record<string, unknown> = { d: polyPath(poly) }
+      if (!(layers.length === copper.length && copper.every(c => layers.includes(c)))) props.layers = layers
       if (!z.keepout.tracks) props.tracks = false
       if (!z.keepout.vias) props.vias = false
       if (!z.keepout.pours) props.pours = false

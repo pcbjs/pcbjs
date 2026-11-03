@@ -10,7 +10,7 @@ import { maskOpenings, padMask } from '../dist/mask.js'
 afterEach(() => resetDefaults())
 
 const outline = () => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 30, h: 20 })
-const mk = (rules, ...kids) => compileBoard(h(PCB, { name: 'M', rules: { clearance: 0.1, minTrackWidth: 0.1, ...rules } }, outline(), ...kids), { routeCache: false })
+const mk = (rules, ...kids) => compileBoard(h(PCB, { name: 'M', rules: { clearance: 0.1, minTrackWidth: 0.1, ...rules } }, outline(), ...kids), { cache: false })
 const find = (b, rule) => b.drc.filter(d => d.rule === rule)
 /** four 0.25 by 1 mm pads at 0.5 mm pitch: 0.25 mm of copper between pads, 0.15 mm of mask with the 0.05 expansion */
 const pads = () => [0, 1, 2, 3].map(k => h('pad', { num: k + 1, at: `${(k - 1.5) * 0.5} 0`, size: [0.25, 1], shape: 'rect' }))
@@ -23,25 +23,29 @@ const Ganged = defineFootprint(props => h('footprint', props, ...pads(), h('rect
 
 test('mask-web: pads of one part are one finding naming the narrowest pair, the web and the count', () => {
   const { A, B, C, D } = nets()
-  const b = mk({ maskWeb: 0.2 }, h(Row().connect(A, B, C, D), { at: '10 10', ref: false }))
+  const b = mk({ maskWeb: 0.2 }, h(Row({ ref: 'U1' }).connect({ 1: A, 2: B, 3: C, 4: D }), { at: '10 10', 'ref:at': false }))
   const w = find(b, 'mask-web')
   assert.equal(w.length, 1)
   assert.equal(w[0].severity, 'warning')
   assert.equal(w[0].layer, 'F.Mask')
-  assert.match(w[0].message, /^mask web between pad U1\.\d and pad U1\.\d on F\.Mask is 0\.15 mm, narrower than 0\.2 mm, and 2 more pairs of U1; the fab merges the openings$/)
+  assert.match(w[0].message, /^mask web between pad U1\/\d and pad U1\/\d on F\.Mask is 0\.15 mm, narrower than 0\.2 mm, and 2 more pairs of U1; the fab merges the openings$/)
   // at the web or below the rule, and without the rule, nothing
-  assert.deepEqual(find(mk({ maskWeb: 0.15 }, h(Row().connect(A, B, C, D), { at: '10 10', ref: false })), 'mask-web'), [])
-  assert.deepEqual(find(mk({}, h(Row().connect(A, B, C, D), { at: '10 10', ref: false })), 'mask-web'), [])
+  assert.deepEqual(find(mk({ maskWeb: 0.15 }, h(Row({ ref: 'U2' }).connect({ 1: A, 2: B, 3: C, 4: D }), { at: '10 10', 'ref:at': false })), 'mask-web'), [])
+  assert.deepEqual(find(mk({}, h(Row({ ref: 'U3' }).connect({ 1: A, 2: B, 3: C, 4: D }), { at: '10 10', 'ref:at': false })), 'mask-web'), [])
 })
 
 test('mask-web: pads of two parts are one finding per pair', () => {
   const { A, B, C, D, E, F, G, H } = nets()
   // U2's pad 1 sits 0.5 mm right of U1's pad 4: the same 0.15 mm web across the parts
-  const b = mk({ maskWeb: 0.2 }, h(Row().connect(A, B, C, D), { at: '10 10', ref: false }), h(Row().connect(E, F, G, H), { at: '12 10', ref: false }))
+  const b = mk(
+    { maskWeb: 0.2 },
+    h(Row({ ref: 'U1' }).connect({ 1: A, 2: B, 3: C, 4: D }), { at: '10 10', 'ref:at': false }),
+    h(Row({ ref: 'U2' }).connect({ 1: E, 2: F, 3: G, 4: H }), { at: '12 10', 'ref:at': false }),
+  )
   const msgs = find(b, 'mask-web').map(d => d.message)
   assert.equal(msgs.length, 3)
   assert.ok(
-    msgs.some(m => /^mask web between pad U1\.4 and pad U2\.1 on F\.Mask is 0\.15 mm, narrower than 0\.2 mm; the fab merges the openings$/.test(m)),
+    msgs.some(m => /^mask web between pad U1\/4 and pad U2\/1 on F\.Mask is 0\.15 mm, narrower than 0\.2 mm; the fab merges the openings$/.test(m)),
     msgs.join('\n'),
   )
 })
@@ -49,15 +53,15 @@ test('mask-web: pads of two parts are one finding per pair', () => {
 test('mask-web: openings that merge, and pads a mask drawing gangs, pass', () => {
   const { A, B, C, D } = nets()
   // a 0.15 mm expansion makes the openings overlap: one merged opening, no web
-  assert.deepEqual(find(mk({ maskWeb: 0.2, maskExpansion: 0.15 }, h(Row().connect(A, B, C, D), { at: '10 10', ref: false })), 'mask-web'), [])
+  assert.deepEqual(find(mk({ maskWeb: 0.2, maskExpansion: 0.15 }, h(Row({ ref: 'U1' }).connect({ 1: A, 2: B, 3: C, 4: D }), { at: '10 10', 'ref:at': false })), 'mask-web'), [])
   // a filled rect on F.Mask over the row opens the mask across it on purpose
-  const b = mk({ maskWeb: 0.2 }, h(Ganged().connect(A, B, C, D), { at: '10 10', ref: false }))
+  const b = mk({ maskWeb: 0.2 }, h(Ganged({ ref: 'U2' }).connect({ 1: A, 2: B, 3: C, 4: D }), { at: '10 10', 'ref:at': false }))
   assert.deepEqual(find(b, 'mask-web'), [])
 })
 
 test('mask-web: DRC measures the openings the mask Gerber draws', () => {
   const { A, B, C, D } = nets()
-  const b = mk({ maskWeb: 0.2 }, h(Row().connect(A, B, C, D), { at: '10 10', ref: false }))
+  const b = mk({ maskWeb: 0.2 }, h(Row({ ref: 'U1' }).connect({ 1: A, 2: B, 3: C, 4: D }), { at: '10 10', 'ref:at': false }))
   const pads = b.items.filter(it => it.kind === 'pad')
   assert.deepEqual(
     maskOpenings(b, 'F'),
@@ -78,7 +82,8 @@ const Box = defineFootprint(props => h('footprint', props, h('pad', { num: 1, at
 
 test('courtyard: an overlap under 10 µm passes, a deeper one is a warning', () => {
   const { A, B } = nets()
-  const pair = gap => mk({}, h(Box().connect(A), { at: '10 10', ref: false }), h(Box().connect(B), { at: `${12 - gap} 10`, ref: false }))
+  const pair = gap =>
+    mk({}, h(Box({ ref: 'C1' }).connect({ 1: A }), { at: '10 10', 'ref:at': false }), h(Box({ ref: 'C2' }).connect({ 1: B }), { at: `${12 - gap} 10`, 'ref:at': false }))
   assert.deepEqual(find(pair(0.005), 'courtyard'), [], '5 µm deep')
   const w = find(pair(0.05), 'courtyard')
   assert.equal(w.length, 1, '50 µm deep')

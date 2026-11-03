@@ -1,8 +1,8 @@
 // Automatic schematic placement: small parts clustered onto the symbol they connect to, the clusters and group sheets packed
 // in reading order into a free page of about A-paper proportions, or the paper asked for, with wire channels between blocks that share nets. Grid units, y down.
 import type { Mat, Pt } from '@pcbjs/core/model'
-import type { PinSide } from '@pcbjs/core/sch-model'
-import { textUnits, type SymbolDef } from '@pcbjs/core/sch-symbol'
+import type { PinSide } from '@pcbjs/core/internal/sch-model'
+import { textUnits, type SymbolDef } from '@pcbjs/core/internal/sch-symbol'
 
 export type Box = [number, number, number, number]
 /** The page: null free, a PAPERS index to start from, or a fixed paper in mm. */
@@ -59,6 +59,7 @@ export function textMode(sym: SymbolDef, pins: { side: PinSide }[]): TextMode {
 
 export interface PlaceItem {
   ref: string
+  displayRef?: string
   value: string
   prefix: string
   sym: SymbolDef
@@ -148,13 +149,13 @@ const common = (a: string[], b: string[]) => {
 }
 
 /** A symbol's extent at an orientation with its ref, value and room for a label at each connected pin but `wired`. */
-export function symExtent(it: Pick<PlaceItem, 'ref' | 'value' | 'sym' | 'pins'>, rot: number, flip: boolean, power: (net: string) => boolean, wired?: string): Box {
+export function symExtent(it: Pick<PlaceItem, 'ref' | 'displayRef' | 'value' | 'sym' | 'pins'>, rot: number, flip: boolean, power: (net: string) => boolean, wired?: string): Box {
   const m = symMatrix([0, 0], rot, flip),
     sym = it.sym
   const e = extentOf(sym, m)
   const b = boxOf([apply(m, [sym.box[0], sym.box[1]]), apply(m, [sym.box[2], sym.box[3]])])
   const pins = sym.pins.map(p => ({ name: p.name, end: apply(m, p.end), side: sideOf(m, p.side) }))
-  const len = Math.max(textUnits(it.ref), textUnits(it.value))
+  const len = Math.max(textUnits(it.displayRef ?? it.ref), textUnits(it.value))
   if (textMode(sym, pins) === 'beside') e[2] = Math.max(e[2], b[2] + 1 + len)
   else {
     e[1] -= 1

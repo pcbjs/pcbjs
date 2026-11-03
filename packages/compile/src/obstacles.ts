@@ -1,78 +1,13 @@
-// The router's obstacles: every copper item grown by the clearance and rasterised as a count per cell that follows the board. Board mm, y down.
+// The router's obstacles: the world a routing stage works on, and every copper item grown by the clearance and rasterised as a count per cell that follows the world. Board mm, y down.
 import type { Board, Item, Keepout, Pt, Ring } from '@pcbjs/core/model'
-import type { ResolvedRules as Rules } from '@pcbjs/core/types'
+import type { ResolvedRules as Rules } from '@pcbjs/core/internal/types'
 import { offset, polysToRings, union } from './geom.js'
 import { copperLayersOf, copperRings } from './copper.js'
+import { copperLayers } from './layers.js'
 import { circleRing } from './path.js'
 import { classNameOf, classOf, overrideBetween } from './netclass.js'
-
-export type Box4 = [number, number, number, number]
-export interface RingSet {
-  rings: Ring[]
-  boxes: Box4[]
-}
-export const ringSet = (rings: Ring[]): RingSet => ({ rings, boxes: rings.map(boxOf) })
-export function boxOf(r: Ring): Box4 {
-  let x0 = Infinity,
-    y0 = Infinity,
-    x1 = -Infinity,
-    y1 = -Infinity
-  for (const [x, y] of r) {
-    if (x < x0) x0 = x
-    if (y < y0) y0 = y
-    if (x > x1) x1 = x
-    if (y > y1) y1 = y
-  }
-  return [x0, y0, x1, y1]
-}
-
-/** Even-odd point in polygon set. */
-export function inside(s: RingSet, x: number, y: number): boolean {
-  let c = false
-  for (let k = 0; k < s.rings.length; k++) {
-    const b = s.boxes[k]
-    if (x < b[0] || x > b[2] || y < b[1] || y > b[3]) continue
-    const r = s.rings[k]
-    for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
-      const [xi, yi] = r[i],
-        [xj, yj] = r[j]
-      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c
-    }
-  }
-  return c
-}
-
-export function segCross(a: Pt, b: Pt, c: Pt, d: Pt): boolean {
-  const o = (p: Pt, q: Pt, r: Pt) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
-  const d1 = o(c, d, a),
-    d2 = o(c, d, b),
-    d3 = o(a, b, c),
-    d4 = o(a, b, d)
-  return (d1 > 0 !== d2 > 0 || d1 === 0 || d2 === 0) && (d3 > 0 !== d4 > 0 || d3 === 0 || d4 === 0)
-}
-
-/** True when the segment crosses or touches any ring edge of the set. */
-export function hitsEdge(s: RingSet, a: Pt, b: Pt): boolean {
-  const sx0 = Math.min(a[0], b[0]),
-    sx1 = Math.max(a[0], b[0]),
-    sy0 = Math.min(a[1], b[1]),
-    sy1 = Math.max(a[1], b[1])
-  for (let k = 0; k < s.rings.length; k++) {
-    const bx = s.boxes[k]
-    if (sx1 < bx[0] || sx0 > bx[2] || sy1 < bx[1] || sy0 > bx[3]) continue
-    const r = s.rings[k]
-    for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
-      const p = r[i],
-        q = r[j]
-      if (Math.max(p[0], q[0]) < sx0 || Math.min(p[0], q[0]) > sx1 || Math.max(p[1], q[1]) < sy0 || Math.min(p[1], q[1]) > sy1) continue
-      if (segCross(a, b, p, q)) return true
-    }
-  }
-  return false
-}
-
-/** True when the segment ab has a point in the set: an end inside, or an edge crossed. */
-export const segHits = (s: RingSet, a: Pt, b: Pt) => inside(s, a[0], a[1]) || inside(s, b[0], b[1]) || hitsEdge(s, a, b)
+import { pulse } from './cancel.js'
+import { boxOf, ringSet, type Box4, type RingSet } from './spatial.js'
 
 /** A search grid: its origin, pitch and size in cells. */
 export interface Grid {
@@ -179,29 +114,7 @@ export function holeOf(it: Item): { at: Pt; r: number } | null {
 }
 export const isNpth = (it: Item) => it.kind === 'pad' && it.type === 'npth'
 
-/** What an item's geometry hangs on; when one of these changes, its grown copper is made again. */
-function stampOf(it: Item): unknown[] {
-  switch (it.kind) {
-    case 'pad':
-      return [it.poly, it.at, it.drill, it.layers, it.net]
-    case 'via':
-      return [it.at, it.size, it.drill, it.layers, it.net]
-    case 'track':
-      return [it.pts, it.width, it.layer, it.net]
-    case 'graphic':
-      return [it.paths, it.width, it.fill, it.layer, it.net]
-    case 'text':
-      return [it.strokes, it.thickness, it.layer, it.net, it.polys]
-    case 'zone':
-      return [it.fill, it.layer, it.net]
-    default:
-      return [(it as Item).net]
-  }
-}
-const sameStamp = (a: unknown[], b: unknown[]) => a.length === b.length && a.every((v, i) => v === b[i])
-
 interface Rec {
-  stamp: unknown[]
   memo: Map<string, RingSet | null>
   box: Box4 | null
   cells: number[]
@@ -221,7 +134,7 @@ interface Counts {
   used: number
 }
 
-/** The obstacles of one board under one set of rules; count grids are made on first use and kept up to date by `sync`. */
+/** The obstacles of one board under one set of rules; count grids are made on first use and kept up to date by each add and remove. */
 export class ObstacleStore {
   private members = new Map<Item, Rec>()
   private buckets = new Map<number, Item[]>()
@@ -267,14 +180,14 @@ export class ObstacleStore {
     }
     for (const l of layers) for (const r of solidRings(it, l)) if (r.length) grow(boxOf(r))
     if (hole) grow([hole.at[0] - hole.r, hole.at[1] - hole.r, hole.at[0] + hole.r, hole.at[1] + hole.r])
-    return { stamp: stampOf(it), memo: new Map(), box, cells: [], layers, hole }
+    return { memo: new Map(), box, cells: [], layers, hole }
   }
   /** The record of an item, a member or not. */
   rec(it: Item): Rec {
     const m = this.members.get(it)
-    if (m && sameStamp(m.stamp, stampOf(it))) return m
+    if (m) return m
     let r = this.loose.get(it)
-    if (!r || !sameStamp(r.stamp, stampOf(it))) this.loose.set(it, (r = this.recOf(it)))
+    if (!r) this.loose.set(it, (r = this.recOf(it)))
     return r
   }
 
@@ -303,28 +216,18 @@ export class ObstacleStore {
     return s
   }
 
-  /** Follow board.items: new items in, removed ones out, items whose geometry changed in again. */
-  sync() {
+  /** The members made `items`, once as a world starts: new ones in, the others out; a changed item is a new one, since items are never written. */
+  track(items: readonly Item[]) {
     const now = new Set<Item>()
-    for (const it of this.board.items) {
+    for (const it of items) {
+      pulse()
       now.add(it)
-      const rec = this.members.get(it)
-      if (!rec) this.add(it)
-      else if (!sameStamp(rec.stamp, stampOf(it))) {
-        this.remove(it)
-        this.add(it)
-      }
+      if (!this.members.has(it)) this.add(it)
     }
     for (const it of [...this.members.keys()]) if (!now.has(it)) this.remove(it)
   }
-  has(it: Item) {
-    return this.members.has(it)
-  }
-  get items(): IterableIterator<[Item, Rec]> {
-    return this.members.entries()
-  }
 
-  private add(it: Item) {
+  add(it: Item) {
     const rec = this.recOf(it)
     this.members.set(it, rec)
     if (rec.box) {
@@ -340,7 +243,7 @@ export class ObstacleStore {
     }
     for (const c of this.counts.values()) c.add(it, rec, 1)
   }
-  private remove(it: Item) {
+  remove(it: Item) {
     const rec = this.members.get(it)!
     this.members.delete(it)
     for (const k of rec.cells) {
@@ -367,14 +270,16 @@ export class ObstacleStore {
   }
 
   private grid(key: string, g: Grid, add: (it: Item, rec: Rec, arr: Uint16Array, sign: number) => void): Uint16Array {
-    this.sync()
     let c = this.counts.get(key)
     if (c) {
       c.used = ++this.tick
       return c.arr
     }
     const arr = new Uint16Array(g.nx * g.ny)
-    for (const [it, rec] of this.members) add(it, rec, arr, 1)
+    for (const [it, rec] of this.members) {
+      pulse()
+      add(it, rec, arr, 1)
+    }
     c = { g, arr, add: (it, rec, sign) => add(it, rec, arr, sign), used: ++this.tick }
     this.counts.set(key, c)
     this.bytes += arr.byteLength
@@ -421,6 +326,12 @@ export class ObstacleStore {
     return this.grid(`h\u0000${gridKey(g)}\u0000${drill}`, g, (_it, rec, arr, sign) => this.holeFill(g, rec, drill, arr, sign))
   }
 
+  /** The count grids dropped, made again on their next use. */
+  dropCounts() {
+    this.counts.clear()
+    this.bytes = 0
+  }
+
   /** The static masks: outside the board shrunk by the edge clearance and w/2, and the keepouts. */
   private masks = new Map<string, Uint8Array | null>()
   mask(key: string, g: Grid, make: () => RingSet | null): Uint8Array | null {
@@ -437,7 +348,7 @@ export class ObstacleStore {
 }
 
 const STORES = new WeakMap<Board, Map<Rules, ObstacleStore>>()
-export function storeOf(board: Board, rules: Rules, cu: string[]): ObstacleStore {
+function storeOf(board: Board, rules: Rules, cu: string[]): ObstacleStore {
   let m = STORES.get(board)
   if (!m) STORES.set(board, (m = new Map()))
   let s = m.get(rules)
@@ -466,4 +377,230 @@ export function viaKeptSet(keepouts: Keepout[], layer: string, size: number, net
   const rings: Ring[] = []
   for (const k of keepouts) if (k.vias && k.layers.includes(layer) && keptOut(k, net)) rings.push(...polysToRings(offset(k.outline, size / 2)))
   return rings.length ? ringSet(polysToRings(union(rings.map(outer)))) : null
+}
+
+const r4 = (v: number) => Math.round(v * 1e4) / 1e4
+/** An item's box with copper and holes, and a signature of all the router sees of it; null for what the router never sees. */
+const sigCache = new WeakMap<Item, { box: Box4; sig: string }>()
+export function itemSig(it: Item, cu: string[]): { box: Box4; sig: string } | null {
+  if (it.kind === 'zone') return null
+  const hit = sigCache.get(it)
+  if (hit) return hit
+  const ls = copperLayersOf(it, cu)
+  const drilled = it.kind === 'pad' && !!it.drill
+  if (!ls.length && !drilled) return null
+  let pts: Pt[] = [],
+    grow = 0,
+    geo: unknown
+  switch (it.kind) {
+    case 'pad':
+      pts = it.poly
+      grow = it.drill ? Math.max(...it.drill) / 2 : 0
+      geo = [
+        it.at.map(r4),
+        it.poly.map(q => q.map(r4)),
+        it.drill,
+        it.type,
+        it.layers,
+        ...(it.clearance !== undefined || it.holeClearance !== undefined ? [[it.clearance ?? null, it.holeClearance ?? null]] : []),
+        ...(it.clearanceTo ? [it.clearanceTo] : []),
+      ]
+      if (it.drill) pts = [...pts, it.at]
+      break
+    case 'via':
+      pts = [it.at]
+      grow = it.size / 2
+      geo = [it.at.map(r4), it.size, it.drill, it.layers]
+      break
+    case 'track':
+      pts = it.pts
+      grow = it.width / 2
+      geo = [it.pts.map(q => q.map(r4)), it.width]
+      break
+    case 'graphic':
+      pts = it.paths.flat()
+      grow = it.width / 2
+      geo = [it.paths.map(r => r.map(q => q.map(r4))), it.width, it.fill, it.closed]
+      break
+    case 'text':
+      pts = it.polys ? it.polys.flatMap(q => q.outer) : it.strokes.flat()
+      grow = it.thickness / 2
+      geo = it.polys ? it.polys.map(q => [q.outer, ...q.holes].map(r => r.map(q => q.map(r4)))) : [it.strokes.map(r => r.map(q => q.map(r4))), it.thickness]
+      break
+  }
+  if (!pts.length) return null
+  const b = boxOf(pts)
+  const out = { box: [b[0] - grow, b[1] - grow, b[2] + grow, b[3] + grow] as Box4, sig: JSON.stringify([it.kind, it.layer, it.net ?? '', ls, geo]) }
+  sigCache.set(it, out)
+  return out
+}
+
+const hits = (a: Box4, b: Box4) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3]
+
+/**
+ * The items a routing stage works on, in board order, written to the board once when the stage ends: the store's buckets and count grids, the per net lists
+ * and the signature buckets follow each add and remove, and `time` counts them, so a layout made at one time tells what came and went since.
+ */
+export class ObstacleWorld {
+  readonly store: ObstacleStore
+  readonly cu: string[]
+  time = 0
+  private list: Item[]
+  private stale = false
+  private live = new Map<number, Item>()
+  private born = new Map<Item, number>()
+  private nets = new Map<string, Item[]>()
+  /** adds after the start and removals, each in time order */
+  private log: { it: Item; t: number }[] = []
+  private gone: { it: Item; t: number; born: number }[] = []
+  private sigs = new Map<number, Item[]>()
+
+  constructor(
+    readonly board: Board,
+    readonly rules: Rules,
+    items: readonly Item[] = board.items,
+  ) {
+    this.cu = copperLayers(board.copper)
+    this.store = storeOf(board, rules, this.cu)
+    this.store.track(items)
+    this.list = [...items]
+    for (const it of items) this.index(it, 0)
+  }
+
+  /** The items in board order. */
+  items(): Item[] {
+    if (this.stale) {
+      this.list = this.list.filter(it => this.live.get(it.id) === it)
+      this.stale = false
+    }
+    return this.list
+  }
+  get(id: number): Item | undefined {
+    return this.live.get(id)
+  }
+  /** The items of a net in board order; the world's own list, never written by the caller. */
+  net(name: string | undefined): readonly Item[] {
+    return (name !== undefined && this.nets.get(name)) || []
+  }
+  /** When an item present now joined, 0 for those the stage started with. */
+  bornOf(it: Item): number {
+    return this.born.get(it) ?? Infinity
+  }
+
+  add(items: readonly Item[]): void {
+    this.time++
+    for (const it of items) {
+      this.list.push(it)
+      this.index(it, this.time)
+      this.log.push({ it, t: this.time })
+    }
+  }
+  remove(ids: ReadonlySet<number>): void {
+    this.time++
+    for (const id of ids) {
+      const it = this.live.get(id)
+      if (!it) continue
+      this.gone.push({ it, t: this.time, born: this.born.get(it)! })
+      this.unindex(it)
+      this.stale = true
+    }
+  }
+  /** `it` in place of the item of its id, where that one stood. */
+  replace(it: Item): void {
+    const old = this.live.get(it.id)!
+    const list = this.items()
+    this.time++
+    this.gone.push({ it: old, t: this.time, born: this.born.get(old)! })
+    this.unindex(old)
+    list[list.indexOf(old)] = it
+    this.index(it, this.time)
+    this.log.push({ it, t: this.time })
+  }
+
+  /** The items present now that joined after `time`, and those present at `time` gone since. */
+  since(time: number): { came: Item[]; went: Item[] } {
+    const after = <T extends { t: number }>(l: T[]) => {
+      let lo = 0,
+        hi = l.length
+      while (lo < hi) {
+        const m = (lo + hi) >> 1
+        if (l[m].t > time) hi = m
+        else lo = m + 1
+      }
+      return l.slice(lo)
+    }
+    return {
+      came: after(this.log)
+        .map(e => e.it)
+        .filter(it => this.born.get(it) !== undefined),
+      went: after(this.gone)
+        .filter(e => e.born <= time)
+        .map(e => e.it),
+    }
+  }
+
+  /** The items whose box comes within pad of the box, from the store's buckets. */
+  near(box: Box4, pad: number): Item[] {
+    return this.store.near(box[0], box[1], box[2], box[3], pad)
+  }
+
+  /** The signatures of the items the router sees whose box meets `box`, but those `skip` names, in no order. */
+  signature(box: Box4, skip: (it: Item) => boolean): string[] {
+    const out: string[] = []
+    const take = (it: Item) => {
+      if (skip(it)) return
+      const s = itemSig(it, this.cu)
+      if (s && hits(s.box, box)) out.push(s.sig)
+    }
+    const cells = (Math.floor(box[2]) - Math.floor(box[0]) + 1) * (Math.floor(box[3]) - Math.floor(box[1]) + 1)
+    if (cells > this.live.size) {
+      for (const it of this.items()) take(it)
+      return out
+    }
+    const seen = new Set<Item>()
+    for (let i = Math.floor(box[0]); i <= Math.floor(box[2]); i++)
+      for (let j = Math.floor(box[1]); j <= Math.floor(box[3]); j++)
+        for (const it of this.sigs.get(cellKey(i, j)) ?? []) {
+          if (seen.has(it)) continue
+          seen.add(it)
+          take(it)
+        }
+    return out
+  }
+
+  private index(it: Item, t: number) {
+    this.live.set(it.id, it)
+    this.born.set(it, t)
+    if (it.net !== undefined) {
+      let l = this.nets.get(it.net)
+      if (!l) this.nets.set(it.net, (l = []))
+      l.push(it)
+    }
+    for (const k of this.sigCells(it)) {
+      let b = this.sigs.get(k)
+      if (!b) this.sigs.set(k, (b = []))
+      b.push(it)
+    }
+    if (t) this.store.add(it)
+  }
+  private unindex(it: Item) {
+    this.live.delete(it.id)
+    this.born.delete(it)
+    if (it.net !== undefined) {
+      const l = this.nets.get(it.net)!
+      l.splice(l.indexOf(it), 1)
+    }
+    for (const k of this.sigCells(it)) {
+      const b = this.sigs.get(k)!
+      b.splice(b.indexOf(it), 1)
+    }
+    this.store.remove(it)
+  }
+  private sigCells(it: Item): number[] {
+    const s = itemSig(it, this.cu)
+    if (!s) return []
+    const out: number[] = []
+    for (let i = Math.floor(s.box[0]); i <= Math.floor(s.box[2]); i++) for (let j = Math.floor(s.box[1]); j <= Math.floor(s.box[3]); j++) out.push(cellKey(i, j))
+    return out
+  }
 }

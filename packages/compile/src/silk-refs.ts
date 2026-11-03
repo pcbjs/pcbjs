@@ -1,10 +1,13 @@
 // Silk refs: each label at the first clean spot around its courtyard, sized by the part; see layout.md Silk refs.
+import { marker } from './messages.js'
 import type { Board, DrcMarker, Footprint, Graphic, Pt, Ring, Text } from '@pcbjs/core/model'
-import { strokeText } from '@pcbjs/core/text'
+import { strokeText } from '@pcbjs/core/internal/text'
 import { applyRing, bbox, mul, offset, placement, polysToRings, strokeClosed, strokeOpen } from './geom.js'
-import { REF_AT } from './flatten.js'
+import { REF_AT, REF_SRC } from './flatten.js'
 import { bareHole } from './bare.js'
 import { Grid, type Box } from './spatial.js'
+import { pulse } from './cancel.js'
+import { immutable } from './items.js'
 
 /** Label height per mm of the courtyard's short side, the largest height, and the stroke per mm of height. */
 const SCALE = 0.2,
@@ -39,7 +42,7 @@ export const SIDES: readonly [number, number, boolean][] = [
 ]
 
 const nm = (v: number) => Math.round(v * 1e6) / 1e6 || 0
-const byRef = (a: Footprint, b: Footprint) => a.ref.localeCompare(b.ref, 'en', { numeric: true })
+const byRef = (a: Footprint, b: Footprint) => (a.displayRef ?? a.ref).localeCompare(b.displayRef ?? b.ref, 'en', { numeric: true })
 
 /** Offsets within REACH on the STEP grid, nearest first. */
 const OFFSETS: Pt[] = (() => {
@@ -151,7 +154,7 @@ interface Look {
   thickness: number
   draw: (p: Pt, rot: number) => Ring[]
 }
-/** A label taken: `box` is its ink box grown by TEXT_GAP; a `fixed` one came from refAt. */
+/** A label taken: `box` is its ink box grown by TEXT_GAP; a `fixed` one came from ref:at. */
 interface Label {
   part: Part
   p: Pt
@@ -168,7 +171,7 @@ export function silkRefs(board: Board, on: boolean): DrcMarker[] {
   const floor = r.silkMinHeight ?? FLOOR
   const byId = new Map(board.items.map(it => [it.id, it]))
   const band = r.edge && r.edge.width > 0 && (r.edge.kinds ?? ['silk']).includes('silk') ? r.edge : null
-  const excepted = new Set((band?.except ?? []).filter((q): q is string => typeof q === 'string'))
+  const excepted = new Set(band?.refs ?? [])
   const insets = new Map<number, { rings: Ring[]; box: Box | null } | null>()
   const innerOf = (d: number) => {
     if (!board.outline.length) return null
@@ -189,6 +192,7 @@ export function silkRefs(board: Board, on: boolean): DrcMarker[] {
     // hard: pad mask openings on this side, kept silkToPad clear, and the text already there
     const hard: { box: Box; rings: Ring[] }[] = []
     for (const it of board.items) {
+      pulse()
       if (it.kind === 'pad' && it.layers.includes(cu)) {
         const rings = polysToRings(offset([it.poly], (it.maskExpansion ?? r.maskExpansion) + r.silkToPad))
         if (rings.length) hard.push({ box: bbox(rings), rings })
@@ -231,6 +235,7 @@ export function silkRefs(board: Board, on: boolean): DrcMarker[] {
     }
     // overlap with courtyards, mm², and silk graphics crossed, weighted as half a mm² each; Infinity where not allowed
     const score = (b: Box, ref: string): number => {
+      pulse()
       if (!allowed(b, ref)) return Infinity
       let s = 0.5 * softIdx.count(b)
       for (const k of bodyIdx.query(b)) s += shared(bodies[k].box, b)
@@ -241,17 +246,17 @@ export function silkRefs(board: Board, on: boolean): DrcMarker[] {
     for (const fp of fps) {
       const own = REF_AT.get(fp)
       if (own === false || !fp.pads.length) continue
-      // test points, pogo pads, fiducials and mounting holes get no automatic ref; a refAt still draws one
+      // test points, pogo pads, fiducials and mounting holes get no automatic ref; a ref:at still draws one
       if (own === undefined && bareHole(board, fp)) continue
       // a footprint that draws its own ref on silk keeps it
-      if (board.items.some(it => it.kind === 'text' && it.layer === silk && it.ref === fp.ref && it.text === fp.ref)) continue
+      if (board.items.some(it => it.kind === 'text' && it.layer === silk && it.ref === fp.ref && it.text === (fp.displayRef ?? fp.ref))) continue
       const body = bodies[fps.indexOf(fp)].box
       parts.push({ fp, body, size: refSize(body, floor), rot: refRotation(fp.rot) })
     }
 
     const laidOut = (part: Part, size: number): Look => {
       const thickness = Math.max(r.silkMinWidth, Math.round(STROKE * size * 100) / 100)
-      const laid = strokeText(part.fp.ref, { size, thickness, anchor: 'middle' })
+      const laid = strokeText(part.fp.displayRef ?? part.fp.ref, { size, thickness, anchor: 'middle' })
       const dy = size - laid.height / 2
       // mirrored on the back so the ref reads from below
       const draw = (p: Pt, rot: number): Ring[] => {
@@ -427,7 +432,7 @@ export function silkRefs(board: Board, on: boolean): DrcMarker[] {
       }
       return false
     }
-    // a refAt is used as given, and the automatic labels keep clear of it
+    // a ref:at is used as given, and the automatic labels keep clear of it
     for (const part of parts) {
       const own = REF_AT.get(part.fp)
       if (!own) continue
@@ -455,46 +460,53 @@ export function silkRefs(board: Board, on: boolean): DrcMarker[] {
       rot,
       look,
     } of labels)
-      board.items.push({
-        kind: 'text',
-        id: nextId++,
-        layer: silk,
-        ref: fp.ref,
-        ...(fp.src ? { src: fp.src } : {}),
-        ...(fp.chain ? { chain: fp.chain } : {}),
-        at: p,
-        rot,
-        size: look.size,
-        thickness: look.thickness,
-        text: fp.ref,
-        anchor: 'middle',
-        mirrored: side === 'B',
-        strokes: look.draw(p, rot),
-      } satisfies Text)
+      board.items.push(
+        immutable({
+          kind: 'text',
+          generated: 'reference',
+          id: nextId++,
+          layer: silk,
+          ref: fp.ref,
+          ...((REF_SRC.get(fp) ?? fp.src) ? { src: REF_SRC.get(fp) ?? fp.src } : {}),
+          ...(fp.chain ? { chain: fp.chain } : {}),
+          at: p,
+          rot,
+          size: look.size,
+          thickness: look.thickness,
+          text: fp.displayRef ?? fp.ref,
+          anchor: 'middle',
+          mirrored: side === 'B',
+          strokes: look.draw(p, rot),
+        } satisfies Text),
+      )
   }
   const out: DrcMarker[] = []
   const list = (fps: Footprint[]) => fps.sort(byRef).map(f => f.ref)
   if (omitted.length) {
-    const names = list(omitted),
-      many = names.length > 1
-    out.push({
-      severity: 'warning',
-      rule: 'silk-ref',
-      at: omitted[0].at,
-      ...(omitted[0].src ? { src: omitted[0].src } : {}),
-      message: `no clear spot within ${REACH} mm for the silk ref${many ? 's' : ''} of ${names.join(', ')}; ${many ? 'they are' : 'it is'} left out, place ${many ? 'them' : 'it'} with refAt="x y rot" or turn ${many ? 'them' : 'it'} off with ref={false}`,
-    })
+    const names = list(omitted)
+    out.push(
+      marker({
+        severity: 'warning',
+        rule: 'silk-ref',
+        at: omitted[0].at,
+        ...(omitted[0].src ? { src: omitted[0].src } : {}),
+        args: { parts: names, reach: REACH },
+        refs: names,
+      }),
+    )
   }
   if (hidden.length) {
-    const names = list(hidden),
-      many = names.length > 1
-    out.push({
-      severity: 'info',
-      rule: 'silk-ref-hidden',
-      at: hidden[0].at,
-      ...(hidden[0].src ? { src: hidden[0].src } : {}),
-      message: `no clean spot beside the courtyard${many ? 's' : ''} of ${names.join(', ')}, too small to hold ${many ? 'their refs' : 'its ref'}; ${many ? 'they are' : 'it is'} left out, place ${many ? 'them' : 'it'} with refAt="x y rot" or turn ${many ? 'them' : 'it'} off with ref={false}`,
-    })
+    const names = list(hidden)
+    out.push(
+      marker({
+        severity: 'info',
+        rule: 'silk-ref-hidden',
+        at: hidden[0].at,
+        ...(hidden[0].src ? { src: hidden[0].src } : {}),
+        args: { parts: names },
+        refs: names,
+      }),
+    )
   }
   return out
 }

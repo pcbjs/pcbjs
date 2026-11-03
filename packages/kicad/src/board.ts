@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { exists, readText } from './host.js'
 import { atom, atoms, child, children, flag, head, isList, num, nums, parseSExpr, type SList } from './sexpr.js'
 import { fontFace, readFootprintList, readGraphic, readZone, type KFootprint, type KGraphic, type KText, type KZone } from './footprint.js'
 import type { Pt } from './geom.js'
@@ -48,7 +48,7 @@ export interface KBoard {
   /** items the importer does not carry, by kind */
   skipped: Record<string, number>
   title?: string
-  revision?: string
+  rev?: string
 }
 
 const pt = (l: SList | undefined): Pt => [num(l, 1, 0), num(l, 2, 0)]
@@ -74,7 +74,7 @@ function readBoardText(l: SList): KText {
 
 /** Read a `.kicad_pcb`, its text or a path. */
 export function readKicadPcb(source: string): KBoard {
-  const text = source.trimStart().startsWith('(') ? source : readFileSync(source, 'utf8')
+  const text = source.trimStart().startsWith('(') ? source : readText(source)
   const l = parseSExpr(text)
   if (head(l) !== 'kicad_pcb') throw new Error(`not a KiCad board: it starts with (${head(l)} …)`)
   const netNames = new Map<string, string>()
@@ -114,7 +114,7 @@ export function readKicadPcb(source: string): KBoard {
     const t = atom(child(tb, 'title'))
     if (t) b.title = t
     const r = atom(child(tb, 'rev'))
-    if (r) b.revision = r
+    if (r) b.rev = r
   }
   const setup = child(l, 'setup')
   const stackup = child(setup, 'stackup')
@@ -221,10 +221,10 @@ export interface KProject {
 }
 
 export function readKicadPro(file: string): KProject | null {
-  if (!existsSync(file)) return null
+  if (!exists(file)) return null
   let d: any
   try {
-    d = JSON.parse(readFileSync(file, 'utf8'))
+    d = JSON.parse(readText(file))
   } catch {
     return null
   }
@@ -253,8 +253,8 @@ export interface KCustomRule {
 }
 
 export function readKicadDru(file: string): KCustomRule[] {
-  if (!existsSync(file)) return []
-  const text = readFileSync(file, 'utf8')
+  if (!exists(file)) return []
+  const text = readText(file)
     .split('\n')
     .filter(l => !/^\s*#/.test(l))
     .join('\n')

@@ -2,7 +2,9 @@
 import ClipperLib from 'clipper-lib'
 import type { Mat, Poly, Pt, Ring } from '@pcbjs/core/model'
 
-const S = 1e5
+/** Clipper's integer units per mm: it rounds every coordinate to 10 nm. */
+export const SCALE = 1e5
+const S = SCALE
 
 // Clipper 6 inserts local minima and scanbeams by walking a list, O(n^2) for a pour with a hole per pad; these sort once in the same order, results unchanged.
 function patchClipper(proto: any) {
@@ -155,6 +157,16 @@ export function strokeClosed(pts: Ring, width: number): Poly[] {
   return treeToPolys(tree)
 }
 
+/** The area of polygons less their holes, mm². */
+export function polysArea(ps: Poly[]): number {
+  const ring = (r: Ring) => {
+    let a = 0
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += (r[j][0] + r[i][0]) * (r[j][1] - r[i][1])
+    return Math.abs(a / 2)
+  }
+  return ps.reduce((s, p) => s + ring(p.outer) - p.holes.reduce((h, r) => h + ring(r), 0), 0)
+}
+
 export function area(rings: Ring[]): number {
   return rings.reduce((s, r) => s + ClipperLib.Clipper.Area(toC(r)) / (S * S), 0)
 }
@@ -249,7 +261,8 @@ export function mul(m: Mat, n: Mat): Mat {
 }
 /** translate(x, y) · rotate(deg, counter-clockwise on screen) · mirror-x(if flip) */
 export function placement(x: number, y: number, rotDeg: number, flip: boolean): Mat {
-  const a = (rotDeg * Math.PI) / 180,
+  if (![x, y, rotDeg].every(Number.isFinite)) throw new Error('placement must be finite')
+  const a = ((rotDeg % 360) * Math.PI) / 180,
     c = Math.cos(a),
     s = Math.sin(a)
   // screen is y-down, so counter-clockwise on screen is a negative mathematical angle
@@ -259,7 +272,9 @@ export function placement(x: number, y: number, rotDeg: number, flip: boolean): 
   return mul(mul(t, rot), f)
 }
 export function apply(m: Mat, p: Pt): Pt {
-  return [m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p[0] + m[3] * p[1] + m[5]]
+  const out: Pt = [m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p[0] + m[3] * p[1] + m[5]]
+  if (!out.every(Number.isFinite)) throw new Error('transformed position must be finite')
+  return out
 }
 export function applyRing(m: Mat, r: Ring): Ring {
   return r.map(p => apply(m, p))

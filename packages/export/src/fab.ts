@@ -1,21 +1,23 @@
+import { validateBoard } from './validate.js'
 import { createHash } from 'node:crypto'
 import { zipSync, strToU8 } from 'fflate'
 import type { Board } from '@pcbjs/core/model'
-import type { Finish, Rules } from '@pcbjs/core/types'
-import { copperLayers } from '@pcbjs/compile/layers'
-import { stackupSum } from '@pcbjs/core/board-spec'
+import type { Finish, Rules } from '@pcbjs/core/internal/types'
+import { copperLayers } from '@pcbjs/compile/internal/layers'
+import { stackupSum } from '@pcbjs/core/internal/board-spec'
 import { excellon } from './excellon.js'
 import { VERSION, gerberJob, gerberLayer, type DrillFile, type GerberFile } from './gerber.js'
 import { bomCsv, bomRows, cplCsv } from './bom.js'
 import { boardSvg } from './svg.js'
 import { schematicSvg } from './sch-svg.js'
-import { variantSlug } from '@pcbjs/core/variants'
+import { variantSlug } from '@pcbjs/core/internal/variants'
 import { boardFindings, formatFindings } from './findings.js'
 import { checkFab, type FabCheck } from './fab-check.js'
+import { sealFindings } from '@pcbjs/compile/internal/seal'
 import { ipc356 } from './ipc356.js'
 import { drillMapSvg, drillReport, mapName, type DrillSet } from './drill.js'
-import { countModels } from '@pcbjs/core/model-source'
-import { bareHole } from '@pcbjs/compile/bare'
+import { countModels } from '@pcbjs/core/internal/model-source'
+import { bareHole } from '@pcbjs/compile/internal/bare'
 
 /** The fab set's date in UTC: `date`, else `SOURCE_DATE_EPOCH` in seconds, else now, so two builds at one date are byte identical. */
 export function fabDate(date?: string, env: Record<string, string | undefined> = process.env): string {
@@ -43,7 +45,7 @@ export function fabManifest(board: Board, files: Record<string, string>, date: s
     })
   return (
     JSON.stringify(
-      { board: board.name, revision: board.revision || null, ...(board.variant ? { target: board.variant.name } : {}), generator: `pcbjs ${VERSION}`, date, files: list },
+      { board: board.name, rev: board.rev || null, ...(board.variant ? { target: board.variant.name } : {}), generator: `pcbjs ${VERSION}`, date, files: list },
       null,
       2,
     ) + '\n'
@@ -95,7 +97,7 @@ export function stackupLines(board: Board): string[] {
     if (l.type === 'core' || l.type === 'prepreg')
       return `  ${''.padEnd(8)} ${l.type} ${l.material ?? 'FR4'}${t(l.thickness)}${l.er !== undefined ? `, er ${l.er}` : ''}${l.lossTangent !== undefined ? `, tan d ${l.lossTangent}` : ''}`
     if (!('side' in l)) return ''
-    const color = l.color ?? (l.type === 'mask' ? s.maskColor : l.type === 'silk' ? s.silkColor : undefined)
+    const color = l.type === 'mask' ? s.maskColor : l.type === 'silk' ? s.silkColor : undefined
     return `  ${`${l.side}.${l.type === 'silk' ? 'SilkS' : l.type === 'mask' ? 'Mask' : 'Paste'}`.padEnd(8)} ${l.type}${t(l.thickness)}${color ? `, ${color.toLowerCase()}` : ''}`
   })
   return [
@@ -153,6 +155,7 @@ export function fontNotes(board: Board): string[] {
 
 /** `check` reads the Gerbers back, see fab-check.ts, before the README is written; `nest: false` is for that check's tests only. */
 export function buildFab(board: Board, date = fabDate(), opts: { root?: string; check?: boolean; nest?: boolean } = {}): FabSet {
+  validateBoard(board)
   const files: Record<string, string> = {}
   const gerbers: GerberFile[] = []
   const known = new Set(board.layers.map(l => l.id))
@@ -198,6 +201,7 @@ export function buildFab(board: Board, date = fabDate(), opts: { root?: string; 
     // a second build of the same board replaces the findings of the first
     const rest = board.drc.filter(d => d.rule !== 'fab-mismatch')
     board.drc = [...rest, ...selfCheck.findings].sort((a, c) => (a.severity === c.severity ? 0 : a.severity === 'error' ? -1 : 1))
+    sealFindings(board, board.variant?.name)
   }
   const errors = board.drc.filter(d => d.severity === 'error')
   const warnings = board.drc.filter(d => d.severity === 'warning')
@@ -209,7 +213,7 @@ export function buildFab(board: Board, date = fabDate(), opts: { root?: string; 
   const models = countModels(board.footprints.map(fp => ({ model: fp.model, height: fp.height ?? (bareHole(board, fp) ? 0 : 1) })))
   const sourcing = `Sourcing: ${tags.length ? `tags ${tags.join(', ')}` : 'no tags, MPN only'}; ${bom.length} row${bom.length === 1 ? '' : 's'}, ${bom.filter(r => r.sourcing.mpn === null).length} without a part number`
   const readme = [
-    `${board.name}${board.revision ? ` ${board.revision}` : ''}: fabrication set (pcbjs)`,
+    `${board.name}${board.rev ? ` ${board.rev}` : ''}: fabrication set (pcbjs)`,
     ...(board.variant
       ? [
           `Target ${board.variant.name}${board.variant.fab ? `, fab ${board.variant.fab}` : ''}, ${board.variant.index + 1} of ${board.variant.names.length}: ${board.variant.names.join(', ')}`,
@@ -218,6 +222,9 @@ export function buildFab(board: Board, date = fabDate(), opts: { root?: string; 
     `Generated ${date} by pcbjs ${VERSION}`,
     '',
     `STATUS: ${errors.length || board.unconnected || ercErrors.length ? `NOT ORDERABLE, ${errors.length} DRC errors, ${board.unconnected} unconnected, ${ercErrors.length} ERC errors; the list is under Checks` : 'ORDERABLE'}`,
+    'ORDERABLE means the implemented board checks passed; it does not include TypeScript checking.',
+    'ERC checks connectivity, not driver, input or power-pin roles. The Gerber self check does not re-read drills, mask, paste or placement.',
+    'Review the circuit and fabrication outputs independently before manufacture.',
     '',
     'Board',
     `  ${board.copper} copper layers, ${board.thickness} mm`,
@@ -269,7 +276,7 @@ export function buildFab(board: Board, date = fabDate(), opts: { root?: string; 
     .join('\n')
   files['README-fab.txt'] = readme
   files['manifest.json'] = fabManifest(board, files, date)
-  const label = (board.revision || 'dev').replace(/[^\w.+-]+/g, '_')
+  const label = (board.rev || 'dev').replace(/[^\w.+-]+/g, '_')
   const slug = board.variant ? `-${variantSlug(board.variant.name)}` : ''
   return { files, zipName: `${board.name}-fab-${label}${slug}.zip`, readme, date }
 }

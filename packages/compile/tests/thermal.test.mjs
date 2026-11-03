@@ -1,6 +1,7 @@
+import { fp, P, net } from './parts.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h, pour, resetDefaults } from '@pcbjs/core'
+import PCB, { h, pour, resetDefaults, route, via } from '@pcbjs/core'
 import { compileBoard } from '../dist/index.js'
 import { bbox, intersection, polysToRings } from '../dist/geom.js'
 import { thermalReport } from '../dist/zones.js'
@@ -11,15 +12,10 @@ const board = (rules, ...kids) => {
   resetDefaults()
   return compileBoard(h(PCB, { name: 'T', ...(rules ? { rules } : {}) }, outline(), ...kids))
 }
-const gnd = connect => pour('GND', 'F.Cu', 'M0 0 H20 V20 H0 Z', connect ? { connect } : undefined)
+const gnd = connect => pour(net('GND'), 'F.Cu', 'M0 0 H20 V20 H0 Z', connect ? { connect } : undefined)
 /** a footprint with one GND pad at 10 10 and a second GND pad far away, so the net needs the pour */
 const part = (pad, fpProps = {}) =>
-  h(
-    'footprint',
-    { ref: 'U1', at: '10 10', 'net:1': 'GND', 'net:2': 'GND', ...fpProps },
-    h('pad', { num: 1, size: [1, 1], ...pad }),
-    h('pad', { num: 2, at: '-6 -6', size: [1, 1] }),
-  )
+  fp({ ref: 'U1', at: '10 10', 'net:1': 'GND', 'net:2': 'GND', ...fpProps }, h('pad', { num: 1, size: [1, 1], ...pad }), h('pad', { num: 2, at: '-6 -6', size: [1, 1] }))
 const zoneOf = b => b.items.find(i => i.kind === 'zone')
 const padOf = (b, num) => b.items.find(i => i.kind === 'pad' && i.num === String(num))
 const fillRings = b => polysToRings(zoneOf(b).fill)
@@ -128,13 +124,13 @@ test('thermal: connect solid and none on the pour, and the pad and footprint ove
   assert.ok(covered(fp, 10.55, 10.45), 'a footprint thermal map reaches its pad')
   const back = board(null, part({ shape: 'rect', thermal: 'thermal' }), gnd('solid'))
   assert.equal(covered(back, 10.55, 10.45), false, 'a pad thermal relief on a solid pour')
-  assert.throws(() => board(null, part({}, { thermal: { 9: 'solid' } }), gnd()), /U1: thermal names pad "9"/)
+  assert.throws(() => board(null, part({}, { thermal: { 9: 'solid' } }), gnd()), /Fixture\(\): thermal names pad "9", which the footprint does not have/)
   assert.throws(() => board(null, part({ thermal: 'spokes' }), gnd()), /<pad 1> thermal must be 'thermal', 'solid' or 'none', got "spokes"/)
-  assert.throws(() => board(null, pour('GND', 'F.Cu', 'M0 0 H20 V20 H0 Z', { connect: 'yes' })), /<zone> connect must be/)
+  assert.throws(() => board(null, pour(net('GND'), 'F.Cu', 'M0 0 H20 V20 H0 Z', { connect: 'yes' })), /pour\(\) connect must be/)
 })
 
 test('thermal: vias and tracks of the net join solidly', () => {
-  const b = board(null, h('via', { at: '5 15', net: 'GND' }), h('track', { net: 'GND', layer: 'F.Cu', width: 0.3, d: 'M14 4 L16 4' }), gnd())
+  const b = board(null, via(net('GND'), '5 15'), route('14 4').net(net('GND')).width(0.3).L(16, 4), gnd())
   assert.ok(covered(b, 5.35, 15), 'fill reaches the via ring')
   assert.ok(covered(b, 16.2, 4), 'fill reaches the track end')
   assert.equal(thermalReport(zoneOf(b)), undefined)
@@ -142,13 +138,16 @@ test('thermal: vias and tracks of the net join solidly', () => {
 
 // other-net tracks around the pad at 10 10 on the given sides, each cutting the spoke there
 const fence = (...sides) =>
-  sides.map(s =>
-    h('track', {
-      net: 'SIG',
-      layer: 'F.Cu',
-      width: 0.3,
-      d: { right: 'M11.3 8.7 V11.3', left: 'M8.7 8.7 V11.3', up: 'M8.7 8.7 H11.3', down: 'M8.7 11.3 H11.3', upLong: 'M6.5 9.1 H11.3', downLong: 'M6.5 10.9 H11.3' }[s],
-    }),
+  sides.map(
+    s =>
+      ({
+        right: route('11.3 8.7').net(net('SIG')).width(0.3).V(11.3),
+        left: route('8.7 8.7').net(net('SIG')).width(0.3).V(11.3),
+        up: route('8.7 8.7').net(net('SIG')).width(0.3).H(11.3),
+        down: route('8.7 11.3').net(net('SIG')).width(0.3).H(11.3),
+        upLong: route('6.5 9.1').net(net('SIG')).width(0.3).H(11.3),
+        downLong: route('6.5 10.9').net(net('SIG')).width(0.3).H(11.3),
+      })[s],
   )
 
 test('thermal: a pad with fewer connected spokes than minSpokes is the warning thermal-spokes', () => {
@@ -157,7 +156,7 @@ test('thermal: a pad with fewer connected spokes than minSpokes is the warning t
   const t = b.drc.filter(d => d.rule === 'thermal-spokes')
   assert.equal(t.length, 1, JSON.stringify(b.drc))
   assert.equal(t[0].severity, 'warning')
-  assert.equal(t[0].message, 'pad U1.1 (GND) joins the GND pour on F.Cu through 1 of 4 thermal spokes, fewer than 2')
+  assert.equal(t[0].message, 'pad U1/1 (GND) joins the GND pour on F.Cu through 1 of 4 thermal spokes, fewer than 2')
   assert.equal(covered(b, 9.25, 10), true, 'the left spoke is kept')
   assert.deepEqual(
     b.ratsnest.filter(r => r.net === 'GND'),
@@ -194,7 +193,7 @@ test('thermal: when the axis spokes are blocked, the diagonal ones are tried bef
 
 test('thermal: a through-hole pad joined solidly by a pour on another layer gives no thermal-spokes warning', () => {
   const tht = { shape: 'rect', size: [1, 1], drill: 0.5 }
-  const bpour = pour('GND', 'B.Cu', 'M0 0 H20 V20 H0 Z', { connect: 'solid' })
+  const bpour = pour(net('GND'), 'B.Cu', 'M0 0 H20 V20 H0 Z', { connect: 'solid' })
   const warned = board(null, part(tht), gnd(), ...fence('right', 'upLong', 'downLong'))
   assert.equal(warned.drc.filter(d => d.rule === 'thermal-spokes').length, 1)
   const b = board(null, part(tht), gnd(), bpour, ...fence('right', 'upLong', 'downLong'))

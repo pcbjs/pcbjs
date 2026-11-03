@@ -1,12 +1,16 @@
-// The schematic picture of a board: symbols placed by part elements and <Sym> or packed by sch-place.ts, hand wires checked against the
+// The schematic picture of a board: symbols placed by part elements and <Place> or packed by sch-place.ts, hand wires checked against the
 // netlist, every other connection wired by the square router or labelled, then the sch-* findings. See docs/schematic-graphic.md.
+import { gridPitch, isGrid, SCH_GRID } from '@pcbjs/core/internal/grid'
+import { marker } from './messages.js'
+import { pulse } from './cancel.js'
 import type { Board, BoardSchematicPart, DrcMarker, Mat, Pad, Pt } from '@pcbjs/core/model'
-import type { PcbNode, Src } from '@pcbjs/core/types'
-import type { SchDrawing, SchLabel, SchPin, SchSheetBox, SchSymbol, SchText, SchWire, PinSide } from '@pcbjs/core/sch-model'
-import { autoSymbol, isSymbol, textUnits, PIN_TEXT, type SymbolDef } from '@pcbjs/core/sch-symbol'
+import type { PcbNode, Src } from '@pcbjs/core/internal/types'
+import type { SchDrawing, SchLabel, SchPin, SchSheetBox, SchSymbol, SchText, SchWire, PinSide } from '@pcbjs/core/internal/sch-model'
+import { autoSymbol, isSymbol, textUnits, PIN_TEXT, type SymbolDef } from '@pcbjs/core/internal/sch-symbol'
 import { childList, isNode } from '@pcbjs/core/jsx-runtime'
-import { instanceOf, instancePath, isPinRef, netInfo, partOf, pinOfPad, type PartState } from '@pcbjs/core/schematic'
-import { mm } from '@pcbjs/core/units'
+import { instanceOf, instancePath, partOf, pinOfPad, type PartState } from '@pcbjs/core/internal/part'
+import { isPinRef, netInfo } from '@pcbjs/core/internal/nets'
+import { mm } from '@pcbjs/core/internal/units'
 import { CompileError } from './flatten.js'
 import { dirOf, simplify, squareRoute, type SquareNet } from './sch-route.js'
 import {
@@ -45,7 +49,7 @@ interface Placed {
   flip: boolean
   auto: boolean
   src?: Src
-  items: Map<string, number[]>
+  items: Map<string, string[]>
 }
 interface HandWire {
   pts: Pt[]
@@ -78,41 +82,38 @@ function symbolOf(part: BoardSchematicPart, st: PartState | undefined, own: unkn
   return autoSymbol({ prefix: part.prefix, pins: part.pins.map(p => p.name), id: part.footprint, value: part.value, name: fp?.displayName || fp?.name })
 }
 
-/** A position in grid units: numbers are units, a token with a unit is converted at the grid pitch. */
-function gridAt(v: unknown, grid: number, where: string): Pt {
-  const tok = (t: unknown): number => {
-    if (typeof t === 'number' && Number.isFinite(t)) return t
-    const s = String(t).trim()
-    if (/^[+-]?(\d+\.?\d*|\.\d+)u?$/.test(s)) return parseFloat(s)
-    try {
-      return mm(s) / grid
-    } catch (e) {
-      throw new CompileError(`${where}: ${(e as Error).message}`)
-    }
-  }
-  if (Array.isArray(v) && v.length >= 2) return [tok(v[0]), tok(v[1])]
-  if (typeof v === 'string') {
-    const t = v.trim().split(/[\s,]+/)
-    if (t.length === 2) return [tok(t[0]), tok(t[1])]
-  }
-  throw new CompileError(`${where}: a position is "x y" or [x, y] in grid units, got ${JSON.stringify(v)}`)
+/** A position in grid units, `"4 7"`. */
+function gridAt(v: unknown, where: string): Pt {
+  const t = typeof v === 'string' ? v.trim().split(/\s+/) : []
+  if (t.length === 2 && t.every(x => /^[+-]?(\d+\.?\d*|\.\d+)$/.test(x))) return [parseFloat(t[0]), parseFloat(t[1])]
+  throw new CompileError(`${where}: a position is "x y" in grid units, such as "4 7", got ${JSON.stringify(v)}`)
 }
 const snap = (p: Pt): Pt => [Math.round(p[0]), Math.round(p[1])]
+
+/** The schematic pitch in mm: a number, or a grid's pitch; a schematic grid is a lattice, so it takes no origin, angle or frame. */
+function schPitch(v: unknown, what: string, src?: Src): number {
+  if (v === undefined) return gridPitch(SCH_GRID)
+  if (typeof v === 'number' && v > 0) return v
+  if (!isGrid(v)) throw new CompileError(`${what} is a pitch in mm such as 2.54, or a defineGrid grid, got ${JSON.stringify(v)}`, src)
+  const extra = (['origin', 'angle', 'frame'] as const).filter(k => v.spec[k] !== undefined)
+  if (extra.length) throw new CompileError(`${what}: the grid ${v.name} has ${extra.join(', ')}, which a schematic grid does not take`, src)
+  return gridPitch(v)
+}
+
+/** A `<Sheet grid>`: how many schematic pitches one unit of it is, a whole number. */
+function sheetScale(v: unknown, pitch: number, src?: Src): number {
+  const own = schPitch(v, '<Sheet> grid', src)
+  const k = own / pitch
+  if (Math.abs(k - Math.round(k)) > 1e-9 || Math.round(k) < 1) throw new CompileError(`<Sheet> grid: its pitch ${own} mm is no whole multiple of the schematic's ${pitch} mm`, src)
+  return Math.round(k)
+}
 
 /** The schematic of a compiled board, and its sch-* findings; `root` is the <Schematic> given to <PCB>, or none for an automatic one. */
 export function compileSchematic(board: Board, partRefs: Map<PartState, string>, root?: unknown): { drawing: SchDrawing; findings: DrcMarker[] } {
   const findings: DrcMarker[] = []
   const node = root === undefined || root === null ? null : resolveRoot(root)
   const p = node?.props ?? {}
-  let grid = 2.54
-  if (p.grid !== undefined) {
-    try {
-      grid = mm(p.grid)
-    } catch (e) {
-      throw new CompileError(`<Schematic> grid: ${(e as Error).message}`, node ? srcOf(node) : undefined)
-    }
-  }
-  if (!(grid > 0)) throw new CompileError(`<Schematic> grid must be a positive length, got ${JSON.stringify(p.grid)}`)
+  const grid = schPitch(p.grid, '<Schematic> grid', node ? srcOf(node) : undefined)
   const labelOver = p.labelOver ?? LABEL_OVER
   if (!Number.isInteger(labelOver) || labelOver < 1) throw new CompileError(`<Schematic> labelOver must be a whole number of pins, got ${JSON.stringify(p.labelOver)}`)
   const sheet = sheetOf(p.sheet, node ? srcOf(node) : undefined)
@@ -123,15 +124,19 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
   const stOf = new Map<string, PartState>()
   for (const [st, ref] of partRefs) stOf.set(ref, st)
   // a logo or a bare hole has no pins, so nothing to draw
-  const parts = board.schematic.parts.filter(x => x.placed && x.pins.length)
+  const parts = board.schematic.parts.filter(x => (x.placed || x.displayRef) && x.pins.length)
   const byRef = new Map(parts.map(x => [x.ref, x]))
+  const displayRefs = new Map(parts.flatMap(p => p.displayRef ? [[p.ref, p.displayRef] as const] : []))
+  const displayNets = new Map(board.schematic.nets.flatMap(n => n.displayName ? [[n.name, n.displayName] as const] : []))
   const padsOf = new Map<string, Pad[]>()
   for (const it of board.items) if (it.kind === 'pad' && it.ref !== undefined) padsOf.set(it.ref, [...(padsOf.get(it.ref) ?? []), it])
-  const pinItems = (part: BoardSchematicPart, st?: PartState): Map<string, number[]> => {
-    const out = new Map<string, number[]>()
+  const idOf = new Map(board.items.flatMap(it => (it.uid ? [[it.uid, it.id] as const] : [])))
+  const ids = (uids: string[]) => uids.flatMap(u => idOf.get(u) ?? [])
+  const pinItems = (part: BoardSchematicPart, st?: PartState): Map<string, string[]> => {
+    const out = new Map<string, string[]>()
     for (const pad of padsOf.get(part.ref) ?? []) {
       const pin = st ? pinOfPad(st.pins, pad) : pad.num
-      if (pin !== null) out.set(pin, [...(out.get(pin) ?? []), pad.id])
+      if (pin !== null) out.set(pin, [...(out.get(pin) ?? []), ...(pad.uid ? [pad.uid] : [])])
     }
     return out
   }
@@ -141,41 +146,44 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
   const labels: HandLabel[] = []
   const texts: SchText[] = []
   const sheets: { name?: string; path: string[]; src?: Src }[] = []
-  const wireNodes: { n: PcbNode; off: Pt }[] = []
-  const placeSym = (st: PartState | null, q: Record<string, any>, tag: string, at: (where: string) => Pt, src?: Src) => {
-    if (!st) throw new CompileError(`<Sym>: part must be a part such as R1, got ${typeof q.part}`, src)
+  const wireNodes: { n: PcbNode; off: Pt; k: number }[] = []
+  const placeSym = (st: PartState, q: Record<string, any>, tag: string, at: (where: string) => Pt, src?: Src) => {
     const ref = partRefs.get(st) ?? null
     const pos = snap(at(`<${tag}> at`))
     const rot = q.rot ?? 0
     if (![0, 90, 180, 270].includes(rot)) throw new CompileError(`<${tag}> rot must be 0, 90, 180 or 270, got ${JSON.stringify(q.rot)}`, src)
     if (ref === null || !byRef.has(ref)) {
-      findings.push({
-        severity: 'warning',
-        rule: 'sch-missing-symbol',
-        message: `<${tag}> places ${ref ?? st.label}, which is not a part on this board`,
-        at: [pos[0] * grid, pos[1] * grid],
-        layer: 'sch',
-        ...(src ? { src } : {}),
-      })
+      findings.push(
+        marker({
+          severity: 'warning',
+          rule: 'sch-missing-symbol',
+          args: { what: 'place', tag, part: ref ?? st.label },
+          ...(ref !== null ? { refs: [ref] } : {}),
+          at: [pos[0] * grid, pos[1] * grid],
+          layer: 'sch',
+          ...(src ? { src } : {}),
+        }),
+      )
       return
     }
     if (syms.has(ref)) throw new CompileError(`<${tag}> places ${ref} twice`, src)
     syms.set(ref, { at: pos, rot, flip: !!q.flip, symbol: q.symbol, ...(src ? { src } : {}) })
   }
-  const walk = (c: unknown, off: Pt, depth: number): void => {
+  /** `k` schematic pitches per unit of the sheet's own grid */
+  const walk = (c: unknown, off: Pt, depth: number, k = 1): void => {
     if (depth > 64 || c === null || c === undefined || typeof c === 'boolean') return
     const list = childList(c)
     if (list) {
-      for (const x of list) walk(x, off, depth + 1)
+      for (const x of list) walk(x, off, depth + 1, k)
       return
     }
     if (!isNode(c))
-      throw new CompileError(`<Schematic> takes parts, <Sym>, <Label>, <Power>, <Text>, <Sheet> and wire(), got ${typeof c === 'string' ? JSON.stringify(c) : typeof c}`)
+      throw new CompileError(`<Schematic> takes parts, <Place>, <Label>, <Power>, <Text>, <Sheet> and wire(), got ${typeof c === 'string' ? JSON.stringify(c) : typeof c}`)
     const q = c.props,
       src = srcOf(c)
     const at = (where: string) => {
-      const g = gridAt(q.at, grid, where)
-      return [g[0] + off[0], g[1] + off[1]] as Pt
+      const g = gridAt(q.at, where)
+      return [g[0] * k + off[0], g[1] * k + off[1]] as Pt
     }
     const st = partOf(c.type)
     if (st) {
@@ -191,17 +199,13 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
     }
     if (typeof c.type === 'function') {
       const props = { ...c.props, ...(c.children.length ? { children: c.children.length === 1 ? c.children[0] : c.children } : {}) }
-      walk((c.type as (p: unknown) => unknown)(props), off, depth + 1)
+      walk((c.type as (p: unknown) => unknown)(props), off, depth + 1, k)
       return
     }
     switch (c.type) {
-      case 'sch-sym':
-        placeSym(partOf(q.part), q, 'Sym', at, src)
-        return
       case 'sch-label':
       case 'sch-power': {
-        const info = netInfo(q.net)
-        const name = info ? info.name : typeof q.net === 'string' ? q.net : null
+        const name = netInfo(q.net)?.name
         if (!name) throw new CompileError(`<${c.type === 'sch-label' ? 'Label' : 'Power'}> needs a net`, src)
         const kind = c.type === 'sch-label' ? 'label' : (q.kind ?? (GROUND.test(name.split('/').pop()!) ? 'gnd' : 'vcc'))
         if (!['label', 'gnd', 'vcc'].includes(kind)) throw new CompileError(`<Power> kind must be 'gnd' or 'vcc', got ${JSON.stringify(q.kind)}`, src)
@@ -217,17 +221,17 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
       case 'sch-sheet': {
         const inst = instanceOf(q.group)
         const path = inst ? instancePath(inst) : Array.isArray(q.group?.path) ? q.group.path : null
-        if (!path) throw new CompileError('<Sheet> group must be a group() or circuit() instance', src)
+        if (!path) throw new CompileError('<Sheet> group must be a circuit instance', src)
         sheets.push({ name: q.name, path: [...path], ...(src ? { src } : {}) })
         const o = q.at === undefined ? off : at('<Sheet> at')
-        walk(c.children, o, depth + 1)
+        walk(c.children, o, depth + 1, q.grid === undefined ? k : sheetScale(q.grid, grid, src))
         return
       }
       case 'sch-wire':
-        wireNodes.push({ n: c, off })
+        wireNodes.push({ n: c, off, k })
         return
       case 'sch':
-        walk(c.children, off, depth + 1)
+        walk(c.children, off, depth + 1, k)
         return
       default:
         throw new CompileError(`<Schematic> cannot hold <${String(c.type)}>`, src)
@@ -276,6 +280,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
     const st = stOf.get(part.ref)
     return {
       ref: part.ref,
+      ...(part.displayRef ? { displayRef: part.displayRef } : {}),
       value: part.value,
       prefix: part.prefix,
       sym: symbolOf(part, st, undefined),
@@ -317,38 +322,44 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
       end: Pt
       root: Pt
       side: PinSide
-      items: number[]
+      items: string[]
     }
     const pinAt = new Map<string, Pin>()
     const pinOf = new Map<string, Pin>()
     const blocked: Pt[] = []
     const symbols: { p: Placed; m: Mat; pins: Pin[]; box: Box }[] = []
     for (const x of placed) {
+      pulse()
       const m = symMatrix(x.at, x.rot, x.flip)
       const names = new Set(x.part.pins.map(q => q.name))
       for (const sp of x.sym.pins)
         if (!names.has(sp.name))
-          findings.push({
-            severity: 'warning',
-            rule: 'sch-missing-symbol',
-            message: `the symbol of ${x.part.ref} has a pin ${sp.name}, which ${x.part.ref} does not have; its pins are ${[...names].join(', ')}`,
-            at: apply(symMatrix(x.at, x.rot, x.flip, grid), sp.end),
-            layer: 'sch',
-            ...(x.src ? { src: x.src } : {}),
-          })
+          findings.push(
+            marker({
+              severity: 'warning',
+              rule: 'sch-missing-symbol',
+              args: { what: 'extra', part: x.part.ref, pin: sp.name, pins: [...names] },
+              refs: [x.part.ref],
+              at: apply(symMatrix(x.at, x.rot, x.flip, grid), sp.end),
+              layer: 'sch',
+              ...(x.src ? { src: x.src } : {}),
+            }),
+          )
       const symNames = new Set(x.sym.pins.map(q => q.name))
       for (const q of x.part.pins)
         if (q.net !== null && !symNames.has(q.name))
-          findings.push({
-            severity: 'warning',
-            rule: 'sch-missing-symbol',
-            message: `the symbol of ${x.part.ref} has no pin ${q.name}, on net ${q.net}`,
-            at: apply(symMatrix(x.at, x.rot, x.flip, grid), [0, 0]),
-            layer: 'sch',
-            items: x.items.get(q.name) ?? [],
-            net: q.net,
-            ...(x.src ? { src: x.src } : {}),
-          })
+          findings.push(
+            marker({
+              severity: 'warning',
+              rule: 'sch-missing-symbol',
+              args: { what: 'missing', part: x.part.ref, pin: q.name, net: q.net },
+              refs: [x.part.ref, `net:${q.net}`],
+              at: apply(symMatrix(x.at, x.rot, x.flip, grid), [0, 0]),
+              layer: 'sch',
+              items: ids(x.items.get(q.name) ?? []),
+              ...(x.src ? { src: x.src } : {}),
+            }),
+          )
       const pins: Pin[] = []
       for (const sp of x.sym.pins) {
         const q = x.part.pins.find(z => z.name === sp.name)
@@ -382,14 +393,17 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
         const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]),
           h = Math.min(a[3], b[3]) - Math.max(a[1], b[1])
         if (w > 1e-6 && h > 1e-6)
-          findings.push({
-            severity: 'warning',
-            rule: 'sch-overlap',
-            message: `the symbols of ${symbols[i].p.part.ref} and ${symbols[j].p.part.ref} overlap`,
-            at: [(Math.max(a[0], b[0]) + w / 2) * grid, (Math.max(a[1], b[1]) + h / 2) * grid],
-            layer: 'sch',
-            ...((symbols[j].p.src ?? symbols[i].p.src) ? { src: symbols[j].p.src ?? symbols[i].p.src } : {}),
-          })
+          findings.push(
+            marker({
+              severity: 'warning',
+              rule: 'sch-overlap',
+              args: { a: symbols[i].p.part.ref, b: symbols[j].p.part.ref },
+              refs: [symbols[i].p.part.ref, symbols[j].p.part.ref],
+              at: [(Math.max(a[0], b[0]) + w / 2) * grid, (Math.max(a[1], b[1]) + h / 2) * grid],
+              layer: 'sch',
+              ...((symbols[j].p.src ?? symbols[i].p.src) ? { src: symbols[j].p.src ?? symbols[i].p.src } : {}),
+            }),
+          )
       }
 
     // hand wires, resolved to points; a pin handle starts or ends at its pin end
@@ -407,11 +421,11 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
         if (!pin) throw new CompileError(`wire(): the symbol of ${ref} has no pin ${name}`, src)
         return pin.end
       }
-      return snap(gridAt(v, grid, 'wire()'))
+      return snap(gridAt(v, 'wire()'))
     }
-    for (const { n, off } of wireNodes) {
+    for (const { n, off, k } of wireNodes) {
       const src = srcOf(n)
-      const start = isPinRef(n.props.from) ? pinEnd(n.props.from, src) : snap([gridAt(n.props.from, grid, 'wire()')[0] + off[0], gridAt(n.props.from, grid, 'wire()')[1] + off[1]])
+      const start = isPinRef(n.props.from) ? pinEnd(n.props.from, src) : snap([gridAt(n.props.from, 'wire()')[0] * k + off[0], gridAt(n.props.from, 'wire()')[1] * k + off[1]])
       const pts: Pt[] = [start]
       let cur = start
       for (const s of n.props.steps as { op: string; n?: number; x?: number; y?: number; to?: unknown }[]) {
@@ -421,20 +435,20 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
         }
         switch (s.op) {
           case 'h':
-            next([cur[0] + s.n!, cur[1]])
+            next([cur[0] + s.n! * k, cur[1]])
             break
           case 'v':
-            next([cur[0], cur[1] + s.n!])
+            next([cur[0], cur[1] + s.n! * k])
             break
           case 'H':
-            next([s.n! + off[0], cur[1]])
+            next([s.n! * k + off[0], cur[1]])
             break
           case 'V':
-            next([cur[0], s.n! + off[1]])
+            next([cur[0], s.n! * k + off[1]])
             break
           case 'l':
           case 'L': {
-            const t: Pt = s.op === 'l' ? [cur[0] + s.x!, cur[1] + s.y!] : [s.x! + off[0], s.y! + off[1]]
+            const t: Pt = s.op === 'l' ? [cur[0] + s.x! * k, cur[1] + s.y! * k] : [s.x! * k + off[0], s.y! * k + off[1]]
             if (t[0] !== cur[0] && t[1] !== cur[1])
               throw new CompileError(`wire(): .${s.op}(${s.x}, ${s.y}) is not horizontal or vertical; a wire is square, use .h() and .v()`, src)
             next(t)
@@ -444,8 +458,8 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
             const t = isPinRef(s.to)
               ? pinEnd(s.to, src)
               : (() => {
-                  const g = gridAt(s.to, grid, 'wire().Z')
-                  return snap([g[0] + off[0], g[1] + off[1]])
+                  const g = gridAt(s.to, 'wire().Z')
+                  return snap([g[0] * k + off[0], g[1] * k + off[1]])
                 })()
             if (t[0] !== cur[0] && t[1] !== cur[1]) next([t[0], cur[1]])
             next(t)
@@ -472,7 +486,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
       const g = find(i)
       const m = groupNets.get(g) ?? new Map<string, string>()
       groupNets.set(g, m)
-      for (const pin of pinAt.values()) if (pin.net && onWire(pin.end, w)) m.set(pin.net, `${pin.ref}.${pin.name}`)
+      for (const pin of pinAt.values()) if (pin.net && onWire(pin.end, w)) m.set(pin.net, `${pin.ref}/${pin.name}`)
       for (const [k, ls] of labelAt) {
         const [x, y] = k.split(',').map(Number)
         if (onWire([x, y], w)) for (const l of ls) m.set(l.net, `label ${l.net}`)
@@ -484,15 +498,18 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
       if (nets.length) w.net = nets[0]
       if ((nets.length > 1 && find(i) === i) || (nets.length > 1 && !wires.some((_, j) => j < i && find(j) === find(i)))) {
         const mid = w.pts[Math.floor(w.pts.length / 2)]
-        findings.push({
-          severity: 'error',
-          rule: 'sch-short',
-          message: `a hand wire joins ${[...m.entries()].map(([n, by]) => `${n} at ${by}`).join(' and ')}`,
-          at: [mid[0] * grid, mid[1] * grid],
-          layer: 'sch',
-          items: [...pinAt.values()].filter(q => q.net && m.has(q.net) && wires.some((x, j) => find(j) === find(i) && onWire(q.end, x))).flatMap(q => q.items),
-          ...(w.src ? { src: w.src } : {}),
-        })
+        findings.push(
+          marker({
+            severity: 'error',
+            rule: 'sch-short',
+            args: { joins: [...m.entries()].map(([n, by]) => `${n} at ${by}`) },
+            refs: [...m.keys()].map(n => `net:${n}`),
+            at: [mid[0] * grid, mid[1] * grid],
+            layer: 'sch',
+            items: ids([...pinAt.values()].filter(q => q.net && m.has(q.net) && wires.some((x, j) => find(j) === find(i) && onWire(q.end, x))).flatMap(q => q.items)),
+            ...(w.src ? { src: w.src } : {}),
+          }),
+        )
       }
     })
 
@@ -506,6 +523,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
     const fixedOf = (net: string) => wires.filter(w => w.net === net).map(w => w.pts)
     if (autoRoute)
       for (const [net, pins] of netPins) {
+        pulse()
         const xs = pins.map(q => q.end[0]),
           ys = pins.map(q => q.end[1])
         const far = Math.max(...xs) - Math.min(...xs) + Math.max(...ys) - Math.min(...ys) > labelFar && !fixedOf(net).length
@@ -517,7 +535,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
       }
     const labelCells = (l: HandLabel): Pt[] => {
       const v = SIDE_V[l.side ?? 'right'],
-        n = l.kind === 'label' ? Math.ceil(textUnits(l.net) + 1.2) : 2
+        n = l.kind === 'label' ? Math.ceil(textUnits(displayNets.get(l.net) ?? l.net) + 1.2) : 2
       return Array.from({ length: n }, (_, i) => [l.at[0] + v[0] * (i + 1), l.at[1] + v[1] * (i + 1)] as Pt)
     }
     // the labels a net in label mode gets: one per pin, or per hand-wired group, that has none
@@ -589,6 +607,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
     const outLabels: SchLabel[] = [...labels, ...autoLabels].map((l, i) => ({
       id: `label:${++ln}`,
       net: l.net,
+      ...(displayNets.has(l.net) ? { displayName: displayNets.get(l.net)! } : {}),
       at: S(l.at),
       side: l.side ?? pinAt.get(key(l.at))?.side ?? 'right',
       kind: l.kind,
@@ -631,40 +650,47 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
           onLabel = anyLabelAt.has(key(e))
         const onOther = gridWires.some(o => o.pts !== w.pts && onWire(e, o)) || onWire(e, { pts: w.pts.slice(e === w.pts[0] ? 1 : 0, e === w.pts[0] ? undefined : -1) })
         if (!onPin && !onLabel && !onOther)
-          findings.push({
-            severity: 'warning',
-            rule: 'sch-dangling',
-            message: `a wire${w.net ? ` of ${w.net}` : ''} ends at (${e[0]}, ${e[1]}) on nothing: no pin, label or other wire`,
-            at: S(e),
-            layer: 'sch',
-            ...(w.net ? { net: w.net } : {}),
-            ...(w.src ? { src: w.src } : {}),
-          })
+          findings.push(
+            marker({
+              severity: 'warning',
+              rule: 'sch-dangling',
+              args: { ...(w.net ? { net: w.net } : {}), at: [e[0], e[1]] },
+              ...(w.net ? { refs: [`net:${w.net}`] } : {}),
+              at: S(e),
+              layer: 'sch',
+              ...(w.net ? { net: w.net } : {}),
+              ...(w.src ? { src: w.src } : {}),
+            }),
+          )
       }
     for (const l of labels)
       if (!pinAt.has(key(l.at)) && !gridWires.some(w => onWire(l.at, w)))
-        findings.push({
-          severity: 'warning',
-          rule: 'sch-dangling',
-          message: `the ${l.kind === 'label' ? 'label' : 'power symbol'} ${l.net} at (${l.at[0]}, ${l.at[1]}) is on no pin or wire`,
-          at: S(l.at),
-          layer: 'sch',
-          net: l.net,
-          ...(l.src ? { src: l.src } : {}),
-        })
+        findings.push(
+          marker({
+            severity: 'warning',
+            rule: 'sch-dangling',
+            args: { label: l.kind === 'label' ? 'label' : 'power symbol', net: l.net, at: [l.at[0], l.at[1]] },
+            refs: [`net:${l.net}`],
+            at: S(l.at),
+            layer: 'sch',
+            ...(l.src ? { src: l.src } : {}),
+          }),
+        )
     for (const [net, pins] of netPins)
       for (const pin of pins) {
         const covered = anyLabelAt.has(key(pin.end)) || gridWires.some(w => w.net === net && onWire(pin.end, w)) || wires.some(w => onWire(pin.end, w))
         if (!covered)
-          findings.push({
-            severity: 'warning',
-            rule: 'sch-unwired',
-            message: `${pin.ref}.${pin.name} on ${net} has neither a wire nor a label`,
-            at: S(pin.end),
-            layer: 'sch',
-            items: pin.items,
-            net,
-          })
+          findings.push(
+            marker({
+              severity: 'warning',
+              rule: 'sch-unwired',
+              args: { pin: `${pin.ref}/${pin.name}`, net },
+              refs: [`net:${net}`],
+              at: S(pin.end),
+              layer: 'sch',
+              items: ids(pin.items),
+            }),
+          )
       }
 
     // sheets: the hand ones, and in an automatic layout one per top-level instance of two or more symbols
@@ -694,6 +720,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
       const t = textPlace(x.sym, box, pins, x.part)
       return {
         ref: x.part.ref,
+        ...(displayRefs.has(x.part.ref) ? { displayRef: displayRefs.get(x.part.ref)! } : {}),
         value: x.part.value,
         kind: x.sym.kind,
         at: S(x.at),
@@ -719,7 +746,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
         h = PIN_TEXT / 2.54
       return [
         [t.ref[0], t.ref[1] - h],
-        [t.ref[0] + textUnits(x.part.ref), t.ref[1]],
+        [t.ref[0] + textUnits(x.part.displayRef ?? x.part.ref), t.ref[1]],
         [t.value[0], t.value[1] - h],
         [t.value[0] + textUnits(x.part.value), t.value[1]],
       ] as Pt[]
@@ -846,15 +873,15 @@ function resolveRoot(v: unknown): PcbNode {
     const c = n.children
     n = (n.type as (p: unknown) => unknown)({ ...n.props, ...(c.length ? { children: c.length === 1 ? c[0] : c } : {}) })
   }
-  if (!isNode(n) || n.type !== 'sch') throw new CompileError('<PCB schematic> takes a <Schematic> element or schematic({ … })', isNode(v) ? srcOf(v) : undefined)
+  if (!isNode(n) || n.type !== 'sch') throw new CompileError('the drawing export of a schematic module is a <Schematic> element', isNode(v) ? srcOf(v) : undefined)
   return n
 }
 
 /** Where the ref and value of a symbol go, grid units, the start of the baseline, and the grid points they keep free of wires. */
-function textPlace(sym: SymbolDef, box: Box, pins: { side: PinSide; end: Pt }[], part: Pick<BoardSchematicPart, 'ref' | 'value'>): { ref: Pt; value: Pt; cells: Pt[] } {
+function textPlace(sym: SymbolDef, box: Box, pins: { side: PinSide; end: Pt }[], part: Pick<BoardSchematicPart, 'ref' | 'displayRef' | 'value'>): { ref: Pt; value: Pt; cells: Pt[] } {
   const mode = textMode(sym, pins)
   const h = PIN_TEXT / 2.54
-  const lr = textUnits(part.ref),
+  const lr = textUnits(part.displayRef ?? part.ref),
     lv = textUnits(part.value)
   const ends = new Set(pins.map(q => key(q.end)))
   const cells: Pt[] = []

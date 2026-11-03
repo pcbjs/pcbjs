@@ -1,7 +1,7 @@
 // The schematic SVG: one element per symbol, pin, wire and label, keyed like the board, so the viewer can cross-probe.
 import { test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h, nets, defineFootprint, resetDefaults, Schematic, Sheet, group } from '@pcbjs/core'
+import PCB, { h, nets, defineFootprint, resetDefaults, Schematic, Sheet, circuit } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
 import { schematicSvg, schematicMarkup, schematicStyle } from '../dist/sch-svg.js'
 import { siteData } from '../dist/site-data.js'
@@ -9,31 +9,31 @@ import { buildFab } from '../dist/fab.js'
 
 afterEach(() => resetDefaults())
 
-const pad = (num, x) => h('pad', { num, at: [x, 0], size: [0.8, 0.8] })
+const pad = (num, x) => h('pad', { num, at: `${x} 0`, size: [0.8, 0.8] })
 const R = defineFootprint(p => h('footprint', p, pad(1, -1), pad(2, 1)), { pins: ['1', '2'], prefix: 'R' })
 
 function board(schematic) {
   const { A, B, GND } = nets()
-  const parts = [R('1k').connect(A, B), R('2k').connect(B, GND)]
+  const parts = [R('1k', { ref: 'R1' }).connect({ 1: A, 2: B }), R('2k', { ref: 'R2' }).connect({ 1: B, 2: GND })]
   return compileBoard(
     h(
       PCB,
-      { name: 'S', silkRefs: false, ...(schematic ? { schematic } : {}) },
+      { name: 'S', silkRefs: false, ...(schematic ? { schematic: { drawing: schematic } } : {}) },
       h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 10 }),
-      ...parts.map((p, i) => h(p, { at: [4 + i * 8, 5] })),
+      ...parts.map((p, i) => h(p, { at: `${4 + i * 8} 5` })),
     ),
-    { routeCache: false },
+    { cache: false },
   )
 }
 
-test('symbols, pins, wires and labels carry the ids of the board', () => {
+test('symbols, pins, wires and labels carry the uids of the pads', () => {
   const b = board()
   const svg = schematicSvg(b, 'dark')
   const pads = b.items.filter(i => i.kind === 'pad')
   assert.match(svg, /^<\?xml/)
   for (const ref of ['R1', 'R2']) {
-    assert.match(svg, new RegExp(`<g class="sch-sym" id="sch-sym-${ref}" data-kind="symbol" data-ref="${ref}" data-items="[0-9 ]+"`))
-    for (const p of pads.filter(x => x.ref === ref)) assert.ok(svg.includes(`data-ref="${ref}" data-pin="${p.num}" data-net="${p.net}" data-items="${p.id}"`), `${ref}.${p.num}`)
+    assert.match(svg, new RegExp(`<g class="sch-sym" id="sch-sym-${ref}" data-kind="symbol" data-ref="${ref}" data-items="item:[0-9a-f]{12}( item:[0-9a-f]{12})*"`))
+    for (const p of pads.filter(x => x.ref === ref)) assert.ok(svg.includes(`data-ref="${ref}" data-pin="${p.num}" data-net="${p.net}" data-items="${p.uid}"`), `${ref}.${p.num}`)
   }
   assert.match(svg, /<path class="sch-wire" id="sch-wire-1" data-kind="wire" data-id="wire:1" data-net="B"/)
   assert.match(svg, /<g class="sch-label sch-power" data-kind="label" data-id="label:\d+" data-net="GND"/)
@@ -66,17 +66,17 @@ test('the page is the drawing grown by a margin: no frame, title block or paper 
 
 test('an automatic sheet box draws no name; a <Sheet> the author wrote keeps its own', () => {
   const { A, B, GND } = nets()
-  const blk = group('BLK', { R1: R('1k').connect(A, B), R2: R('2k').connect(B, GND) })
+  const blk = circuit('blk', ({ A, B, GND }) => ({ R1: R('1k').connect({ 1: A, 2: B }), R2: R('2k').connect({ 1: B, 2: GND }) }))({ A, B, GND }, 'BLK1')
   const make = sch =>
     compileBoard(
       h(
         PCB,
-        { name: 'G', silkRefs: false, ...(sch ? { schematic: sch } : {}) },
+        { name: 'G', silkRefs: false, ...(sch ? { schematic: { drawing: sch } } : {}) },
         h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 10 }),
-        h(blk.R1, { at: [4, 5] }),
-        h(blk.R2, { at: [12, 5] }),
+        h(blk.R1, { at: '4 5' }),
+        h(blk.R2, { at: '12 5' }),
       ),
-      { routeCache: false },
+      { cache: false },
     )
   const auto = make()
   assert.equal(auto.schematic.drawing.sheets.length, 1)
@@ -84,4 +84,20 @@ test('an automatic sheet box draws no name; a <Sheet> the author wrote keeps its
   assert.ok(!schematicMarkup(auto.schematic.drawing, auto).includes('sch-sheet-name'))
   const hand = make(h(Schematic, {}, h(Sheet, { group: blk, name: 'Divider', at: '4 4' })))
   assert.ok(schematicMarkup(hand.schematic.drawing, hand).includes('class="sch-sheet-name"'))
+})
+
+test('library symbol and private-net labels render local text with canonical probe attributes', () => {
+  const b = board(), drawing = b.schematic.drawing
+  const symbol = { ...drawing.symbols[0], displayRef: 'R0' }
+  const label = { id: 'label:local', net: 'CH200/private', displayName: 'private', at: [20, 20], side: 'right', kind: 'label', auto: true }
+  const local = { ...drawing, symbols: [symbol], labels: [label] }
+  const markup = schematicMarkup(local)
+  const expected = schematicMarkup({ ...local, symbols: [{ ...symbol, ref: 'R0', displayRef: undefined }], labels: [{ ...label, net: 'private', displayName: undefined }] })
+  for (const kind of ['sch-ref', 'sch-label-text']) {
+    const path = text => text.match(new RegExp(`class="${kind}" d="([^"]+)"`))?.[1]
+    assert.ok(path(markup))
+    assert.equal(path(markup), path(expected), `${kind} renders the local label`)
+  }
+  assert.ok(markup.includes(`data-ref="${symbol.ref}"`))
+  assert.ok(markup.includes('data-net="CH200/private"'))
 })

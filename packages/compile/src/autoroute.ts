@@ -1,4 +1,5 @@
 // Grid A* per leg with vias between adjacent layers; legs that do not fit negotiate congestion, PathFinder style. See docs/autorouter.md.
+import { marker } from './messages.js'
 import type {
   AutoRouteJob,
   Board,
@@ -19,49 +20,35 @@ import type {
   Track,
   Via,
 } from '@pcbjs/core/model'
-import { tuneRoutes, type PairFrees, type TuneRoute } from './tune.js'
-import { tunePairCentre } from './pair-tune.js'
-import { routeLength } from './length.js'
-import type { ResolvedRules as Rules, Src } from '@pcbjs/core/types'
-import type { AutoRouteParams, RouteContext, Pos, ResolvedPos, RouteFn, RouteRequest, RouteResult } from '@pcbjs/core/types'
-import { BASE_AUTOROUTE, mergeAutoroute } from '@pcbjs/core/board-spec'
-import { CompileError, PART_REFS } from './flatten.js'
-import { isPinRef, partOf, pinOfPad } from '@pcbjs/core/schematic'
+import type { Hold } from '@pcbjs/core/internal/patch'
+import type { TuneRoute } from './tune.js'
+import type { ResolvedRules as Rules, Src } from '@pcbjs/core/internal/types'
+import type { AutoRouteParams, RouteContext, RouteEnd, ResolvedPos, RouteFn, RoutePoint, RouteRequest, RouteResult, RouteSolverContext } from '@pcbjs/core/internal/types'
+import { BASE_AUTOROUTE, mergeAutoroute } from '@pcbjs/core/internal/board-spec'
+import { CompileError, PART_REFS, ROUTE_IDS } from './flatten.js'
+import { solverOrder } from './deps.js'
+import { isPinRef } from '@pcbjs/core/internal/nets'
+import { isRoutePoint, partOf, pinOfPad } from '@pcbjs/core/internal/part'
 import { apply, IDENTITY, invert, offset, polysToRings, union } from './geom.js'
 import { copperBox, copperLayersOf, copperRings } from './copper.js'
-import { defaultVia } from '@pcbjs/core/rules'
-import { connectivity, joined } from './connectivity.js'
+import { defaultVia } from '@pcbjs/core/internal/rules'
+import { joined } from './connectivity.js'
 import { copperLayers, isCopper, resolveLayer } from './layers.js'
-import { circleRing } from './path.js'
-import { at as parseAt, coordString, mm } from '@pcbjs/core/units'
-import { RouteCache, ROUTER_VERSION, hash, type LegEntry, type LockEntry, type PairState } from './route-cache.js'
+import { applyPrims, circleRing } from './path.js'
+import { at as parseAt, coordString, endAt, mm } from '@pcbjs/core/internal/units'
+import { RouteCache, ROUTER_VERSION, hash, type LegEntry } from './route-cache.js'
 import { netLoops } from './loops.js'
 import { classOf, itemClearance, maxClearance, maxHoleClearance, notePair, overrideBetween, pairGapOf } from './netclass.js'
 import { PairGeometryError } from './pair.js'
-import { layPairJob, pairStub, type PairContext, type PairJob, type PairLaid } from './pair-lay.js'
+import { idsOf, layPairJob, pairItems, pairStub, type PairContext, type PairJob, type PairLaid, type TunePair } from './pair-lay.js'
 import { neckLength, neckOf, neckPieces, neckPrims, neckStub, padMinor, padReach } from './neck.js'
 import { planCorner, primsOf, trackShape } from './round.js'
 import type { IsFree } from './length.js'
 import { itemLabel } from './route-findings.js'
-import {
-  boxOf,
-  exemptKey,
-  fill,
-  fillAdd,
-  hitsEdge,
-  inside,
-  isNpth,
-  keptSet,
-  outer,
-  ringSet,
-  segCross,
-  segHits,
-  solidRings,
-  storeOf,
-  viaKeptSet,
-  type Grid,
-  type RingSet,
-} from './obstacles.js'
+import { exemptKey, fill, fillAdd, isNpth, itemSig, keptSet, ObstacleWorld, outer, solidRings, viaKeptSet, type Grid } from './obstacles.js'
+import { boxOf, hitsEdge, inside, ringSet, segCross, segHits, type RingSet } from './spatial.js'
+import { pulse } from './cancel.js'
+import { changed, immutable } from './items.js'
 
 const MAX_STATES = 3e7
 /** Cost factor of a move across the preferred direction of its layer. */
@@ -95,7 +82,7 @@ function layerName(board: Board, name: string): string {
 /** A pad's own layer for smd, `defaultLayer` for tht when the pad is on it. */
 function padLayer(pad: Pad, defaultLayer: string): string {
   const cu = pad.layers.filter(isCopper)
-  if (!cu.length) throw new CompileError(`pad ${pad.ref}.${pad.num} has no copper`, pad.src)
+  if (!cu.length) throw new CompileError(`pad ${pad.ref}/${pad.num} has no copper`, pad.src)
   return cu.includes(defaultLayer) ? defaultLayer : cu[0]
 }
 /** A pad as a route end, with every copper layer it may be reached on when it has several. */
@@ -105,7 +92,53 @@ function padEnd(pad: Pad, defaultLayer: string): ResolvedPos {
   return { x: pad.at[0], y: pad.at[1], layer, ...(cu.length > 1 ? { layers: cu } : {}) }
 }
 
-export function resolvePos(board: Board, pos: Pos, defaultLayer: string): ResolvedPos {
+/** Where each laid route's chain calls end on a board, `pt:0` its start, with the layer at each; route points resolve against it. */
+const ROUTE_PTS = new WeakMap<Board, Map<string, { pts: Pt[]; layers: string[] }>>()
+const routePts = (board: Board) => ROUTE_PTS.get(board) ?? ROUTE_PTS.set(board, new Map()).get(board)!
+
+/** A route point as the reference grammar names it, `CH2/route:vccTrunk/pt:2`; null until its route is laid. */
+export function pointRef(board: Board, p: RoutePoint): string | null {
+  const id = ROUTE_IDS.get(p.route)
+  const got = id && routePts(board).get(id)
+  if (!got) return null
+  return `${id}/pt:${p.pt === 'end' ? got.pts.length - 1 : p.pt}`
+}
+
+function resolvePoint(board: Board, p: RoutePoint): ResolvedPos {
+  const id = ROUTE_IDS.get(p.route)
+  if (!id) throw new CompileError('a route point is a route end, but its route is not placed on this board')
+  const got = routePts(board).get(id)
+  if (!got)
+    throw new CompileError(`${id}/${p.pt === 'end' ? 'end' : `pt:${p.pt}`} is a route end, but ${id} is not laid before it; two routes that end on each other's points are a cycle`)
+  const k = p.pt === 'end' ? got.pts.length - 1 : p.pt
+  if (k >= got.pts.length) throw new CompileError(`${id}/pt:${k} is a route end, but ${id} has points pt:0 to pt:${got.pts.length - 1}`)
+  return { x: got.pts[k][0], y: got.pts[k][1], layer: got.layers[k] }
+}
+
+/** The routes whose points a job's ends name. */
+const pointDeps = (j: AutoRouteJob): string[] => [j.from, j.to, j.root, j.pair?.fromN, j.pair?.toN].flatMap(e => (isRoutePoint(e) ? [ROUTE_IDS.get(e.route) ?? ''] : []))
+
+/** The jobs with each route that ends on another's point after that route, document order kept otherwise; a cycle is a compile error. */
+function byPoints(jobs: AutoRouteJob[]): AutoRouteJob[] {
+  if (!jobs.some(j => pointDeps(j).length)) return jobs
+  const deps = new Map<string, string[]>()
+  for (const j of jobs) if (j.route) deps.set(j.route, [...(deps.get(j.route) ?? []), ...pointDeps(j)])
+  const depth = new Map<string, number>()
+  const walk = (id: string, seen: string[]): number => {
+    if (depth.has(id)) return depth.get(id)!
+    if (seen.includes(id)) throw new CompileError(`the routes ${[...seen.slice(seen.indexOf(id)), id].join(' -> ')} end on each other's points, a cycle`)
+    const d = Math.max(-1, ...(deps.get(id) ?? []).filter(x => deps.has(x)).map(x => walk(x, [...seen, id]))) + 1
+    depth.set(id, d)
+    return d
+  }
+  return jobs
+    .map((j, i) => ({ j, i, d: j.route ? walk(j.route, []) : 0 }))
+    .sort((a, b) => a.d - b.d || a.i - b.i)
+    .map(x => x.j)
+}
+
+export function resolvePos(board: Board, pos: RouteEnd, defaultLayer: string): ResolvedPos {
+  if (isRoutePoint(pos)) return resolvePoint(board, pos)
   if (isPinRef(pos)) {
     const st = partOf(pos.part)
     const ref = st && PART_REFS.get(board)?.get(st)
@@ -135,7 +168,7 @@ export function resolvePos(board: Board, pos: Pos, defaultLayer: string): Resolv
   }
   if (Array.isArray(pos)) return { x: mm(pos[0]), y: mm(pos[1]), layer: pos[2] ? layerName(board, pos[2]) : defaultLayer }
   if (pos && typeof pos === 'object' && 'at' in pos) {
-    const [x, y] = parseAt(pos.at)
+    const [x, y] = endAt(pos.at)
     // a via end meets the route on `defaultLayer` when it spans it, else on its first layer
     const ls = (pos as { layers?: unknown }).layers
     if (Array.isArray(ls) && ls.length && !pos.layer) return { x, y, layer: ls.includes(defaultLayer) ? defaultLayer : ls[0], ...(ls.length > 1 ? { layers: [...ls] } : {}) }
@@ -144,10 +177,10 @@ export function resolvePos(board: Board, pos: Pos, defaultLayer: string): Resolv
   throw new CompileError(`bad position ${JSON.stringify(pos)}`)
 }
 
-export { solidRings }
+export { solidRings, ObstacleWorld }
 
 interface LayoutInternals {
-  board: Board
+  world: ObstacleWorld
   rules: Rules
   clearanceTo(net: string | undefined, other: string | undefined): number
   /** `via`: the set for a via's copper, without the keepouts */
@@ -207,16 +240,24 @@ function holesOf(items: Item[]): { it: Pad | Via; at: Pt; r: number }[] {
   )
 }
 
-/** The board's obstacles for one route, without `exclude`; `soft` items are negotiation's to price, and `twin.partner` counts as `twin.net`. */
-export function buildLayout(board: Board, exclude: Set<number> = new Set(), rules: Rules = board.rules, soft: Item[] = [], twin?: { net: string; partner: string }): RouteContext {
-  const r = rules
-  const cu = copperLayers(board.copper)
+/** The world's obstacles for one route as they stand now, without `exclude`; `soft` items are negotiation's to price, and `twin.partner` counts as `twin.net`. */
+export function buildLayout(world: ObstacleWorld, exclude: Set<number> = new Set(), soft: Item[] = [], twin?: { net: string; partner: string }): RouteContext {
+  const { board, rules: r, store, cu } = world
   const softIds = new Set(soft.map(it => it.id))
-  const snap = new Set(board.items)
+  // the world as this layout sees it: what it held now, less what the layout leaves out
+  const now = world.time
   const left = (it: Item) => exclude.has(it.id) || softIds.has(it.id)
-  const items = board.items.filter(it => !left(it))
-  const store = storeOf(board, r, cu)
+  const seen = (it: Item) => world.bornOf(it) <= now && !left(it)
+  // what came and went since, made again only when the world moved
+  let at = -1,
+    moved: ReturnType<ObstacleWorld['since']> = { came: [], went: [] }
+  const changes = () => (world.time === at ? moved : ((at = world.time), (moved = world.since(now))))
+  let view: Item[] | undefined
+  // only for a custom router, which runs before the world moves
+  const items = () => (view ??= world.items().filter(seen))
   const own = (net: string | undefined, other: string | undefined) => net !== undefined && (other === net || (!!twin && net === twin.net && other === twin.partner))
+  /** The items present now of the routed net, its twin's partner too, that this layout sees. */
+  const ownNow = (net: string | undefined): Item[] => [...world.net(net), ...(twin && net === twin.net ? world.net(twin.partner) : [])].filter(seen)
   // never below the rules' clearance; a pad's override wins over the other net's class
   const clearanceTo = (net: string | undefined, other: string | undefined, it?: Item): number => {
     const pad = (it && overrideBetween(board, { kind: 'track', net }, it)) || 0
@@ -249,7 +290,8 @@ export function buildLayout(board: Board, exclude: Set<number> = new Set(), rule
     let s = obs.get(key)
     if (s) return s
     const byGap = new Map<number, Ring[]>()
-    for (const it of items) {
+    for (const it of items()) {
+      pulse()
       if (own(net, it.net)) continue
       if (!copperLayersOf(it, cu).includes(layer)) continue
       const gap =
@@ -262,7 +304,7 @@ export function buildLayout(board: Board, exclude: Set<number> = new Set(), rule
     }
     const parts = [...byGap.entries()].sort((a, b) => a[0] - b[0]).map(([gap, rs]) => polysToRings(offset(rs, gap + width / 2)))
     const grown = parts.length > 1 ? polysToRings(union(parts.flat())) : (parts[0] ?? [])
-    const holeRings = (holes ??= holesOf(items))
+    const holeRings = (holes ??= holesOf(items()))
       .filter(h => (h.it.kind === 'pad' && h.it.type === 'npth') || !own(net, h.it.net))
       .map(h => circleRing(h.at[0], h.at[1], h.r + store.holeGap(h.it) + width / 2))
     const k = via ? null : keptOf(layer, width, net)
@@ -281,34 +323,15 @@ export function buildLayout(board: Board, exclude: Set<number> = new Set(), rule
     return s
   }
 
-  // exact tests, items in 1 mm buckets
+  // exact tests, items from the store's buckets
   const maxGap = Math.max(r.clearance, maxClearance(board), r.holeClearance, maxHoleClearance(board))
-  let buckets: Map<number, Item[]> | undefined
   const near = (x0: number, y0: number, x1: number, y1: number, pad: number): Item[] => {
-    if (!buckets) {
-      buckets = new Map()
-      for (const it of items) {
-        const b = store.rec(it).box
-        if (!b) continue
-        for (let i = Math.floor(b[0]); i <= Math.floor(b[2]); i++)
-          for (let j = Math.floor(b[1]); j <= Math.floor(b[3]); j++) {
-            const k = (i + 32768) * 65536 + (j + 32768)
-            let l = buckets.get(k)
-            if (!l) buckets.set(k, (l = []))
-            l.push(it)
-          }
-      }
+    const out = world.near([x0, y0, x1, y1], pad).filter(seen)
+    for (const it of changes().went) {
+      if (left(it)) continue
+      const b = store.rec(it).box
+      if (b && b[0] - pad <= x1 && x0 <= b[2] + pad && b[1] - pad <= y1 && y0 <= b[3] + pad) out.push(it)
     }
-    const out: Item[] = [],
-      seen = new Set<Item>()
-    for (let i = Math.floor(x0 - pad); i <= Math.floor(x1 + pad); i++)
-      for (let j = Math.floor(y0 - pad); j <= Math.floor(y1 + pad); j++)
-        for (const it of buckets.get((i + 32768) * 65536 + (j + 32768)) ?? []) {
-          if (seen.has(it)) continue
-          seen.add(it)
-          const b = store.rec(it).box!
-          if (b[0] - pad <= x1 && x0 <= b[2] + pad && b[1] - pad <= y1 && y0 <= b[3] + pad) out.push(it)
-        }
     return out
   }
   const setsNear = (layer: string, net: string | undefined, w: number, x0: number, y0: number, x1: number, y1: number): RingSet[] => {
@@ -345,17 +368,28 @@ export function buildLayout(board: Board, exclude: Set<number> = new Set(), rule
     return !!k && segHits(k, a, b)
   }
 
-  // the store's counts less what this layout leaves out and the routed net's copper
+  // the store's counts less what came since, what this layout leaves out and the routed net's copper, plus what went since
+  const leftNow = (): Item[] =>
+    [...exclude, ...softIds].flatMap(id => {
+      const it = world.get(id)
+      return it && world.bornOf(it) <= now ? [it] : []
+    })
   const trackGrid = (g: Grid, layer: string, net: string | undefined, w: number, via: boolean): Uint8Array => {
     const cn = store.classGap(net),
       sn = store.scopeOf(net) ? net : undefined
     const a = store.trackCounts(g, layer, w, cn, net).slice()
-    for (const [it, rec] of store.items) {
-      if (!snap.has(it) || left(it)) store.trackFill(g, it, rec, layer, w, cn, a, -1, true, true, sn)
-      else if (own(net, it.net)) store.trackFill(g, it, rec, layer, w, cn, a, -1, true, !isNpth(it), sn)
+    const { came, went } = changes()
+    for (const it of [...came, ...new Set(leftNow())]) {
+      pulse()
+      store.trackFill(g, it, store.rec(it), layer, w, cn, a, -1, true, true, sn)
     }
-    for (const it of items)
-      if (!store.has(it)) {
+    for (const it of ownNow(net)) {
+      pulse()
+      store.trackFill(g, it, store.rec(it), layer, w, cn, a, -1, true, !isNpth(it), sn)
+    }
+    for (const it of went)
+      if (!left(it)) {
+        pulse()
         const o = own(net, it.net)
         store.trackFill(g, it, store.rec(it), layer, w, cn, a, 1, !o, !o || isNpth(it), sn)
       }
@@ -371,14 +405,26 @@ export function buildLayout(board: Board, exclude: Set<number> = new Set(), rule
   const viaGrid = (g: Grid, layer: string, net: string | undefined, size: number, drill: number, viaInPad: boolean): Uint8Array => {
     // minHoleToHole from every hole of any net but the soft legs'
     const a = store.holeCounts(g, drill).slice()
-    for (const [it, rec] of store.items) if (rec.hole && (!snap.has(it) || softIds.has(it.id))) store.holeFill(g, rec, drill, a, -1)
-    for (const it of snap) if (!softIds.has(it.id) && !store.has(it)) store.holeFill(g, store.rec(it), drill, a, 1)
+    const { came, went } = changes()
+    const softNow = [...softIds].flatMap(id => {
+      const it = world.get(id)
+      return it && world.bornOf(it) <= now ? [it] : []
+    })
+    for (const it of [...came, ...softNow]) {
+      pulse()
+      const rec = store.rec(it)
+      if (rec.hole) store.holeFill(g, rec, drill, a, -1)
+    }
+    for (const it of went) if (!softIds.has(it.id)) store.holeFill(g, store.rec(it), drill, a, 1)
     const n = g.nx * g.ny,
       out = new Uint8Array(n)
     for (let i = 0; i < n; i++) if (a[i]) out[i] = 1
     if (!viaInPad && net !== undefined)
-      for (const it of items)
-        if (it.kind === 'pad' && it.type === 'smd' && own(net, it.net) && it.layers.includes(layer)) fill(g, ringSet(polysToRings(offset(solidRings(it, layer), size / 2))), out, 1)
+      for (const it of ownNow(net))
+        if (it.kind === 'pad' && it.type === 'smd' && it.layers.includes(layer)) {
+          pulse()
+          fill(g, ringSet(polysToRings(offset(solidRings(it, layer), size / 2))), out, 1)
+        }
     const k = store.mask(`vk\u0000${layer}\u0000${size}\u0000${exemptOf(net)}`, g, () => viaKeptSet(keepouts, layer, size, net))
     if (k) for (let i = 0; i < n; i++) if (k[i]) out[i] = 1
     return out
@@ -396,7 +442,7 @@ export function buildLayout(board: Board, exclude: Set<number> = new Set(), rule
       return !blockedAt(layer, net, width, x, y)
     },
   }
-  const inn: LayoutInternals = { board, rules: r, obstacleSet, allowedSet, clearanceTo, blockedAt, segBlocked, trackGrid, viaGrid }
+  const inn: LayoutInternals = { world, rules: r, obstacleSet, allowedSet, clearanceTo, blockedAt, segBlocked, trackGrid, viaGrid }
   internals.set(layout, inn)
   return layout
 }
@@ -437,6 +483,7 @@ const rasterCache = new WeakMap<RouteContext, Map<string, Uint8Array>>()
 
 /** 1 where a track of this width and net may not have its centre line. */
 function blockedGrid(layout: RouteContext, g: Grid, layer: string, net: string | undefined, width: number, via = false): Uint8Array {
+  pulse()
   let m = rasterCache.get(layout)
   if (!m) {
     m = new Map()
@@ -544,6 +591,7 @@ export const maze: RouteFn = (req, layout) => {
     const a = new Uint16Array(N)
     let any = false
     for (const it of its) {
+      pulse()
       const s = tm.grow(it, layer, d)
       if (s) {
         fillAdd(g, s, a, 1)
@@ -627,7 +675,7 @@ export const maze: RouteFn = (req, layout) => {
     const layer = layers[l],
       al = q.allowedSet(tw)
     if (!q.blockedAt(layer, req.net, tw, e.x, e.y) && (!al || inside(al, e.x, e.y))) return true
-    return !inn || onOwnCopper(inn.board, req, e.x, e.y, layer)
+    return !inn || onOwnCopper(inn.world, req, e.x, e.y, layer)
   }
   const isStart = new Uint8Array(L),
     isEnd = new Uint8Array(L)
@@ -764,7 +812,9 @@ export const maze: RouteFn = (req, layout) => {
       for (const c of m.keys()) seed(l, c)
     })
   let found = -1
+  let steps = 0
   while (hn) {
+    if ((++steps & 255) === 0) pulse()
     const cur = pop()
     if (closed[cur]) continue
     closed[cur] = 1
@@ -970,12 +1020,10 @@ function snap(its: Item[], layer: string, p: Pt, next: Pt, w: number, free: (a: 
   return free(q, next) ? q : null
 }
 
-function onOwnCopper(board: Board, req: RouteRequest, x: number, y: number, layer: string): boolean {
-  const cu = copperLayers(board.copper)
-  for (const it of board.items) {
-    if (it.net === undefined || (it.net !== req.net && it.net !== req.pair?.partner)) continue
+function onOwnCopper(world: ObstacleWorld, req: RouteRequest, x: number, y: number, layer: string): boolean {
+  for (const it of [...world.net(req.net), ...(req.pair && req.pair.partner !== req.net ? world.net(req.pair.partner) : [])]) {
     if (it.kind !== 'pad' && it.kind !== 'via' && it.kind !== 'track') continue
-    if (!copperLayersOf(it, cu).includes(layer)) continue
+    if (!copperLayersOf(it, world.cu).includes(layer)) continue
     if (inside(ringSet(solidRings(it, layer)), x, y)) return true
   }
   return false
@@ -1185,7 +1233,7 @@ export function getRouter(spec: 'maze' | 'straight' | RouteFn | null | undefined
   throw new CompileError(`unknown routing algorithm ${JSON.stringify(spec)} (use 'maze', 'straight' or a function)`)
 }
 
-function padOf(board: Board, pos: Pos): Pad | null {
+export function padOf(board: Board, pos: RouteEnd): Pad | null {
   if (isPinRef(pos)) {
     const st = partOf(pos.part)
     const ref = st && PART_REFS.get(board)?.get(st)
@@ -1198,17 +1246,87 @@ function padOf(board: Board, pos: Pos): Pad | null {
   const pads = board.items.filter((i): i is Pad => i.kind === 'pad' && i.ref === ref)
   return pads.find(p => p.num === num) ?? pads.find(p => p.name === num) ?? null
 }
-const posLabel = (pos: Pos, pad: Pad | null) =>
-  pad ? `${pad.ref}.${isPinRef(pos) ? pos.pin : pad.num}` : typeof pos === 'string' ? JSON.stringify(pos) : JSON.stringify(isPinRef(pos) ? pos.pin : pos)
+const posLabel = (board: Board, pos: RouteEnd, pad: Pad | null) =>
+  pad
+    ? `${pad.ref}/${isPinRef(pos) ? pos.pin : pad.num}`
+    : isRoutePoint(pos)
+      ? (pointRef(board, pos) ?? 'a route point')
+      : typeof pos === 'string'
+        ? JSON.stringify(pos)
+        : JSON.stringify(isPinRef(pos) ? pos.pin : pos)
 
 /** The board's parameters merged with the job's, mm. */
 type ResolvedParams = Omit<AutoRouteParams, 'via' | 'avoid'> & JobParams
+
+/** `route(NET)` as joining legs: every other pad of the net toward the root, the first pad unless `.root()` names one. */
+function wholeNet(board: Board, job: AutoRouteJob): AutoRouteJob[] {
+  const seen = new Set<string>()
+  const pads = board.items.filter((i): i is Pad => {
+    if (i.kind !== 'pad' || i.net !== job.net || !i.layers.some(isCopper)) return false
+    const k = `${i.ref ?? i.id}\u0000${i.num}`
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+  const root = job.root !== undefined ? padOf(board, job.root) : pads[0]
+  if (job.root !== undefined && (!root || root.net !== job.net))
+    throw new CompileError(
+      `route(${job.net}).root(): ${root ? `${root.ref}/${root.num} is on ${root.net ?? 'no net'}` : 'the root is no pad of the board'}, not on ${job.net}`,
+      job.src,
+    )
+  const end = (p: Pad): RouteEnd => (p.ref !== undefined ? (`${p.ref}.${p.num}` as RouteEnd) : { at: p.at })
+  const { whole: _, root: _r, ...rest } = job
+  return pads
+    .filter(p => p !== root && !(p.ref !== undefined && p.ref === root?.ref && p.num === root.num))
+    .map((p, i) => ({ ...rest, from: end(p), to: end(root!), infer: true, ...(i ? { sub: true } : {}) }))
+}
+
+/** The pad of `net` nearest `at` that is not `own`, for a route that ends on a net. */
+function nearestPad(board: Board, net: string, at: Pt, own: Pad | null): Pad | null {
+  let best: Pad | null = null,
+    bd = Infinity
+  for (const it of board.items) {
+    if (it.kind !== 'pad' || it.net !== net || !it.layers.some(isCopper) || (own && it.ref === own.ref && it.num === own.num)) continue
+    const d = Math.hypot(it.at[0] - at[0], it.at[1] - at[1])
+    if (d < bd) {
+      bd = d
+      best = it
+    }
+  }
+  return best
+}
+
+/** A chain arc from `p0` to `p1` turning through `angle` degrees, counter-clockwise on the y-down screen when positive: its chord points after p0 and its primitive. */
+function chainArc(p0: Pt, p1: Pt, angle: number): { pts: Pt[]; prim: Extract<Prim, { kind: 'arc' }> } | null {
+  const vx = p1[0] - p0[0],
+    vy = p1[1] - p0[1],
+    chord = Math.hypot(vx, vy)
+  if (chord < 1e-9) return null
+  const t = (angle * Math.PI) / 180
+  // in y-up coordinates the centre of a counter-clockwise arc lies left of the chord
+  const d = chord / 2 / Math.tan(t / 2)
+  const c: Pt = [(p0[0] + p1[0]) / 2 + (vy / chord) * d, (p0[1] + p1[1]) / 2 - (vx / chord) * d]
+  const r = Math.hypot(p0[0] - c[0], p0[1] - c[1])
+  const n = Math.max(2, Math.ceil(Math.abs(t) / (2 * Math.acos(Math.max(0, 1 - ARC_TOL / r)))))
+  const a0 = Math.atan2(-(p0[1] - c[1]), p0[0] - c[0])
+  const pts: Pt[] = []
+  for (let i = 1; i < n; i++) {
+    const a = a0 + (t * i) / n
+    pts.push([c[0] + r * Math.cos(a), c[1] - r * Math.sin(a)])
+  }
+  pts.push([p1[0], p1[1]])
+  return { pts, prim: { kind: 'arc', from: [p0[0], p0[1]], to: [p1[0], p1[1]], center: c, cw: t < 0 } }
+}
+/** mm of chord error on a chain arc, as on a path arc */
+const ARC_TOL = 0.005
 
 /** One automatic leg; `own` is the src its copper carries, the X or XZ command's range when known. */
 interface Leg {
   from: ResolvedPos
   to: ResolvedPos
   own?: Origin
+  /** the chain's width where the leg is, mm */
+  width: number
 }
 type Origin = { src?: Src; chain?: Src[] }
 
@@ -1249,6 +1367,8 @@ export interface AutorouteOptions {
   cache?: RouteCache | null
   /** see CompileOptions.progress */
   progress?: (p: RouteProgress) => void
+  /** refs of parts not placed yet, the followers, which a route's solver may not read */
+  hidden?: string[]
 }
 /** The router's first pass over every leg, then each negotiation `round` over the legs it routes again. */
 export interface RouteProgress {
@@ -1256,76 +1376,28 @@ export interface RouteProgress {
   legs: number
   round?: number
 }
-/** `loops`: nets with a `.loop()` route; `notes`: the info findings `trunk-narrow` */
+/** What the tune stage takes from the router, data but the cache it commits: the routes to tune, the rules, and per routing the next free id, which a pair laid out anew takes its new ids from. */
+export interface Tuning {
+  routes: TuneRoute[]
+  rules: Rules
+  cache: RouteCache | null
+  next: number[]
+}
+/** `loops`: nets with a `.loop()` route; `notes`: the info findings `trunk-narrow`; `routes` set by the tune stage */
 export interface AutorouteOutcome {
   failures: RouteFailure[]
   report: RoutingReport
   added: Item[]
   pairs?: PairInfo[]
   routes?: RouteRecord[]
+  tuning?: Tuning
   loops?: string[]
   notes?: DrcMarker[]
 }
 
-const r6 = (v: number) => Math.round(v * 1e6) / 1e6
 const r4 = (v: number) => Math.round(v * 1e4) / 1e4
 type Box = [number, number, number, number]
 const boxHit = (a: Box, b: Box) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3]
-
-/** An item's box with copper and holes, and a signature of all the router sees of it. */
-const sigCache = new WeakMap<Item, { box: Box; sig: string }>()
-function itemSig(it: Item, cu: string[]): { box: Box; sig: string } | null {
-  if (it.kind === 'zone') return null
-  const hit = sigCache.get(it)
-  if (hit) return hit
-  const ls = copperLayersOf(it, cu)
-  const drilled = it.kind === 'pad' && !!it.drill
-  if (!ls.length && !drilled) return null
-  let pts: Pt[] = [],
-    grow = 0,
-    geo: unknown
-  switch (it.kind) {
-    case 'pad':
-      pts = it.poly
-      grow = it.drill ? Math.max(...it.drill) / 2 : 0
-      geo = [
-        it.at.map(r4),
-        it.poly.map(q => q.map(r4)),
-        it.drill,
-        it.type,
-        it.layers,
-        ...(it.clearance !== undefined || it.holeClearance !== undefined ? [[it.clearance ?? null, it.holeClearance ?? null]] : []),
-        ...(it.clearanceTo ? [it.clearanceTo] : []),
-      ]
-      if (it.drill) pts = [...pts, it.at]
-      break
-    case 'via':
-      pts = [it.at]
-      grow = it.size / 2
-      geo = [it.at.map(r4), it.size, it.drill, it.layers]
-      break
-    case 'track':
-      pts = it.pts
-      grow = it.width / 2
-      geo = [it.pts.map(q => q.map(r4)), it.width]
-      break
-    case 'graphic':
-      pts = it.paths.flat()
-      grow = it.width / 2
-      geo = [it.paths.map(r => r.map(q => q.map(r4))), it.width, it.fill, it.closed]
-      break
-    case 'text':
-      pts = it.polys ? it.polys.flatMap(q => q.outer) : it.strokes.flat()
-      grow = it.thickness / 2
-      geo = it.polys ? it.polys.map(q => [q.outer, ...q.holes].map(r => r.map(q => q.map(r4)))) : [it.strokes.map(r => r.map(q => q.map(r4))), it.thickness]
-      break
-  }
-  if (!pts.length) return null
-  const b = boxOf(pts)
-  const out = { box: [b[0] - grow, b[1] - grow, b[2] + grow, b[3] + grow] as Box, sig: JSON.stringify([it.kind, it.layer, it.net ?? '', ls, geo]) }
-  sigCache.set(it, out)
-  return out
-}
 
 function segDist(a: Pt, b: Pt, c: Pt, d: Pt): number {
   if (segCross(a, b, c, d)) return 0
@@ -1388,10 +1460,10 @@ function itemsClash(x: Item, y: Item, gap: number, rules: Rules, cu: string[]): 
 }
 
 /** Up to five items of other nets nearest the line from a to b on the layers tried, nearest first. */
-function blockersOf(board: Board, nets: Set<string>, a: Pt, b: Pt, layers: string[], exclude: Set<number>): number[] {
-  const cu = copperLayers(board.copper)
+function blockersOf(world: ObstacleWorld, nets: Set<string>, a: Pt, b: Pt, layers: string[], exclude: Set<number>): number[] {
+  const cu = world.cu
   const scored: [number, number][] = []
-  for (const it of board.items) {
+  for (const it of world.items()) {
     if (exclude.has(it.id) || it.kind === 'zone' || it.id < 0) continue
     if (it.net !== undefined && nets.has(it.net)) continue
     const rings = copperLayersOf(it, cu)
@@ -1415,9 +1487,9 @@ function blockersOf(board: Board, nets: Set<string>, a: Pt, b: Pt, layers: strin
     .map(x => x[1])
 }
 
-function nearestCopper(board: Board, nets: Set<string>, p: Pt, cu: string[]): { it: Item; d: number } | null {
+function nearestCopper(items: readonly Item[], nets: Set<string>, p: Pt, cu: string[]): { it: Item; d: number } | null {
   let best: { it: Item; d: number } | null = null
-  for (const it of board.items) {
+  for (const it of items) {
     if (it.kind === 'zone' || it.id < 0 || (it.net !== undefined && nets.has(it.net))) continue
     const rings = copperLayersOf(it, cu).flatMap(l => solidRings(it, l))
     if ((it.kind === 'pad' && it.drill) || it.kind === 'via') rings.push(circleRing(it.at[0], it.at[1], it.kind === 'via' ? it.drill / 2 : Math.max(...it.drill!) / 2))
@@ -1434,70 +1506,116 @@ function nearestCopper(board: Board, nets: Set<string>, p: Pt, cu: string[]): { 
   return best
 }
 
-/** Places every route's manual commands in document order, then routes the automatic legs by priority and declaration order. */
-export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRouteParams = BASE_AUTOROUTE, opts: AutorouteOptions = {}): AutorouteOutcome {
-  const report: RoutingReport = { legs: 0, routed: 0, failed: 0, cached: 0, locked: 0, ripped: 0 }
+/** A hold's copper of one leg as the router gives a result. */
+const resultOf = (h: Hold): RouteResult => ({
+  tracks: h.tracks.map(t => ({ layer: t.layer, pts: t.pts.map(([x, y]) => [x, y] as Pt) })),
+  vias: h.vias.map(v => ({ x: v.at[0], y: v.at[1], layers: [v.span[0], v.span[1]] })),
+})
+
+/** A leg's result as a hold keeps it, with the width and via the route gave it. */
+const holdOf = (r: RouteResult, width: number, via: { drill: number; size: number }): Hold => ({
+  tracks: r.tracks.map(t => ({ layer: t.layer, pts: t.pts.map(([x, y]) => [x, y] as Pt), width })),
+  vias: r.vias.map(v => ({ at: [v.x, v.y], span: [v.layers[0], v.layers[1]], drill: via.drill, size: via.size })),
+})
+
+/** The held results and rerouted legs of one run, its legs numbered from where the route's earlier runs left off. */
+function patchedLegs(job: AutoRouteJob, base: Map<string, number>, n: number): { held?: (RouteResult | null)[]; fresh?: Set<number> } {
+  if (job.route === undefined) return {}
+  const from = base.get(job.route) ?? 0
+  base.set(job.route, from + n)
+  const out: { held?: (RouteResult | null)[]; fresh?: Set<number> } = {}
+  if (job.hold) out.held = Array.from({ length: n }, (_, k) => (job.hold![from + k] ? resultOf(job.hold![from + k]!) : null))
+  const fresh = (job.reroute ?? []).map(k => k - 1 - from).filter(k => k >= 0 && k < n)
+  if (fresh.length) out.fresh = new Set(fresh)
+  return out
+}
+
+/** One route's job as planned: its parameters, ends and automatic legs; `join`: which end of its one leg may join the net's copper; `direct`: the leg reaches its end pads only */
+export interface RouteRun {
+  job: AutoRouteJob
+  P: ResolvedParams
+  net?: string
+  width: number
+  layer: string
+  via: { drill: number; size: number }
+  legs: Leg[]
+  /** the start, then where each chain call ends */
+  pts: Pt[]
+  fail: (msg: string) => never
+  /** a hold patch's copper by leg, placed first in place of routing the leg */
+  held?: (RouteResult | null)[]
+  /** the legs a reroute patch names, never taken from the route memo */
+  fresh?: Set<number>
+  pair?: PairRun
+  join?: [boolean, boolean]
+  direct?: boolean
+}
+
+/** What the manual copper stage leaves the router: every route's run, the manual copper it laid on the board, the failures of pairs no path can carry. */
+export interface RoutePlan {
+  jobs: number
+  runs: RouteRun[]
+  manual: Item[]
+  /** the ids of the pairs' centre lines, on the board as their copper until the router lays the pairs out */
+  centres: Set<number>
+  failures: RouteFailure[]
+  report: RoutingReport
+  rules: Rules
+  /** the first id after the plan's */
+  nextId: number
+}
+
+/** Layouts built on first use. */
+const lazyFree = (mk: () => RouteContext): IsFree => {
+  let l: RouteContext | undefined
+  return (ly, x, y, n, w) => (l ??= mk()).isFree(ly, x, y, n, w)
+}
+const pairFreesOf =
+  (world: ObstacleWorld, padFree: IsFree) =>
+  (netP: string, netN: string, exclude: Set<number>): PairContext => ({
+    free: lazyFree(() => buildLayout(world, exclude)),
+    centreFree: lazyFree(() => buildLayout(world, exclude, [], { net: netP, partner: netN })),
+    padFree,
+  })
+/** A free test of the pads only, as necks and pair fans keep clear of them. */
+export const padFreeOf = (world: ObstacleWorld): IsFree => lazyFree(() => buildLayout(world, new Set(world.items().flatMap(i => (i.kind !== 'pad' ? [i.id] : [])))))
+
+/** Every route's parameters, ends, nets and manual commands in document order, its manual copper in the world as it goes, since each route's corners, necks and pair stubs keep clear of the copper before it; the board's items written once at the end. */
+export function planRoutes(board: Board, jobs: AutoRouteJob[], defaults: AutoRouteParams = BASE_AUTOROUTE, opts: Pick<AutorouteOptions, 'rules' | 'strict'> = {}): RoutePlan {
+  const report: RoutingReport = { legs: 0, routed: 0, failed: 0, cached: 0, held: 0, ripped: 0 }
   const failures: RouteFailure[] = []
   const added: Item[] = []
-  if (!jobs.length) return { failures, report, added }
   const rules = opts.rules ?? board.rules
-  const cache = opts.cache ?? null
-  const cu = copperLayers(board.copper)
-  const outerLayers = [cu[0], cu[cu.length - 1]]
+  const world = new ObstacleWorld(board, rules)
+  const cu = world.cu
   let nextId = board.items.reduce((m, it) => Math.max(m, it.id), 0) + 1
   const order = (l: string) => cu.indexOf(l)
   const byStack = (ls: string[]) => [...new Set(ls)].sort((a, b) => order(a) - order(b))
   const push = (it: Item) => {
-    board.items.push(it)
+    world.add([immutable(it)])
     added.push(it)
   }
-  // a net's class clearance moves the obstacles of every leg, so it is in every key
-  const classed = board.classes
-    ? (board.schematic?.nets ?? []).flatMap(n => {
-        const c = classOf(board, n.name)?.clearance
-        return c !== undefined && c > rules.clearance ? [[n.name, c]] : []
-      })
-    : []
-  // rules that only DRC and zone fill read stay out of the key
-  const boardKey = JSON.stringify([
-    ROUTER_VERSION,
-    { ...rules, edge: undefined, maskWeb: undefined, silkMinHeight: undefined, holeClearanceBy: undefined, minHoleToHoleBy: undefined },
-    board.copper,
-    hash(JSON.stringify(board.outline.map(r => r.map(q => q.map(r4))))),
-    ...(classed.length ? [classed] : []),
-  ])
-
-  /** `join`: which end of its one leg may join the net's copper; `direct`: the leg reaches its end pads only */
-  interface Run {
-    job: AutoRouteJob
-    P: ResolvedParams
-    net?: string
-    width: number
-    layer: string
-    via: { drill: number; size: number }
-    legs: Leg[] | null
-    fail: (msg: string) => never
-    lockKey?: string
-    pair?: PairRun
-    join?: [boolean, boolean]
-    direct?: boolean
+  /** `it` changed, in its place in the world and in `added`. */
+  const swap = <T extends Item>(it: T, change: Partial<T>): T => {
+    const next = changed(it, change)
+    world.replace(next)
+    const k = added.indexOf(it)
+    if (k >= 0) added[k] = next
+    return next
   }
-  const runs: Run[] = []
+  const runs: RouteRun[] = []
   let pairCount = 0
-  // layouts built on first use; necks see the pads only
-  const lazyFree = (mk: () => RouteContext): IsFree => {
-    let l: RouteContext | undefined
-    return (ly, x, y, n, w) => (l ??= mk()).isFree(ly, x, y, n, w)
-  }
-  const pairFrees = (netP: string, netN: string, exclude: Set<number>): PairContext => ({
-    free: lazyFree(() => buildLayout(board, exclude, rules)),
-    centreFree: lazyFree(() => buildLayout(board, exclude, rules, [], { net: netP, partner: netN })),
-    padFree: padFree(),
-  })
-  let padLayout: IsFree | undefined
-  const padFree = (): IsFree => (padLayout ??= lazyFree(() => buildLayout(board, new Set(board.items.filter(i => i.kind !== 'pad').map(i => i.id)), rules)))
+  // necks see the pads only
+  const padLayout = padFreeOf(world)
+  const padFree = () => padLayout
+  const pairFrees = pairFreesOf(world, padLayout)
+  // where each branch starts: the trunk's cursor, layer and net at its `B` step
+  const forks = new Map<number, { x: number; y: number; layer: string; net?: string }>()
+  // the automatic legs of each route before this run, so a patch's leg numbers count over the whole route
+  const legBase = new Map<string, number>()
   // pass 1: parameters, ends, nets and manual commands, in document order
-  for (const job of jobs) {
+  for (const job of byPoints(jobs).flatMap(j => (j.whole ? wholeNet(board, j) : [j]))) {
+    pulse()
     const fail = (msg: string): never => {
       throw new CompileError(msg, job.src)
     }
@@ -1520,23 +1638,23 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       avoid: defaults.avoid?.map((a): JobAvoid =>
         a && typeof a === 'object' && !Array.isArray(a) && !isPinRef(a) && 'w' in a
           ? { ring: rectRing(mm(a.x), mm(a.y), mm(a.w), mm(a.h)), ...(a.layer ? { layer: name(a.layer) } : {}) }
-          : { pos: a as Pos },
+          : { pos: a as RouteEnd },
       ),
     }
     const P = mergeAutoroute(board0, job.params)
     let via = { drill: P.via?.drill ?? defaultVia(rules).drill, size: P.via?.size ?? defaultVia(rules).size }
-    if (job.from === undefined || job.to === undefined) {
-      runs.push({ job, P, net: job.net, width: job.width ?? rules.minTrackWidth, layer: job.layer ?? 'F.Cu', via, legs: null, fail })
-      continue
-    }
-    const padA = padOf(board, job.from),
-      padB = padOf(board, job.to)
-    let net = job.net
-    if (job.infer) {
-      const la = posLabel(job.from, padA),
-        lb = posLabel(job.to, padB)
-      if (padA?.net && padB?.net && padA.net !== padB.net) fail(`route from ${la} to ${lb} joins two nets, ${padA.net} and ${padB.net}`)
-      const inferred = padA?.net ?? padB?.net
+    const fork = job.fork !== undefined ? forks.get(job.fork) : undefined
+    if (job.fork !== undefined && !fork) fail('a branch starts where its trunk forks, but the trunk never reached the fork')
+    const padA = job.from !== undefined ? padOf(board, job.from) : null
+    let padB = job.to !== undefined ? padOf(board, job.to) : null
+    let net = job.net ?? fork?.net
+    const la = job.from !== undefined ? posLabel(board, job.from, padA) : 'its fork',
+      lb = job.to !== undefined ? posLabel(board, job.to, padB) : job.toNet !== undefined ? `net ${job.toNet}` : 'its end'
+    if (job.infer && !job.netless) {
+      const nb = job.toNet ?? padB?.net
+      if (padA?.net && nb && padA.net !== nb) fail(`route from ${la} to ${lb} joins two nets, ${padA.net} and ${nb}`)
+      if (fork?.net && nb && fork.net !== nb) fail(`the branch to ${lb} is on ${nb}, but its trunk is on ${fork.net}`)
+      const inferred = padA?.net ?? nb
       if (net !== undefined && inferred !== undefined && net !== inferred) fail(`route from ${la} to ${lb} is given the net ${net}, but ${padA?.net ? la : lb} is on ${inferred}`)
       net ??= inferred
       if (net === undefined)
@@ -1549,13 +1667,21 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
     let width = job.width ?? rules.minTrackWidth
     let start: ResolvedPos
     try {
-      start = resolvePos(board, job.from, job.layer ?? 'F.Cu')
+      start = fork ? { x: fork.x, y: fork.y, layer: fork.layer } : resolvePos(board, job.from!, job.layer ?? 'F.Cu')
     } catch (e) {
       return fail((e as Error).message)
     }
+    // the cursor in board mm, which a net end is nearest to
+    let at: Pt = [start.x, start.y]
     let endAt = (layer: string): ResolvedPos => {
+      if (job.toNet !== undefined) {
+        padB = nearestPad(board, job.toNet, at, padA)
+        if (!padB) return fail(`route from ${la} joins net ${job.toNet}, which has no other pad`)
+        return padEnd(padB, layer)
+      }
+      if (job.to === undefined) return fail(`route from ${la} has no end to run to`)
       try {
-        return resolvePos(board, job.to!, layer)
+        return resolvePos(board, job.to, layer)
       } catch (e) {
         return fail((e as Error).message)
       }
@@ -1626,6 +1752,8 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       width = 2 * w + g
       via = { drill: spacing + via.drill, size: spacing + via.size }
     }
+    // the width the chain starts with; `.width()` in the chain changes it from there on
+    const runWidth = width
     const whole: Origin = { src: job.src, ...(job.chain ? { chain: job.chain } : {}) }
     // a step's own range with the route call innermost in the chain, else the call's range
     const own = (st: RouteStep): Origin => (st.src ? { src: st.src, chain: [...(job.chain ?? []), ...(job.src ? [job.src] : [])] } : whole)
@@ -1636,18 +1764,22 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
     // the path is walked in the frame it was written in
     const m = job.m ?? IDENTITY,
       inv = invert(m)
+    // a pair has moved its start to the midpoint of its pads
+    at = [start.x, start.y]
     let cur: Pt = apply(inv, [start.x, start.y]),
-      at: Pt = [start.x, start.y],
       layer = start.layer
     let line: Pt[] = [at]
-    // one track per manual command, null between them at a via or leg, for .corner()
+    const pts: Pt[] = [[nm(at[0]), nm(at[1])]]
+    const ptLayers = [layer]
+    // one track per manual command, null between them at a via, an arc or a leg, for .corner()
     const manual: (Track | null)[] = []
-    const flush = (st: RouteStep) => {
+    const flush = (st: RouteStep, prims?: Prim[]) => {
       if (line.length >= 2) {
         const id = nextId++
-        const t = { kind: 'track', id, layer, ...item(st), pts: line, width } as Track
+        const t = { kind: 'track', id, layer, ...item(st), pts: line, width, ...(prims ? { prims } : {}) } as Track
         push(t)
-        manual.push(t)
+        if (prims) manual.push(null)
+        else manual.push(t)
         if (pr) {
           pr.pieces.push({ kind: 'pts', layer, pts: line })
           pr.ids.push(id)
@@ -1677,22 +1809,40 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
           line.push(go([cur[0], st.rel ? cur[1] + st.y : st.y]))
           flush(st)
           break
+        case 'A': {
+          if (pr) fail('route chain: a differential pair takes no arc; its corners round with .corner()')
+          const p0 = cur,
+            arc = chainArc(p0, st.rel ? [cur[0] + st.x, cur[1] + st.y] : [st.x, st.y], st.angle)
+          if (!arc) fail(`route chain: the arc from (${fmt(p0[0])}, ${fmt(p0[1])}) ends where it starts`)
+          for (const q of arc!.pts) line.push(apply(m, q))
+          go(arc!.pts[arc!.pts.length - 1])
+          flush(st, applyPrims(m, [arc!.prim]))
+          break
+        }
+        case 'W':
+          if (pr) fail('route chain: a differential pair has one width; give it before the chain or with .impedance()')
+          width = st.width
+          break
+        case 'B':
+          forks.set(st.id, { x: at[0], y: at[1], layer, ...(net !== undefined ? { net } : {}) })
+          manual.push(null)
+          break
         case 'X': {
           const f0 = from()
           go(st.rel ? [cur[0] + st.x, cur[1] + st.y] : [st.x, st.y])
           pr?.pieces.push({ kind: 'leg', k: legs.length })
           manual.push(null)
-          legs.push({ from: f0, to: { x: at[0], y: at[1], layer }, own: own(st) })
+          legs.push({ from: f0, to: { x: at[0], y: at[1], layer }, own: own(st), width })
           line = [at]
           break
         }
         case 'U': {
           const to = name(st.layer)
-          if (to === layer) fail(`route path: U ${st.layer} at (${fmt(at[0])}, ${fmt(at[1])}), the route is on ${layer} already`)
+          if (to === layer) fail(`route chain: .via('${st.layer}') at (${fmt(at[0])}, ${fmt(at[1])}), the route is on ${layer} already`)
           if (st.cross && !pr) fail('route chain: .cross() is for a differential pair')
           const pair = [layer, to].sort((a, b) => order(a) - order(b)) as [string, string]
           const id = nextId++
-          push({ kind: 'via', id, layer: pair[0], ...item(st), at: [at[0], at[1]], drill: via.drill, size: via.size, layers: pair } as Via)
+          push({ kind: 'via', id, layer: pair[0], ...item(st), at: [at[0], at[1]], drill: st.drill ?? via.drill, size: st.size ?? via.size, layers: pair } as Via)
           manual.push(null)
           if (pr) {
             pr.pieces.push({ kind: 'via', layer: to, ...(st.cross ? { cross: true } : {}) })
@@ -1703,35 +1853,28 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
         }
         case 'Z': {
           const end = endAt(layer)
-          if (end.layer !== layer) fail(`route path: Z draws on ${layer}, but ${posLabel(job.to, padB)} is on ${end.layer}; change layer with @<layer> first, or end with XZ`)
-          line.push([end.x, end.y])
+          if (end.layer !== layer && !end.layers?.includes(layer))
+            fail(`route chain: .Z() draws on ${layer}, but ${lb} is on ${end.layer}; change layer with .via('${end.layer}') first, or end with .X()`)
+          // a chain already within 1 µm of the end, as after an arc to it, draws nothing more
+          if (Math.hypot(end.x - at[0], end.y - at[1]) > 1e-3) line.push([end.x, end.y])
           at = [end.x, end.y]
           flush(st)
           break
         }
         case 'XZ': {
           pr?.pieces.push({ kind: 'leg', k: legs.length })
-          legs.push({ from: from(), to: endAt(layer), own: own(st) })
+          legs.push({ from: from(), to: endAt(layer), own: own(st), width })
           break
         }
       }
+      const end = st.op === 'XZ' ? [legs[legs.length - 1].to.x, legs[legs.length - 1].to.y] : at
+      pts.push([nm(end[0]), nm(end[1])])
+      ptLayers.push(st.op === 'XZ' ? legs[legs.length - 1].to.layer : layer)
       first = false
     }
-    let lockKey: string | undefined
-    if (job.lock) {
-      const end = endAt(job.layer ?? 'F.Cu')
-      lockKey = hash(
-        JSON.stringify([
-          'lock',
-          net ?? '',
-          job.path ?? '',
-          [r6(start.x), r6(start.y), start.layer],
-          [r6(end.x), r6(end.y), end.layer],
-          ...(pr ? [['pair', pr.netN, pr.w, pr.g]] : []),
-        ]),
-      )
-    }
-    const cr = job.corner?.radius
+    if (job.route && !job.sub) routePts(board).set(job.route, { pts, layers: ptLayers })
+    if (job.netless && legs.length) fail('a route on no net takes no automatic leg; draw it by hand')
+    const cr = job.corner
     if (!pr && typeof cr === 'number' && cr > 0) {
       const mine = new Set(added.slice(firstAdded).map(i => i.id))
       roundManual(
@@ -1739,7 +1882,8 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
         cr,
         width,
         net,
-        lazyFree(() => buildLayout(board, mine, rules)),
+        lazyFree(() => buildLayout(world, mine)),
+        swap,
       )
     }
     if (pr) {
@@ -1809,7 +1953,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
     } else if (net !== undefined) {
       // neck-down: a stub before an automatic leg, else the end manual tracks split where full width clears the pads
       const endAtLast = job.steps?.length ? job.steps[job.steps.length - 1].op : 'XZ'
-      const mine = () => board.items.filter((i): i is Track => i.kind === 'track' && job.route !== undefined && i.route === job.route)
+      const mine = () => world.net(net).filter((i): i is Track => i.kind === 'track' && job.route !== undefined && i.route === job.route)
       for (const [pad, atStart] of [
         [padA, true],
         [padB, false],
@@ -1847,15 +1991,11 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
         const rest = parts.find(q => q.width === width),
           thin = parts.find(q => q.width !== width)
         if (!thin) continue
-        if (rest) {
-          t.pts = rest.pts
-          if (rest.prims) t.prims = rest.prims
-          else delete t.prims
-        } else {
-          t.width = thin.width
+        if (!rest) {
+          swap(t, { width: thin.width })
           continue
         }
-        const { id: _, prims: _p, ...base } = t
+        const { id: _, prims: _p, ...base } = swap(t, { pts: rest.pts, prims: rest.prims })
         push({ ...base, id: nextId++, ...thin, width: thin.width } as Track)
       }
     }
@@ -1871,27 +2011,103 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       legs.length = 0
     }
     // a lone automatic leg joins the net's copper, but not at an end the neck moved off its pad, and never for a length or a match
+    // a branch leaves from its fork, and a route that ends on a net joins it however its chain began
     const single = !job.steps || (job.steps.length === 1 && job.steps[0].op === 'XZ')
-    const joins = !pr && !job.direct && net !== undefined && single && (P.algorithm === undefined || P.algorithm === 'maze') && legs.length === 1 && !job.length && !job.match
+    const joins =
+      !pr &&
+      !job.direct &&
+      net !== undefined &&
+      (single || job.toNet !== undefined) &&
+      (P.algorithm === undefined || P.algorithm === 'maze') &&
+      legs.length === 1 &&
+      !job.length &&
+      !job.match
     const atPad = (pad: Pad | null, e: ResolvedPos) => !pad || same([e.x, e.y], pad.at)
-    const join: [boolean, boolean] | undefined = joins ? [atPad(padA, legs[0].from), atPad(padB, legs[0].to)] : undefined
+    const join: [boolean, boolean] | undefined = joins ? [single && !fork && atPad(padA, legs[0].from), atPad(padB, legs[0].to)] : undefined
     runs.push({
       job,
       P,
       net,
-      width,
+      width: runWidth,
       layer: start.layer,
       via,
       legs,
+      pts,
       fail,
-      lockKey,
+      ...patchedLegs(job, legBase, legs.length),
       ...(pr ? { pair: pr } : {}),
       ...(join ? { join } : {}),
       ...(job.direct && !pr ? { direct: true } : {}),
     })
   }
+  const centres = new Set(runs.flatMap(r => r.pair?.ids ?? []))
+  board.items = world.items()
+  return {
+    jobs: jobs.length,
+    runs,
+    manual: added.filter(it => !centres.has(it.id)),
+    centres,
+    failures,
+    report,
+    rules,
+    nextId,
+  }
+}
 
-  // pass 2: one task per automatic leg and per whole net, by priority, then declaration order
+/** Plans the routes, then routes their automatic legs. */
+export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRouteParams = BASE_AUTOROUTE, opts: AutorouteOptions = {}): AutorouteOutcome {
+  const plan = planRoutes(board, jobs, defaults, opts)
+  return routeLegs(plan, new ObstacleWorld(board, plan.rules), opts)
+}
+
+/** Routes the plan's automatic legs by priority and declaration order in the world of its board, which holds the plan's manual copper; the board's items written once at the end. */
+export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: AutorouteOptions = {}): AutorouteOutcome {
+  const board = world.board
+  const report: RoutingReport = { ...plan.report }
+  const failures: RouteFailure[] = [...plan.failures]
+  const added: Item[] = [...plan.manual]
+  if (!plan.jobs) return { failures, report, added }
+  const rules = plan.rules
+  const runs = plan.runs
+  const cache = opts.cache ?? null
+  const cu = world.cu
+  const outerLayers = [cu[0], cu[cu.length - 1]]
+  // past what the beforeRoute slot added
+  let nextId = Math.max(plan.nextId, board.items.reduce((m, it) => Math.max(m, it.id), 0) + 1)
+  const order = (l: string) => cu.indexOf(l)
+  const byStack = (ls: string[]) => [...new Set(ls)].sort((a, b) => order(a) - order(b))
+  const push = (it: Item) => {
+    world.add([immutable(it)])
+    added.push(it)
+  }
+  /** The ids gone from the world and from `added`. */
+  const drop = (ids: ReadonlySet<number>) => {
+    world.remove(ids)
+    let w = 0
+    for (const it of added) if (!ids.has(it.id)) added[w++] = it
+    added.length = w
+  }
+  const padLayout = padFreeOf(world)
+  const padFree = () => padLayout
+  const pairFrees = pairFreesOf(world, padLayout)
+  // a net's class clearance moves the obstacles of every leg, so it is in every key
+  const classed = board.classes
+    ? (board.schematic?.nets ?? []).flatMap(n => {
+        const c = classOf(board, n.name)?.clearance
+        return c !== undefined && c > rules.clearance ? [[n.name, c]] : []
+      })
+    : []
+  // rules that only DRC and zone fill read stay out of the key
+  const boardKey = JSON.stringify([
+    ROUTER_VERSION,
+    { ...rules, edge: undefined, maskWeb: undefined, silkMinHeight: undefined, holeClearanceBy: undefined, minHoleToHoleBy: undefined },
+    board.copper,
+    hash(JSON.stringify(board.outline.map(r => r.map(q => q.map(r4))))),
+    ...(classed.length ? [classed] : []),
+  ])
+  type Run = RouteRun
+
+  // one task per automatic leg, by priority, then declaration order
   const runOrder = runs
     .map((r, i) => ({ r, i, pr: r.P.priority ?? 0 }))
     .sort((a, b) => b.pr - a.pr || a.i - b.i)
@@ -1899,7 +2115,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
   // the joining legs of one net and priority take their places widest first, then longest, so trunks carry the width
   {
     const spanOfLeg = (r: Run) => {
-      const l = r.legs![0]
+      const l = r.legs[0]
       return Math.hypot(l.to.x - l.from.x, l.to.y - l.from.y)
     }
     const groups = new Map<string, number[]>()
@@ -1916,24 +2132,23 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       })
     }
   }
-  /** `key` is '' for a lock's result; `wn` is a whole net's index among the whole-net results, -1 for a leg. */
+  /** `key` is '' for a held result. */
   interface Placed {
     key: string
     a: ResolvedPos
     b: ResolvedPos
     result: RouteResult
     objs: Item[]
-    wn: number
   }
   interface Task {
     seq: number
     r: Run
-    /** the leg's index in r.legs, -1 for a whole net */
+    /** the leg's index in r.legs */
     k: number
     placed: Placed[]
     items: number[]
     result: RouteResult | null
-    how?: 'cache' | 'lock' | 'route'
+    how?: 'cache' | 'hold' | 'route' | 'solver'
     /** `with`: the leg it collided with last */
     fail?: { reason: string; layers: string[]; key: string; with?: Task }
     /** the failure came from the cache */
@@ -1952,11 +2167,8 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
     pruned?: boolean
   }
   const tasks: Task[] = []
-  for (const r of runOrder)
-    for (let k = 0; k < (r.legs ? r.legs.length : 1); k++)
-      tasks.push({ seq: tasks.length, r, k: r.legs ? k : -1, placed: [], items: [], result: null, memo: new Map(), shared: [] })
+  for (const r of runOrder) for (let k = 0; k < r.legs.length; k++) tasks.push({ seq: tasks.length, r, k, placed: [], items: [], result: null, memo: new Map(), shared: [] })
   const firstLegId = nextId
-  let wnCount = 0
   const ripupOf = (t: Task) => t.r.P.ripup ?? RIPUP
   const isMaze = (a: AutoRouteParams['algorithm'] | undefined) => a === undefined || a === 'maze'
   const whereOf = (s: Src | undefined) => (s ? ` (${s.file}:${s.line}:${s.col})` : '')
@@ -1971,13 +2183,12 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
   interface Ctx {
     placed: Set<number>
     viaCount: number
-    locked?: LockEntry
     cacheable: boolean
     router: RouteFn
     nets: Set<string>
     twin?: { net: string; partner: string }
-    tries(a: ResolvedPos, b: ResolvedPos, layers: string[]): Try[]
-    place(t: Task, res: RouteResult, key: string, a: ResolvedPos, b: ResolvedPos, o?: Origin, wn?: number, extra?: Strip[]): void
+    tries(a: ResolvedPos, b: ResolvedPos, layers: string[], w?: number): Try[]
+    place(t: Task, res: RouteResult, key: string, a: ResolvedPos, b: ResolvedPos, o?: Origin, extra?: Strip[]): void
     /** adds the widened trunk under a placed leg */
     attach(t: Task, strips: Strip[]): void
     failed(a: ResolvedPos, b: ResolvedPos, layers: string[], reason: string, label: string, leg: number, legs: number, o?: Origin): void
@@ -1992,11 +2203,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       : ''
   const sigsIn = (box: Box, skip: (it: Item) => boolean): string => {
     const sigs: string[] = kindSig ? [kindSig] : []
-    for (const it of board.items) {
-      if (skip(it)) continue
-      const s = itemSig(it, cu)
-      if (s && boxHit(s.box, box)) sigs.push(s.sig)
-    }
+    sigs.push(...world.signature(box, skip))
     for (const k of board.keepouts ?? [])
       if (boxHit(boxOf(k.outline.flat()), box))
         sigs.push(JSON.stringify(['keepout', k.layers, k.tracks, k.vias, k.pours, k.outline.map(q => q.map(p => p.map(r4))), ...(k.except ? [k.except] : [])]))
@@ -2026,7 +2233,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       fail((e as Error).message)
     }
     const md = P.maxDetour
-    const detour = typeof md === 'number' ? { ratio: md, floor: DETOUR_FLOOR } : { ratio: md?.ratio ?? DETOUR_RATIO, floor: md?.floor ?? DETOUR_FLOOR }
+    const detour = { ratio: md?.ratio ?? DETOUR_RATIO, floor: md?.floor ?? DETOUR_FLOOR }
     const c: Ctx = {
       placed,
       viaCount: 0,
@@ -2039,11 +2246,10 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       attach: null!,
       failed: null!,
       boxAround: null!,
-      ...(r.lockKey && cache ? { locked: cache.lock(r.lockKey) } : {}),
     }
-    const request = (start: ResolvedPos, end: ResolvedPos, layers: string[]): RouteRequest => ({
+    const request = (start: ResolvedPos, end: ResolvedPos, layers: string[], w: number): RouteRequest => ({
       net,
-      width,
+      width: w,
       start,
       end,
       layers,
@@ -2060,7 +2266,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       ...(detour.ratio > 0 ? { maxDetour: detour } : {}),
     })
     // then the outer layers too when the layers were not set
-    c.tries = (a, b, layers) => {
+    c.tries = (a, b, layers, w = width) => {
       const lists = [layers]
       if (!P.layers && P.maxVias !== 0) {
         const wide = byStack([...layers, ...outerLayers])
@@ -2075,17 +2281,29 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
             key: '',
             reason: `it changes layer from ${a.layer} to ${b.layer}, but ${P.maxVias === 0 ? 'vias are off for this route, maxVias is 0' : `maxVias is ${P.maxVias} and the route has placed ${c.viaCount}`}`,
           }
-        const req = request(a, b, ls)
+        const req = request(a, b, ls, w)
         const mode = r.direct ? ['direct'] : r.join ? [['join', ...r.join]] : []
-        return { layers: ls, req, key: cacheable ? hash(JSON.stringify([boardKey, P.algorithm ?? 'maze', P.priority ?? 0, req, ...mode])) : '', reason: 'no path found' }
+        // a route with a chain, branches or more than two ends keys its legs on the whole of it
+        const tree = job.tree !== undefined ? [['tree', job.tree]] : []
+        return { layers: ls, req, key: cacheable ? hash(JSON.stringify([boardKey, P.algorithm ?? 'maze', P.priority ?? 0, req, ...mode, ...tree])) : '', reason: 'no path found' }
       })
     }
     const rid = job.route !== undefined ? { route: job.route } : {}
-    c.place = (t, res, key, a, b, o = { src: job.src, ...(job.chain ? { chain: job.chain } : {}) }, wn = -1, extra) => {
+    c.place = (t, res, key, a, b, o = { src: job.src, ...(job.chain ? { chain: job.chain } : {}) }, extra) => {
       const objs: Item[] = []
       for (const tr of res.tracks) {
         if (!tr.pts || tr.pts.length < 2) continue
-        objs.push({ kind: 'track', id: nextId++, layer: layerName(board, tr.layer), net, ref: job.ref, ...o, ...rid, pts: tr.pts.map(([x, y]) => [x, y] as Pt), width } as Track)
+        objs.push({
+          kind: 'track',
+          id: nextId++,
+          layer: layerName(board, tr.layer),
+          net,
+          ref: job.ref,
+          ...o,
+          ...rid,
+          pts: tr.pts.map(([x, y]) => [x, y] as Pt),
+          width: legOf(t).width,
+        } as Track)
       }
       for (const v of res.vias) {
         const pair = v.layers.map(l => layerName(board, l)).sort((x, y) => order(x) - order(y)) as [string, string]
@@ -2098,7 +2316,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
         t.items.push(it.id)
         owner.set(it.id, t)
       }
-      t.placed.push({ key, a, b, result: res, objs, wn })
+      t.placed.push({ key, a, b, result: res, objs })
       t.result = res
       t.memo.clear()
       t.box = undefined
@@ -2139,7 +2357,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
         to: b,
         layers,
         reason,
-        blockers: blockersOf(board, nets, [a.x, a.y], [b.x, b.y], layers, placed),
+        blockers: blockersOf(world, nets, [a.x, a.y], [b.x, b.y], layers, placed),
         ...((o?.src ?? job.src) ? { src: job.src ?? o?.src } : {}),
         ...(job.chain ? { chain: job.chain } : {}),
       })
@@ -2151,28 +2369,28 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
     if (!c) ctxs.set(r, (c = open(r)))
     return c
   }
-  const legOf = (t: Task) => t.r.legs![t.k]
+  const legOf = (t: Task) => t.r.legs[t.k]
   const layersOf = (t: Task) => {
     const leg = legOf(t)
     return t.r.P.layers ?? byStack([leg.from.layer, leg.to.layer])
   }
 
   const owner = new Map<number, Task>()
-  const store = storeOf(board, rules, cu)
+  const store = world.store
   interface Ends {
     terms: Terms
     connected: boolean
     comps: [Item[], Item[]]
     at: [Item[], Item[]]
   }
-  /** A leg's own net as the search sees it: the copper joined to each end, the rest of the net fenced off; null for a pair, a whole net or another router. */
+  /** A leg's own net as the search sees it: the copper joined to each end, the rest of the net fenced off; null for a pair or another router. */
   const endsOf = (t: Task, sides: [boolean, boolean]): Ends | null => {
     const r = t.r,
       net = r.net
-    if (r.pair || !r.legs || net === undefined || !isMaze(r.P.algorithm)) return null
+    if (r.pair || net === undefined || !isMaze(r.P.algorithm)) return null
     const leg = legOf(t),
       mine = new Set(t.items)
-    const its = board.items.filter(it => it.net === net && it.kind !== 'zone' && it.id >= 0 && !mine.has(it.id) && copperLayersOf(it, cu).length)
+    const its = world.net(net).filter(it => it.kind !== 'zone' && it.id >= 0 && !mine.has(it.id) && copperLayersOf(it, cu).length)
     const idx = new Map(its.map((it, i) => [it, i]))
     const up = its.map((_, i) => i)
     const find = (i: number): number => {
@@ -2232,7 +2450,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
     return { terms, connected, comps: [c0, c1], at: [a0, a1] }
   }
   // a future `current` on routes and classes would size a shared trunk from the sum of its branch currents here
-  const trunkWidth = (t: Task) => t.r.width
+  const trunkWidth = (t: Task) => legOf(t).width
   /** The trunk under a joining leg's junctions at the leg's width, or the end whose trunk cannot widen. */
   const widen = (t: Task, res: RouteResult, e: Ends, kept: (0 | 1)[] = []): { strips: Strip[]; narrow?: 0 | 1 } => {
     const leg = legOf(t),
@@ -2262,7 +2480,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       if (kept.includes(side)) continue
       for (const s of run) {
         if (s.width >= w - 1e-9) continue
-        const q = queries((layout ??= buildLayout(board, new Set(t.items), rules)))
+        const q = queries((layout ??= buildLayout(world, new Set(t.items))))
         for (let i = 1; i < s.pts.length; i++) if (!q.segFree(s.layer, s.pts[i - 1], s.pts[i], t.r.net, w)) return { strips: [], narrow: side }
         strips.push({ layer: s.layer, pts: s.pts, width: w })
       }
@@ -2335,11 +2553,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       gone = new Set<number>()
     for (const p of t.placed) p.objs = p.objs.filter(it => !overlays.has(it) || (gone.add(it.id), false))
     if (gone.size) {
-      for (const list of [board.items, added]) {
-        let w = 0
-        for (const it of list) if (!gone.has(it.id)) list[w++] = it
-        list.length = w
-      }
+      drop(gone)
       t.items = t.items.filter(id => !gone.has(id))
       for (const id of gone) {
         c.placed.delete(id)
@@ -2366,8 +2580,8 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       0,
     )
   /** How many groups the pads of a net fall in through its copper but pours. */
-  const padGroups = (net: string): number => {
-    const its = board.items.filter(it => it.net === net && it.kind !== 'zone' && copperLayersOf(it, cu).length)
+  const padGroups = (net: string, off: Set<number>): number => {
+    const its = world.net(net).filter(it => !off.has(it.id) && it.kind !== 'zone' && copperLayersOf(it, cu).length)
     const up = its.map((_, i) => i)
     const find = (i: number): number => {
       while (up[i] !== i) i = up[i] = up[up[i]]
@@ -2389,26 +2603,23 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
     const live = (t: Task) => t.r.join && !!t.result && !t.pruned && t.items.length > 0
     const nets = [...new Set(tasks.filter(live).map(t => t.r.net!))].sort()
     for (const net of nets) {
-      let loops = netLoops(board, new Set([net])).length
+      let loops = netLoops(board, new Set([net]), world.net(net)).length
       if (!loops) continue
-      const groups = padGroups(net)
+      const groups = padGroups(net, new Set())
       const cands = tasks
         .filter(t => live(t) && t.r.net === net)
         .map(t => ({ t, cost: legCost(t) }))
         .sort((a, b) => b.cost - a.cost || b.t.seq - a.t.seq)
       for (const { t } of cands) {
-        const ids = new Set(t.items),
-          all = [...board.items]
-        const drop = (list: Item[]) => {
-          let w = 0
-          for (const it of list) if (!ids.has(it.id)) list[w++] = it
-          list.length = w
-        }
-        drop(board.items)
-        const n = netLoops(board, new Set([net])).length
-        if (n < loops && padGroups(net) === groups) {
+        const ids = new Set(t.items)
+        const n = netLoops(
+          board,
+          new Set([net]),
+          world.net(net).filter(it => !ids.has(it.id)),
+        ).length
+        if (n < loops && padGroups(net, ids) === groups) {
           const c = ctxOf(t.r)
-          drop(added)
+          drop(ids)
           for (const id of ids) {
             c.placed.delete(id)
             owner.delete(id)
@@ -2420,7 +2631,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
           t.box = undefined
           loops = n
           if (!loops) break
-        } else board.items.splice(0, board.items.length, ...all)
+        }
       }
     }
   }
@@ -2438,8 +2649,8 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
     if (!t.r.join || !t.result || !joinedIn(t, t.result)) return s
     const net = t.r.net,
       sigs: string[] = []
-    for (const it of board.items) {
-      if (it.net !== net || skip(it) || (owner.get(it.id)?.seq ?? -1) > t.seq) continue
+    for (const it of world.net(net)) {
+      if (skip(it) || (owner.get(it.id)?.seq ?? -1) > t.seq) continue
       const g = itemSig(it, cu)
       if (g) sigs.push(g.sig)
     }
@@ -2447,7 +2658,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
   }
 
   const prio = (t: Task) => t.r.P.priority ?? 0
-  const softOk = (t: Task) => t.k >= 0 && t.how !== 'lock' && isMaze(t.r.P.algorithm) && ripupOf(t) > 0
+  const softOk = (t: Task) => t.how !== 'hold' && t.how !== 'solver' && isMaze(t.r.P.algorithm) && ripupOf(t) > 0
   const sameNet = (a: Task, b: Task) => {
     const nb = ctxOf(b.r).nets
     for (const n of ctxOf(a.r).nets) if (nb.has(n)) return true
@@ -2479,12 +2690,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
     const rv = resvs.get(r)
     if (!rv) return
     resvs.delete(r)
-    if (rv.items.length) {
-      const ids = new Set(rv.items.map(it => it.id))
-      let w = 0
-      for (const it of board.items) if (!ids.has(it.id)) board.items[w++] = it
-      board.items.length = w
-    }
+    if (rv.items.length) world.remove(new Set(rv.items.map(it => it.id)))
     if (rv.owner) {
       rv.owner.memo.clear()
       rv.owner.box = undefined
@@ -2545,7 +2751,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       if (!(e instanceof PairGeometryError)) throw e
       rv = { laid: null, err: e, items: [], owner, sig: `err:${e.message}` }
     }
-    for (const it of rv.items) board.items.push(it)
+    world.add(rv.items.map(immutable))
     if (owner) {
       owner.memo.clear()
       owner.box = undefined
@@ -2595,11 +2801,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
   const unplace = (t: Task) => {
     if (t.r.pair) dropResv(t.r)
     const ids = new Set(t.items)
-    for (const list of [board.items, added]) {
-      let w = 0
-      for (const it of list) if (!ids.has(it.id)) list[w++] = it
-      list.length = w
-    }
+    drop(ids)
     const c = ctxOf(t.r)
     for (const id of ids) c.placed.delete(id)
     for (const p of t.placed) for (const it of p.objs) if (it.kind === 'via') c.viaCount--
@@ -2628,6 +2830,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
   const routeOrphans = () => {
     orphans.sort(bySeq)
     while (orphans.length) {
+      pulse()
       const o = orphans.shift()!
       if (!o.result && !o.fail && !o.stored) routeHard(o)
     }
@@ -2636,6 +2839,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
   const displaceBy = (t: Task, any = false): Task[] => {
     const out: Task[] = []
     for (const o of tasks) {
+      pulse()
       if (o === t || o.r === t.r || !o.result || !softOk(o) || (any ? prio(o) > prio(t) : prio(o) >= prio(t))) continue
       if (!clash(t, o)) continue
       unplace(o)
@@ -2660,14 +2864,14 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
   const routeHard = (t: Task): boolean => {
     const c = ctxOf(t.r),
       leg = legOf(t)
-    const ts = c.tries(leg.from, leg.to, layersOf(t))
+    const ts = c.tries(leg.from, leg.to, layersOf(t), leg.width)
     const lower = tasks.filter(o => o !== t && o.r !== t.r && o.result && prio(o) < prio(t) && softOk(o))
     let layout: RouteContext | undefined
     for (const q of ts) {
       if (!q.req) continue
       let s: Solved
       try {
-        s = solve(t, q.req, req => c.router(req, (layout ??= buildLayout(board, c.placed, rules, lower.flatMap(objsOf), c.twin))))
+        s = solve(t, q.req, req => c.router(req, (layout ??= buildLayout(world, c.placed, lower.flatMap(objsOf), c.twin))))
       } catch (e) {
         q.reason = (e as Error).message
         continue
@@ -2676,7 +2880,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
         q.reason = 'the router returned no geometry'
         continue
       }
-      c.place(t, s.res, q.key, leg.from, leg.to, leg.own, -1, s.strips)
+      c.place(t, s.res, q.key, leg.from, leg.to, leg.own, s.strips)
       t.how = 'route'
       t.fail = undefined
       t.on = s.on
@@ -2690,106 +2894,63 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
     return false
   }
   const rerouteDisplaced = () => {
-    for (const t of tasks) if (t.k >= 0 && !t.result && t.displaced && !t.fail) routeHard(t)
+    for (const t of tasks) if (!t.result && t.displaced && !t.fail) routeHard(t)
     routeOrphans()
   }
 
-  /** Routes ratsnest lines of a whole net until it is one island, skipping the lines that failed. */
-  const routeNet = (t: Task) => {
-    const r = t.r,
-      c = ctxOf(r),
-      { P, net } = r
-    if (net === undefined) r.fail('a track without d or a net has nothing to route')
-    const layers = P.layers ?? [r.layer]
-    const line = (a: ResolvedPos, b: ResolvedPos, k: number, total: number): RouteResult | null => {
-      report.legs++
-      const ts = c.tries(a, b, layers)
-      for (const q of ts) {
-        if (!q.req || !c.cacheable) continue
-        const e = cache!.leg(q.key)
-        if (e?.result && valid(e.result) && sigsIn(e.box, it => c.placed.has(it.id)) === e.obs) {
-          report.cached++
-          report.routed++
-          c.place(t, e.result, q.key, a, b, undefined, wnCount++)
-          return e.result
-        }
-      }
-      let layout: RouteContext | undefined
-      for (const q of ts) {
-        if (!q.req) continue
-        let res: RouteResult
-        try {
-          res = c.router(q.req, (layout ??= buildLayout(board, c.placed, rules, [], c.twin)))
-        } catch (e) {
-          q.reason = (e as Error).message
-          continue
-        }
-        if (!valid(res)) {
-          q.reason = 'the router returned no geometry'
-          continue
-        }
-        report.routed++
-        c.place(t, res, q.key, a, b, undefined, wnCount++)
-        return res
-      }
-      const last = ts[ts.length - 1]
-      c.failed(a, b, last.layers, last.reason, '', k, total)
-      return null
+  // a route's solver lays its legs out first, in task order: it reads the solvers before it and nothing routed after
+  const solved = new Map<string, RouteResult[]>()
+  const hidden = new Set(opts.hidden ?? [])
+  const solverCtx = (t: Task): RouteSolverContext => {
+    const own = t.r.job.route
+    const me = { kind: 'solver' as const, ref: own ?? 'route', ...(t.r.job.src ? { src: t.r.job.src } : {}) }
+    return {
+      ...buildLayout(world, ctxOf(t.r).placed),
+      part: ref => {
+        if (hidden.has(ref)) throw solverOrder(me, { kind: 'follower', ref })
+        const fp = board.footprints.find(f => f.ref === ref)
+        return fp ? { x: fp.at[0], y: fp.at[1], r: fp.rot, side: fp.side } : null
+      },
+      route: v => {
+        const id = typeof v === 'string' ? v : ROUTE_IDS.get(v)
+        if (id === undefined) throw new CompileError(`${own}: the solver's ctx.route() takes a route placed on this board or its id, such as 'route:3'`, t.r.job.src)
+        const got = id === own ? undefined : solved.get(id)
+        if (!got) throw solverOrder(me, { kind: 'route', ref: id })
+        return { tracks: got.flatMap(g => g.tracks), vias: got.flatMap(g => g.vias) }
+      },
     }
-    const lineKey = (x: { from: Pt; to: Pt }) =>
-      [x.from, x.to]
-        .map(q => q.map(r4).join(','))
-        .sort()
-        .join(' ')
-    const skip = new Set<string>()
-    const all = () => connectivity(board).ratsnest.filter(x => x.net === net)
-    let lines = all()
-    const total = lines.length
-    let guard = lines.length * 2 + 4,
-      k = 0
-    for (;;) {
-      const todo = lines.filter(x => !skip.has(lineKey(x)))
-      if (!todo.length) break
-      const rn = todo[0]
-      const a = endpoint(board, net!, rn.from, r.layer, layers, cu),
-        b = endpoint(board, net!, rn.to, r.layer, layers, cu)
-      if (guard-- <= 0) {
-        c.failed(a, b, layers, `net ${net} is still not connected after routing`, '', ++k, total)
-        break
-      }
-      const res = line(a, b, ++k, total)
-      const after = all()
-      if (!res) skip.add(lineKey(rn))
-      else if (after.length >= lines.length) {
-        skip.add(lineKey(rn))
-        c.failed(
-          a,
-          b,
-          layers,
-          `routing net ${net} from (${fmt(rn.from[0])}, ${fmt(rn.from[1])}) to (${fmt(rn.to[0])}, ${fmt(rn.to[1])}) did not join the two islands`,
-          '',
-          k,
-          total,
-        )
-      }
-      lines = after
-    }
+  }
+  for (const t of tasks) {
+    pulse()
+    const fn = t.r.job.solver
+    if (!fn || valid(t.r.held?.[t.k])) continue
+    const c = ctxOf(t.r),
+      leg = legOf(t)
+    const q = c.tries(leg.from, leg.to, layersOf(t), leg.width).find(x => x.req)
+    if (!q?.req) continue
+    const res = fn(q.req, solverCtx(t))
+    if (res === null) continue
+    if (!valid(res)) throw new CompileError(`${t.r.job.route}: .solver() must return { tracks, vias } or null, got ${JSON.stringify(res)}`, t.r.job.src)
+    c.place(t, res, '', leg.from, leg.to, leg.own)
+    t.how = 'solver'
+    if (t.r.job.route) solved.set(t.r.job.route, [...(solved.get(t.r.job.route) ?? []), res])
   }
 
   // stored results are placed first, then checked against the copper around them, the last compile's final copper
   const entries = new Map<Task, LegEntry>()
   for (const t of tasks) {
-    if (t.k < 0) continue
+    pulse()
     const c = ctxOf(t.r),
       leg = legOf(t)
-    const kept = c.locked && c.locked.legs.length === t.r.legs!.length ? c.locked.legs[t.k] : null
+    const kept = t.r.held?.[t.k]
+    if (t.how === 'solver') continue
     if (valid(kept)) {
       c.place(t, kept, '', leg.from, leg.to, leg.own)
-      t.how = 'lock'
+      t.how = 'hold'
       continue
     }
-    if (!c.cacheable) continue
-    for (const q of c.tries(leg.from, leg.to, layersOf(t))) {
+    if (!c.cacheable || t.r.fresh?.has(t.k)) continue
+    for (const q of c.tries(leg.from, leg.to, layersOf(t), leg.width)) {
       const e = q.req ? cache!.leg(q.key) : undefined
       if (!e) continue
       // a stored failure holds only under the same negotiation bound
@@ -2811,9 +2972,13 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
   for (const r of runs) if (r.pair) layResv(r)
   if (entries.size) {
     prune()
-    for (const t of tasks) if (t.how === 'cache') restrip(t)
+    for (const t of tasks) {
+      pulse()
+      if (t.how === 'cache') restrip(t)
+    }
     const stale = new Set<Task>()
     for (const [t, e] of entries) {
+      pulse()
       const own = ctxOf(t.r).placed,
         rv = resvIds(t.r)
       if (obsOf(t, e.box, it => own.has(it.id) || rv.has(it.id)) !== e.obs) stale.add(t)
@@ -2827,11 +2992,12 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       t.stored = false
     }
   }
-  // a cached leg must also keep clear of the legs before it and the locked ones
+  // a cached leg must also keep clear of the legs before it and the held ones
   for (const t of tasks) {
+    pulse()
     if (t.how !== 'cache') continue
     for (const o of tasks) {
-      if (o === t || !o.result || (o.seq > t.seq && o.how !== 'lock') || !clash(t, o)) continue
+      if (o === t || !o.result || (o.seq > t.seq && o.how !== 'hold' && o.how !== 'solver') || !clash(t, o)) continue
       unplace(t)
       t.how = undefined
       break
@@ -2839,22 +3005,26 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
   }
   opts.progress?.({ done: 0, legs: tasks.length })
   for (const t of tasks) {
-    if (t.k < 0) routeNet(t)
-    else if (!t.result && !t.stored) routeHard(t)
+    pulse()
+    if (!t.result && !t.stored) routeHard(t)
     opts.progress?.({ done: t.seq + 1, legs: tasks.length })
   }
   routeOrphans()
+  pulse()
 
   let rounds = 0
   if (tasks.some(t => t.fail && !t.stored && softOk(t))) rounds = negotiate(tasks.filter(t => t.fail && softOk(t)))
+  pulse()
   rerouteDisplaced()
 
   // pairs laid out again against the final copper displace the legs their new layout collides with
   for (let pass = 0; pass < 4; pass++) {
+    pulse()
     const before = new Map([...resvs].map(([r, rv]) => [r, rv.sig]))
     for (const r of runs) if (r.pair) dropResv(r)
     let moved = false
     for (const r of runs) {
+      pulse()
       const rv = r.pair ? layResv(r) : null
       if (!rv?.owner || rv.sig === before.get(r) || !rv.items.length) continue
       if (displaceBy(rv.owner, true).length) moved = true
@@ -2876,7 +3046,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
     const hardLayout = (c: Ctx) => {
       const key = c.twin ? `${c.twin.net}\u0000${c.twin.partner}` : ''
       let l = layouts.get(key)
-      if (!l) layouts.set(key, (l = buildLayout(board, new Set(), rules, pool.flatMap(objsOf), c.twin)))
+      if (!l) layouts.set(key, (l = buildLayout(world, new Set(), pool.flatMap(objsOf), c.twin)))
       return l
     }
     const hists = new Map<string, Float32Array>()
@@ -3014,7 +3184,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
     const routeSoft = (t: Task, pres: number): boolean => {
       const c = ctxOf(t.r),
         leg = legOf(t)
-      const ts = c.tries(leg.from, leg.to, layersOf(t))
+      const ts = c.tries(leg.from, leg.to, layersOf(t), leg.width)
       const q = [...ts].reverse().find(x => x.req)
       if (!q) {
         const last = ts[ts.length - 1]
@@ -3030,7 +3200,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
         t.fail = { reason: (e as Error).message, layers: q.layers, key: q.key }
         return false
       }
-      c.place(t, s.res, q.key, leg.from, leg.to, leg.own, -1, s.strips)
+      c.place(t, s.res, q.key, leg.from, leg.to, leg.own, s.strips)
       t.how = 'route'
       t.fail = undefined
       t.shared = cg.shared ?? []
@@ -3062,6 +3232,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       n++
       const moved: Task[] = []
       for (const [i, t] of todo.entries()) {
+        pulse()
         if (t.result) {
           takeOff(t)
           report.ripped++
@@ -3140,18 +3311,19 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
   }
 
   routeOrphans()
+  pulse()
   prune()
-  for (const t of tasks) restrip(t)
+  for (const t of tasks) {
+    pulse()
+    restrip(t)
+  }
 
   // renumbered in priority and declaration order, so cold, warm and negotiated compiles give the same ids
   {
+    // no search runs after this, and the next one builds its count grids afresh
+    world.store.dropCounts()
     const objs = tasks.flatMap(t => t.placed.flatMap(p => p.objs))
-    const ids = new Set(objs.map(o => o.id))
-    for (const list of [board.items, added]) {
-      let w = 0
-      for (const it of list) if (!ids.has(it.id)) list[w++] = it
-      list.length = w
-    }
+    drop(new Set(objs.map(o => o.id)))
     nextId = firstLegId
     for (const c of ctxs.values()) c.placed.clear()
     owner.clear()
@@ -3160,27 +3332,29 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       if (t.pruned) continue
       const c = ctxOf(t.r)
       for (const p of t.placed)
-        for (const it of p.objs) {
-          it.id = nextId++
+        p.objs = p.objs.map(o => {
+          const it = { ...o, id: nextId++ }
+          if (overlays.has(o)) overlays.add(it)
           push(it)
           t.items.push(it.id)
           c.placed.add(it.id)
           owner.set(it.id, t)
-        }
+          return it
+        })
     }
   }
   for (const t of tasks) {
-    if (t.k < 0) continue
     report.legs++
     if (t.how === 'cache') report.cached++
-    if (t.how === 'lock') report.locked++
+    if (t.how === 'hold') report.held++
+    if (t.how === 'solver') report.solved = (report.solved ?? 0) + 1
     if (t.result) {
       report.routed++
       continue
     }
     if (!t.fail) continue
     const leg = legOf(t),
-      n = t.r.legs!.length
+      n = t.r.legs.length
     ctxOf(t.r).failed(leg.from, leg.to, t.fail.layers, t.fail.reason, n > 1 ? `automatic leg ${t.k + 1} of ${n}, ` : '', t.k + 1, n, leg.own)
   }
   if (rounds) report.rounds = rounds
@@ -3192,126 +3366,50 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       job = t.r.job
     const pad = board.items.find((it): it is Pad => it.kind === 'pad' && it.net === t.r.net && same(it.at, [e.x, e.y]))
     const name = job.route ?? 'a route',
-      end = pad ? `pad ${pad.ref}.${pad.num}` : `its end at (${fmt(e.x)}, ${fmt(e.y)})`
-    const message = t.narrow.kept
-      ? `${name} joins the copper of net ${t.r.net} near ${end}, which stays narrower than its ${fmt(t.r.width)} mm: widening it would break clearance, and no path reaches ${end} itself`
-      : `${name} runs to ${end} instead of joining the copper of net ${t.r.net} there: widening that copper to ${fmt(t.r.width)} mm would break clearance`
-    notes.push({
-      severity: 'info',
-      rule: 'trunk-narrow',
-      message,
-      at: [e.x, e.y],
-      layer: e.layer,
-      net: t.r.net,
-      ...(job.route ? { routeId: job.route } : {}),
-      ...(job.src ? { src: job.src } : {}),
-      items: t.items,
-    })
+      end = pad ? `pad ${pad.ref}/${pad.num}` : `its end at (${fmt(e.x)}, ${fmt(e.y)})`
+    notes.push(
+      marker({
+        severity: 'info',
+        rule: 'trunk-narrow',
+        args: { route: name, net: t.r.net ?? '', end, width: t.r.width, ...(t.narrow.kept ? { kept: true } : {}) },
+        at: [e.x, e.y],
+        layer: e.layer,
+        refs: [...(job.route ? [job.route] : []), ...(t.r.net !== undefined ? [`net:${t.r.net}`] : [])],
+        ...(job.src ? { src: job.src } : {}),
+        items: t.items,
+      }),
+    )
   }
 
   if (cache) {
-    for (const r of runOrder) {
-      if (!r.lockKey || !r.legs) continue
-      const results = tasks
-        .filter(t => t.r === r)
-        .sort((x, y) => x.k - y.k)
-        .map(t => t.result)
-      cache.putLock(r.lockKey, { ...(r.net !== undefined ? { net: r.net } : {}), ...(r.job.path !== undefined ? { path: r.job.path } : {}), legs: results })
-    }
-    // hashed over the final copper, whole-net lines placed after a line left out
-    const wnOf = new Map<number, number>()
-    for (const t of tasks) for (const p of t.placed) if (p.wn >= 0) for (const it of p.objs) wnOf.set(it.id, p.wn)
+    // hashed over the final copper
     for (const t of tasks) {
+      pulse()
       const c = ctxOf(t.r)
       if (!c.cacheable) continue
       const rv = resvIds(t.r)
-      const skip = (wn: number) => (it: Item) => c.placed.has(it.id) || rv.has(it.id) || (wnOf.get(it.id) ?? -2) > wn
+      const skip = (it: Item) => c.placed.has(it.id) || rv.has(it.id)
       for (const p of t.placed) {
         if (!p.key) continue
         const box = c.boxAround(p.a, p.b, p.result)
-        cache.putLeg(p.key, { obs: p.wn >= 0 ? sigsIn(box, skip(p.wn)) : obsOf(t, box, skip(p.wn)), box, result: p.result, ...(t.narrow ? { narrow: t.narrow } : {}) })
+        cache.putLeg(p.key, { obs: obsOf(t, box, skip), box, result: p.result, ...(t.narrow ? { narrow: t.narrow } : {}) })
       }
-      if (t.k >= 0 && !t.result && t.fail?.key)
-        cache.putLeg(t.fail.key, { obs: sigsIn(EVERYWHERE, skip(-1)), box: EVERYWHERE, result: null, fail: { reason: t.fail.reason, layers: t.fail.layers, ripup: ripupOf(t) } })
+      if (!t.result && t.fail?.key)
+        cache.putLeg(t.fail.key, { obs: sigsIn(EVERYWHERE, skip), box: EVERYWHERE, result: null, fail: { reason: t.fail.reason, layers: t.fail.layers, ripup: ripupOf(t) } })
     }
   }
 
   // the centre line placeholders leave; a pair whose legs all routed gets its two tracks
   const pairs: PairInfo[] = []
-  /** `pool`: every id the pair has had, taken back in order on a new layout, so tuning leaves the board's ids as they were */
-  interface PairDone {
-    r: Run
-    pr: PairRun
-    laid: PairLaid
-    ids: number[]
-    pool: number[]
-    whole: Origin
-  }
-  const done: PairDone[] = []
-  const stack = board.stackup ?? board.thickness
-  const placePair = (d: PairDone) => {
-    const { r, pr, laid, whole } = d
-    const rid = r.job.route !== undefined ? { route: r.job.route } : {}
-    d.ids = []
-    let k = 0
-    const take = () => {
-      if (k === d.pool.length) d.pool.push(nextId++)
-      return d.pool[k++]
-    }
-    for (const t of laid.tracks) {
-      const id = take()
-      d.ids.push(id)
-      const sh = t.prims ? trackShape(t.prims) : { pts: t.pts.map(([x, y]) => [nm(x), nm(y)] as Pt) }
-      push({
-        kind: 'track',
-        id,
-        layer: t.layer,
-        net: t.role === 'P' ? r.net : pr.netN,
-        ref: r.job.ref,
-        ...whole,
-        ...rid,
-        ...sh,
-        width: nm(t.width),
-        pair: pr.id,
-        role: t.role,
-      } as Track)
-    }
-    for (const v of laid.vias) {
-      const id = take()
-      d.ids.push(id)
-      const span = [...v.layers].sort((a, b) => order(a) - order(b)) as [string, string]
-      push({
-        kind: 'via',
-        id,
-        layer: span[0],
-        net: v.role === 'P' ? r.net : pr.netN,
-        ref: r.job.ref,
-        ...whole,
-        ...rid,
-        at: [nm(v.at[0]), nm(v.at[1])],
-        drill: pr.via.drill,
-        size: pr.via.size,
-        layers: span,
-      } as Via)
-    }
-  }
-  const unplacePair = (d: PairDone) => {
-    const gone = new Set(d.ids)
-    for (const list of [board.items, added]) {
-      let w = 0
-      for (const it of list) if (!gone.has(it.id)) list[w++] = it
-      list.length = w
-    }
-    d.ids = []
-  }
-  const pairLength = (laid: PairLaid) => {
-    const side = (role: 'P' | 'N') =>
-      routeLength(
-        laid.tracks.filter(t => t.role === role),
-        laid.vias.filter(v => v.role === role),
-        stack,
-      )
-    return Math.max(side('P'), side('N'))
+  const done: { r: Run; pr: PairRun; tp: TunePair }[] = []
+  const placePair = (tp: TunePair) => {
+    const items = pairItems(
+      tp,
+      cu,
+      idsOf(tp, () => nextId++),
+    )
+    tp.ids = items.map(it => it.id)
+    for (const it of items) push(it)
   }
   const finalLaid = new Map(resvs)
   for (const r of runs) if (r.pair) dropResv(r)
@@ -3319,25 +3417,32 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
     const pr = r.pair
     if (!pr) continue
     const own = tasks.filter(t => t.r === r).sort((x, y) => x.k - y.k)
-    const gone = new Set([...pr.ids, ...own.flatMap(t => t.items)])
-    for (const list of [board.items, added]) {
-      let w = 0
-      for (const it of list) if (!gone.has(it.id)) list[w++] = it
-      list.length = w
-    }
+    drop(new Set([...pr.ids, ...own.flatMap(t => t.items)]))
     if (own.some(t => !t.result) || pr.crossed) continue
     const whole: Origin = { ...(r.job.src ? { src: r.job.src } : {}), ...(r.job.chain ? { chain: r.job.chain } : {}) }
     try {
       const rv = finalLaid.get(r) ?? (layResv(r), resvs.get(r)!)
       if (!rv.laid) throw rv.err!
-      const d: PairDone = { r, pr, laid: rv.laid, ids: [], pool: [], whole }
-      placePair(d)
-      done.push(d)
+      const tp: TunePair = {
+        at: done.length,
+        laid: rv.laid,
+        ids: [],
+        pool: [],
+        id: pr.id,
+        nets: [r.net!, pr.netN],
+        via: pr.via,
+        ref: r.job.ref,
+        ...(r.job.route !== undefined ? { route: r.job.route } : {}),
+        ...whole,
+        next: 0,
+      }
+      placePair(tp)
+      done.push({ r, pr, tp })
     } catch (e) {
       if (!(e instanceof PairGeometryError)) throw e
       const at: ResolvedPos = { x: e.at[0], y: e.at[1], layer: pr.start?.layer ?? r.layer }
       const nets = new Set([r.net!, pr.netN]),
-        nb = nearestCopper(board, nets, e.at, cu)
+        nb = nearestCopper(world.items(), nets, e.at, cu)
       const why = nb ? `; the copper of another net nearest that point is ${itemLabel(nb.it)}, ${fmt(nb.d)} mm from it` : ''
       const message = `cannot lay out the pair of nets ${r.net} and ${pr.netN}: ${e.message}${why}`
       if (opts.strict) throw new CompileError(message, r.job.src)
@@ -3346,68 +3451,40 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       failures.push({ net: r.net, leg: 1, legs: 1, from: at, to: at, layers: [at.layer], reason: e.message + why, message, blockers: nb ? [nb.it.id] : [], ...whole })
     }
   }
-  for (const d of done)
-    pairs.push({ id: d.pr.id, nets: [d.r.net!, d.pr.netN], width: d.pr.w, gap: d.pr.g, skew: d.pr.skew, maxUncoupled: d.pr.uncoupled, uncoupled: d.laid.uncoupled, ...d.whole })
-  // the tuner meanders a pair in its centre line and lays it out again
-  const tunePair = (d: PairDone, info: PairInfo, extra: number, tolerance: number, frees: PairFrees): { added: number; note?: string } => {
-    unplacePair(d)
-    const t = d.r.P.tune
-    const res = tunePairCentre(d.laid.job, extra, {
-      pair: { free: frees.free, centreFree: frees.centreFree, padFree: padFree() },
-      room: frees.room,
-      measure: pairLength,
-      tolerance,
-      ...(frees.over !== undefined ? { over: frees.over } : {}),
-      pads: board.items.filter((i): i is Pad => i.kind === 'pad' && (i.net === d.r.net || i.net === d.pr.netN)),
-      ...(frees.amplitude !== undefined ? { amplitude: frees.amplitude } : t?.amplitude !== undefined ? { amplitude: mm(t.amplitude) } : {}),
-      ...(t?.spacing !== undefined ? { spacing: mm(t.spacing) } : {}),
+  for (const { r, pr, tp } of done)
+    pairs.push({
+      id: pr.id,
+      nets: [r.net!, pr.netN],
+      width: pr.w,
+      gap: pr.g,
+      skew: pr.skew,
+      maxUncoupled: pr.uncoupled,
+      uncoupled: tp.laid.uncoupled,
+      ...(tp.src ? { src: tp.src } : {}),
+      ...(tp.chain ? { chain: tp.chain } : {}),
     })
-    if (res.added > 1e-6) {
-      d.laid = res.laid
-      info.uncoupled = d.laid.uncoupled
-    }
-    placePair(d)
-    return { added: res.added, ...(res.note ? { note: res.note } : {}) }
-  }
-  const pairState = (l: PairLaid): PairState => ({
-    centre: l.job.centre,
-    vias: l.job.vias,
-    layers: l.job.layers,
-    ...(l.job.auto ? { auto: l.job.auto } : {}),
-    ...(l.job.radii ? { radii: l.job.radii } : {}),
-    tracks: l.tracks.map(t => ({ layer: t.layer, role: t.role, pts: t.pts as [number, number][], width: t.width, ...(t.prims ? { prims: t.prims } : {}) })),
-    pvias: l.vias.map(v => ({ role: v.role, at: v.at as [number, number], layers: v.layers })),
-    uncoupled: l.uncoupled,
-    lengthP: l.lengthP,
-    lengthN: l.lengthN,
-  })
-  const restorePair = (d: PairDone, info: PairInfo, s: PairState) => {
-    unplacePair(d)
-    const { auto: _auto, radii: _radii, ...job } = d.laid.job
-    d.laid = {
-      ...d.laid,
-      job: { ...job, centre: s.centre, vias: s.vias, layers: s.layers, ...(s.auto ? { auto: s.auto } : {}), ...(s.radii ? { radii: s.radii } : {}) },
-      tracks: s.tracks,
-      vias: s.pvias,
-      uncoupled: s.uncoupled,
-      lengthP: s.lengthP,
-      lengthN: s.lengthN,
-    }
-    delete d.laid.clash
-    info.uncoupled = s.uncoupled
-    placePair(d)
-  }
   const tuneIn: TuneRoute[] = []
   for (const r of runs) {
-    if (r.job.route === undefined) continue
-    const pr = r.pair,
-      info = pr ? pairs.find(p => p.id === pr.id) : undefined
+    // a branch or an extra end is reported with its trunk
+    if (r.job.route === undefined || r.job.sub) continue
+    const pr = r.pair
     const d = pr ? done.find(x => x.r === r) : undefined
-    const routed = !!r.legs && tasks.every(t => t.r !== r || !!t.result) && (!pr || !!info)
+    const routed = tasks.every(t => t.r.job.route !== r.job.route || !!t.result) && (!pr || !!d)
+    const legEnds = runs
+      .filter(x => x.job.route === r.job.route)
+      .flatMap(x =>
+        x.legs.map((l, k) => {
+          const t = tasks.find(q => q.r === x && q.k === k)
+          const copper = t?.result && !t.pruned ? holdOf(t.result, l.width, x.via) : undefined
+          return { from: [nm(l.from.x), nm(l.from.y)] as Pt, to: [nm(l.to.x), nm(l.to.y)] as Pt, ...(copper ? { copper } : {}) }
+        }),
+      )
     tuneIn.push({
       id: r.job.route,
       ...(r.net !== undefined ? { net: r.net } : {}),
       routed,
+      pts: r.pts,
+      ...(legEnds.length ? { legs: legEnds } : {}),
       ...(r.job.length ? { length: r.job.length } : {}),
       ...(r.job.match ? { match: r.job.match } : {}),
       ...(r.P.tune ? { tune: r.P.tune } : {}),
@@ -3419,14 +3496,7 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
               w: pr.w,
               g: pr.g,
               skew: pr.skew,
-              ...(info ? { info } : {}),
-              ...(d && info
-                ? {
-                    lengthen: (extra: number, tol: number, frees: PairFrees) => tunePair(d, info, extra, tol, frees),
-                    state: () => pairState(d.laid),
-                    restore: (s: PairState) => restorePair(d, info, s),
-                  }
-                : {}),
+              ...(d ? { laid: d.tp } : {}),
             },
           }
         : {}),
@@ -3434,15 +3504,14 @@ export function autoroute(board: Board, jobs: AutoRouteJob[], defaults: AutoRout
       ...(r.job.chain ? { chain: r.job.chain } : {}),
     })
   }
-  const routes = tuneIn.length ? tuneRoutes(board, tuneIn, { rules, cache: cache ? { get: k => cache.tune(k), put: (k, e) => cache.putTune(k, e) } : null }) : []
-  cache?.commit()
   const loops = [...new Set(runs.flatMap(r => (r.job.loop && r.net !== undefined ? [r.net] : [])))]
+  board.items = world.items()
   return {
     failures,
     report,
     added,
+    tuning: { routes: tuneIn, rules, cache, next: [nextId] },
     ...(pairs.length ? { pairs } : {}),
-    ...(routes.length ? { routes } : {}),
     ...(loops.length ? { loops } : {}),
     ...(notes.length ? { notes } : {}),
   }
@@ -3457,7 +3526,7 @@ function pairJobOf(
   results: RouteResult[],
   name: (l: string) => string,
   neck?: { width?: number; length?: number },
-  corner?: { radius?: number | 'none' },
+  corner?: number | 'none',
 ): PairJob {
   const start = pr.start!
   const secs: { layer: string; pts: Pt[]; auto: boolean; marks: boolean[]; cross?: boolean }[] = [{ layer: start.layer, pts: [[start.x, start.y]], auto: false, marks: [false] }]
@@ -3501,7 +3570,7 @@ function pairJobOf(
   auto[auto.length - 1] = false
   if (centre.length < 2) throw new PairGeometryError('the pair centre line has no length', [start.x, start.y])
   // only hand drawn corners are rounded, by default with the pitch
-  const rad = corner?.radius === 'none' ? 0 : (corner?.radius ?? pr.w + pr.g)
+  const rad = corner === 'none' ? 0 : (corner ?? pr.w + pr.g)
   const radii = centre.map((_, i) => (rad > 0 && i > 0 && i < centre.length - 1 && !auto[i] && !vias.includes(i) ? rad : 0))
   return {
     id: pr.id,
@@ -3539,24 +3608,8 @@ const rectRing = (x: number, y: number, w: number, h: number): Ring => [
   [x, y + h],
 ]
 
-/** A ratsnest end on its item's layer, the job layer first, then the routing layers. */
-function endpoint(board: Board, net: string, pt: Pt, jobLayer: string, layers: string[], cu: string[]): ResolvedPos {
-  const at = (it: Item): Pt | null => (it.kind === 'pad' || it.kind === 'via' ? it.at : it.kind === 'track' ? it.pts[0] : null)
-  const it = board.items.find(
-    i =>
-      i.net === net &&
-      (() => {
-        const a = at(i)
-        return !!a && same(a, pt)
-      })(),
-  )
-  const own = it ? copperLayersOf(it, cu) : []
-  const layer = own.includes(jobLayer) ? jobLayer : (own.find(l => layers.includes(l)) ?? own[0] ?? jobLayer)
-  return { x: pt[0], y: pt[1], layer, ...(own.length > 1 ? { layers: own } : {}) }
-}
-
-/** Rounds the corners between joined manual tracks in place: an arc down to the width, else a 45 degree chamfer, else square. */
-function roundManual(manual: (Track | null)[], radius: number, width: number, net: string | undefined, free: IsFree): void {
+/** Rounds the corners between joined manual tracks, each changed one put in its place by `swap`: an arc down to the width, else a 45 degree chamfer, else square. */
+function roundManual(manual: (Track | null)[], radius: number, width: number, net: string | undefined, free: IsFree, swap: (t: Track, change: Partial<Track>) => Track): void {
   const lineEnd = (t: Track) => {
     const p = primsOf(t)
     return p[p.length - 1]
@@ -3611,9 +3664,7 @@ function roundManual(manual: (Track | null)[], radius: number, width: number, ne
     const p1 = primsOf(t1)
     const s1 = trackShape([...p1.slice(0, -1), { kind: 'line', from: e.from, to: A }, corner])
     const s2 = trackShape([{ kind: 'line', from: B, to: s0.to }, ...primsOf(t2).slice(1)])
-    t1.pts = s1.pts
-    if (s1.prims) t1.prims = s1.prims
-    t2.pts = s2.pts
-    if (s2.prims) t2.prims = s2.prims
+    manual[i - 1] = swap(t1, { pts: s1.pts, ...(s1.prims ? { prims: s1.prims } : {}) })
+    manual[i] = swap(t2, { pts: s2.pts, ...(s2.prims ? { prims: s2.prims } : {}) })
   }
 }

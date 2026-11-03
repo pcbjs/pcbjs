@@ -1,12 +1,12 @@
-import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { env, exists, isAbsolute, isDir, join, readDir, readText, relative, resolve, sha1, windows } from './host.js'
+import { keepout } from '@pcbjs/core'
 import { anchorModel, h } from '@pcbjs/core/jsx-runtime'
-import { callerSite, defineFootprint, SchematicError } from '@pcbjs/core/schematic'
-import type { FootprintFactory, FootprintProps, ModelSpec, PcbNode } from '@pcbjs/core/types'
+import { defineFootprint } from '@pcbjs/core/internal/footprint'
+import { SchematicError } from '@pcbjs/core/internal/nets'
+import { callerSite } from '@pcbjs/core/internal/provenance'
+import { realm } from '@pcbjs/core/internal/realm'
+import type { FootprintFactory, FootprintProps, ModelSpec, PcbNode } from '@pcbjs/core/internal/types'
 import { footprintSpecs, KICAD_SILK_MODES, padPins, readKicadMod, type ElementSpec, type KFootprint, type KicadSilkMode, type KModel } from './footprint.js'
-
-const REGISTRY = Symbol.for('pcbjs.kicad.config')
 
 /** The `kicad` section of pcb.config.ts. */
 export interface KicadConfig {
@@ -18,25 +18,26 @@ export interface KicadConfig {
 
 /** Called by the cli for every project it loads. */
 export function setKicadConfig(root: string, config: KicadConfig | undefined): void {
-  ;(globalThis as any)[REGISTRY] = { root, config: config ?? {} }
+  realm().kicad = { root, config: config ?? {} }
 }
-function registered(): { root: string; config: KicadConfig } {
-  return (globalThis as any)[REGISTRY] ?? { root: process.cwd(), config: {} }
+/** No project before the cli registers one: only the installed libraries and absolute paths. */
+function registered(): { root: string | null; config: KicadConfig } {
+  return realm().kicad ?? { root: null, config: {} }
 }
 
 /** The installed KiCad share folders, newest version first. */
 export function kicadShareDirs(): string[] {
   const out: string[] = []
   const add = (d: string) => {
-    if (existsSync(d) && !out.includes(d)) out.push(d)
+    if (exists(d) && !out.includes(d)) out.push(d)
   }
   add('/Applications/KiCad/KiCad.app/Contents/SharedSupport')
   add('/usr/share/kicad')
   add('/usr/local/share/kicad')
   add('/opt/homebrew/share/kicad')
-  const pf = process.env.ProgramFiles
-  if (pf && existsSync(join(pf, 'KiCad'))) {
-    const vers = readdirSync(join(pf, 'KiCad')).sort((a, b) => parseFloat(b) - parseFloat(a))
+  const pf = env('ProgramFiles')
+  if (pf && exists(join(pf, 'KiCad'))) {
+    const vers = readDir(join(pf, 'KiCad')).sort((a, b) => parseFloat(b) - parseFloat(a))
     for (const v of vers) add(join(pf, 'KiCad', v, 'share', 'kicad'))
   }
   return out
@@ -46,19 +47,20 @@ const FOOTPRINT_VARS = ['KICAD10_FOOTPRINT_DIR', 'KICAD9_FOOTPRINT_DIR', 'KICAD8
 const MODEL_VARS = ['KICAD10_3DMODEL_DIR', 'KICAD9_3DMODEL_DIR', 'KICAD8_3DMODEL_DIR', 'KICAD7_3DMODEL_DIR', 'KICAD6_3DMODEL_DIR', 'KISYS3DMOD']
 
 export function installedFootprints(): string | null {
-  for (const v of FOOTPRINT_VARS) if (process.env[v] && existsSync(process.env[v]!)) return process.env[v]!
-  for (const d of kicadShareDirs()) if (existsSync(join(d, 'footprints'))) return join(d, 'footprints')
+  for (const v of FOOTPRINT_VARS) if (env(v) && exists(env(v)!)) return env(v)!
+  for (const d of kicadShareDirs()) if (exists(join(d, 'footprints'))) return join(d, 'footprints')
   return null
 }
 export function installedModels(): string | null {
   const cfg = registered().config.models
-  if (cfg) return resolve(registered().root, cfg)
-  for (const v of MODEL_VARS) if (process.env[v] && existsSync(process.env[v]!)) return process.env[v]!
-  for (const d of kicadShareDirs()) if (existsSync(join(d, '3dmodels'))) return join(d, '3dmodels')
+  const root = registered().root
+  if (cfg && (root || isAbsolute(cfg))) return resolve(root ?? '/', cfg)
+  for (const v of MODEL_VARS) if (env(v) && exists(env(v)!)) return env(v)!
+  for (const d of kicadShareDirs()) if (exists(join(d, '3dmodels'))) return join(d, '3dmodels')
   return null
 }
 
-const splitList = (s: string | undefined) => (s ?? '').split(process.platform === 'win32' ? ';' : ':').filter(Boolean)
+const splitList = (s: string | undefined) => (s ?? '').split(windows() ? ';' : ':').filter(Boolean)
 
 /** The library roots in search order: the project, pcb.config.ts, KICAD_FOOTPRINTS, the installed library. */
 export function footprintRoots(o: { root?: string; footprints?: string[] } = {}): string[] {
@@ -66,16 +68,17 @@ export function footprintRoots(o: { root?: string; footprints?: string[] } = {})
   const root = o.root ?? reg.root
   const out: string[] = []
   const add = (d: string) => {
-    const a = resolve(root, d)
-    if (existsSync(a) && !out.includes(a)) out.push(a)
+    if (!root && !isAbsolute(d)) return
+    const a = resolve(root ?? '/', d)
+    if (exists(a) && !out.includes(a)) out.push(a)
   }
-  for (const d of ['.', 'lib', 'footprints', 'lib/footprints']) {
-    const dir = resolve(root, d)
-    if (!existsSync(dir)) continue
-    for (const f of readdirSync(dir)) if (f.endsWith('.pretty')) add(join(dir, f))
+  for (const d of root ? ['.', 'lib', 'footprints', 'lib/footprints'] : []) {
+    const dir = resolve(root!, d)
+    if (!exists(dir)) continue
+    for (const f of readDir(dir)) if (f.endsWith('.pretty')) add(join(dir, f))
   }
   for (const d of o.footprints ?? reg.config.footprints ?? []) add(d)
-  for (const d of splitList(process.env.KICAD_FOOTPRINTS)) add(d)
+  for (const d of splitList(env('KICAD_FOOTPRINTS'))) add(d)
   const installed = installedFootprints()
   if (installed) add(installed)
   return out
@@ -84,7 +87,7 @@ export function footprintRoots(o: { root?: string; footprints?: string[] } = {})
 function prettyDirs(root: string): string[] {
   if (root.endsWith('.pretty')) return [root]
   try {
-    return readdirSync(root)
+    return readDir(root)
       .filter(f => f.endsWith('.pretty'))
       .map(f => join(root, f))
   } catch {
@@ -95,8 +98,10 @@ function prettyDirs(root: string): string[] {
 /** The `.kicad_mod` file of a `Lib:Name`, a bare `Name` searched in every library, or a path. */
 export function findFootprint(ref: string, o: { root?: string; footprints?: string[] } = {}): string | null {
   if (ref.endsWith('.kicad_mod')) {
-    const f = resolve(o.root ?? registered().root, ref)
-    return existsSync(f) ? f : null
+    const base = o.root ?? registered().root
+    if (!base && !isAbsolute(ref)) return null
+    const f = resolve(base ?? '/', ref)
+    return exists(f) ? f : null
   }
   const colon = ref.indexOf(':')
   const lib = colon >= 0 ? ref.slice(0, colon) : null,
@@ -105,7 +110,7 @@ export function findFootprint(ref: string, o: { root?: string; footprints?: stri
     for (const p of prettyDirs(r)) {
       if (lib !== null && !p.endsWith(`/${lib}.pretty`) && !p.endsWith(`\\${lib}.pretty`)) continue
       const f = join(p, `${name}.kicad_mod`)
-      if (existsSync(f)) return f
+      if (exists(f)) return f
     }
   }
   return null
@@ -119,25 +124,25 @@ export function libraryOf(file: string): string | null {
 
 export function isInstalled(file: string): boolean {
   const installed = installedFootprints()
-  return !!installed && resolve(file).startsWith(resolve(installed) + (process.platform === 'win32' ? '\\' : '/'))
+  return !!installed && resolve(file).startsWith(resolve(installed) + (windows() ? '\\' : '/'))
 }
 
 /** A KiCad model path with its variables resolved; a missing `.wrl` falls back to the `.step` beside it and the other way round. */
 export function kicadModel(path: string, projectDir?: string): string {
   let out = path.replace(/\$\{([A-Za-z0-9_]+)\}|\$\(([A-Za-z0-9_]+)\)/g, (m, a, b) => {
     const v = a ?? b
-    if (MODEL_VARS.includes(v)) return process.env[v] && existsSync(process.env[v]!) ? process.env[v]! : (installedModels() ?? m)
-    if (v === 'KIPRJMOD') return projectDir ?? registered().root
-    return process.env[v] ?? m
+    if (MODEL_VARS.includes(v)) return env(v) && exists(env(v)!) ? env(v)! : (installedModels() ?? m)
+    if (v === 'KIPRJMOD') return projectDir ?? registered().root ?? m
+    return env(v) ?? m
   })
-  if (!existsSync(out)) {
+  if (!exists(out)) {
     for (const [a, b] of [
       [/\.wrl$/i, '.step'],
       [/\.step$/i, '.wrl'],
       [/\.stp$/i, '.step'],
     ] as const) {
       const alt = out.replace(a, b)
-      if (alt !== out && existsSync(alt)) {
+      if (alt !== out && exists(alt)) {
         out = alt
         break
       }
@@ -146,11 +151,15 @@ export function kicadModel(path: string, projectDir?: string): string {
   return out
 }
 
-/** A ${KIPRJMOD} or relative model path made relative to `fromDir`; null for a library model or a missing file. */
+const MODEL_VAR = /^\$\{(KICAD\d*_3DMODEL_DIR|KISYS3DMOD)\}\//
+
+/** `${KICAD10_3DMODEL_DIR}/Lib.3dshapes/Name.wrl` as `kicad:Lib.3dshapes/Name.step`; another path as KiCad wrote it. */
+export const kicadSource = (path: string): string => (MODEL_VAR.test(path) ? `kicad:${path.replace(MODEL_VAR, '').replace(/\.(wrl|stp)$/i, '.step')}` : path)
+
+/** A ${KIPRJMOD} or relative model path made relative to `fromDir`, there or not; null for a library model. */
 export function projectModelPath(path: string, kicadProject: string, fromDir: string): string | null {
   if (/\$\{(?!KIPRJMOD\})[A-Za-z0-9_]+\}/.test(path)) return null
   const abs = kicadModel(/^\$\{KIPRJMOD\}/.test(path) || isAbsolute(path) ? path : join('${KIPRJMOD}', path), kicadProject)
-  if (!existsSync(abs)) return null
   const rel = relative(fromDir, abs).split('\\').join('/')
   return rel.startsWith('.') ? rel : `./${rel}`
 }
@@ -160,7 +169,8 @@ export function modelSpec(fp: KFootprint, projectDir?: string): ModelSpec | unde
   const m: KModel | undefined = fp.models.find(x => !x.hidden && x.path)
   if (!m) return undefined
   const file = kicadModel(m.path, projectDir)
-  const spec: Record<string, unknown> = { file: isAbsolute(file) || /^\$\{/.test(file) ? file : resolve(projectDir ?? registered().root, file) }
+  // a library model not installed here is fetched by its kicad: name
+  const spec: Record<string, unknown> = { file: /^\$\{/.test(file) ? kicadSource(m.path) : isAbsolute(file) ? file : resolve(projectDir ?? registered().root ?? '/', file) }
   if (m.offset.some(v => v !== 0)) spec.offset = m.offset
   if (m.scale.some(v => v !== 1)) spec.scale = m.scale
   if (m.rotate.some(v => v !== 0)) spec.rotate = m.rotate
@@ -195,23 +205,22 @@ export function prefixOf(lib: string | undefined, name: string): string {
 /** A list renames the pins in pad order, a record maps a pad number to a name; pads named NC are no pin. */
 export type KicadPinNames = readonly string[] | Readonly<Record<string, string>>
 
+/** `withPins(kicadFootprint(id), names)` of @pcbjs/lib renames the pins. */
 export interface KicadFootprintOptions {
-  /** rename the pins, `['VIN', 'GND', 'EN', 'NC', 'VOUT']` or `{ 1: 'VIN', EP: 'GND' }` */
-  pinNames?: KicadPinNames
   prefix?: string
   /** default the footprint name */
   value?: string
-  /** the 3D model, over the one the footprint names; false for none */
-  model?: ModelSpec | false
-  /** extra library roots, searched first */
-  footprints?: string[]
+  /** the 3D model, over the one the footprint names; `{ kind: 'none' }` for none */
+  model?: ModelSpec
   /** 'full' and 'open' as drawn, 'none' without any; default 'full' */
   silk?: KicadSilkMode
 }
 
 export function specNodes(specs: ElementSpec[], names?: Map<string, string>): PcbNode[] {
   return specs.map(s => {
-    const props = { ...s.props }
+    const { d, ...props } = s.props
+    if (s.type === 'keepout') return keepout(String(d), props)
+    if (d !== undefined) props.d = d
     if (s.type === 'pad' && names?.has(String(props.num))) props.name = names.get(String(props.num))
     return h(s.type, props, ...(s.children ?? []))
   })
@@ -243,15 +252,18 @@ export function renamePins(name: string, pins: string[], pinNames: KicadPinNames
   return { names, pins: out, nc }
 }
 
+// withPins of @pcbjs/lib renames a factory that carries this
+const RENAME = Symbol.for('pcbjs.footprint.rename')
+
 /** A footprint factory from a read footprint; its pins are the pad numbers in pad order, renamed by `pinNames`. */
-export function footprintFactory(fp: KFootprint, o: KicadFootprintOptions = {}): FootprintFactory<string, FootprintProps> {
+export function footprintFactory(fp: KFootprint, o: KicadFootprintOptions = {}, pinNames?: KicadPinNames): FootprintFactory<string, FootprintProps> {
   if (o.silk !== undefined && !KICAD_SILK_MODES.includes(o.silk))
     throw new TypeError(`${fp.name}: silk must be ${KICAD_SILK_MODES.map(m => `'${m}'`).join(', ')}, got ${JSON.stringify(o.silk)}`)
   // without its silk it is another footprint, as KiCad's NoSilkScreen variants are
   const id = `${fp.lib ?? libraryOf(fp.file ?? '') ?? 'kicad'}:${fp.name}${o.silk === 'none' ? '_NoSilkScreen' : ''}`
-  const { names, pins, nc } = renamePins(fp.name, padPins(fp), o.pinNames)
+  const { names, pins, nc } = renamePins(fp.name, padPins(fp), pinNames)
   const kids = specNodes(footprintSpecs(fp, ['F.Cu', 'B.Cu'], { silk: o.silk }), names)
-  const model = o.model === false ? undefined : (o.model ?? modelSpec(fp))
+  const model = o.model ?? modelSpec(fp)
   const base: Record<string, unknown> = { id, value: o.value ?? fp.name }
   if (model) base.model = model
   if (!fp.attrs.bom) base.bom = false
@@ -263,14 +275,13 @@ export function footprintFactory(fp: KFootprint, o: KicadFootprintOptions = {}):
     return h('footprint', { ...base, ...rest }, ...kids, more)
   }
   Object.defineProperty(render, 'name', { value: fp.name })
-  return defineFootprint<string, FootprintProps>(render, {
+  const f = defineFootprint<string, FootprintProps>(render, {
     pins,
     nc,
     prefix: o.prefix ?? prefixOf(fp.lib, fp.name),
-    id,
-    name: fp.name,
-    ...(fp.netTie ? { netTie: fp.netTie } : {}),
   })
+  Object.defineProperty(f, RENAME, { value: (names: KicadPinNames, more: KicadFootprintOptions) => footprintFactory(fp, { ...o, ...more }, names) })
+  return f
 }
 
 const CACHE = Symbol.for('pcbjs.kicad.cache')
@@ -280,8 +291,8 @@ function cache(): Map<string, { hash: string; fp: KFootprint }> {
 
 /** Read a `.kicad_mod` through a cache keyed by path and content. */
 export function loadFootprint(file: string): KFootprint {
-  const text = readFileSync(file, 'utf8')
-  const hash = createHash('sha1').update(text).digest('hex')
+  const text = readText(file)
+  const hash = sha1(text)
   const hit = cache().get(file)
   if (hit && hit.hash === hash) return hit.fp
   const fp = readKicadMod(text)
@@ -297,7 +308,14 @@ export function loadFootprint(file: string): KFootprint {
 /** A KiCad library footprint as a factory: `kicadFootprint('Package_SO:SOIC-8_3.9x4.9mm_P1.27mm')`. */
 export function kicadFootprint(ref: string, o: KicadFootprintOptions = {}): FootprintFactory<string, FootprintProps> {
   if (typeof ref !== 'string' || !ref) throw new TypeError(`kicadFootprint needs a footprint such as 'Package_SO:SOIC-8_3.9x4.9mm_P1.27mm', got ${JSON.stringify(ref)}`)
-  const file = findFootprint(ref, { footprints: o.footprints ? [...o.footprints, ...(registered().config.footprints ?? [])] : undefined })
+  for (const k of ['pinNames', 'footprints'])
+    if (k in o)
+      throw new TypeError(
+        k === 'pinNames'
+          ? 'kicadFootprint: rename pins with withPins(kicadFootprint(id), names) of @pcbjs/lib'
+          : 'kicadFootprint: library folders go in kicad.footprints of pcb.config.ts',
+      )
+  const file = findFootprint(ref)
   if (!file) {
     const roots = footprintRoots()
     throw new SchematicError(
@@ -308,14 +326,8 @@ export function kicadFootprint(ref: string, o: KicadFootprintOptions = {}): Foot
   const colon = ref.indexOf(':')
   if (colon >= 0 && !fp.lib) fp = { ...fp, lib: ref.slice(0, colon) }
   // a relative model file is relative to the caller, as every model literal is
-  const model = o.model ? anchorModel(o.model, callerSite(true)?.file) : o.model
+  const model = o.model ? anchorModel(o.model, callerSite()?.file) : o.model
   return footprintFactory(fp, model === o.model ? o : { ...o, model })
 }
 
-export const isDir = (p: string): boolean => {
-  try {
-    return statSync(p).isDirectory()
-  } catch {
-    return false
-  }
-}
+export { isDir }

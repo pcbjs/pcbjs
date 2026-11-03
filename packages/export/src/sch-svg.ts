@@ -1,9 +1,9 @@
 // The schematic as SVG: one markup in CSS variables for the viewer, and a standalone file per theme. Elements carry the PCB's
-// keys, data-ref, data-pin, data-net and data-items with the pad ids, so the viewer can cross-probe.
+// keys, data-ref, data-pin, data-net and data-items with the pad uids, so the viewer can cross-probe.
 import type { Board, Mat, Pt } from '@pcbjs/core/model'
-import type { PinSide, SchDrawing, SchLabel, SchSymbol } from '@pcbjs/core/sch-model'
-import { strokeText, type TextAnchor } from '@pcbjs/core/text'
-import { PIN_TEXT } from '@pcbjs/core/sch-symbol'
+import type { PinSide, SchDrawing, SchLabel, SchSymbol } from '@pcbjs/core/internal/sch-model'
+import { strokeText, type TextAnchor } from '@pcbjs/core/internal/text'
+import { PIN_TEXT } from '@pcbjs/core/internal/sch-symbol'
 
 const f = (v: number) => String(Math.round(v * 1000) / 1000)
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
@@ -88,7 +88,7 @@ function symbolMarkup(s: SchSymbol, g: number): string {
       `<g class="sch-pin" data-kind="pin" data-ref="${esc(s.ref)}" data-pin="${esc(p.name)}"${p.net ? ` data-net="${esc(p.net)}"` : ''}${p.items.length ? ` data-items="${p.items.join(' ')}"` : ''}><path class="sch-pin-line" d="M${f(p.end[0])} ${f(p.end[1])}L${f(p.root[0])} ${f(p.root[1])}"/>${name ? `<path class="sch-name" d="${name}"/>` : ''}</g>`,
     )
   }
-  out.push(`<path class="sch-ref" d="${textPath(s.ref, s.refAt, PIN_TEXT)}"/>`)
+  out.push(`<path class="sch-ref" d="${textPath(s.displayRef ?? s.ref, s.refAt, PIN_TEXT)}"/>`)
   if (s.value) out.push(`<path class="sch-value" d="${textPath(s.value, s.valueAt, PIN_TEXT)}"/>`)
   return `<g class="sch-sym" id="sch-sym-${ID(s.ref)}" data-kind="symbol" data-ref="${esc(s.ref)}"${s.items.length ? ` data-items="${s.items.join(' ')}"` : ''}>${out.join('')}</g>`
 }
@@ -98,41 +98,42 @@ function labelMarkup(l: SchLabel, g: number): string {
     [x, y] = l.at
   const at = (k: number, n = 0): Pt => [x + v[0] * k * g - v[1] * n * g, y + v[1] * k * g + v[0] * n * g]
   const P = (p: Pt) => `${f(p[0])} ${f(p[1])}`
+  const label = l.displayName ?? l.net
   const base = `data-kind="label" data-id="${l.id}" data-net="${esc(l.net)}"`
   const vertical = l.side === 'top' || l.side === 'bottom'
   if (l.kind === 'gnd') {
     const d = `M${P(at(0))}L${P(at(1))}M${P(at(1, -0.6))}L${P(at(1, 0.6))}M${P(at(1.25, -0.4))}L${P(at(1.25, 0.4))}M${P(at(1.5, -0.2))}L${P(at(1.5, 0.2))}`
-    const name = /^GND$/i.test(l.net)
+    const name = /^GND$/i.test(label)
       ? ''
       : textPath(
-          l.net,
+          label,
           vertical
             ? [at(2.1)[0] - PIN_TEXT * 1.5, at(2.1)[1] + (l.side === 'bottom' ? PIN_TEXT : 0)]
-            : [at(1.9)[0] - (l.side === 'left' ? width(l.net, PIN_TEXT) : 0), at(1.9)[1] + PIN_TEXT / 2],
+            : [at(1.9)[0] - (l.side === 'left' ? width(label, PIN_TEXT) : 0), at(1.9)[1] + PIN_TEXT / 2],
           PIN_TEXT,
         )
     return `<g class="sch-label sch-power" ${base}><path class="sch-power-line" d="${d}"/>${name ? `<path class="sch-label-text" d="${name}"/>` : ''}</g>`
   }
   if (l.kind === 'vcc') {
     const d = `M${P(at(0))}L${P(at(1))}M${P(at(1, -0.5))}L${P(at(1, 0.5))}`
-    const w = width(l.net, PIN_TEXT)
+    const w = width(label, PIN_TEXT)
     const t = vertical
       ? ([at(1.3)[0] - w / 2, at(1.3)[1] + (l.side === 'bottom' ? PIN_TEXT : 0)] as Pt)
       : ([l.side === 'left' ? at(1.3)[0] - w : at(1.3)[0], at(1.3)[1] + PIN_TEXT / 2] as Pt)
-    return `<g class="sch-label sch-power" ${base}><path class="sch-power-line" d="${d}"/><path class="sch-label-text" d="${textPath(l.net, t, PIN_TEXT)}"/></g>`
+    return `<g class="sch-label sch-power" ${base}><path class="sch-power-line" d="${d}"/><path class="sch-label-text" d="${textPath(label, t, PIN_TEXT)}"/></g>`
   }
   // a flag pointing at its pin, the name inside
-  const w = width(l.net, PIN_TEXT) / g,
+  const w = width(label, PIN_TEXT) / g,
     half = 0.35
   const d = `M${P(at(0))}L${P(at(0.4, -half))}L${P(at(0.7 + w, -half))}L${P(at(0.7 + w, half))}L${P(at(0.4, half))}Z`
   const text = vertical
-    ? textPath(l.net, [x + PIN_TEXT / 2, l.side === 'top' ? y - 0.5 * g : y + (0.5 + w) * g], PIN_TEXT, 'start', -90)
-    : textPath(l.net, [l.side === 'right' ? x + 0.5 * g : x - (0.5 + w) * g, y + PIN_TEXT / 2], PIN_TEXT)
+    ? textPath(label, [x + PIN_TEXT / 2, l.side === 'top' ? y - 0.5 * g : y + (0.5 + w) * g], PIN_TEXT, 'start', -90)
+    : textPath(label, [l.side === 'right' ? x + 0.5 * g : x - (0.5 + w) * g, y + PIN_TEXT / 2], PIN_TEXT)
   return `<g class="sch-label" ${base}><path class="sch-flag" d="${d}"/><path class="sch-label-text" d="${text}"/></g>`
 }
 
 /** The drawing as SVG elements in `--sch-*` colours, without the <svg> around it; the viewBox is `d.page`. A paper adds its frame and title block. */
-export function schematicMarkup(d: SchDrawing, board?: Pick<Board, 'name' | 'revision'>): string {
+export function schematicMarkup(d: SchDrawing, board?: Pick<Board, 'name' | 'rev'>): string {
   const g = d.grid
   const [x0, y0, x1, y1] = d.page
   const out: string[] = []
@@ -142,7 +143,7 @@ export function schematicMarkup(d: SchDrawing, board?: Pick<Board, 'name' | 'rev
     out.push(
       `<g class="sch-frame"><rect class="sch-paper" x="0" y="0" width="${f(w)}" height="${f(h)}"/><rect class="sch-border" x="5" y="5" width="${f(w - 10)}" height="${f(h - 10)}"/>` +
         `<rect class="sch-border" x="${f(tb.x)}" y="${f(tb.y)}" width="${f(tb.w)}" height="${f(tb.h)}"/>` +
-        `<path class="sch-title" d="${textPath(d.title, [tb.x + 3, tb.y + 6], 2.5)}${board ? textPath(`${board.name}  rev ${board.revision}  ${d.paper.name}`, [tb.x + 3, tb.y + 12], 1.5) : ''}"/></g>`,
+        `<path class="sch-title" d="${textPath(d.title, [tb.x + 3, tb.y + 6], 2.5)}${board ? textPath(`${board.name}  rev ${board.rev}  ${d.paper.name}`, [tb.x + 3, tb.y + 12], 1.5) : ''}"/></g>`,
     )
   } else out.push(`<rect class="sch-paper" x="${f(x0)}" y="${f(y0)}" width="${f(x1 - x0)}" height="${f(y1 - y0)}"/>`)
   for (const s of d.sheets) {

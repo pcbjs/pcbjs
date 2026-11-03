@@ -1,9 +1,11 @@
 // Loops in a net's copper, pours left out: holes in the union of a layer's copper, and cycles through vias and plated pads between layers.
+import { marker } from './messages.js'
 import type { Board, DrcMarker, Item, Pt, Ring } from '@pcbjs/core/model'
 import { area, centroid, intersection, offset, polysToRings, union } from './geom.js'
 import { copperLayers } from './layers.js'
 import { copperLayersOf } from './copper.js'
-import { inside, ringSet, solidRings, type RingSet } from './obstacles.js'
+import { solidRings } from './obstacles.js'
+import { inside, ringSet, type RingSet } from './spatial.js'
 import { classOf } from './netclass.js'
 
 /** mm²; a smaller hole is a sliver of the offsets, not a loop. */
@@ -22,7 +24,7 @@ export interface Loop {
 const f2 = (v: number) => v.toFixed(2)
 
 export function loopLabel(it: Item): string {
-  if (it.kind === 'pad') return `pad ${it.ref ?? ''}.${it.num}`
+  if (it.kind === 'pad') return `pad ${it.ref ?? ''}/${it.num}`
   const route = it.kind === 'track' || it.kind === 'via' ? it.route : undefined
   if (it.kind === 'via' && !route) return `via at (${f2(it.at[0])}, ${f2(it.at[1])})`
   return `${it.kind}${route ? ` ${route}` : it.ref ? ` of ${it.ref}` : ''}`
@@ -30,11 +32,11 @@ export function loopLabel(it: Item): string {
 
 const counted = (it: Item, cu: string[]) => it.net !== undefined && it.kind !== 'zone' && copperLayersOf(it, cu).length > 0
 
-/** The loops of every net, or of `only`, over the board's copper but pours. */
-export function netLoops(board: Board, only?: Set<string>): Loop[] {
+/** The loops of every net, or of `only`, over the board's copper but pours, or over `items` in its place. */
+export function netLoops(board: Board, only?: Set<string>, items: readonly Item[] = board.items): Loop[] {
   const cu = copperLayers(board.copper)
   const byNet = new Map<string, Item[]>()
-  for (const it of board.items) {
+  for (const it of items) {
     if (!counted(it, cu) || (only && !only.has(it.net!))) continue
     let l = byNet.get(it.net!)
     if (!l) byNet.set(it.net!, (l = []))
@@ -220,15 +222,15 @@ export function loopFindings(board: Board): DrcMarker[] {
       const names = l.items.slice(0, 6).map(loopLabel)
       const more = l.items.length > 6 ? ` and ${l.items.length - 6} more` : ''
       const src = l.items.find(it => it.kind === 'track' && it.src)?.src
-      const m: DrcMarker = {
+      const m = marker({
         severity: 'warning',
         rule: 'net-loop',
-        net: l.net,
+        refs: [`net:${l.net}`],
         at: l.at,
         items: l.items.map(it => it.id),
-        message: `net ${l.net} forms a loop${l.layer ? ` on ${l.layer}` : ' between layers'} through ${names.join(', ')}${more}; route it as a tree, or mark it intended with .loop() on a route of the net or loops: true in its class`,
-      }
-      if (l.layer) m.layer = l.layer
+        args: { net: l.net, through: names, more },
+        ...(l.layer ? { layer: l.layer } : {}),
+      })
       if (src) m.src = src
       return m
     })

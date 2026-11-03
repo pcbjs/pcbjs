@@ -1,6 +1,5 @@
 // `pcbjs import board`: a `.kicad_pcb` as pcb.tsx, pcb.sch.ts, pcb.copper.tsx, pcb.art.tsx, lib/ and pcb.config.ts.
-import { existsSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, exists, join } from './host.js'
 import { readKicadDru, readKicadPcb, readKicadPro, type KBoard, type KCustomRule, type KProject, type KTrack, type KVia } from './board.js'
 import {
   footprintPadSpecs,
@@ -16,12 +15,13 @@ import {
   textSpec,
   type ElementSpec,
   type KFootprint,
+  type KGraphic,
   type KPad,
   type KZone,
 } from './footprint.js'
 import { findFootprint, installedFootprints, isInstalled, libraryOf, loadFootprint, prefixOf } from './library.js'
 import { code, footprintModule, ident, jsx, key, lit, str } from './emit.js'
-import { fmt, nm, normAngle, rotate, svgArcTo, type Pt } from './geom.js'
+import { arcThrough, fmt, nm, normAngle, rotate, type Pt } from './geom.js'
 import { mapDru, maxPad, mergePartClearance, type DruMapping, type PadTypeMM, type PartRuleSet } from './dru.js'
 import { readSchematicFields, schematicFiles, type KSymbolFields } from './schematic.js'
 import { findFont, kicadOutlineText, type FoundFont } from './fonts.js'
@@ -59,8 +59,8 @@ const xy = (p: Pt) => `${fmt(p[0])} ${fmt(p[1])}`
 const natural = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true })
 const prefixOfRef = (ref: string) => /^[A-Za-z_]+/.exec(ref)?.[0].replace(/_+$/, '') || ref
 const PCBJS_REF = /^[A-Za-z_]\w*$/
-const AUTO_REF = /^[A-Z]+\d+$/
 const COPPER = /^(F|B)\.Cu$|^In\d+\.Cu$/
+const STACKUP_BUILDER: Record<number, string> = { 4: 'fourLayer', 6: 'sixLayer', 8: 'eightLayer' }
 
 /** Unique identifiers in the shared namespace of the generated files. */
 class Names {
@@ -73,15 +73,13 @@ class Names {
     'pour',
     'keepout',
     'kicadFootprint',
-    'kicadModel',
     'defineFootprint',
     'defineConfig',
-    'defineDefaultRules',
+    'defineDefaultBoard',
     'copper',
     'Art',
     'VIA',
     'AS_DRAWN',
-    'source',
     'React',
     'h',
     'Fragment',
@@ -318,9 +316,15 @@ export function importBoardData(
       }
       refOf.set(fp, ref)
     }
+    // the binding name is the ref, so a ref the generated files need for themselves gives way
     for (const fp of [...board.footprints].sort((a, b) => natural(refOf.get(a)!, refOf.get(b)!))) {
-      const r = refOf.get(fp)!
-      refName.set(fp, names.take(PCBJS_REF.test(r) ? r : ident(r, 'X')))
+      const r = refOf.get(fp)!,
+        n = names.take(ident(r, 'X'))
+      if (n !== r) {
+        notes.push(`ref ${r} is a name the generated files or TypeScript use: imported as ${n}`)
+        refOf.set(fp, n)
+      }
+      refName.set(fp, n)
     }
   }
 
@@ -517,7 +521,7 @@ export function importBoardData(
       if (count.size > 1) notes.push(`${ref} pin ${pin}: its pads are on ${[...count.keys()].map(n => n ?? 'no net').join(' and ')}; connected to ${best ?? 'NC'}`)
       conn.set(pin, best)
     }
-    const part = def.pins.length > 0
+    const part = true
     insts.push({ fp, def, ref, name: '', part, conn, pads })
   }
   insts.sort((a, b) => natural(a.ref, b.ref))
@@ -588,12 +592,12 @@ export function importBoardData(
     files.set(`${libDir}/${d.name}.tsx`, m.code)
   }
 
-  const sourcing: { name: string; spec: string }[] = []
+  let sourced = 0
   const dnpRefs = new Set<string>()
   {
     const lines: string[] = [
       `// The nets and parts of ${src}: one part per footprint, named by its ref, each pad's net given by .connect().`,
-      '// Pins are the pad numbers; rename them with pinNames on the footprint, then connect by name.',
+      '// Pins are the pad numbers; to connect by name, name the pads in the footprint module and list the names in its pins.',
     ]
     const imports = new Map<string, Set<string>>()
     const need = (mod: string, n: string) => {
@@ -625,7 +629,7 @@ export function importBoardData(
       const value = i.fp.properties.Value ?? ''
       const sym = o.symbols?.get(i.fp.properties.Reference ?? i.ref)
       const source = sourceOf(i.fp, sym)
-      if (Object.keys(source).length) sourcing.push({ name: i.name, spec: lit(source) })
+      if (Object.keys(source).length) sourced++
       const opts: Record<string, unknown> = {}
       if (!i.fp.attrs.bom) opts.bom = false
       if (!i.fp.attrs.pos) opts.pos = false
@@ -633,50 +637,33 @@ export function importBoardData(
         opts.dnp = true
         dnpRefs.add(i.ref)
       }
-      let args: string
-      if (Object.keys(opts).length) args = lit({ ...(value ? { value } : {}), ...opts })
-      else args = value ? str(value) : ''
+      if (i.name !== i.ref) opts.ref = i.ref
+      const args = Object.keys(opts).length ? `${value ? str(value) : 'undefined'}, ${lit(opts)}` : value ? str(value) : ''
       const conn = [...i.conn].map(([pin, n]) => `${key(pin)}: ${netRef(n) ?? 'NC'}`)
-      const refCall = AUTO_REF.test(i.ref) && i.name === i.ref ? '' : `.ref(${str(i.ref)})`
+      const sourceCall = Object.keys(source).length ? `.source(${lit(source)})` : ''
       const fns = i.fp.pads.filter(p => p.pinFunction && p.pinFunction !== p.num && !/^Pin_?\d+$/i.test(p.pinFunction)).map(p => `${p.num} ${p.pinFunction}`)
       const fnNote = fns.length ? ` // ${[...new Set(fns)].join(', ')}` : ''
       const pr = partRules.get(i.ref)
       const rulesCall = pr && Object.keys(pr).length ? `.rules(${lit(pr)})` : ''
-      lines.push(`export const ${i.name} = ${i.def.name}(${args})${refCall}.connect({ ${conn.join(', ')} })${rulesCall}${fnNote}`)
+      lines.push(`export const ${i.name} = ${i.def.name}(${args})${conn.length ? `.connect({ ${conn.join(', ')} })` : ''}${sourceCall}${rulesCall}${fnNote}`)
     }
+    if (sourced)
+      lines.splice(
+        2,
+        0,
+        `// .source() carries each part's fields, MPN, Manufacturer, LCSC as 'MPN:LCSC' and the rest, from ${o.schematicName ? `the symbols of ${o.schematicName} over ` : ''}the footprints.`,
+      )
     files.set(`${stem}.sch.ts`, lines.join('\n') + '\n')
   }
 
-  // one source() per set of equal fields
-  if (sourcing.length) {
-    const groups = new Map<string, string[]>()
-    for (const x of sourcing) groups.set(x.spec, [...(groups.get(x.spec) ?? []), x.name])
-    const from = o.schematicName ? `the symbols of ${o.schematicName} and the footprints of ${src}` : `the footprints of ${src}`
-    const lines = [
-      `// Part numbers and fields of ${src}, from ${from}: MPN, Manufacturer, LCSC as 'MPN:LCSC' and the project's own fields.`,
-      "// A fab target orders its tag first, 'MPN:LCSC' for JLCPCB, then MPN; see the docs topic sourcing.",
-      `import { source } from '@pcbjs/core'`,
-    ]
-    const used = sourcing.map(x => x.name)
-    lines.push(
-      used.length > 12
-        ? `import {\n  ${chunk(used, 12)
-            .map(c => c.join(', '))
-            .join(',\n  ')},\n} from './${stem}.sch'`
-        : `import { ${used.join(', ')} } from './${stem}.sch'`,
-      '',
-    )
-    for (const [spec, ns] of groups) lines.push(`source(${ns.length === 1 ? ns[0] : `[${ns.join(', ')}]`}, ${spec})`)
-    files.set(`${stem}.sourcing.ts`, lines.join('\n') + '\n')
-    counts.sourced = sourcing.length
-  }
+  if (sourced) counts.sourced = sourced
 
   const copperFile = buildCopper(board, insts, netRef, copperLayers, notes, counts)
   const copperNeeds = copperFile.parts
   {
     const lines = [
-      `// The copper of ${src}: pours and keepouts, then each net's tracks as route chains, straight .Z() segments with .via() at`,
-      '// each layer change, and the vias no chain passes through. Replace a chain with .X() legs to let the router redo it.',
+      `// The copper of ${src}: pours, keepouts and copper graphics, then each net's tracks as route chains, straight .L() segments and .A() arcs with .via() at`,
+      '// each layer change, and the vias no chain passes through. Replace segments with .X() legs to let the router redo them.',
     ]
     const coreNames = ['route', ...(copperFile.usesVia ? ['via'] : []), ...(copperFile.usesPour ? ['pour'] : []), ...(copperFile.usesKeepout ? ['keepout'] : [])]
     lines.push(`import { ${coreNames.join(', ')} } from '@pcbjs/core'`)
@@ -692,7 +679,7 @@ export function importBoardData(
     files.set(`${stem}.copper.tsx`, lines.join('\n') + '\n')
   }
 
-  const art = graphicSpecs(board.graphics.filter(g => g.layer !== 'Edge.Cuts'))
+  const art = graphicSpecs(board.graphics.filter(g => g.layer !== 'Edge.Cuts' && !COPPER.test(g.layer)))
   counts.graphics = art.length
   if (art.length) {
     const lines = [`// The graphics of ${src} itself: silk, Fab and user layers. Footprint graphics are in their footprints.`, '', 'export const Art = () => (', '  <>']
@@ -764,9 +751,10 @@ export function importBoardData(
     const classes = classTable(pro, classOf, dru)
     const boardProps: Record<string, unknown> = { name: o.name ?? stem }
     if (board.title && board.title !== boardProps.name) boardProps.title = board.title
-    if (board.revision) boardProps.revision = board.revision
+    if (board.rev) boardProps.rev = board.rev
+    const builder = STACKUP_BUILDER[copperLayers.length]
     if (stack) boardProps.stackup = code(lit(stack))
-    else if (copperLayers.length !== 2) boardProps.copper = copperLayers.length
+    else if (copperLayers.length !== 2 && builder) boardProps.stackup = code(`${builder}()`)
     if (classes) boardProps.classes = code(lit(classes))
     if (Object.keys(fontTable).length) boardProps.fonts = code(lit(fontTable))
     const lines = [
@@ -787,8 +775,8 @@ export function importBoardData(
         plainImports.get(i.def.module)!.add(i.def.name)
       }
     for (const [mod, ns] of [...plainImports].sort((a, b) => a[0].localeCompare(b[0]))) lines.push(`import { ${[...ns].sort().join(', ')} } from '${mod}'`)
+    if (!stack && copperLayers.length !== 2 && builder) lines.push(`import { ${builder} } from ${str('@pcbjs/lib/stackups')}`)
     lines.push(`import { copper } from './${stem}.copper'`)
-    if (sourcing.length) lines.push(`import './${stem}.sourcing'`)
     if (art.length) lines.push(`import { Art } from './${stem}.art'`)
     lines.push('', 'export default (')
     const attrs = Object.entries(boardProps).map(([k, v]) => jsx({ type: 'x', props: { [k]: v } }).slice(3, -3))
@@ -822,10 +810,7 @@ export function importBoardData(
         dnpRefs.add(i.ref)
       }
       const refAt = refAtOf(i.fp)
-      if (refAt === false) {
-        if (i.part) props.ref = false
-        else props.refAt = false
-      } else if (refAt !== undefined) props.refAt = refAt
+      if (refAt !== undefined) props['ref:at'] = refAt
       lines.push(`    ${jsx({ type: i.part ? i.name : i.def.name, props })}`)
     }
     if (texts.length) {
@@ -844,7 +829,7 @@ export function importBoardData(
 
   {
     const rules = rulesOf(board, pro, notes)
-    const lines = ["import { defineConfig, defineDefaultRules } from '@pcbjs/core'", '', `// The design rules of ${src} and its .kicad_pro.`]
+    const lines = ["import { defineConfig, defineDefaultBoard } from '@pcbjs/core'", '', `// The design rules of ${src} and its .kicad_pro.`]
     const show = (r: { name: string; constraints: string[]; condition: string }) => {
       const cond = r.condition.length > 110 ? r.condition.slice(0, 107) + '...' : r.condition
       return `${r.name}: ${r.constraints.join(', ')}${cond ? `, when ${cond}` : ''}`
@@ -861,7 +846,7 @@ export function importBoardData(
         `${dru.unmapped.length} custom rule${dru.unmapped.length === 1 ? '' : 's'} of the .kicad_dru not carried, listed in pcb.config.ts: ${dru.unmapped.map(r => r.name).join('; ')}`,
       )
     }
-    lines.push(`defineDefaultRules(${lit(rules)})`, '', 'export default defineConfig({', `  entries: [${str(o.entry ?? out)}],`, '})')
+    lines.push(`defineDefaultBoard({ rules: ${lit(rules)} })`, '', 'export default defineConfig({', `  entries: [${str(o.entry ?? out)}],`, '})')
     files.set('pcb.config.ts', lines.join('\n') + '\n')
   }
 
@@ -870,7 +855,7 @@ export function importBoardData(
       `${dnpRefs.size} part${dnpRefs.size === 1 ? ' is' : 's are'} DNP in KiCad, imported with dnp: true: ${[...dnpRefs].slice(0, 8).join(', ')}${dnpRefs.size > 8 ? ', …' : ''}`,
     )
   const own = board.footprints.flatMap(f =>
-    f.pads.filter(p => !!p.clearance && p.kind !== 'np_thru_hole').map(p => (p.num ? `${refOf.get(f)}.${p.num}` : `${refOf.get(f)} unnumbered pad`)),
+    f.pads.filter(p => !!p.clearance && p.kind !== 'np_thru_hole').map(p => (p.num ? `${refOf.get(f)}/${p.num}` : `${refOf.get(f)} unnumbered pad`)),
   )
   if (own.length)
     notes.push(
@@ -881,6 +866,69 @@ export function importBoardData(
     notes.push(`${fpOwn.length} footprints have their own clearance in KiCad, carried as part rules: ${fpOwn.slice(0, 8).join(', ')}${fpOwn.length > 8 ? ', …' : ''}`)
   for (const [k, n] of Object.entries(board.skipped)) notes.push(`${n} ${k} item${n === 1 ? '' : 's'} not imported`)
   return { files, copies, counts, notes }
+}
+
+/** The board's graphics on copper as copper on no net: lines, arcs and outlines as chains, filled shapes as pours. */
+function copperGraphics(board: KBoard, notes: string[]): string[] {
+  const out: string[] = []
+  const pt = (p: Pt) => `${fmt(p[0])}, ${fmt(p[1])}`
+  const chain = (g: KGraphic, from: Pt) => `route(${str(xy(from))}).net(null)${g.layer !== 'F.Cu' ? `.layer(${str(g.layer)})` : ''}.width(${fmt(nm(g.width))})`
+  const arc = (a: Pt, m: Pt, b: Pt) => {
+    const sweep = arcSweep({ start: a, mid: m, end: b })
+    return sweep === undefined ? `.L(${str(xy(b))})` : `.A(${pt(b)}, ${fmt(sweep)})`
+  }
+  let skipped = 0
+  for (const g of board.graphics) {
+    if (!COPPER.test(g.layer)) continue
+    const ring = g.kind === 'rect' ? rectRing(g) : g.kind === 'poly' ? (g.pts ?? []) : null
+    if (g.fill && (ring || g.kind === 'circle')) {
+      const d = g.kind === 'circle' ? circlePath(g.center!, Math.hypot(g.end![0] - g.center![0], g.end![1] - g.center![1])) : polyPath(ring!)
+      out.push(`pour(null, ${str(g.layer)}, ${str(d)}),`)
+    } else if (g.kind === 'line') out.push(`${chain(g, g.start!)}.L(${str(xy(g.end!))}),`)
+    else if (g.kind === 'arc') out.push(`${chain(g, g.start!)}${arc(g.start!, g.mid!, g.end!)},`)
+    else if (g.kind === 'circle') {
+      const c = g.center!,
+        e = g.end!,
+        o: Pt = [2 * c[0] - e[0], 2 * c[1] - e[1]]
+      out.push(`${chain(g, e)}.A(${pt(o)}, 180).A(${pt(e)}, 180),`)
+    } else if (ring && ring.length >= 2) {
+      const first = Array.isArray(ring[0]) ? ring[0] : ring[0].start
+      let s = chain(g, first),
+        cur = first
+      for (const q of [...ring.slice(Array.isArray(ring[0]) ? 1 : 0), first]) {
+        if (Array.isArray(q)) {
+          if (!same(cur, q)) s += `.L(${str(xy(q))})`
+          cur = q
+        } else {
+          if (!same(cur, q.start)) s += `.L(${str(xy(q.start))})`
+          s += arc(q.start, q.mid, q.end)
+          cur = q.end
+        }
+      }
+      out.push(s + ',')
+    } else skipped++
+  }
+  if (out.some(l => l.startsWith('pour('))) notes.push('filled copper graphics are pours on no net: they keep clearance from other copper, where KiCad draws them as they are')
+  if (skipped) notes.push(`${skipped} copper graphic${skipped === 1 ? '' : 's'}, Bezier curves, not imported`)
+  return out
+}
+const rectRing = (g: KGraphic): Pt[] => [g.start!, [g.end![0], g.start![1]], g.end!, [g.start![0], g.end![1]]]
+const circlePath = (c: Pt, r: number) =>
+  `M ${fmt(c[0] + r)} ${fmt(c[1])} A ${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(c[0] - r)} ${fmt(c[1])} A ${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(c[0] + r)} ${fmt(c[1])} Z`
+
+/** A point of a chain: the via there, and the layer and arc of the track arriving at it. */
+interface Step {
+  p: Pt
+  layer: string
+  via?: KVia
+  /** degrees, counter-clockwise on screen when positive */
+  arc?: number
+}
+
+/** A KiCad arc's turn as the chain's `.A()` angle: KiCad's sweep runs clockwise on screen, the chain's counter-clockwise. */
+function arcSweep(t: { start: Pt; mid?: Pt; end: Pt }): number | undefined {
+  const k = arcThrough(t.start, t.mid!, t.end)
+  return k ? (-k.sweep * 180) / Math.PI : undefined
 }
 
 interface CopperOut {
@@ -931,8 +979,8 @@ function buildCopper(
       if (!k.vias) opts.vias = false
       if (!k.pours) opts.pours = false
       if (!layers.length) continue
-      const ls = layers.length === copper.length ? "'all'" : layers.length === 1 ? str(layers[0]) : lit(layers)
-      keepLines.push(`keepout(${ls}, ${str(d)}${Object.keys(opts).length ? `, ${lit(opts)}` : ''}),${z.name ? ` // ${z.name}` : ''}`)
+      const all = { ...(layers.length === copper.length ? {} : { layers }), ...opts }
+      keepLines.push(`keepout(${str(d)}${Object.keys(all).length ? `, ${lit(all)}` : ''}),${z.name ? ` // ${z.name}` : ''}`)
       keepouts++
       res.usesKeepout = true
       continue
@@ -946,8 +994,7 @@ function buildCopper(
     if (z.connect === 'thru_hole_only') notes.push(`a ${z.net ?? 'no-net'} zone joins only through-hole pads in KiCad: imported with thermal reliefs on every pad`)
     for (const l of layers) {
       const n = useNet(z.net)
-      if (n) zoneLines.push(`pour(${n}, ${str(l)}, ${str(d)}${Object.keys(opts).length ? `, ${lit(opts)}` : ''}),`)
-      else zoneLines.push(`pour(${lit({ layer: l, d, ...opts })}),`)
+      zoneLines.push(`pour(${n ?? 'null'}, ${str(l)}, ${str(d)}${Object.keys(opts).length ? `, ${lit(opts)}` : ''}),`)
       pours++
       res.usesPour = true
     }
@@ -956,6 +1003,11 @@ function buildCopper(
   counts.keepouts = keepouts
   if (zoneLines.length) res.lines.push('// pours', ...zoneLines, '')
   if (keepLines.length) res.lines.push('// keepouts', ...keepLines, '')
+  const drawn = copperGraphics(board, notes)
+  if (drawn.length) {
+    res.lines.push('// copper graphics, on no net', ...drawn, '')
+    if (drawn.some(l => l.startsWith('pour('))) res.usesPour = true
+  }
 
   // the most common via size is VIA
   const sizes = new Map<string, number>()
@@ -988,7 +1040,8 @@ function buildCopper(
     // only a pin with one pad: a pin handle lands on that pad
     if (inst.pads.filter(q => q.pin === pin).length !== 1 || inst.pads.some(q => q.pin === pin && q.split)) return null
     res.parts.add(inst.name)
-    return /^\d+$/.test(pin) && Number(pin) > 0 && String(Number(pin)) === pin ? `${inst.name}[${pin}]` : `${inst.name}.pin(${str(pin)})`
+    if (/^\d+$/.test(pin) && Number(pin) > 0 && String(Number(pin)) === pin) return `${inst.name}[${pin}]`
+    return /^[A-Za-z_$][\w$]*$/.test(pin) ? `${inst.name}.${pin}` : `${inst.name}[${str(pin)}]`
   }
 
   const viaAt = new Map<string, KVia[]>()
@@ -1014,15 +1067,9 @@ function buildCopper(
     const tracks = byNet.get(net)!
     const lines: string[] = []
     const nid = useNet(net || undefined)
-    const straight = tracks.filter(t => !t.mid)
-    for (const t of tracks.filter(t => t.mid)) {
-      const d = `M ${xy(t.start)} ${svgArcTo(t.start, t.mid!, t.end)}`
-      lines.push(`route(${lit({ ...(nid ? { net: code(nid) } : {}), layer: t.layer, width: nm(t.width), d })}),`)
-      arcs++
-    }
     const at = new Map<string, number[]>()
     const nodeKey = (p: Pt, l: string) => `${pkey(p)}|${l}`
-    straight.forEach((t, i) => {
+    tracks.forEach((t, i) => {
       for (const p of [t.start, t.end]) {
         const k = nodeKey(p, t.layer)
         if (!at.has(k)) at.set(k, [])
@@ -1040,16 +1087,18 @@ function buildCopper(
       return (at.get(nodeKey(p, l))?.length ?? 0) !== 2
     }
     const walk = (startIdx: number, from: Pt) => {
-      const seq: { p: Pt; layer: string; via?: KVia }[] = []
+      const seq: Step[] = []
       let cur = startIdx,
         p = from,
-        width = straight[startIdx].width
-      seq.push({ p, layer: straight[cur].layer })
+        width = tracks[startIdx].width
+      seq.push({ p, layer: tracks[cur].layer })
       for (;;) {
         used.add(cur)
-        const t = straight[cur]
-        const q = same(t.start, p) ? t.end : t.start
-        seq.push({ p: q, layer: t.layer })
+        const t = tracks[cur]
+        const fwd = same(t.start, p),
+          q = fwd ? t.end : t.start
+        const sweep = t.mid ? arcSweep(t) : undefined
+        seq.push({ p: q, layer: t.layer, ...(sweep !== undefined ? { arc: fwd ? sweep : -sweep } : {}) })
         p = q
         if (isEnd(p, t.layer)) break
         const v = viaHere(p)
@@ -1057,23 +1106,35 @@ function buildCopper(
         if (v) {
           for (const l of copper) for (const j of at.get(nodeKey(p, l)) ?? []) if (j !== cur && !used.has(j)) next = j
         } else next = (at.get(nodeKey(p, t.layer)) ?? []).find(j => j !== cur && !used.has(j))
-        if (next === undefined || straight[next].width !== width) break
+        if (next === undefined || tracks[next].width !== width) break
         // a via the chain changes layer at is the chain's own; one it passes on one layer stays separate
-        if (v && straight[next].layer !== t.layer) {
+        if (v && tracks[next].layer !== t.layer) {
           seq[seq.length - 1].via = v
           usedVias.add(v)
         }
         cur = next
-        width = straight[next].width
+        width = tracks[next].width
       }
       return { seq, width }
     }
-    const emit = (seq: { p: Pt; layer: string; via?: KVia }[], width: number) => {
+    // the same chain walked the other way: each point keeps its via and takes the layer and arc of the track that now arrives at it
+    const reversed = (q: Step[]): Step[] =>
+      q.map((_, j) => {
+        const { arc: _arc, ...pt } = q[q.length - 1 - j]
+        const by = q[Math.min(q.length - 1, q.length - j)]
+        return { ...pt, layer: by.layer, ...(j && by.arc !== undefined ? { arc: -by.arc } : {}) }
+      })
+    const emit = (walked: Step[], width: number) => {
+      // a chain with a pad starts there and ends on a pad or its open point as the declared end; copper on no net has no pad end
+      const end = (q: Step) => (net ? padEnd(q.p, q.layer, net) : null)
+      const a0 = end(walked[0]),
+        b0 = end(walked[walked.length - 1])
+      const seq = !a0 && b0 ? reversed(walked) : walked
       const first = seq[0],
         last = seq[seq.length - 1]
-      const a = padEnd(first.p, first.layer, net || undefined)
-      const b = padEnd(last.p, last.layer, net || undefined)
-      let s = `route(${a ?? str(xy(first.p))})`
+      const a = a0 ?? b0
+      const b = a0 && b0 ? b0 : a ? str(xy(last.p)) : null
+      let s = a ? `route(${a}, ${b})` : `route(${str(xy(first.p))})`
       if (first.layer !== 'F.Cu') s += `.layer(${str(first.layer)})`
       s += `.width(${fmt(width)}).neck(AS_DRAWN)`
       res.usesNeck = true
@@ -1082,36 +1143,39 @@ function buildCopper(
         const arg = viaArg(vias[0].via!)
         if (vias.every(q => viaArg(q.via!) === arg)) s += `.vias(${arg})`
       }
-      if (!a && !b && nid) s += `.net(${nid})`
+      if (!a && !b) s += `.net(${nid ?? 'null'})`
       for (let k = 1; k < seq.length; k++) {
         const q = seq[k]
-        if (k === seq.length - 1) s += `.Z(${b ?? str(xy(q.p))})`
+        if (q.arc !== undefined) {
+          s += `.A(${fmt(q.p[0])}, ${fmt(q.p[1])}, ${fmt(q.arc)})`
+          arcs++
+        } else segs++
+        if (k === seq.length - 1) s += b ? '.Z()' : q.arc === undefined ? `.L(${str(xy(q.p))})` : ''
         else {
-          s += `.Z(${str(xy(q.p))})`
+          if (q.arc === undefined) s += `.L(${str(xy(q.p))})`
           if (q.via) {
             const nextLayer = seq[k + 1].layer
             if (nextLayer !== q.layer) s += `.via(${str(nextLayer)})`
           }
         }
-        segs++
       }
       lines.push(s + ',')
       chains++
     }
     // ends first, then what is left, loops included
-    for (let i = 0; i < straight.length; i++) {
+    for (let i = 0; i < tracks.length; i++) {
       if (used.has(i)) continue
-      for (const p of [straight[i].start, straight[i].end]) {
+      for (const p of [tracks[i].start, tracks[i].end]) {
         if (used.has(i)) break
-        if (isEnd(p, straight[i].layer)) {
+        if (isEnd(p, tracks[i].layer)) {
           const w = walk(i, p)
           emit(w.seq, w.width)
         }
       }
     }
-    for (let i = 0; i < straight.length; i++)
+    for (let i = 0; i < tracks.length; i++)
       if (!used.has(i)) {
-        const w = walk(i, straight[i].start)
+        const w = walk(i, tracks[i].start)
         emit(w.seq, w.width)
       }
     if (lines.length) res.lines.push(`// ${net || 'no net'}`, ...lines)
@@ -1125,7 +1189,7 @@ function buildCopper(
       const n = useNet(v.net)
       const extra = v.kind !== 'through' || v.layers[0] !== 'F.Cu' || v.layers[1] !== 'B.Cu'
       const arg = extra ? lit({ drill: nm(v.drill), size: nm(v.size), layers: v.layers }) : viaArg(v)
-      res.lines.push(n ? `via(${n}, ${str(xy(v.at))}, ${arg}),` : `via(${lit({ at: xy(v.at), drill: nm(v.drill), size: nm(v.size) })}),`)
+      res.lines.push(`via(${n ?? 'null'}, ${str(xy(v.at))}, ${arg}),`)
     }
   }
   counts.chains = chains
@@ -1134,12 +1198,6 @@ function buildCopper(
   counts.vias = board.vias.length
   if (res.lines[res.lines.length - 1] === '') res.lines.pop()
   return res
-}
-
-const chunk = <T>(xs: T[], n: number): T[][] => {
-  const out: T[][] = []
-  for (let k = 0; k < xs.length; k += n) out.push(xs.slice(k, k + n))
-  return out
 }
 
 const same = (a: Pt, b: Pt) => Math.abs(a[0] - b[0]) < 1e-4 && Math.abs(a[1] - b[1]) < 1e-4
@@ -1172,12 +1230,10 @@ function stackupOf(board: KBoard, notes: string[]): Record<string, unknown> | nu
     } else if (/solder mask/.test(t)) {
       const l: Record<string, unknown> = { type: 'mask', side: s.name.startsWith('B.') ? 'B' : 'F' }
       if (s.thickness) l.thickness = s.thickness
-      if (s.color) l.color = s.color
       maskColor ??= s.color
       layers.push(l)
     } else if (/silk screen/.test(t)) {
       const l: Record<string, unknown> = { type: 'silk', side: s.name.startsWith('B.') ? 'B' : 'F' }
-      if (s.color) l.color = s.color
       silkColor ??= s.color
       layers.push(l)
     } else if (/solder paste/.test(t)) layers.push({ type: 'paste', side: s.name.startsWith('B.') ? 'B' : 'F' })
@@ -1269,4 +1325,4 @@ function classTable(pro: KProject | null, classOf: Map<string, string>, dru?: Dr
   return Object.keys(out).length ? out : null
 }
 
-export { existsSync, join }
+export { exists, join }

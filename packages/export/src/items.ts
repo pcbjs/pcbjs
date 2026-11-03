@@ -1,11 +1,12 @@
 // Outers have a positive signed area in board mm, y down, holes a negative one, so a reader needs no containment test.
 import type { Board, Item, Pad, Poly, Pt, Ring, Via } from '@pcbjs/core/model'
 import type { SiteItem } from '@pcbjs/core/site-data'
-import { bbox, bboxOverlap, clipRings, offsetRings, pointInRing, polysToRings, strokeClosed, strokeOpen, union } from '@pcbjs/compile/geom'
-import { circleRing } from '@pcbjs/compile/path'
-import { copperLayers } from '@pcbjs/compile/layers'
-import { copperLayersOf, copperRings } from '@pcbjs/compile/copper'
-import { Grid, type Box } from '@pcbjs/compile/spatial'
+import { itemRev } from '@pcbjs/core/ref'
+import { bbox, bboxOverlap, clipRings, offsetRings, pointInRing, polysToRings, strokeClosed, strokeOpen, union } from '@pcbjs/compile/internal/geom'
+import { circleRing } from '@pcbjs/compile/internal/path'
+import { copperLayers } from '@pcbjs/compile/internal/layers'
+import { copperLayersOf, copperRings } from '@pcbjs/compile/internal/copper'
+import { Grid, type Box } from '@pcbjs/compile/internal/spatial'
 
 // 1 µm, far below anything a fab makes
 const Q = 1e3
@@ -445,14 +446,21 @@ function cleanSigned(rings: Ring[], own: Pt | null): [number, number][][] {
 
 const SIDES = ['F', 'B'] as const
 
+/** A board item's row and its rings in mm on the layers it occupies; on outer copper, the rings under each side's mask where some are open. */
+export interface ShapedItem {
+  row: SiteItem
+  rings: [number, number][][]
+  covered?: { F?: [number, number][][]; B?: [number, number][][] }
+}
+
 /** Every item as rings in mm on the layers it occupies; drills cut what they pass through, as on the made board. */
-export function siteItems(board: Board): SiteItem[] {
+export function siteItems(board: Board): ShapedItem[] {
   const cu = copperLayers(board.copper)
   const holes = holesOf(board, cu)
   const holeGrid = holes.length ? new Grid(holes.map(h => h.box)) : null
   const open = { F: openingsOf(board, 'F'), B: openingsOf(board, 'B') }
   const openGrid = { F: open.F.length ? new Grid(open.F.map(o => o.box)) : null, B: open.B.length ? new Grid(open.B.map(o => o.box)) : null }
-  const out: SiteItem[] = []
+  const out: ShapedItem[] = []
   for (const it of board.items) {
     let rings = geometry(it)
     if (!rings.length) continue
@@ -478,7 +486,7 @@ export function siteItems(board: Board): SiteItem[] {
         edges = null
       }
     }
-    let covered: SiteItem['covered']
+    let covered: ShapedItem['covered']
     if (rings.length)
       for (const side of SIDES) {
         const grid = openGrid[side]
@@ -489,15 +497,37 @@ export function siteItems(board: Board): SiteItem[] {
         if (part) (covered ??= {})[side] = part
       }
     out.push({
-      id: it.id,
-      kind: it.kind,
-      layers: [...layers],
-      ...(it.net ? { net: it.net } : {}),
-      ...(it.ref ? { ref: it.ref } : {}),
+      row: {
+        id: it.id,
+        ...(it.uid ? { uid: it.uid } : {}),
+        rev: itemRev(it),
+        kind: it.kind,
+        ...(it.kind === 'text' && it.generated ? { generated: it.generated } : {}),
+        layers: [...layers],
+        ...(it.net ? { net: it.net } : {}),
+        ...(it.ref ? { ref: it.ref } : {}),
+        ...(it.kind === 'pad' ? { pad: it.num } : {}),
+        ...(rings.length ? { box: boxOf(rings) } : {}),
+        ...(drill !== undefined ? { drill } : {}),
+      },
       rings,
-      ...(drill !== undefined ? { drill } : {}),
       ...(covered ? { covered } : {}),
     })
   }
   return out
+}
+
+function boxOf(rings: [number, number][][]): NonNullable<SiteItem['box']> {
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity
+  for (const r of rings)
+    for (const [x, y] of r) {
+      if (x < x0) x0 = x
+      if (x > x1) x1 = x
+      if (y < y0) y0 = y
+      if (y > y1) y1 = y
+    }
+  return [x0, y0, x1, y1]
 }

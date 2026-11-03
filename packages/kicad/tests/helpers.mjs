@@ -216,6 +216,7 @@ ${fx('J1', '30 10', {
     `(pad "1" thru_hole rect (at 0 0) (size 1.7 1.7) (drill 1) (layers "*.Cu" "*.Mask") (remove_unused_layers yes) (keep_end_layers yes) (zone_layer_connections "In1.Cu") (net "GND"))`,
     `(pad "2" thru_hole circle (at 0 2.54) (size 1.7 1.7) (drill 1) (layers "*.Cu" "*.Mask") (remove_unused_layers yes) (keep_end_layers yes) (zone_layer_connections) (net "SIG"))`,
     `(pad "3" thru_hole circle (at 0 5.08) (size 1.7 1.7) (drill 1) (layers "*.Cu" "*.Mask") (remove_unused_layers no) (net "VCC"))`,
+    `(zone (layers "F.Cu" "B.Cu") (hatch edge 0.5) (keepout (tracks not_allowed) (vias not_allowed) (pads allowed) (copperpour not_allowed) (footprints allowed)) (polygon (pts (xy 29 7) (xy 31 7) (xy 31 8) (xy 29 8))))`,
   ],
 })}
 ${fx('D1', '20 30', {
@@ -237,6 +238,12 @@ ${fx('D1', '20 30', {
   (segment (start 20 10) (end 30 12.54) (width 1) (layer "F.Cu") (net "SIG"))
   (segment (start 11 20) (end 20 10) (width 1) (layer "F.Cu") (net "SIG"))
   (segment (start 30 12.54) (end 34 12.54) (width 0.3) (layer "In2.Cu") (net "SIG"))
+  (arc (start 30 15.08) (mid 32.828427 16.251573) (end 34 19.08) (width 0.3) (layer "F.Cu") (net "VCC"))
+  (segment (start 34 19.08) (end 34 25) (width 0.3) (layer "F.Cu") (net "VCC"))
+  (segment (start 2 36) (end 12 36) (width 0.5) (layer "B.Cu"))
+  (via (at 40 5) (size 0.6) (drill 0.3) (layers "F.Cu" "B.Cu"))
+  (zone (layer "B.Cu") (hatch edge 0.5) (connect_pads (clearance 0.3)) (min_thickness 0.25) (polygon (pts (xy 36 22) (xy 43 22) (xy 43 30) (xy 36 30))))
+  (gr_line (start 3 3) (end 9 3) (stroke (width 0.4) (type solid)) (layer "F.Cu"))
 )
 `
   const sym = (ref, extra, flags = '(dnp no)') => `  (symbol (lib_id "Device:R") (at 0 0 0) (unit 1) (in_bom yes) (on_board yes) ${flags} (uuid "u-${ref}")

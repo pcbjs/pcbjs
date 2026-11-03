@@ -1,9 +1,13 @@
 // The 3D items of the site data: drills cut the copper that crosses them, and `covered` is the part under the mask.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h } from '@pcbjs/core'
+import PCB, { h, route, via } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
-import { siteItems } from '../dist/items.js'
+import { siteItems as shaped } from '../dist/items.js'
+import { fp, N } from './parts.mjs'
+
+/** Each item's row with its rings and covered parts beside it. */
+const siteItems = b => shaped(b).map(s => ({ ...s.row, rings: s.rings, ...(s.covered ? { covered: s.covered } : {}) }))
 
 const outline = h('path', { layer: 'Edge.Cuts', d: 'M0 0 H30 V20 H0 Z' })
 const area = r => {
@@ -34,30 +38,26 @@ const disc = (c, r) => {
 }
 
 test('items: a track across a via stops at its hole on both sides, and the via keeps its hole second', () => {
-  const b = compileBoard(h(PCB, { name: 'Via' }, outline, h('via', { net: 'A', at: '15 10' }), h('track', { net: 'A', layer: 'F.Cu', width: 0.5, d: 'M10 10 H20' })))
+  const b = compileBoard(h(PCB, { name: 'Via' }, outline, via(N.A, '15 10'), route('10 10').net(N.A).width(0.5).H(20)))
   const items = siteItems(b)
   assert.deepEqual(
     items.map(i => i.id),
     b.items.map(i => i.id),
     'one item per board item, ids kept',
   )
-  const via = b.items.find(i => i.kind === 'via'),
-    r = via.drill / 2 - 0.005
+  const hole = b.items.find(i => i.kind === 'via'),
+    r = hole.drill / 2 - 0.005
   const track = items.find(i => i.kind === 'track')
-  for (const p of disc(via.at, r)) assert.ok(!inCopper(p, track.rings), `no track copper in the drill at ${p}`)
+  for (const p of disc(hole.at, r)) assert.ok(!inCopper(p, track.rings), `no track copper in the drill at ${p}`)
   assert.ok(inCopper([12, 10], track.rings) && inCopper([18, 10], track.rings), 'the track is kept either side of the via')
   const v = items.find(i => i.kind === 'via')
   assert.ok(area(v.rings[0]) > 0 && area(v.rings[1]) < 0, 'the via ring, then its hole')
-  for (const p of disc(via.at, r)) assert.ok(!inCopper(p, v.rings))
+  for (const p of disc(hole.at, r)) assert.ok(!inCopper(p, v.rings))
 })
 
 test('items: a slotted pad and the track into it are cut by the slot, and the track is finish inside the opening', () => {
-  const fp = h(
-    'footprint',
-    { ref: 'J1', value: 'V', id: 'pcbjs:Slot', at: '15 10', 'net:pad1': 'A', bom: false },
-    h('pad', { num: 1, shape: 'oval', size: [3, 1.6], drill: [2.2, 0.8] }),
-  )
-  const b = compileBoard(h(PCB, { name: 'Slot' }, outline, fp, h('track', { net: 'A', layer: 'F.Cu', width: 0.4, d: 'M8 10 H15' })))
+  const J1 = fp({ ref: 'J1', value: 'V', id: 'pcbjs:Slot', at: '15 10', 'net:pad1': 'A', bom: false }, h('pad', { num: 1, shape: 'oval', size: [3, 1.6], drill: [2.2, 0.8] }))
+  const b = compileBoard(h(PCB, { name: 'Slot' }, outline, J1, route('8 10').net(N.A).width(0.4).H(15)))
   const items = siteItems(b)
   assert.deepEqual(
     items.map(i => i.id),
@@ -88,13 +88,12 @@ test('items: a slotted pad and the track into it are cut by the slot, and the tr
 test('items: a turned slot drill is a stadium of its width and length in the pad, the board drills and the drill file alike', async () => {
   const { siteData } = await import('../dist/site-data.js')
   const { excellon } = await import('../dist/excellon.js')
-  const fp = h(
-    'footprint',
+  const J1 = fp(
     { ref: 'J1', value: 'V', id: 'pcbjs:Slot', at: '15 10 30', 'net:pad1': 'A', 'net:pad2': 'A', bom: false },
     h('pad', { num: 1, shape: 'oval', size: [3, 1.6], drill: [2.2, 0.8] }),
     h('pad', { num: 2, shape: 'circle', size: [1.6, 1.6], drill: 0.8, at: '0 4' }),
   )
-  const b = compileBoard(h(PCB, { name: 'Slot' }, outline, fp))
+  const b = compileBoard(h(PCB, { name: 'Slot' }, outline, J1))
   const site = siteData(b, { root: '/', dev: false, fabUrl: '', fabName: '', fabFiles: [], fabStatus: 'ok', svgUrl: '', bom: [] })
   const slot = site.drills.find(d => d.len !== undefined),
     round = site.drills.find(d => d.len === undefined)

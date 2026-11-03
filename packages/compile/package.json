@@ -18,9 +18,161 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "default": "./dist/*.js"
+    "./query": {
+      "types": "./dist/query.d.ts",
+      "default": "./dist/query.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    },
+    "./internal/autoroute": {
+      "types": "./dist/autoroute.d.ts",
+      "default": "./dist/autoroute.js"
+    },
+    "./internal/bare": {
+      "types": "./dist/bare.d.ts",
+      "default": "./dist/bare.js"
+    },
+    "./internal/cancel": {
+      "types": "./dist/cancel.d.ts",
+      "default": "./dist/cancel.js"
+    },
+    "./internal/bom": {
+      "types": "./dist/bom.d.ts",
+      "default": "./dist/bom.js"
+    },
+    "./internal/cache": {
+      "types": "./dist/cache.d.ts",
+      "default": "./dist/cache.js"
+    },
+    "./internal/checks": {
+      "types": "./dist/checks.d.ts",
+      "default": "./dist/checks.js"
+    },
+    "./internal/connectivity": {
+      "types": "./dist/connectivity.d.ts",
+      "default": "./dist/connectivity.js"
+    },
+    "./internal/copper": {
+      "types": "./dist/copper.d.ts",
+      "default": "./dist/copper.js"
+    },
+    "./internal/current": {
+      "types": "./dist/current.d.ts",
+      "default": "./dist/current.js"
+    },
+    "./internal/deps": {
+      "types": "./dist/deps.d.ts",
+      "default": "./dist/deps.js"
+    },
+    "./internal/drc": {
+      "types": "./dist/drc.d.ts",
+      "default": "./dist/drc.js"
+    },
+    "./internal/entry": {
+      "types": "./dist/entry.d.ts",
+      "default": "./dist/entry.js"
+    },
+    "./internal/fdlibm": {
+      "types": "./dist/fdlibm.d.ts",
+      "default": "./dist/fdlibm.js"
+    },
+    "./internal/flatten": {
+      "types": "./dist/flatten.d.ts",
+      "default": "./dist/flatten.js"
+    },
+    "./internal/freeze": {
+      "types": "./dist/freeze.d.ts",
+      "default": "./dist/freeze.js"
+    },
+    "./internal/geom": {
+      "types": "./dist/geom.d.ts",
+      "default": "./dist/geom.js"
+    },
+    "./internal/layers": {
+      "types": "./dist/layers.d.ts",
+      "default": "./dist/layers.js"
+    },
+    "./internal/mask": {
+      "types": "./dist/mask.d.ts",
+      "default": "./dist/mask.js"
+    },
+    "./internal/messages": {
+      "types": "./dist/messages.d.ts",
+      "default": "./dist/messages.js"
+    },
+    "./internal/models": {
+      "types": "./dist/models.d.ts",
+      "default": "./dist/models.js"
+    },
+    "./internal/netclass": {
+      "types": "./dist/netclass.d.ts",
+      "default": "./dist/netclass.js"
+    },
+    "./internal/pair-info": {
+      "types": "./dist/pair-info.d.ts",
+      "default": "./dist/pair-info.js"
+    },
+    "./internal/patches": {
+      "types": "./dist/patches.d.ts",
+      "default": "./dist/patches.js"
+    },
+    "./internal/path": {
+      "types": "./dist/path.d.ts",
+      "default": "./dist/path.js"
+    },
+    "./internal/pipeline": {
+      "types": "./dist/pipeline.d.ts",
+      "default": "./dist/pipeline.js"
+    },
+    "./internal/records": {
+      "types": "./dist/query/records.d.ts",
+      "default": "./dist/query/records.js"
+    },
+    "./internal/reference": {
+      "types": "./dist/reference.d.ts",
+      "default": "./dist/reference.js"
+    },
+    "./internal/round": {
+      "types": "./dist/round.d.ts",
+      "default": "./dist/round.js"
+    },
+    "./internal/route-cache": {
+      "types": "./dist/route-cache.d.ts",
+      "default": "./dist/route-cache.js"
+    },
+    "./internal/route-shape": {
+      "types": "./dist/route-shape.d.ts",
+      "default": "./dist/route-shape.js"
+    },
+    "./internal/scope": {
+      "types": "./dist/scope.d.ts",
+      "default": "./dist/scope.js"
+    },
+    "./internal/seal": {
+      "types": "./dist/seal.d.ts",
+      "default": "./dist/seal.js"
+    },
+    "./internal/self-check": {
+      "types": "./dist/self-check.d.ts",
+      "default": "./dist/self-check.js"
+    },
+    "./internal/spatial": {
+      "types": "./dist/spatial.d.ts",
+      "default": "./dist/spatial.js"
+    },
+    "./internal/tune": {
+      "types": "./dist/tune.d.ts",
+      "default": "./dist/tune.js"
+    },
+    "./internal/user-cache": {
+      "types": "./dist/user-cache.d.ts",
+      "default": "./dist/user-cache.js"
+    },
+    "./internal/zones": {
+      "types": "./dist/zones.d.ts",
+      "default": "./dist/zones.js"
     },
     "./package.json": "./package.json"
   },
@@ -31,7 +183,7 @@
   "scripts": {
     "build": "tsc -b",
     "watch": "tsc -b --watch",
-    "test": "node --test \"tests/**/*.test.mjs\"",
+    "test": "node --import ../../scripts/test-env.mjs --import ../../scripts/test-watchdog.mjs --test \"tests/**/*.test.mjs\"",
     "prepack": "node ../../scripts/pack-files.mjs pre",
     "postpack": "node ../../scripts/pack-files.mjs post"
   },

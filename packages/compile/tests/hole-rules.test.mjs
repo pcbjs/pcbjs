@@ -1,19 +1,27 @@
 // Hole rules by layer and kind: `holeClearance: { inner, outer }` for hole to copper, `minHoleToHole: { pad, via }` for hole to
 // hole, a number meaning both, merged side by side over a lower level, the router keeping the larger side.
+import { fp, P, net } from './parts.mjs'
 import { test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h, resetDefaults, defineDefaultRules } from '@pcbjs/core'
-import { resolveRules, holeClearanceOn, holeToHole } from '@pcbjs/core/rules'
+import PCB, { h, pour, resetDefaults, defineDefaultBoard, route, via } from '@pcbjs/core'
+import { resolveRules, holeClearanceOn, holeToHole } from '@pcbjs/core/internal/rules'
 import { compileBoard } from '../dist/index.js'
+import { fourLayer } from '@pcbjs/core/internal/stackups'
 
 afterEach(() => resetDefaults())
 
-const mk = (rules, ...kids) => compileBoard(h(PCB, { name: 'H', copper: 4, rules }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 30, h: 20 }), ...kids), { routeCache: false })
+const mk = (rules, ...kids) =>
+  compileBoard(h(PCB, { name: 'H', stackup: fourLayer(), rules }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 30, h: 20 }), ...kids), { cache: false })
 const find = (b, rule) => b.drc.filter(d => d.rule === rule)
 /** a 1 mm non-plated hole at x, y */
-const hole = (x, y, ref) => h('footprint', { ref, at: `${x} ${y}` }, h('pad', { num: '', at: '0 0', size: 1, drill: 1, type: 'npth' }))
+const hole = (x, y, ref) => fp({ ref, at: `${x} ${y}` }, h('pad', { num: '', at: '0 0', size: 1, drill: 1, type: 'npth' }))
 /** a 0.2 mm track on a layer whose edge is `gap` from the edge of a 1 mm hole at 10 10 */
-const by = (layer, gap) => h('track', { net: 'B', layer, width: 0.2, d: `M5 ${10 + 0.5 + gap + 0.1} H15` })
+const by = (layer, gap) =>
+  route(`5 ${10 + 0.5 + gap + 0.1}`)
+    .net(net('B'))
+    .layer(layer)
+    .width(0.2)
+    .H(15)
 
 test('hole rules: hole to copper by layer, outer on F.Cu and B.Cu, inner between', () => {
   const rules = { holeClearance: { inner: 0.33, outer: 0.28 } }
@@ -30,8 +38,8 @@ test('hole rules: hole to copper by layer, outer on F.Cu and B.Cu, inner between
 })
 
 test('hole rules: the pour keeps the hole clearance of its layer', () => {
-  const pour = layer => h('zone', { net: 'GND', layer, d: 'M0 0 H30 V20 H0 Z', islands: 'keep' })
-  const b = mk({ holeClearance: { inner: 0.6, outer: 0.3 } }, hole(10, 10, 'H1'), pour('F.Cu'), pour('In1.Cu'))
+  const gnd = layer => pour(net('GND'), layer, 'M0 0 H30 V20 H0 Z', { islands: 'keep' })
+  const b = mk({ holeClearance: { inner: 0.6, outer: 0.3 } }, hole(10, 10, 'H1'), gnd('F.Cu'), gnd('In1.Cu'))
   const reach = layer => {
     const z = b.items.find(i => i.kind === 'zone' && i.layer === layer)
     // the nearest fill vertex to the hole centre, less the hole radius
@@ -43,10 +51,10 @@ test('hole rules: the pour keeps the hole clearance of its layer', () => {
 })
 
 test('hole rules: hole to hole by kind, via between two vias, pad otherwise', () => {
-  const via = (x, net = 'A') => h('via', { at: `${x} 5`, net, drill: 0.3, size: 0.6 })
+  const v = (x, name = 'A') => via(net(name), `${x} 5`, { drill: 0.3, size: 0.6 })
   const rules = { minHoleToHole: { pad: 0.45, via: 0.2 } }
   // two vias 0.3 mm apart edge to edge, two holes 0.3 mm apart, a via 0.3 mm from a hole
-  const b = mk(rules, via(5), via(5.6), hole(10, 10, 'H1'), hole(11.3, 10, 'H2'), via(20), hole(20.95, 5, 'H3'))
+  const b = mk(rules, v(5), v(5.6), hole(10, 10, 'H1'), hole(11.3, 10, 'H2'), v(20), hole(20.95, 5, 'H3'))
   const f = find(b, 'hole-to-hole').map(d => d.message)
   assert.deepEqual(
     f,
@@ -56,11 +64,11 @@ test('hole rules: hole to hole by kind, via between two vias, pad otherwise', ()
     ],
     'the two vias keep 0.2',
   )
-  assert.equal(find(mk({ minHoleToHole: 0.45 }, via(5), via(5.6)), 'hole-to-hole').length, 1, 'a number holds between vias too')
+  assert.equal(find(mk({ minHoleToHole: 0.45 }, v(5), v(5.6)), 'hole-to-hole').length, 1, 'a number holds between vias too')
 })
 
 test('hole rules: side by side over a lower level, and the helpers', () => {
-  defineDefaultRules({ holeClearance: 0.3, minHoleToHole: { via: 0.25 } })
+  defineDefaultBoard({ rules: { holeClearance: 0.3, minHoleToHole: { via: 0.25 } } })
   const b = mk({ holeClearance: { inner: 0.4 } })
   assert.deepEqual(b.rules.holeClearanceBy, { inner: 0.4, outer: 0.3 })
   assert.deepEqual(b.rules.minHoleToHoleBy, { pad: 0.5, via: 0.25 }, 'pad keeps BASE 0.5')

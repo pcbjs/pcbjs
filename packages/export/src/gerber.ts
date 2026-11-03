@@ -1,12 +1,13 @@
+import { validateBoard } from './validate.js'
 // RS-274X with X2 attributes; a layer without arcs has no G75, G02 or G03.
 import type { Board, Graphic, Item, Pad, Prim, Ring, Text } from '@pcbjs/core/model'
-import type { Finish } from '@pcbjs/core/types'
-import { bbox, bboxOverlap, offset, overlaps, pointInRing, polysToRings, union } from '@pcbjs/compile/geom'
-import { copperRings } from '@pcbjs/compile/copper'
-import { copperLayers } from '@pcbjs/compile/layers'
-import { hasArc } from '@pcbjs/compile/path'
+import type { Finish } from '@pcbjs/core/internal/types'
+import { bbox, bboxOverlap, offset, overlaps, pointInRing, polysToRings, union } from '@pcbjs/compile/internal/geom'
+import { copperRings } from '@pcbjs/compile/internal/copper'
+import { copperLayers } from '@pcbjs/compile/internal/layers'
+import { hasArc } from '@pcbjs/compile/internal/path'
 import { padMask, padPaste } from './pads.js'
-import { maskOpenings } from '@pcbjs/compile/mask'
+import { maskOpenings } from '@pcbjs/compile/internal/mask'
 import { createRequire } from 'node:module'
 
 export { maskOpenings }
@@ -15,7 +16,11 @@ export { maskOpenings }
 export const VERSION: string = createRequire(import.meta.url)('../package.json').version
 
 const U = 1e6 // FSLAX46Y46: 1 unit = 1 nm... 6 decimals of mm
-const coord = (v: number) => Math.round(v * U).toString()
+const coord = (v: number) => {
+  const scaled = Math.round(v * U)
+  if (!Number.isSafeInteger(scaled) || Math.abs(scaled) >= 1e10) throw new Error('Gerber coordinate exceeds FSLAX46Y46 range')
+  return scaled.toString()
+}
 const xy = (x: number, y: number) => `X${coord(x)}Y${coord(-y)}` // Gerber y is up
 const EPS = 1e-9
 const same = (a: Ring[number], b: Ring[number]) => Math.abs(a[0] - b[0]) <= EPS && Math.abs(a[1] - b[1]) <= EPS
@@ -303,6 +308,7 @@ const circleDef = (d: number) => `C,${(Math.round(d * 1e4) / 1e4).toFixed(4)}`
 
 /** `nest: false` writes nested polygons in list order, so the self check's tests can show that bug is caught. */
 export function gerberLayer(board: Board, layer: string, date: string, opts: { nest?: boolean } = {}): GerberFile | null {
+  validateBoard(board)
   const fn = fileFunction(board, layer)
   if (!fn) return null
   const w = new Writer()
@@ -361,7 +367,7 @@ export function gerberLayer(board: Board, layer: string, date: string, opts: { n
   const head = [
     `%TF.GenerationSoftware,pcbjs,pcbjs,${VERSION}*%`,
     `%TF.CreationDate,${date}*%`,
-    `%TF.ProjectId,${board.name.replace(/[^A-Za-z0-9]/g, '_')},${'00000000-0000-0000-0000-000000000000'},${board.revision || 'rev?'}*%`,
+    `%TF.ProjectId,${board.name.replace(/[^A-Za-z0-9]/g, '_')},${'00000000-0000-0000-0000-000000000000'},${board.rev || 'rev?'}*%`,
     `%TF.SameCoordinates,Original*%`,
     `%TF.FileFunction,${fn}*%`,
     `%TF.FilePolarity,${isMask ? 'Negative' : 'Positive'}*%`,
@@ -446,7 +452,7 @@ export function gerberJob(board: Board, files: GerberFile[], date: string, drill
   const job = {
     Header: { GenerationSoftware: { Vendor: 'pcbjs', Application: 'pcbjs', Version: VERSION }, CreationDate: date },
     GeneralSpecs: {
-      ProjectId: { Name: board.name, GUID: '00000000-0000-0000-0000-000000000000', Revision: board.revision || 'rev?' },
+      ProjectId: { Name: board.name, GUID: '00000000-0000-0000-0000-000000000000', Revision: board.rev || 'rev?' },
       Size: { X: Math.round(board.bbox.w * 1000) / 1000, Y: Math.round(board.bbox.h * 1000) / 1000 },
       LayerNumber: board.copper,
       BoardThickness: board.thickness,
@@ -522,7 +528,7 @@ export function materialStackup(board: Board): Record<string, string | number>[]
       const type = l.type === 'silk' ? 'Legend' : l.type === 'mask' ? 'SolderMask' : 'SolderPaste'
       const name = `${side(l.side)} ${l.type === 'silk' ? 'Silk Screen' : l.type === 'mask' ? 'Solder Mask' : 'Solder Paste'}`
       const e: Record<string, string | number> = { Type: type, Name: name }
-      const color = l.color ?? (l.type === 'mask' ? s.maskColor : l.type === 'silk' ? s.silkColor : undefined)
+      const color = l.type === 'mask' ? s.maskColor : l.type === 'silk' ? s.silkColor : undefined
       if (color) e.Color = color
       if (l.thickness !== undefined) e.Thickness = l.thickness
       out.push(e)

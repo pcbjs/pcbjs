@@ -1,4 +1,5 @@
 // Silk refs: the candidate order around the courtyard, the label's rotation and size, rows that share a side, the silk-ref-hidden info and determinism.
+import { fp, P, net } from './parts.mjs'
 import { test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import PCB, { h, resetDefaults } from '@pcbjs/core'
@@ -8,12 +9,11 @@ import { refRotation, refSize, SIDES } from '../dist/silk-refs.js'
 
 afterEach(() => resetDefaults())
 
-const opts = { routeCache: false }
+const opts = { cache: false }
 const edge = (w = 40, hh = 30) => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w, h: hh })
 // a two pad part with a courtyard of w by hh mm round its origin
 const part = (ref, at, { w = 1.8, hh = 0.9, id = 'test:R', ...props } = {}) =>
-  h(
-    'footprint',
+  fp(
     { ref, at, id, ...props },
     h('pad', { num: 1, at: `${-w / 4} 0`, size: [w / 4, hh / 2] }),
     h('pad', { num: 2, at: `${w / 4} 0`, size: [w / 4, hh / 2] }),
@@ -101,8 +101,7 @@ test('hidden: a part too small to hold its label with no spot round it is left o
 })
 
 test('a part large enough takes a pad-free spot inside its courtyard when nothing round it is free', () => {
-  const big = h(
-    'footprint',
+  const big = fp(
     { ref: 'U1', at: '3 3', id: 'test:U' },
     h('pad', { num: 1, at: '-2 0', size: [0.6, 4] }),
     h('pad', { num: 2, at: '2 0', size: [0.6, 4] }),

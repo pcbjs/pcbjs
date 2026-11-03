@@ -34,7 +34,7 @@ test('orientRings: rings already right are returned as they are', () => {
 
 function cutBoard(sweep) {
   const { GND } = nets()
-  const J1 = PinHeader(1).connect(GND)
+  const J1 = PinHeader(1)({ ref: 'J1' }).connect({ 1: GND })
   return compileBoard(
     h(
       PCB,

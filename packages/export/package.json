@@ -18,9 +18,89 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "default": "./dist/*.js"
+    "./compose": {
+      "types": "./dist/compose.d.ts",
+      "default": "./dist/compose.js"
+    },
+    "./browser-worker": {
+      "types": "./dist/browser-worker.d.ts",
+      "default": "./dist/browser-worker.js"
+    },
+    "./internal/board-glb": {
+      "types": "./dist/board-glb.d.ts",
+      "default": "./dist/board-glb.js"
+    },
+    "./internal/bom": {
+      "types": "./dist/bom.d.ts",
+      "default": "./dist/bom.js"
+    },
+    "./internal/copper-area": {
+      "types": "./dist/copper-area.d.ts",
+      "default": "./dist/copper-area.js"
+    },
+    "./internal/excellon": {
+      "types": "./dist/excellon.d.ts",
+      "default": "./dist/excellon.js"
+    },
+    "./internal/fab": {
+      "types": "./dist/fab.d.ts",
+      "default": "./dist/fab.js"
+    },
+    "./internal/fab-check": {
+      "types": "./dist/fab-check.d.ts",
+      "default": "./dist/fab-check.js"
+    },
+    "./internal/facet-stream": {
+      "types": "./dist/facet-stream.d.ts",
+      "default": "./dist/facet-stream.js"
+    },
+    "./internal/findings": {
+      "types": "./dist/findings.d.ts",
+      "default": "./dist/findings.js"
+    },
+    "./internal/gerber": {
+      "types": "./dist/gerber.d.ts",
+      "default": "./dist/gerber.js"
+    },
+    "./internal/models": {
+      "types": "./dist/models.d.ts",
+      "default": "./dist/models.js"
+    },
+    "./internal/pads": {
+      "types": "./dist/pads.d.ts",
+      "default": "./dist/pads.js"
+    },
+    "./internal/scene/colors": {
+      "types": "./dist/scene/colors.d.ts",
+      "default": "./dist/scene/colors.js"
+    },
+    "./internal/scene/explode": {
+      "types": "./dist/scene/explode.d.ts",
+      "default": "./dist/scene/explode.js"
+    },
+    "./internal/scene/geometry": {
+      "types": "./dist/scene/geometry.d.ts",
+      "default": "./dist/scene/geometry.js"
+    },
+    "./internal/scene/merge": {
+      "types": "./dist/scene/merge.d.ts",
+      "default": "./dist/scene/merge.js"
+    },
+    "./internal/scene/stack": {
+      "types": "./dist/scene/stack.d.ts",
+      "default": "./dist/scene/stack.js"
+    },
+    "./internal/sch-svg": {
+      "types": "./dist/sch-svg.d.ts",
+      "default": "./dist/sch-svg.js"
+    },
+    "./internal/site-data": {
+      "types": "./dist/site-data.d.ts",
+      "default": "./dist/site-data.js"
+    },
+    "./internal/svg": {
+      "types": "./dist/svg.d.ts",
+      "default": "./dist/svg.js"
     },
     "./package.json": "./package.json"
   },
@@ -31,14 +111,17 @@
   "scripts": {
     "build": "tsc -b",
     "watch": "tsc -b --watch",
-    "test": "node --test \"tests/**/*.test.mjs\"",
+    "test": "node --import ../../scripts/test-env.mjs --import ../../scripts/test-watchdog.mjs --test \"tests/**/*.test.mjs\"",
     "prepack": "node ../../scripts/pack-files.mjs pre",
     "postpack": "node ../../scripts/pack-files.mjs post"
   },
   "dependencies": {
     "@pcbjs/compile": "^0.0.1-beta.0",
     "@pcbjs/step": "^0.0.1-beta.0",
-    "fflate": "^0.8.2"
+    "clipper-lib": "^6.4.2",
+    "fflate": "^0.8.2",
+    "sharp": "^0.35.5",
+    "three": "^0.182.0"
   },
   "peerDependencies": {
     "@pcbjs/core": "^0.0.1-beta.0"

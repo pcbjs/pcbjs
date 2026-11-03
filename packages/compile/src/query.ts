@@ -1,0 +1,32 @@
+// @pcbjs/compile/query: the read-only board API over one compiled board, see docs/queries.md.
+export {
+  boardApi,
+  type Board,
+  type BoardInput,
+  type Entity,
+  type FindingView,
+  type ItemKind,
+  type ItemView,
+  type Net,
+  type Part,
+  type Point,
+  type Route,
+  type Target,
+} from './query/board.js'
+export type {
+  FindingRecord,
+  GroupRecord,
+  ItemRecord,
+  LegRecord,
+  NetRecord,
+  PadRecord,
+  PairRecord,
+  PartRecord,
+  PlaneRecord,
+  PrimRecord,
+  PtRecord,
+  RegionRecord,
+  RouteRecord,
+  SourceRange,
+  SpanRecord,
+} from './query/records.js'

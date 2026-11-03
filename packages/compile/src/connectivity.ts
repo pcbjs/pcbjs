@@ -1,22 +1,32 @@
 import type { Board, Item, Poly, Pt, Ratsnest, Zone } from '@pcbjs/core/model'
-import { area, centroid, offsetRings } from './geom.js'
+import { area, bboxOverlap, centroid, offsetRings } from './geom.js'
 import { copperLayers } from './layers.js'
-import { copperBox, copperIndex, copperLayersOf, copperRings } from './copper.js'
-import { Grid, overlapsNear, RingIndex } from './spatial.js'
+import { copperBox, copperLayersOf, copperRings, copperSet, sameNet } from './copper.js'
+import { distance, EdgeSet, Grid, overlap, overlapsNear } from './spatial.js'
+import { maxClearance } from './netclass.js'
+import { pulse } from './cancel.js'
 
 export interface Connectivity {
   ratsnest: Ratsnest[]
   unconnected: number
   shorts: [Item, Item, string][]
   singles: string[]
-  /** other-net pairs whose copper boxes overlap but whose copper does not, by pairKey, so DRC need not clip them again */
-  apart?: Set<string>
+  /** per copper layer, the item pairs of other nets or none whose boxes come within the board's largest clearance, for the DRC; see NearPair */
+  near: NearPair[]
   /** per ratsnest line, the two islands it joins in words when either holds a pour piece, else undefined */
   islands?: ([string, string] | undefined)[]
   /** the component of each item and pour piece, see connectedGroups */
   groups?: ConnectedGroups
   /** every pour piece, each a node of `groups` */
   pieces?: Piece[]
+}
+
+/** Two items of other nets on a layer, the earlier in board order first, a zone standing for its pieces; `short` when their copper overlaps. Pairs of a layer come in board order, as a loop over every pair visits them. */
+export interface NearPair {
+  layer: string
+  a: Item
+  b: Item
+  short: boolean
 }
 
 /** Which component each pad lies in, by the union-find root; pads of one component are joined through copper. */
@@ -27,18 +37,18 @@ export interface ConnectedGroups {
 /** One piece of a pour's fill as an item of its own: the zone with only that polygon, keeping the zone's id. */
 export type Piece = Zone & { piece: { zone: Zone; index: number; at: Pt; area: number } }
 
-/** The pieces of a zone's fill, each its own node of connectivity. */
+const cut = new WeakMap<Zone, Piece[]>()
+/** The pieces of a zone's fill, each its own node of connectivity; the same objects for one zone, so their copper is built once. */
 export function pieces(z: Zone): Piece[] {
-  return z.fill.map((p: Poly, index) => ({ ...z, fill: [p], piece: { zone: z, index, at: centroid([p.outer]), area: Math.abs(area([p.outer, ...p.holes])) } }))
+  let ps = cut.get(z)
+  if (!ps) cut.set(z, (ps = z.fill.map((p: Poly, index) => ({ ...z, fill: [p], piece: { zone: z, index, at: centroid([p.outer]), area: Math.abs(area([p.outer, ...p.holes])) } }))))
+  return ps
 }
 
 const f2 = (v: number) => v.toFixed(2)
 const mm2 = (v: number) => (v >= 0.1 ? f2(v) : v.toFixed(4))
 /** A pour piece in words: its layer, centroid and area. */
 export const pieceText = (p: Piece) => `the ${p.layer} pour piece at (${f2(p.piece.at[0])}, ${f2(p.piece.at[1])}), ${mm2(p.piece.area)} mm²`
-
-/** The key of an item pair on a layer, the earlier item in board order first. */
-export const pairKey = (layer: string, a: Item, b: Item) => `${layer}:${a.id}:${b.id}`
 
 class UF {
   p: number[]
@@ -77,27 +87,42 @@ function anchor(it: Item): Pt {
 
 /** How close copper of one net must come to count as touching, mm. */
 const TOUCH = 0.001
+/** Clipper's TOUCH offset falls short of its arc by up to half its radius at a corner, so between these gaps its boolean decides as it always did, mm. */
+const TOUCH_SURE = 0.0002
+const SLACK = 0.0001
 
 /** Copper grown by TOUCH, per item and layer: a pour piece meets many same-net items it does not overlap. */
-const grown = new WeakMap<Item, Map<string, RingIndex>>()
-function grownBy(it: Item, layer: string): RingIndex {
+const grown = new WeakMap<Item, Map<string, EdgeSet>>()
+function grownBy(it: Item, layer: string): EdgeSet {
   let m = grown.get(it)
   if (!m) grown.set(it, (m = new Map()))
   let g = m.get(layer)
-  if (!g) m.set(layer, (g = new RingIndex(offsetRings(copperRings(it, layer), TOUCH))))
+  if (!g) m.set(layer, (g = new EdgeSet(offsetRings(copperRings(it, layer), TOUCH))))
   return g
 }
-/** Whether two items of one net are joined on a layer: their copper overlaps or touches edge to edge. */
+
+/** Whether two items of one net are joined on a layer: their copper overlaps or touches edge to edge, within TOUCH. */
 export function joined(a: Item, b: Item, layer: string): boolean {
-  return overlapsNear(copperIndex(a, layer), copperIndex(b, layer)) || touches(a, b, layer)
+  const ca = copperSet(a, layer),
+    cb = copperSet(b, layer)
+  const d = distance(ca, cb, TOUCH + SLACK, TOUCH_SURE)
+  if (d < TOUCH_SURE) return true
+  if (d >= TOUCH + SLACK) return false
+  return overlapsNear(ca, cb) || touches(a, b, layer)
 }
 
-/** Whether two items of one net touch edge to edge: the one with fewer vertices grown by TOUCH overlaps the other. */
+/** Clipper's touch: the one with fewer vertices grown by TOUCH overlaps the other. */
 function touches(a: Item, b: Item, layer: string): boolean {
-  const size = (it: Item) => copperRings(it, layer).reduce((n, r) => n + r.length, 0)
-  const [s, t] = size(a) <= size(b) ? [a, b] : [b, a]
-  return overlapsNear(grownBy(s, layer), copperIndex(t, layer))
+  const [s, t] = copperSet(a, layer).size <= copperSet(b, layer).size ? [a, b] : [b, a]
+  return overlapsNear(grownBy(s, layer), copperSet(t, layer))
 }
+
+const tested = new WeakMap<Zone, Map<Item, boolean>[]>()
+/** Island removal's verdicts for a zone: per piece of its fill, the same-net items and pieces it tested and whether they joined, so connectivity need not test them again. */
+export function recordJoins(z: Zone, joins: Map<Item, boolean>[]): void {
+  tested.set(z, joins)
+}
+const knownJoin = (p: Item, x: Item): boolean | undefined => ('piece' in p ? tested.get((p as Piece).piece.zone)?.[(p as Piece).piece.index]?.get(x) : undefined)
 
 /** Whether two items are pads of one net tie group, which may touch without a short; null when the board has no net tie. */
 export function netTied(board: Board): ((a: Item, b: Item) => boolean) | null {
@@ -119,57 +144,71 @@ export function netTied(board: Board): ((a: Item, b: Item) => boolean) | null {
   }
 }
 
+/** One candidate pass per layer: same-net pairs whose boxes meet are joined, other-net pairs tested for a short and kept for the DRC's clearance. Pulses per layer and per pair. */
 export function connectivity(board: Board): Connectivity {
   const cu = copperLayers(board.copper)
   const tied = netTied(board)
+  const reach = maxClearance(board)
+  const order = new Map(board.items.map((it, i) => [it, i]))
   // each pour piece is a node of its own: a pad in a piece that touches nothing else of its net is cut off
-  const items = board.items.flatMap((it): Item[] => (it.net === undefined || !copperLayersOf(it, cu).length ? [] : it.kind === 'zone' ? pieces(it) : [it]))
+  const copper = board.items.flatMap((it): Item[] => (!copperLayersOf(it, cu).length ? [] : it.kind === 'zone' ? pieces(it) : [it]))
+  const items = copper.filter(it => it.net !== undefined)
   const idx = new Map(items.map((it, i) => [it, i]))
   const uf = new UF(items.length)
   const shorts: [Item, Item, string][] = []
   const shortKeys = new Set<string>()
-  const apart = new Set<string>()
-  // a short and a pair key name the zone, not the piece
+  const near: NearPair[] = []
+  // a short and a near pair name the zone, not the piece
   const real = (it: Item): Item => ('piece' in it ? (it as Piece).piece.zone : it)
+  const rank = (p: NearPair) => [order.get(p.a)!, order.get(p.b)!]
   for (const layer of cu) {
-    const on = items.filter(it => copperLayersOf(it, cu).includes(layer) && copperRings(it, layer).length)
+    pulse()
+    const on = copper.filter(it => copperLayersOf(it, cu).includes(layer) && copperRings(it, layer).length)
     // grid candidates in the same order as a loop over every pair
     const grid = new Grid(on.map(it => copperBox(it, layer)))
-    const touched = new Set<string>()
+    const pairs = new Map<string, NearPair>()
     for (let i = 0; i < on.length; i++) {
       const a = on[i],
-        ia = idx.get(a)!
-      for (const j of grid.query(grid.boxes[i])) {
+        ia = idx.get(a)
+      for (const j of grid.query(grid.boxes[i], reach)) {
         if (j <= i) continue
+        pulse()
         const b = on[j],
-          ib = idx.get(b)!
-        if (a.net === b.net && uf.find(ia) === uf.find(ib)) continue
-        const ra = real(a),
-          rb = real(b)
-        if (!overlapsNear(copperIndex(a, layer), copperIndex(b, layer))) {
-          if (a.net !== b.net) {
-            apart.add(pairKey(layer, ra, rb))
-            if (tied?.(a, b) && touches(a, b, layer)) uf.union(ia, ib)
-          }
+          ib = idx.get(b)
+        const meet = bboxOverlap(grid.boxes[i], grid.boxes[j])
+        if (sameNet(a.net, b.net)) {
           // copper of one net that only touches edge to edge is joined, as in KiCad
-          else if (touches(a, b, layer)) uf.union(ia, ib)
+          if (meet && uf.find(ia!) !== uf.find(ib!) && (knownJoin(a, b) ?? knownJoin(b, a) ?? joined(a, b, layer))) uf.union(ia!, ib!)
           continue
         }
-        if (a.net === b.net) uf.union(ia, ib)
-        // a net tie joins its pads into one island, each keeping its net, no short
-        else if (tied?.(a, b)) uf.union(ia, ib)
-        else {
-          touched.add(pairKey(layer, ra, rb))
-          const k = `${layer}:${ra.id}:${rb.id}`
-          if (!shortKeys.has(k)) {
-            shortKeys.add(k)
-            shorts.push([ra, rb, layer])
+        const short = meet && overlap(copperSet(a, layer), copperSet(b, layer))
+        const ra = real(a),
+          rb = real(b)
+        if (ia !== undefined && ib !== undefined) {
+          // a net tie joins its pads into one island, each keeping its net, no short
+          if (tied?.(a, b) && meet && (short || joined(a, b, layer))) uf.union(ia, ib)
+          else if (short) {
+            const k = `${layer}:${ra.id}:${rb.id}`
+            if (!shortKeys.has(k)) {
+              shortKeys.add(k)
+              shorts.push([ra, rb, layer])
+            }
           }
         }
+        if (ra === rb) continue
+        const k = `${order.get(ra)}:${order.get(rb)}`
+        const p = pairs.get(k)
+        if (p) p.short ||= short
+        else pairs.set(k, { layer, a: ra, b: rb, short })
       }
     }
-    // a zone is apart from an item only when none of its pieces overlaps it
-    for (const k of touched) apart.delete(k)
+    near.push(
+      ...[...pairs.values()].sort((x, y) => {
+        const [xa, xb] = rank(x),
+          [ya, yb] = rank(y)
+        return xa - ya || xb - yb
+      }),
+    )
   }
   const byNet = new Map<string, Item[]>()
   for (const it of items) {
@@ -227,13 +266,13 @@ export function connectivity(board: Board): Connectivity {
       return i === undefined ? -1 : uf.find(i)
     },
   }
-  return { ratsnest, unconnected, shorts, singles, apart, islands: words, groups, pieces: items.filter((it): it is Piece => 'piece' in it) }
+  return { ratsnest, unconnected, shorts, singles, near, islands: words, groups, pieces: items.filter((it): it is Piece => 'piece' in it) }
 }
 
 /** An island of a net in words: up to three of its pads and its largest pour piece. */
 function islandText(items: Item[]): string {
   const ps = items.filter((it): it is Piece => 'piece' in it).sort((a, b) => b.piece.area - a.piece.area)
-  const pads = items.flatMap(it => (it.kind === 'pad' ? [`${it.ref ?? '?'}.${it.num}`] : []))
+  const pads = items.flatMap(it => (it.kind === 'pad' ? [`${it.ref ?? '?'}/${it.num}`] : []))
   const who = pads.length ? `${pads.slice(0, 3).join(', ')}${pads.length > 3 ? ` and ${pads.length - 3} more pads` : ''}` : 'tracks and vias'
   if (!ps.length) return who
   return `${who} in ${pieceText(ps[0])}${ps.length > 1 ? ` and ${ps.length - 1} more piece${ps.length > 2 ? 's' : ''}` : ''}`

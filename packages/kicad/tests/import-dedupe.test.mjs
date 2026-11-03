@@ -92,3 +92,10 @@ test('padThermals: one setting per pad number, null when a number has two', () =
     rmSync(top, { recursive: true, force: true })
   }
 })
+
+test('import: reference placements emit canonical ref:at attributes', () => {
+  const board = imported().files.get('pcb.tsx')
+  assert.match(board, /<R1[^>]*ref:at="0 -2 0"/)
+  assert.match(board, /<R2[^>]*ref:at=/)
+  assert.doesNotMatch(board, /refAt=/)
+})

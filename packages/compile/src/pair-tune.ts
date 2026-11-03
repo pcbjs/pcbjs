@@ -3,6 +3,7 @@ import type { Pad, Pt } from '@pcbjs/core/model'
 import { longestFreeSegment, type FreeSpan, type IsFree } from './length.js'
 import { meander, meanderCapacity, smallestBump } from './meander.js'
 import { layPairJob, mergeStraight, type PairContext, type PairJob, type PairLaid } from './pair-lay.js'
+import { pulse } from './cancel.js'
 
 export interface PairTuneContext {
   /** `free` must see the board without this pair's own copper; without it the pair is not tuned */
@@ -90,6 +91,7 @@ export function tunePairCentre(job: PairJob, extra: number, ctx: PairTuneContext
   }
   let ai = 0
   for (let guard = 0; guard < 32 && ai < amps.length; guard++) {
+    pulse()
     let left = extra - (L - L0)
     if (left <= tol) break
     if (left < smallestBump(rmin) - 1e-9) {
@@ -113,6 +115,7 @@ export function tunePairCentre(job: PairJob, extra: number, ctx: PairTuneContext
     const bounds = [0, ...cur.vias, cur.centre.length - 1]
     let best: { k: number; span: FreeSpan } | null = null
     for (let k = 0; k + 1 < bounds.length; k++) {
+      pulse()
       const sec = cur.centre.slice(bounds[k], bounds[k + 1] + 1)
       const span = longestFreeSegment(sec, ok, cw, A + MARGIN, { layer: cur.layers[k], net: job.nets[0], step: 0.1, clearance: job.copper + MARGIN })
       if (span && (!best || span.length > best.span.length + 1e-9)) best = { k, span }

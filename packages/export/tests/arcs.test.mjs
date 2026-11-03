@@ -1,7 +1,7 @@
 // Arcs in the Gerbers and the SVG: G75 with G02 and G03 where a path holds an arc, nothing changed where none does.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h } from '@pcbjs/core'
+import PCB, { h, route } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
 import { gerberLayer, layerMarkup } from '../dist/index.js'
 
@@ -50,7 +50,7 @@ test('arcs: a layer without arcs is written exactly as before, without G75', () 
       { name: 'Mixed' },
       h('path', { layer: 'Edge.Cuts', d: ROUNDED }),
       h('path', { layer: 'F.SilkS', d: 'M 1 1 H 5 C 6 1 6 3 5 3 Z' }),
-      h('track', { layer: 'F.Cu', width: 0.25, d: 'M 3 3 H 10 V 8' }),
+      route('3 3').net(null).width(0.25).H(10).V(8),
     ),
   )
   for (const layer of ['F.SilkS', 'F.Cu', 'B.Cu']) {
@@ -67,8 +67,8 @@ test('arcs: a mirrored arc turns the other way in the Gerber, and a track keeps 
       PCB,
       { name: 'Mirror' },
       h('path', { layer: 'Edge.Cuts', d: ROUNDED }),
-      h('track', { layer: 'F.Cu', width: 0.25, d: 'M 5 5 A 1 1 0 0 1 7 5' }),
-      h('g', { at: '20 10', side: 'B' }, h('track', { layer: 'F.Cu', width: 0.25, d: 'M 0 0 A 1 1 0 0 1 2 0' })),
+      route('5 5').net(null).width(0.25).A(7, 5, -180),
+      h('g', { at: '20 10', side: 'B' }, route('0 0').net(null).layer('F.Cu').width(0.25).A(2, 0, -180)),
     ),
   )
   // front: clockwise on the y-down board from (5, 5) over the top to (7, 5), centre (6, 5)

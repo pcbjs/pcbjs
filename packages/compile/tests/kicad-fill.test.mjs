@@ -1,8 +1,9 @@
 // Pour and mask details where pcbjs follows KiCad: own-net tracks count as spokes, a spoke landing in another pad's spoke is
 // kept, a neck between keepouts narrower than the min width goes, and every non-plated hole opens the mask.
+import { fp, P, net } from './parts.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h, pour, keepout, resetDefaults } from '@pcbjs/core'
+import PCB, { h, pour, keepout, resetDefaults, route } from '@pcbjs/core'
 import { compileBoard } from '../dist/index.js'
 import { area, intersection, polysToRings } from '../dist/geom.js'
 import { thermalReport } from '../dist/zones.js'
@@ -13,10 +14,10 @@ const board = (...kids) => {
   resetDefaults()
   return compileBoard(h(PCB, { name: 'T' }, outline(), ...kids))
 }
-const gnd = () => pour('GND', 'F.Cu', 'M0 0 H20 V20 H0 Z')
+const gnd = () => pour(net('GND'), 'F.Cu', 'M0 0 H20 V20 H0 Z')
 // pour keepouts that let tracks through
-const block = d => keepout('F.Cu', d, { tracks: false, vias: false })
-const gndPad = (ref, at) => h('footprint', { ref, at, 'net:1': 'GND' }, h('pad', { num: 1, shape: 'rect', size: [1, 1] }))
+const block = d => keepout(d, { layers: ['F.Cu'], tracks: false, vias: false })
+const gndPad = (ref, at) => fp({ ref, at, 'net:1': 'GND' }, h('pad', { num: 1, shape: 'rect', size: [1, 1] }))
 const zoneOf = b => b.items.find(i => i.kind === 'zone')
 const spokeWarnings = b => b.drc.filter(d => d.rule === 'thermal-spokes').map(d => d.message)
 
@@ -26,11 +27,11 @@ const oneSide = () => [block('M 2 2 H 18 V 9.4 H 2 Z'), block('M 2 10.6 H 18 V 1
 test("thermal-spokes: a track of the pad's own net leaving it counts as a spoke", () => {
   const lone = board(gnd(), ...oneSide(), gndPad('U1', '10 10'), gndPad('U2', '16 16'))
   assert.equal(thermalReport(zoneOf(lone)).pads.find(p => p.pad.ref === 'U1').spokes, 1)
-  assert.deepEqual(spokeWarnings(lone), ['pad U1.1 (GND) joins the GND pour on F.Cu through 1 of 4 thermal spokes, fewer than 2'])
-  const tracked = board(gnd(), ...oneSide(), gndPad('U1', '10 10'), gndPad('U2', '16 16'), h('track', { net: 'GND', layer: 'F.Cu', width: 0.3, d: 'M 10 10 H 4' }))
+  assert.deepEqual(spokeWarnings(lone), ['pad U1/1 (GND) joins the GND pour on F.Cu through 1 of 4 thermal spokes, fewer than 2'])
+  const tracked = board(gnd(), ...oneSide(), gndPad('U1', '10 10'), gndPad('U2', '16 16'), route('10 10').net(net('GND')).width(0.3).H(4))
   assert.deepEqual(spokeWarnings(tracked), [])
   // a track of another layer does not count
-  const back = board(gnd(), ...oneSide(), gndPad('U1', '10 10'), gndPad('U2', '16 16'), h('track', { net: 'GND', layer: 'B.Cu', width: 0.3, d: 'M 10 10 H 4' }))
+  const back = board(gnd(), ...oneSide(), gndPad('U1', '10 10'), gndPad('U2', '16 16'), route('10 10').net(net('GND')).layer('B.Cu').width(0.3).H(4))
   assert.equal(spokeWarnings(back).length, 1)
 })
 
@@ -61,9 +62,9 @@ const circle = (cx, cy, r) => 'M ' + Array.from({ length: 36 }, (_, k) => `${cx 
 test('min width: a neck between two keepouts narrower than the min width is opened away, its pocket an island', () => {
   // two keepout circles 0.2 mm apart, as Base's tooling hole and M3 hole keepouts by FID1; below them a pocket closed by
   // keepouts on its other sides, which reaches the rest of the pour only through the neck
-  const ko = d => keepout('F.Cu', d, { tracks: false, vias: false })
+  const ko = d => keepout(d, { layers: ['F.Cu'], tracks: false, vias: false })
   const b = board(
-    pour('GND', 'F.Cu', 'M2 2 H18 V18 H2 Z', { minWidth: 0.25 }),
+    pour(net('GND'), 'F.Cu', 'M2 2 H18 V18 H2 Z', { minWidth: 0.25 }),
     gndPad('U1', '4 4'),
     ko(circle(8.4, 9.5, 1.5)),
     ko(circle(13.35, 9.5, 3.25)),
@@ -88,9 +89,9 @@ test('min width: a neck between two keepouts narrower than the min width is open
 
 test('npth mask: every non-plated hole opens the mask by default, mask={false} opens none', () => {
   const b = board(
-    h('footprint', { ref: 'H1', at: '5 5' }, h('pad', { num: '', size: 3.2, drill: 3.2, type: 'npth' })),
-    h('footprint', { ref: 'H2', at: '12 5' }, h('pad', { num: '', size: 1, drill: 1.5, type: 'npth', maskExpansion: 0.1 })),
-    h('footprint', { ref: 'H3', at: '15 15' }, h('pad', { num: '', size: 2, drill: 2, type: 'npth', mask: false })),
+    fp({ ref: 'H1', at: '5 5' }, h('pad', { num: '', size: 3.2, drill: 3.2, type: 'npth' })),
+    fp({ ref: 'H2', at: '12 5' }, h('pad', { num: '', size: 1, drill: 1.5, type: 'npth', maskExpansion: 0.1 })),
+    fp({ ref: 'H3', at: '15 15' }, h('pad', { num: '', size: 2, drill: 2, type: 'npth', mask: false })),
   )
   const [h1, h2, h3] = b.items.filter(i => i.kind === 'pad')
   assert.ok(h1.layers.includes('F.Mask') && h1.layers.includes('B.Mask'))

@@ -1,6 +1,5 @@
 // The board file carries only the fields KiCad copied onto footprints, so the importer reads MPN and the rest from the schematic.
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, exists, readText, resolve } from './host.js'
 import { atom, child, children, head, isList, parseSExpr, type SList } from './sexpr.js'
 
 export interface KSymbolFields {
@@ -24,7 +23,7 @@ const TRUE_TEXT = /^(1|y|yes|true|dnp|x)$/i
 /** The root schematic `<name>.kicad_sch` beside the `.kicad_pcb`, if any; its sheets are read through it. */
 export function schematicFiles(boardFile: string): string[] {
   const root = boardFile.replace(/\.kicad_pcb$/, '.kicad_sch')
-  return existsSync(root) ? [root] : []
+  return exists(root) ? [root] : []
 }
 
 /** The fields of every symbol by reference, through every sheet; power symbols and unreadable files are skipped. */
@@ -34,11 +33,11 @@ export function readSchematicFields(files: string | string[]): Map<string, KSymb
   const queue = (Array.isArray(files) ? files : [files]).map(f => resolve(f))
   while (queue.length) {
     const file = queue.shift()!
-    if (seen.has(file) || !existsSync(file)) continue
+    if (seen.has(file) || !exists(file)) continue
     seen.add(file)
     let root: SList
     try {
-      root = parseSExpr(readFileSync(file, 'utf8'))
+      root = parseSExpr(readText(file))
     } catch {
       continue
     }

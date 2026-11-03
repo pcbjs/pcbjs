@@ -1,10 +1,13 @@
+import { validateBoard } from './validate.js'
 // The reader covers only what gerber.ts writes, so an export bug cannot pass as an orderable set.
 import type { Board, DrcMarker, Pad, Poly, Pt, Ring } from '@pcbjs/core/model'
-import { area, bbox, centroid, clipRings, offsetRings, pointInPoly, polysToRings, strokeOpen, union, unionEvenOdd } from '@pcbjs/compile/geom'
-import { copperLayers } from '@pcbjs/compile/layers'
-import { copperLayersOf, copperRings } from '@pcbjs/compile/copper'
-import { chainRings } from '@pcbjs/compile/path'
-import { connectivity } from '@pcbjs/compile/connectivity'
+import { area, bbox, centroid, clipRings, offsetRings, pointInPoly, polysToRings, strokeOpen, union, unionEvenOdd } from '@pcbjs/compile/internal/geom'
+import { copperLayers } from '@pcbjs/compile/internal/layers'
+import { copperLayersOf, copperRings } from '@pcbjs/compile/internal/copper'
+import { chainRings } from '@pcbjs/compile/internal/path'
+import { connectivity } from '@pcbjs/compile/internal/connectivity'
+import { marker } from '@pcbjs/compile/internal/messages'
+import type { TemplateArgs } from '@pcbjs/core/finding'
 import type { GerberFile } from './gerber.js'
 
 // mm², once edge noise is gone
@@ -25,6 +28,7 @@ function disc(cx: number, cy: number, r: number): Ring {
 
 /** Read a Gerber that pcbjs wrote, in board mm, y down; throws on anything outside that subset. */
 export function readGerber(text: string): ReadGerber {
+  let format = false, units = false, ended = false
   let scale = 1e6,
     x = 0,
     y = 0,
@@ -82,14 +86,24 @@ export function readGerber(text: string): ReadGerber {
   for (const raw of text.split('\n')) {
     const line = raw.trim()
     if (!line) continue
+    if (ended) throw new Error('statement after M02')
     if (line.startsWith('%')) {
+      if (!line.endsWith('*%')) throw new Error('unfinished extended command')
       const body = line.slice(1, -1).replace(/\*$/, '')
       let m: RegExpExecArray | null
-      if ((m = /^FSLAX(\d)(\d)Y(\d)(\d)$/.exec(body))) scale = 10 ** Number(m[2])
+      if ((m = /^FSLAX(\d)(\d)Y(\d)(\d)$/.exec(body))) {
+        if (m[1] !== m[3] || m[2] !== m[4]) throw new Error('inconsistent coordinate format')
+        scale = 10 ** Number(m[2])
+        format = true
+      }
       else if (body === 'MOMM') {
-        /* mm */
+        units = true
       } else if (body === 'MOIN') throw new Error('inch Gerbers are not read')
-      else if ((m = /^ADD(\d+)C,([\d.]+)$/.exec(body))) apertures.set(Number(m[1]), Number(m[2]))
+      else if ((m = /^ADD(\d+)C,([\d.]+)$/.exec(body))) {
+        const diameter = Number(m[2])
+        if (!Number.isFinite(diameter) || diameter <= 0) throw new Error('invalid aperture diameter')
+        apertures.set(Number(m[1]), diameter)
+      }
       else if (/^ADD/.test(body)) throw new Error(`aperture ${body} is not one pcbjs writes`)
       else if ((m = /^LP([DC])$/.exec(body))) {
         flushPath()
@@ -102,11 +116,14 @@ export function readGerber(text: string): ReadGerber {
     if (line.startsWith('G04')) continue
     const m = /^(G0[123])?(?:X(-?\d+))?(?:Y(-?\d+))?(?:I(-?\d+))?(?:J(-?\d+))?(D0[123])?\*$/.exec(line)
     if (m && (m[2] !== undefined || m[3] !== undefined || m[6])) {
+      if (!format || !units) throw new Error('drawing before format/unit headers')
+      if (!inRegion && m[6] !== 'D02' && !apertures.has(ap)) throw new Error('drawing without a selected aperture')
       if (m[1]) mode = m[1] as typeof mode
       const nx = m[2] !== undefined ? Number(m[2]) / scale : x,
         ny = m[3] !== undefined ? Number(m[3]) / scale : y
       const ci = m[4] !== undefined ? Number(m[4]) / scale : 0,
         cj = m[5] !== undefined ? Number(m[5]) / scale : 0
+      if (![nx, ny, ci, cj].every(Number.isFinite)) throw new Error('nonfinite coordinate')
       const d = m[6] ?? 'D01'
       if (d === 'D02') {
         if (inRegion) {
@@ -150,6 +167,7 @@ export function readGerber(text: string): ReadGerber {
     }
     if (line === 'G74*') throw new Error('single quadrant arcs are not read')
     if (line === 'G36*') {
+      if (inRegion) throw new Error('nested region')
       flushPath()
       inRegion = true
       contour = []
@@ -157,7 +175,9 @@ export function readGerber(text: string): ReadGerber {
       continue
     }
     if (line === 'G37*') {
+      if (!inRegion) throw new Error('region end without start')
       if (contour.length) contours.push(contour)
+      if (!contours.length || contours.some(c => c.length < 4 || c[0][0] !== c[c.length - 1][0] || c[0][1] !== c[c.length - 1][1])) throw new Error('unclosed region contour')
       // a region fills its contour whichever way it runs: a mirrored pad runs clockwise, and must not cancel the copper under it
       add(contours.filter(c => c.length >= 3).map(c => positive(flip(c))))
       inRegion = false
@@ -172,9 +192,14 @@ export function readGerber(text: string): ReadGerber {
       ap = Number(sel[1])
       continue
     }
-    if (line === 'M02*') break
+    if (line === 'M02*') {
+      if (inRegion) throw new Error('unfinished region')
+      ended = true
+      continue
+    }
     throw new Error(`unknown statement ${line}`)
   }
+  if (!format || !units || !ended) throw new Error('missing format/unit headers or M02 termination')
   flushPath()
   flushBatch()
   return { polys: union(acc), paths }
@@ -270,7 +295,7 @@ function padGroups(board: Board, pieces: Map<string, Poly[]>, cu: string[]): { p
   return { pads, group: pads.map((_, i) => (first[i] >= 0 ? find(first[i]) : -1)) }
 }
 
-const padName = (p: Pad) => `${p.ref ?? '?'}.${p.num}`
+const padName = (p: Pad) => `${p.ref ?? '?'}/${p.num}`
 
 export interface FabCheck {
   findings: DrcMarker[]
@@ -280,10 +305,14 @@ export interface FabCheck {
 
 /** Compare a fab set's copper and outline Gerbers with the board; every difference is a DRC error `fab-mismatch`. */
 export function checkFab(board: Board, gerbers: GerberFile[]): FabCheck {
+  validateBoard(board)
   const t0 = performance.now()
   const out: DrcMarker[] = []
   const cu = copperLayers(board.copper)
-  const fail = (layer: string, message: string, at: Pt) => out.push({ severity: 'error', rule: 'fab-mismatch', message, at: [r2(at[0]), r2(at[1])], layer })
+  const fail = (layer: string, args: TemplateArgs, at: Pt, area?: number) =>
+    out.push(
+      marker({ severity: 'error', rule: 'fab-mismatch', args, ...(area !== undefined ? { measured: { value: mm2(area), unit: 'mm2' } } : {}), at: [r2(at[0]), r2(at[1])], layer }),
+    )
   const byLayer = new Map<string, GerberFile>()
   for (const g of gerbers) {
     const m = /^Copper,L(\d+)/.exec(g.fileFunction)
@@ -292,27 +321,32 @@ export function checkFab(board: Board, gerbers: GerberFile[]): FabCheck {
   }
   const read = (layer: string): ReadGerber | null => {
     const g = byLayer.get(layer)
-    if (!g) return null
+    if (!g) {
+      fail(layer, { what: 'unreadable', gerber: layer, error: 'the expected Gerber file is missing' }, [0, 0])
+      return null
+    }
     try {
       return readGerber(g.text)
     } catch (e: any) {
-      fail(layer, `${g.name} cannot be read back: ${e?.message ?? e}`, [0, 0])
+      fail(layer, { what: 'unreadable', gerber: g.name, error: String(e?.message ?? e) }, [0, 0])
       return null
     }
   }
   // the outline: closed contours of the profile, inside an odd number of them is board
   let region: Ring[] | null = null
   const edge = read('Edge.Cuts')
-  if (edge && edge.paths.length) {
-    const { rings } = chainRings(
+  if (edge) {
+    const { rings, open } = chainRings(
       edge.paths,
       edge.paths.map(p => p.length > 2 && Math.hypot(p[0][0] - p[p.length - 1][0], p[0][1] - p[p.length - 1][1]) < 1e-6),
     )
-    if (rings.length) {
+    if (open.length) fail('Edge.Cuts', { what: 'unreadable', gerber: byLayer.get('Edge.Cuts')!.name, error: 'open outline toolpath was found' }, [0, 0])
+    if (!rings.length) fail('Edge.Cuts', { what: 'unreadable', gerber: byLayer.get('Edge.Cuts')!.name, error: 'no closed outline was found' }, [0, 0])
+    else {
       region = polysToRings(unionEvenOdd(rings))
       if (board.outline.length) {
         const d = solid(clipRings('xor', region, board.outline))
-        if (d.area > FAB_TOLERANCE) fail('Edge.Cuts', `the outline read back from the Gerber differs from the board's by ${mm2(d.area)} mm²`, d.at!)
+        if (d.area > FAB_TOLERANCE) fail('Edge.Cuts', { what: 'outline' }, d.at!, d.area)
       }
     }
   }
@@ -326,10 +360,10 @@ export function checkFab(board: Board, gerbers: GerberFile[]): FabCheck {
     want.set(layer, model)
     const gr = polysToRings(g.polys)
     const d = solid(clipRings('xor', gr, polysToRings(model)))
-    if (d.area > FAB_TOLERANCE) fail(layer, `${layer} read back from ${byLayer.get(layer)!.name} differs from the board's copper by ${mm2(d.area)} mm²`, d.at!)
+    if (d.area > FAB_TOLERANCE) fail(layer, { what: 'copper', gerber: byLayer.get(layer)!.name }, d.at!, d.area)
     if (region) {
       const past = solid(clipRings('difference', gr, region))
-      if (past.area > FAB_TOLERANCE) fail(layer, `${layer} has ${mm2(past.area)} mm² of copper outside the board outline or inside a cutout`, past.at!)
+      if (past.area > FAB_TOLERANCE) fail(layer, { what: 'outside' }, past.at!, past.area)
     }
   }
   // joined as the DRC's connectivity says, each pour piece its own node
@@ -354,7 +388,7 @@ export function checkFab(board: Board, gerbers: GerberFile[]): FabCheck {
         if (lost.has(net)) return
         lost.add(net)
         const at = p.at
-        fail(copperLayersOf(p, cu)[0], `net ${net}: pad ${padName(p)} is no longer joined to ${padName(m.pads[j])} in the Gerbers`, at)
+        fail(copperLayersOf(p, cu)[0], { what: 'split', net, pad: padName(p), other: padName(m.pads[j]) }, at)
       }
     })
     g.pads.forEach((p, i) => {
@@ -371,7 +405,7 @@ export function checkFab(board: Board, gerbers: GerberFile[]): FabCheck {
         const mj = m.pads.findIndex((q, k) => q.net === other && g.group[k] === g.group[i])
         if (mj >= 0 && m.group[mj] === m.group[i]) return
         shorted.add(key)
-        fail(cu[0], `nets ${other} and ${p.net} are joined in the Gerbers at pad ${padName(p)}`, p.at)
+        fail(cu[0], { what: 'short', other, net: p.net!, pad: padName(p) }, p.at)
       }
     })
   }

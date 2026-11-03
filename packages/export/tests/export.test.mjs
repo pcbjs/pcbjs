@@ -2,24 +2,17 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import PCB, { h } from '@pcbjs/core'
+import PCB, { h, route } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
 import { boardSvg, buildFab, excellon, gerberLayer, zipFab } from '../dist/index.js'
+import { fp, N } from './parts.mjs'
 
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const DATE = '2026-01-01T00:00:00.000Z'
-const pad = (ref, x) =>
-  h('footprint', { ref, value: 'V', id: 'pcbjs:TestPad', at: `${x}mm 10mm`, 'net:pad1': 'V', bom: false }, h('pad', { num: 1, size: 2, shape: 'circle', drill: 1 }))
+const pad = (ref, x) => fp({ ref, value: 'V', id: 'pcbjs:TestPad', at: `${x}mm 10mm`, 'net:pad1': 'V', bom: false }, h('pad', { num: 1, size: 2, shape: 'circle', drill: 1 }))
 const board = () =>
   compileBoard(
-    h(
-      PCB,
-      { name: 'Two', revision: '1.0' },
-      h('circle', { layer: 'Edge.Cuts', cx: 10, cy: 10, r: 10 }),
-      pad('TP1', 5),
-      pad('TP2', 15),
-      h('track', { net: 'V', layer: 'F.Cu', width: 0.5, d: 'M 5 10 H 15' }),
-    ),
+    h(PCB, { name: 'Two', rev: '1.0' }, h('circle', { layer: 'Edge.Cuts', cx: 10, cy: 10, r: 10 }), pad('TP1', 5), pad('TP2', 15), route('5 10').net(N.V).width(0.5).H(15)),
   )
 
 test('export: the fab set has every layer, the drills, the job file and an orderable README', () => {

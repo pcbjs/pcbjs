@@ -1,7 +1,8 @@
 // Board mm, y down.
 import type { Prim, Pt } from '@pcbjs/core/model'
 import { primsLength } from './round.js'
-import type { Stackup } from '@pcbjs/core/types'
+import type { Stackup } from '@pcbjs/core/internal/types'
+import { pulse } from './cancel.js'
 
 /** Which side of a segment, relative to its direction of travel on a y-down screen; left is the normal [dy, -dx]. */
 export type Side = 'left' | 'right'
@@ -86,6 +87,7 @@ export function longestFreeSegment(pts: Pt[], isFree: IsFree, width: number, amp
       nl: Pt = [u[1], -u[0]]
     const K = Math.max(1, Math.ceil(L / step - 1e-9))
     for (const side of ['left', 'right'] as Side[]) {
+      pulse()
       const sg = side === 'left' ? 1 : -1
       const far: Pt = [nl[0] * sg * amplitude, nl[1] * sg * amplitude]
       const bx0 = Math.min(a[0], b[0], a[0] + far[0], b[0] + far[0]) - keep,

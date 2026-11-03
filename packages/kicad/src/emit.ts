@@ -1,7 +1,7 @@
-import { basename } from 'node:path'
+import { basename } from './host.js'
 import { fmt } from './geom.js'
 import { footprintSpecs, padPins, type ElementSpec, type KFootprint } from './footprint.js'
-import { isInstalled, libraryOf, prefixOf, projectModelPath } from './library.js'
+import { isInstalled, kicadSource, libraryOf, prefixOf, projectModelPath } from './library.js'
 
 /** Code printed as it is, not as a literal. */
 export class Code {
@@ -93,6 +93,7 @@ export function atString(v: unknown): unknown {
 }
 
 export function jsx(e: ElementSpec | { type: string; props: Record<string, unknown>; children?: (string | number | Code)[] }): string {
+  if (e.type === 'keepout') return `{${keepoutCall(e.props)}}`
   const props = Object.entries(e.props)
     .filter(([, v]) => v !== undefined)
     .map(([k, v]) => attr(k, k === 'at' ? atString(v) : v))
@@ -100,6 +101,12 @@ export function jsx(e: ElementSpec | { type: string; props: Record<string, unkno
   if (!e.children?.length) return `${open} />`
   const inner = e.children.map(c => (c instanceof Code ? `{${c.code}}` : typeof c === 'string' && !/[{}<>\n]/.test(c) && c.trim() === c && c !== '' ? c : `{${lit(c)}}`)).join('')
   return `${open}>${inner}</${e.type}>`
+}
+
+/** A `keepout` spec as the call: the area, then the options. */
+export function keepoutCall(props: Record<string, unknown>): string {
+  const { d, ...opts } = props
+  return `keepout(${str(String(d))}${Object.keys(opts).length ? `, ${lit(opts)}` : ''})`
 }
 
 /** An identifier from any name: KiCad footprint names such as SOIC-8_3.9x4.9mm_P1.27mm become SOIC_8_3_9x4_9mm_P1_27mm. */
@@ -146,17 +153,15 @@ export interface FootprintFileOptions {
   attrs?: boolean
 }
 
-/** The model prop as code; `kicadModel('${KICAD10_3DMODEL_DIR}/…')` keeps the KiCad reference, resolved at compile. */
-export function modelCode(fp: KFootprint, file?: string): { code: Code; usesKicad: boolean } | null {
+/** The model prop as code: a KiCad library model as `kicad:<Lib>.3dshapes/<Name>.step`, else `file` or the path KiCad wrote. */
+export function modelCode(fp: KFootprint, file?: string): Code | null {
   const m = fp.models.find(x => !x.hidden && x.path)
   if (!m) return null
-  const parts: string[] = []
-  const usesKicad = !file
-  parts.push(`file: ${file ? str(file) : `kicadModel(${str(m.path)})`}`)
+  const parts = [`file: ${str(file ?? kicadSource(m.path))}`]
   if (m.offset.some(v => v !== 0)) parts.push(`offset: ${lit(m.offset)}`)
   if (m.scale.some(v => v !== 1)) parts.push(`scale: ${lit(m.scale)}`)
   if (m.rotate.some(v => v !== 0)) parts.push(`rotate: ${lit(m.rotate)}`)
-  return { code: new Code(`{ ${parts.join(', ')} }`), usesKicad }
+  return new Code(`{ ${parts.join(', ')} }`)
 }
 
 /** The `defineFootprint` module of one footprint, for `pcbjs import footprint`. */
@@ -170,11 +175,12 @@ export function footprintModule(fp: KFootprint, o: FootprintFileOptions = {}): {
     for (const s of specs) if (s.type === 'pad' && o.pinNames.has(String(s.props.num))) s.props = { num: s.props.num, name: o.pinNames.get(String(s.props.num)), ...s.props }
   let modelFile = o.modelFile
   const shown = fp.models.find(x => !x.hidden && x.path)
+  // a project model missing here is still written where it would be, for `pcbjs model add` or a copy to fill
   if (!modelFile && shown && o.kicadProject && o.fileDir) modelFile = projectModelPath(shown.path, o.kicadProject, o.fileDir) ?? undefined
   const model = modelCode(fp, modelFile)
   const head: string[] = [...sourceComment(fp, o.source ?? fp.file ?? fp.name)]
-  head.push(`import { defineFootprint, type FootprintProps } from '@pcbjs/core'`)
-  if (model?.usesKicad) head.push(`import { kicadModel } from '@pcbjs/kicad'`)
+  const core = specs.some(s => s.type === 'keepout') ? 'defineFootprint, keepout' : 'defineFootprint'
+  head.push(`import { ${core}, type FootprintProps } from '@pcbjs/core'`)
   const fpProps: Record<string, unknown> = {
     id,
     value: fp.properties.Value && !/\$\{/.test(fp.properties.Value) && fp.properties.Value !== fp.name ? fp.properties.Value : fp.name,
@@ -182,12 +188,12 @@ export function footprintModule(fp: KFootprint, o: FootprintFileOptions = {}): {
   if (fp.descr) fpProps.description = fp.descr.replace(/\s+/g, ' ')
   if (o.attrs !== false && !fp.attrs.bom) fpProps.bom = false
   if (o.attrs !== false && !fp.attrs.pos) fpProps.pos = false
-  if (model) fpProps.model = model.code
-  const fnName = `${name}Footprint`
+  if (model) fpProps.model = model
+  if (fp.netTie) fpProps.netTie = fp.netTie
   const lines = [
     ...head,
     '',
-    `function ${fnName}(props: FootprintProps) {`,
+    `export const ${name} = defineFootprint(function ${ident(fp.name)}(props: FootprintProps) {`,
     '  const { children, ...rest } = props',
     '  return (',
     `    ${jsx({ type: 'footprint', props: fpProps }).replace(/ \/>$/, ' {...rest}>')}`,
@@ -195,13 +201,9 @@ export function footprintModule(fp: KFootprint, o: FootprintFileOptions = {}): {
     '      {children}',
     '    </footprint>',
     '  )',
-    '}',
-    '',
   ]
   const named = o.pinNames ? [...new Set(pins.map(p => o.pinNames!.get(p) ?? p))] : pins
-  const meta: Record<string, unknown> = { pins: named, prefix: o.prefix ?? prefixOf(lib ?? undefined, fp.name), id, name: fp.name }
-  if (fp.netTie) meta.netTie = fp.netTie
-  lines.push(`export const ${name} = defineFootprint(${fnName}, ${lit(meta)})`)
+  lines.push(`}, ${lit({ pins: named, prefix: o.prefix ?? prefixOf(lib ?? undefined, fp.name) })})`)
   return { code: lines.join('\n') + '\n', exportName: name, pins: named }
 }
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Grid, RingIndex, EMPTY, overlapsNear, contactNear } from '../dist/spatial.js'
+import { Grid, EdgeSet, EMPTY, overlapsNear, contactNear } from '../dist/spatial.js'
 import { bbox, bboxOverlap, overlaps, contactPoint, polysToRings, difference } from '../dist/geom.js'
 import { circleRing } from '../dist/path.js'
 
@@ -63,7 +63,7 @@ test('spatial: a large board, 50 000 boxes, answers like the brute force and in 
   for (const i of [0, 777, 12345, 49999]) assert.deepEqual(grid.query(boxes[i], 0.2), brute(boxes, boxes[i], 0.2))
 })
 
-test('spatial: a ring index keeps the rings near a box in their order, and clipping against them matches clipping against all', () => {
+test('spatial: an edge set keeps the rings near a box in their order, and clipping against them matches clipping against all', () => {
   // a pour with a grid of round holes, and small shapes over it
   const holes = []
   for (let i = 0; i < 12; i++) for (let j = 0; j < 12; j++) holes.push(circleRing(2 + i * 3, 2 + j * 3, 0.8))
@@ -80,7 +80,7 @@ test('spatial: a ring index keeps the rings near a box in their order, and clipp
       holes,
     ),
   )
-  const idx = new RingIndex(pour)
+  const idx = new EdgeSet(pour)
   assert.ok(pour.length > 100)
   const near = idx.near({ x: 4, y: 4, w: 1, h: 1 })
   assert.ok(near.length < 10 && near.length >= 1)
@@ -93,7 +93,7 @@ test('spatial: a ring index keeps the rings near a box in their order, and clipp
     const x = r() * 37,
       y = r() * 37
     const shape = [circleRing(x, y, 0.3 + r() * 1.2)]
-    const s = new RingIndex(shape)
+    const s = new EdgeSet(shape)
     assert.equal(overlapsNear(s, idx), overlaps(shape, pour), `shape at ${x}, ${y}`)
     if (overlaps(shape, pour)) assert.deepEqual(contactNear(s, idx), contactPoint(shape, pour))
   }

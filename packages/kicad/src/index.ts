@@ -30,7 +30,6 @@ export {
   footprintRoots,
   installedFootprints,
   installedModels,
-  kicadModel,
   modelSpec,
   prefixOf,
   setKicadConfig,

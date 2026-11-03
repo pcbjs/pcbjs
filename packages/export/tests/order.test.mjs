@@ -1,9 +1,9 @@
 // Fix round 3: holes cut into filled graphics, the order package, reproducible dates, CPL origins and skipped empty paste.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h, resetDefaults } from '@pcbjs/core'
+import PCB, { h, resetDefaults, via } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
-import { area, intersection, polysToRings } from '@pcbjs/compile/geom'
+import { area, intersection, polysToRings } from '@pcbjs/compile/internal/geom'
 import { buildFab, cutIn, gerberLayer, readGerber } from '../dist/index.js'
 
 const DATE = '2026-01-01T00:00:00.000Z'
@@ -105,32 +105,19 @@ import { unzipSync, strFromU8 } from 'fflate'
 import JLC from '@pcbjs/fab/JLCPCB/2-Layer'
 import { PinHeader } from '@pcbjs/lib'
 import { fabDate, ipc356, cplCsv, siteData, zipFab } from '../dist/index.js'
+import { fp, N } from './parts.mjs'
 
 const smd = (ref, x, net, extra = {}) =>
-  h('footprint', { ref, value: 'V', id: 'pcbjs:TestSmd', at: `${x}mm 10mm`, 'net:pad1': net, ...extra }, h('pad', { num: 1, size: 2, shape: 'rect', ...(extra.pad ?? {}) }))
-const tht = (ref, x, net) =>
-  h('footprint', { ref, value: 'V', id: 'pcbjs:TestTht', at: `${x}mm 10mm`, 'net:pad1': net, bom: false }, h('pad', { num: 1, size: 2, shape: 'circle', drill: 1 }))
+  fp({ ref, value: 'V', id: 'pcbjs:TestSmd', at: `${x}mm 10mm`, 'net:pad1': net, ...extra }, h('pad', { num: 1, size: 2, shape: 'rect', ...(extra.pad ?? {}) }))
+const tht = (ref, x, net) => fp({ ref, value: 'V', id: 'pcbjs:TestTht', at: `${x}mm 10mm`, 'net:pad1': net, bom: false }, h('pad', { num: 1, size: 2, shape: 'circle', drill: 1 }))
 const EDGE = h('path', { layer: 'Edge.Cuts', d: 'M 0 0 H 40 V 20 H 0 Z' })
 const hole = (ref, x, extra = {}) =>
-  h(
-    'footprint',
-    { ref, value: 'M3', id: 'pcbjs:Hole', at: `${x}mm 5mm`, bom: false, pos: false, ...extra },
-    h('pad', { num: '', size: 3.2, shape: 'circle', drill: 3.2, type: 'npth' }),
-  )
+  fp({ ref, value: 'M3', id: 'pcbjs:Hole', at: `${x}mm 5mm`, bom: false, pos: false, ...extra }, h('pad', { num: '', size: 3.2, shape: 'circle', drill: 3.2, type: 'npth' }))
 
 test('order: IPC-D-356A records every pad and via in fixed columns, a long net under an alias', () => {
   resetDefaults()
   const b = compileBoard(
-    h(
-      PCB,
-      { name: 'Ipc', revision: 'A' },
-      EDGE,
-      tht('J1', 5, 'A_VERY_LONG_NET_NAME'),
-      tht('J2', 15, 'A_VERY_LONG_NET_NAME'),
-      smd('R1', 25, 'GND'),
-      hole('H1', 35),
-      h('via', { at: '10 15', net: 'GND' }),
-    ),
+    h(PCB, { name: 'Ipc', rev: 'A' }, EDGE, tht('J1', 5, 'A_VERY_LONG_NET_NAME'), tht('J2', 15, 'A_VERY_LONG_NET_NAME'), smd('R1', 25, 'GND'), hole('H1', 35), via(N.GND, '10 15')),
   )
   const t = ipc356(b, DATE)
   const lines = t.trim().split('\n')
@@ -160,7 +147,7 @@ test('order: IPC-D-356A records every pad and via in fixed columns, a long net u
 
 test('order: the fab set has the netlist, a drill report, a drill map per drill file and a manifest of every file', () => {
   resetDefaults()
-  const b = compileBoard(h(PCB, { name: 'Order', revision: '1' }, EDGE, tht('J1', 5, 'A'), tht('J2', 15, 'A'), hole('H1', 35)))
+  const b = compileBoard(h(PCB, { name: 'Order', rev: '1' }, EDGE, tht('J1', 5, 'A'), tht('J2', 15, 'A'), hole('H1', 35)))
   const fab = buildFab(b, DATE)
   for (const n of ['Order.ipc', 'Order-drill-report.txt', 'Order-PTH-drl_map.svg', 'Order-NPTH-drl_map.svg', 'manifest.json']) assert.ok(fab.files[n], n)
   const rpt = fab.files['Order-drill-report.txt']
@@ -217,7 +204,7 @@ test('dates: --date, SOURCE_DATE_EPOCH, then now; one date in every file; zips i
 test('cpl: courtyard centre for JLCPCB presets, footprint origin otherwise, the board prop wins; DNP parts left out', () => {
   resetDefaults()
   const make = (Board, props = {}) => {
-    const J1 = PinHeader(2)
+    const J1 = PinHeader(2)({ ref: 'J1' })
     return compileBoard(h(Board, { name: 'Cpl', ...props }, EDGE, h(J1, { at: '10 10' }), smd('R1', 25, 'A', { dnp: true })))
   }
   const row = csv =>

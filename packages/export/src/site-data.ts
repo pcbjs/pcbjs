@@ -1,55 +1,83 @@
-import type { Board, Footprint, Pad, Pt, SchematicExport, Track } from '@pcbjs/core/model'
+import type { Board, Footprint, Pad, Pt, Ratsnest, SchematicExport, Track } from '@pcbjs/core/model'
+import { joinSite, type FacetData } from '@pcbjs/core/site-facets'
 import type { Src } from '@pcbjs/core'
-import type { RouteInfo, SiteData, SiteFootprint, SiteItem, SourceIndex, SourceRange } from '@pcbjs/core/site-data'
-import { holesMarkup, layerMarkup, viewBox } from './svg.js'
-import { bbox as ringsBbox, pointInRing } from '@pcbjs/compile/geom'
-import { siteItems } from './items.js'
-import { siteModel } from './models.js'
-import { routesCopper, type RouteCopper } from '@pcbjs/compile/pair-info'
-import { bareHole } from '@pcbjs/compile/bare'
+import type { RouteInfo, SiteData, SiteFootprint, SiteItem, SiteSrc, SourceIndex, SourceRange } from '@pcbjs/core/site-data'
+import { filledRings, holesMarkup, layerMarkup, viewBox } from './svg.js'
+import { bbox as ringsBbox, pointInRing } from '@pcbjs/compile/internal/geom'
+import { siteItems, type ShapedItem } from './items.js'
+import { pack } from '@pcbjs/core/site-shapes'
+import { siteFindings } from './findings.js'
+import { generatedOf, modelHash, placedModel, type MeshBounds } from './models.js'
+import { routesCopper, type RouteCopper } from '@pcbjs/compile/internal/pair-info'
+import { bareHole } from '@pcbjs/compile/internal/bare'
 import { referenceLayer, referenceMarkup, siteReferences } from './reference.js'
 import { SCH_THEMES, schematicMarkup, schematicStyle } from './sch-svg.js'
 
 export type * from '@pcbjs/core/site-data'
+export { siteItems, type ShapedItem }
 
-function defOf(fp: Footprint, rel: (p: string) => string, abs: (p: string) => string): { def?: SiteFootprint['def'] } {
+function defOf(fp: Footprint, rel: (p: string) => string): { def?: SiteFootprint['def'] } {
   const d = [...(fp.chain ?? [])].reverse().find(ranged)
   if (!d || (fp.src && d.file === fp.src.file && d.line === fp.src.line && d.col === fp.src.col)) return {}
-  return { def: { file: rel(d.file), line: d.line, col: d.col, endLine: d.endLine!, endCol: d.endCol!, abs: abs(d.file) } }
+  return { def: { file: rel(d.file), line: d.line, col: d.col, endLine: d.endLine!, endCol: d.endCol! } }
 }
 
 const exported = (e: SchematicExport | undefined, rel: (p: string) => string) => (e ? { export: { name: e.name, ...(e.module ? { module: rel(e.module) } : {}) } } : {})
 
-export function siteData(
-  board: Board,
-  opts: { root: string; fabUrl: string; fabName: string; fabFiles: string[]; fabStatus: string; svgUrl: string; dev: boolean; bom: SiteData['bom'] },
-): SiteData {
-  const rel = (p: string) => (p.startsWith(opts.root) ? p.slice(opts.root.length).replace(/^[\\/]/, '') : p)
-  // the transform gives paths relative to the root, jsxDEV absolute ones
-  const abs = (p: string) => (/^([\\/]|[A-Za-z]:)/.test(p) ? p : `${opts.root.replace(/[\\/]$/, '')}/${p}`)
-  const sources = sourceIndex(board, rel)
+/** What every facet builder reads beyond the board. */
+export interface SiteOptions {
+  root: string
+  dev: boolean
+  /** the one timestamp of a compile, so its facets agree */
+  generatedAt?: string
+  /** a target's place among the board's targets, set on the board only once its stages ran */
+  variant?: Board['variant']
+  /** reads a STEP model's mesh for the model facet's extent and issue; without it the facet has neither */
+  meshBounds?: MeshBounds
+}
+export interface FabOptions {
+  fabUrl: string
+  fabName: string
+  fabFiles: string[]
+  fabStatus: string
+  svgUrl: string
+  bom: SiteData['bom']
+}
+
+const relOf = (root: string) => (p: string) => (p.startsWith(root) ? p.slice(root.length).replace(/^[\\/]/, '') : p)
+
+export function siteData(board: Board, opts: SiteOptions & FabOptions): SiteData {
+  const items = siteItems(board)
+  return joinSite({
+    meta: metaFacet(board, opts),
+    sch: schFacet(board, opts.root),
+    layers: layersFacet(board, opts.root, items),
+    shapes: shapesFacet(board, items),
+    model: modelFacet(board, opts),
+    findings: findingsFacet(board, opts.root),
+    fab: fabFacet(board, opts),
+  })
+}
+
+/** `meta`, from the end of place: the board, its rules, outline, parts and pads, and the netlist's airwires. */
+export function metaFacet(board: Board, opts: SiteOptions): FacetData['meta'] {
+  const rel = relOf(opts.root)
+  const variant = board.variant ?? opts.variant
   return {
     name: board.name,
     title: board.title,
-    revision: board.revision,
+    rev: board.rev,
     copper: board.copper,
     thickness: board.thickness,
     rules: board.rules,
     stackup: board.stackup,
     viewBox: viewBox(board),
     bbox: board.bbox,
-    layers: [
-      ...[...board.layers]
-        .sort((a, b) => a.order - b.order)
-        .map(l => ({ id: l.id, name: l.name, kind: l.kind, side: l.side, color: l.color, order: l.order, svg: layerMarkup(board, l.id) + referenceMarkup(board, l.id) })),
-      ...referenceLayer(board),
-    ],
-    holes: holesMarkup(board),
     outline: [...board.outline].sort((a, b) => Math.abs(area(b)) - Math.abs(area(a))).map(r => r.map(([x, y]) => [round(x), round(y)] as [number, number])),
-    drills: board.items.flatMap(it => (it.kind === 'via' ? [{ x: round(it.at[0]), y: round(it.at[1]), d: it.drill }] : it.kind === 'pad' && it.drill ? [padDrill(it)] : [])),
     nets: board.nets.map(n => n.name),
     footprints: board.footprints.map(fp => ({
       ref: fp.ref,
+      ...(fp.displayRef ? { displayRef: fp.displayRef } : {}),
       value: fp.value,
       id: fp.id,
       at: fp.at,
@@ -58,52 +86,22 @@ export function siteData(
       bom: fp.bom,
       fields: fp.fields,
       description: fp.description,
-      src: fp.src
-        ? { file: rel(fp.src.file), line: fp.src.line, col: fp.src.col, ...(ranged(fp.src) ? { endLine: fp.src.endLine, endCol: fp.src.endCol } : {}), abs: abs(fp.src.file) }
-        : undefined,
-      ...defOf(fp, rel, abs),
+      src: fp.src ? { file: rel(fp.src.file), line: fp.src.line, col: fp.src.col, ...(ranged(fp.src) ? { endLine: fp.src.endLine, endCol: fp.src.endCol } : {}) } : undefined,
+      ...defOf(fp, rel),
       body: bodyBox(board, fp),
       bbox: footprintBbox(board, fp),
-      height: fp.height ?? (bareHole(board, fp) ? 0 : 1),
-      ...siteModel(fp.model, rel),
+      height: heightOf(board, fp),
       pads: fp.pads
         .map(id => board.items[id - 1])
         .filter(it => it && it.kind === 'pad')
-        .map(it => (it.kind === 'pad' ? { num: it.num, name: it.name, net: it.net, at: it.at } : null!))
+        .map(it => (it.kind === 'pad' ? { num: it.num, name: it.name, net: it.net, at: it.at, ...(it.uid ? { uid: it.uid } : {}) } : null!))
         .filter(Boolean),
     })),
-    drc: board.drc,
-    erc: board.erc,
-    schematic: {
-      parts: board.schematic.parts.map(p => ({
-        ...p,
-        path: [...(p.path ?? [])],
-        local: p.local ?? p.ref,
-        pins: p.pins.map(q => ({ ...q })),
-        src: p.src ? { file: rel(p.src.file), line: p.src.line, col: p.src.col } : undefined,
-        ...exported(p.export, rel),
-      })),
-      nets: board.schematic.nets.map(n => ({ ...n, pins: [...n.pins], ...(n.path ? { path: [...n.path] } : {}), ...exported(n.export, rel) })),
-      circuits: (board.schematic.circuits ?? []).map(c => ({ ...c, path: [...c.path], parts: [...c.parts], children: [...c.children] })),
-      ...(board.schematic.drawing
-        ? {
-            drawing: schDrawing(board.schematic.drawing, rel),
-            svg: { markup: schematicMarkup(board.schematic.drawing, board), style: schematicStyle(), themes: structuredClone(SCH_THEMES) },
-          }
-        : {}),
-    },
-    ratsnest: board.ratsnest,
-    unconnected: board.unconnected,
-    stats: board.stats,
-    bom: opts.bom,
+    airwires: airwires(board),
     sourcingTags: [...(board.sourcingTags ?? [])],
-    fab: { url: opts.fabUrl, name: opts.fabName, files: opts.fabFiles, status: opts.fabStatus },
-    svgUrl: opts.svgUrl,
-    generatedAt: new Date().toISOString(),
+    generatedAt: opts.generatedAt ?? new Date().toISOString(),
     dev: opts.dev,
-    ...(board.variant ? { variant: { ...board.variant, names: [...board.variant.names] } } : {}),
-    ...(Object.keys(sources).length ? { sources } : {}),
-    items: withPairs(board, siteItems(board)),
+    ...(variant ? { variant: { ...variant, names: [...variant.names] } } : {}),
     ...(board.keepouts?.length
       ? {
           keepouts: board.keepouts.map(k => ({
@@ -117,12 +115,172 @@ export function siteData(
           })),
         }
       : {}),
-    ...(board.routing ? { routing: structuredClone(board.routing) } : {}),
     ...siteReferences(board, rel),
+    ...(board.grids?.length ? { grids: board.grids.map(g => ({ ...g, ...srcs(rel, { src: g.src, attach: g.attach }) })) } : {}),
+    ...(board.edit?.length
+      ? {
+          edit: board.edit.map(e => ({
+            ...e,
+            src: srcs(rel, e.src),
+            ...(e.def ? { def: relKey(rel, e.def) } : {}),
+            ...(e.steps ? { steps: e.steps.map(s => ({ op: s.op, ...(s.layer ? { layer: s.layer } : {}), ...(s.angle !== undefined ? { angle: s.angle } : {}), ...srcs(rel, { src: s.src }) })) } : {}),
+          })),
+        }
+      : {}),
+  }
+}
+
+/** A definition key, `${file}#${name}`, with its file relative to the root. */
+const relKey = (rel: (p: string) => string, key: string) => {
+  const i = key.lastIndexOf('#')
+  return i < 0 ? key : `${rel(key.slice(0, i))}${key.slice(i)}`
+}
+
+/** Each defined source relative to the root, as `{ file, line, col }`. */
+function srcs<K extends string>(rel: (p: string) => string, o: Partial<Record<K, { file: string; line: number; col: number } | undefined>>): Partial<Record<K, SiteSrc>> {
+  const out: Partial<Record<K, SiteSrc>> = {}
+  for (const [k, v] of Object.entries(o) as [K, { file: string; line: number; col: number } | undefined][]) if (v) out[k] = { file: rel(v.file), line: v.line, col: v.col }
+  return out
+}
+
+/** `sch`, from the end of the schematic stage: the netlist and its drawing. */
+export function schFacet(board: Board, root: string): FacetData['sch'] {
+  const rel = relOf(root)
+  return {
+    schematic: {
+      parts: board.schematic.parts.map(p => ({
+        ...p,
+        path: [...(p.path ?? [])],
+        local: p.local ?? p.ref,
+        pins: p.pins.map(q => ({ ...q })),
+        src: p.src ? { file: rel(p.src.file), line: p.src.line, col: p.src.col } : undefined,
+        ...exported(p.export, rel),
+      })),
+      nets: board.schematic.nets.map(n => ({ ...n, pins: [...n.pins], ...(n.path ? { path: [...n.path] } : {}), ...exported(n.export, rel) })),
+      circuits: (board.schematic.circuits ?? []).map(c => ({
+        ...c,
+        def: relKey(rel, c.def),
+        ...(c.layout ? { layout: relKey(rel, c.layout) } : {}),
+        path: [...c.path],
+        parts: [...c.parts],
+        children: [...c.children],
+      })),
+      ...(board.schematic.drawing
+        ? {
+            drawing: schDrawing(board.schematic.drawing, rel),
+            svg: { markup: schematicMarkup(board.schematic.drawing, board), style: schematicStyle(), themes: structuredClone(SCH_THEMES) },
+          }
+        : {}),
+    },
+  }
+}
+
+/** `layers`, from the end of tune without fills and of finish with them: the markup per layer, the items and the routes; `carried` the uids of copper a live rebuild keeps from the last compile. */
+export function layersFacet(board: Board, root: string, items: ShapedItem[], carried?: string[]): FacetData['layers'] {
+  const rel = relOf(root)
+  const sources = sourceIndex(board, rel)
+  return {
+    layers: [
+      ...[...board.layers]
+        .sort((a, b) => a.order - b.order)
+        .map(l => ({ id: l.id, name: l.name, kind: l.kind, side: l.side, color: l.color, order: l.order, svg: layerMarkup(board, l.id) + referenceMarkup(board, l.id) })),
+      ...referenceLayer(board),
+    ],
+    holes: holesMarkup(board),
+    drills: board.items.flatMap(it => (it.kind === 'via' ? [{ x: round(it.at[0]), y: round(it.at[1]), d: it.drill }] : it.kind === 'pad' && it.drill ? [padDrill(it)] : [])),
+    ...(Object.keys(sources).length ? { sources } : {}),
+    items: rowsOf(board, items),
+    ...(board.routing ? { routing: structuredClone(board.routing) } : {}),
     ...routeInfos(board, s => ({ file: rel(s.file), line: s.line, col: s.col, ...(ranged(s) ? { endLine: s.endLine, endCol: s.endCol } : {}) })),
+    ...(carried?.length ? { carried } : {}),
+    ...(board.placed?.length ? { placed: board.placed.map(p => ({ ...p, ...(p.src ? { src: { file: rel(p.src.file), line: p.src.line, col: p.src.col } } : {}) })) } : {}),
+  }
+}
+
+/** `shapes`, with each `layers`: every item's rings, the parts of outer copper under the mask, and each side's mask openings as the mask layer draws them. */
+export function shapesFacet(board: Board, items: ShapedItem[]): FacetData['shapes'] {
+  const covered = (side: 'F' | 'B') => pack(items.flatMap(it => (it.covered?.[side] ? [[it.row.id, it.covered[side]] as const] : [])))
+  const openings = (side: 'F' | 'B') => pack(filledRings(board, `${side}.Mask`))
+  return {
+    shapes: { rings: pack(items.map(it => [it.row.id, it.rings] as const)), covered: { F: covered('F'), B: covered('B') }, openings: { F: openings('F'), B: openings('B') } },
+  }
+}
+
+/** The item rows of the layers facet: the routes, pairs and instances on them. */
+function rowsOf(board: Board, items: ShapedItem[]): SiteItem[] {
+  return withInstances(
+    board,
+    withPairs(
+      board,
+      items.map(it => ({ ...it.row })),
+    ),
+  )
+}
+
+/** `findings`, from the end of checks: DRC and ERC, the routed ratsnest and the counts. */
+export function findingsFacet(board: Board, root: string): FacetData['findings'] {
+  const n = (k: string) => board.items.filter(it => it.kind === k).length
+  return {
+    ...siteFindings(board, root),
+    ratsnest: board.ratsnest,
+    unconnected: board.unconnected,
+    stats: { ...board.stats, tracks: n('track'), vias: n('via'), pads: n('pad'), zones: n('zone') },
+  }
+}
+
+/** `fab`, from the end of exports: the fab set, the SVG, the BOM and the compile's times. */
+export function fabFacet(board: Board, opts: FabOptions): FacetData['fab'] {
+  return {
+    bom: opts.bom,
+    fab: { url: opts.fabUrl, name: opts.fabName, files: opts.fabFiles, status: opts.fabStatus },
+    svgUrl: opts.svgUrl,
     // not enumerable on the board, so a spread or JSON of it drops them: copied by name
     ...(board.timings ? { timings: { ...board.timings } } : {}),
   }
+}
+
+/** `model`, from the end of place: each footprint's 3D model, a STEP model with its mesh extent and how it sits on the courtyard. */
+export function modelFacet(board: Board, opts: SiteOptions): FacetData['model'] {
+  const rel = relOf(opts.root)
+  return { models: board.footprints.map(fp => ({ ref: fp.ref, ...defined(placedModel(board, fp, rel, opts.meshBounds)), ...generatedMesh(board, fp) })) }
+}
+
+/** A footprint's body height for the 3D view: its own, else 0 for a bare hole and 1 mm for any other. */
+const heightOf = (board: Board, fp: Footprint): number => fp.height ?? (bareHole(board, fp) ? 0 : 1)
+
+/** The mesh hash of a footprint's generated body, which the cli makes on first ask. */
+function generatedMesh(board: Board, fp: Footprint): { mesh?: string } {
+  const spec = generatedOf(fp.model)
+  return spec ? { mesh: modelHash(spec, { height: heightOf(board, fp), thickness: board.thickness }) } : {}
+}
+
+const defined = <T extends object>(o: T): Partial<T> => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>
+
+/** Per net the shortest tree over its pads' centres, the ratsnest of the netlist before any copper counts. */
+export function airwires(board: Board): Ratsnest[] {
+  const byNet = new Map<string, Pt[]>()
+  for (const it of board.items) if (it.kind === 'pad' && it.net) byNet.set(it.net, [...(byNet.get(it.net) ?? []), it.at])
+  const out: Ratsnest[] = []
+  for (const [net, pts] of byNet) {
+    const dist = pts.map(() => Infinity),
+      from = pts.map(() => 0),
+      done = pts.map(() => false)
+    dist[0] = 0
+    for (let k = 0; k < pts.length; k++) {
+      let i = -1
+      for (let j = 0; j < pts.length; j++) if (!done[j] && (i < 0 || dist[j] < dist[i])) i = j
+      done[i] = true
+      if (k) out.push({ net, from: pts[from[i]], to: pts[i] })
+      for (let j = 0; j < pts.length; j++) {
+        const d = Math.hypot(pts[j][0] - pts[i][0], pts[j][1] - pts[i][1])
+        if (!done[j] && d < dist[j]) {
+          dist[j] = d
+          from[j] = i
+        }
+      }
+    }
+  }
+  return out
 }
 
 // above this many routes, the site lists only the routes with a target, a group or a pair
@@ -166,6 +324,7 @@ export function routeInfos(board: Board, src: (s: Src) => Src = s => s): { route
       ...(r.src ? { src: src(r.src) } : {}),
       ...(call && r.src ? { call: src(call) } : {}),
       ...(path ? { path } : {}),
+      ...(r.pts?.length ? { pts: r.pts.map(p => [p[0], p[1]] as [number, number]) } : {}),
     })
   }
   return out.length ? { routes: out } : {}
@@ -272,14 +431,26 @@ function instanceSites(board: Board): (chain?: Src[]) => string | undefined {
   }
 }
 
+// a text or graphic an instance's layout drew names that instance, so selecting the instance lights it; a board without instances is unchanged
+function withInstances(board: Board, items: SiteItem[]): SiteItem[] {
+  const pathOf = instanceSites(board)
+  const byId = new Map(board.items.map(t => [t.id, t] as const))
+  for (const it of items) {
+    if ((it.kind !== 'text' && it.kind !== 'graphic') || it.ref) continue
+    const path = pathOf(byId.get(it.id)?.chain)
+    if (path) it.path = path
+  }
+  return items
+}
+
 // copied onto the site items so both views can find a pair's two tracks and show the width
 function withPairs(board: Board, items: SiteItem[]): SiteItem[] {
   // by id: the router removes a pair's placeholder copper, so ids are not positions in board.items
   const byId = new Map(board.items.map(t => [t.id, t] as const))
   for (const it of items) {
-    if (it.kind !== 'track') continue
     const t = byId.get(it.id)
-    if (!t || t.kind !== 'track') continue
+    if ((t?.kind === 'track' || t?.kind === 'via') && t.route) it.route = t.route
+    if (it.kind !== 'track' || t?.kind !== 'track') continue
     it.width = t.width
     if (t.pair !== undefined) {
       it.pair = t.pair
@@ -299,7 +470,7 @@ export function sourceIndex(board: Board, rel: (file: string) => string): Source
     const end: [number, number] = ranged(s) ? [s.endLine!, s.endCol!] : [s.line, s.col]
     const key = `${file}\0${s.line}:${s.col}:${end[0]}:${end[1]}`
     let e = byKey.get(key)
-    if (!e) byKey.set(key, (e = { file, range: { start: [s.line, s.col], end, ids: [], refs: [] } }))
+    if (!e) byKey.set(key, (e = { file, range: { start: [s.line, s.col], end, uids: [], refs: [] } }))
     if (s.seg !== undefined) e.range.seg = s.seg
     return e.range
   }
@@ -309,11 +480,11 @@ export function sourceIndex(board: Board, rel: (file: string) => string): Source
     return withRange.length ? withRange : all
   }
   for (const it of board.items)
-    for (const s of sitesOf(it.src, it.chain)) {
+    for (const s of it.uid ? sitesOf(it.src, it.chain) : []) {
       const r = entry(s)
-      if (r.ids.at(-1) === it.id) continue
-      r.ids.push(it.id)
-      if (s !== it.src) (r.outer ??= []).push(it.id)
+      if (r.uids.at(-1) === it.uid) continue
+      r.uids.push(it.uid!)
+      if (s !== it.src) (r.outer ??= []).push(it.uid!)
     }
   for (const fp of board.footprints)
     for (const s of sitesOf(fp.src, fp.chain)) {
@@ -326,8 +497,8 @@ export function sourceIndex(board: Board, rel: (file: string) => string): Source
   for (const ranges of Object.values(out)) {
     ranges.sort((a, b) => cmp(a.start, b.start) || cmp(b.end, a.end))
     for (const r of ranges) {
-      r.ids.sort((a, b) => a - b)
-      r.outer?.sort((a, b) => a - b)
+      r.uids.sort()
+      r.outer?.sort()
       r.refs.sort()
     }
   }
@@ -337,7 +508,7 @@ export function sourceIndex(board: Board, rel: (file: string) => string): Source
 const round = (v: number) => Math.round(v * 1e4) / 1e4
 
 /** The drawing with its source files relative to the root, as the source index has them. */
-function schDrawing(d: import('@pcbjs/core/sch-model').SchDrawing, rel: (p: string) => string): import('@pcbjs/core/sch-model').SchDrawing {
+function schDrawing(d: import('@pcbjs/core/internal/sch-model').SchDrawing, rel: (p: string) => string): import('@pcbjs/core/internal/sch-model').SchDrawing {
   const s = <T extends { src?: Src }>(x: T): T => (x.src ? { ...x, src: { ...x.src, file: rel(x.src.file) } } : { ...x })
   return { ...d, symbols: d.symbols.map(s), wires: d.wires.map(s), labels: d.labels.map(s), sheets: d.sheets.map(s), texts: d.texts.map(s) }
 }

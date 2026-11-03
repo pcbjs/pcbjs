@@ -1,16 +1,19 @@
-import type { Board, DrcMarker, Item, Keepout, Ring, RouteFailure } from '@pcbjs/core/model'
+import type { Board, DrcMarker, Item, Keepout, Ring, RouteFailure, RouteRecord } from '@pcbjs/core/model'
 import { area, centroid, intersection, overlaps, polysToRings } from './geom.js'
 import { copperLayers } from './layers.js'
 import { copperLayersOf, copperRings } from './copper.js'
+import { marker } from './messages.js'
+import type { TemplateArgs } from '@pcbjs/core/finding'
+import type { Src } from '@pcbjs/core/internal/types'
 
-const fmt = (v: number) => String(Math.round(v * 1000) / 1000)
 /** mm², below which the part of a pour inside a keepout is rounding, not copper */
 const ZONE_SLIVER = 1e-3
+const sameSite = (a: Src | undefined, b: Src | undefined) => !!a && !!b && a.file === b.file && a.line === b.line && a.col === b.col
 const where = (s: { file: string; line: number; col: number } | undefined) => (s ? ` (${s.file}:${s.line}:${s.col})` : '')
 
 /** An item as a finding names it: its kind, part or pad, net and source. */
 export function itemLabel(it: Item): string {
-  const base = it.kind === 'pad' ? `pad ${it.ref}.${it.num}` : it.ref ? `${it.kind} of ${it.ref}` : it.kind
+  const base = it.kind === 'pad' ? `pad ${it.ref}/${it.num}` : it.ref ? `${it.kind} of ${it.ref}` : it.kind
   return `${base}${it.net ? ` (${it.net})` : ''}${where(it.src)}`
 }
 
@@ -41,28 +44,51 @@ export function blockingKeepouts(board: Board, f: RouteFailure): Keepout[] {
   return f.layers.every(l => ks.some(k => k.layers.includes(l))) ? ks : []
 }
 
+const keepoutNames = (ks: Keepout[]) => ks.map(k => `${k.ref ? `${k.ref} ` : ''}${where(k.src).trim() || 'without a source'}`)
 const keepoutText = (ks: Keepout[], layers: string[]) =>
-  `; blocked by the keepout${ks.length > 1 ? 's' : ''} ${ks.map(k => `${k.ref ? `${k.ref} ` : ''}${where(k.src).trim() || 'without a source'}`).join(', ')} on ${[...new Set(ks.flatMap(k => k.layers.filter(l => layers.includes(l))))].join(', ')}`
+  `; blocked by the keepout${ks.length > 1 ? 's' : ''} ${keepoutNames(ks).join(', ')} on ${[...new Set(ks.flatMap(k => k.layers.filter(l => layers.includes(l))))].join(', ')}`
 
 /** One route-failed error per failed leg. */
-export function routeFailedFindings(board: Board, failures: RouteFailure[]): DrcMarker[] {
+export function routeFailedFindings(board: Board, failures: RouteFailure[], routes: readonly Pick<RouteRecord, 'id' | 'net' | 'src'>[] = board.routes ?? []): DrcMarker[] {
   const byId = new Map(board.items.map(it => [it.id, it]))
   return failures.map(f => {
     const leg = f.legs > 1 ? `leg ${f.leg} of ${f.legs} of ` : ''
+    // the route call that failed, the one whose source the failure carries
+    const route = routes.find(r => sameSite(r.src, f.src) && (f.net === undefined || r.net === f.net))?.id
     const blockers = f.blockers.map(id => byId.get(id)).filter((it): it is Item => !!it)
     const ks = blockingKeepouts(board, f)
-    const message =
-      f.message ??
-      `cannot route ${leg}net ${f.net ?? '(no net)'} from (${fmt(f.from.x)}, ${fmt(f.from.y)}) on ${f.from.layer} to (${fmt(f.to.x)}, ${fmt(f.to.y)}) on ${f.to.layer}, layers ${f.layers.join(', ')}: ${f.reason}${ks.length ? keepoutText(ks, f.layers) : ''}${blockers.length ? `; nearest obstacles: ${blockers.map(itemLabel).join(', ')}` : ''}`
-    const m: DrcMarker = {
+    const args: TemplateArgs = f.message
+      ? { text: f.message }
+      : {
+          leg,
+          net: f.net ?? '(no net)',
+          from: [f.from.x, f.from.y],
+          fromLayer: f.from.layer,
+          to: [f.to.x, f.to.y],
+          toLayer: f.to.layer,
+          layers: f.layers,
+          reason: f.reason,
+          blocked: ks.length ? keepoutText(ks, f.layers) : '',
+          obstacles: blockers.map(itemLabel),
+        }
+    const m = marker({
       severity: 'error',
       rule: 'route-failed',
-      message,
+      args,
       at: [(f.from.x + f.to.x) / 2, (f.from.y + f.to.y) / 2],
       layer: f.from.layer,
       items: f.blockers,
-      route: { ...(f.net !== undefined ? { net: f.net } : {}), leg: f.leg, legs: f.legs, from: f.from, to: f.to, layers: f.layers },
-    }
+      refs: [...(route ? [route] : []), ...(f.net !== undefined ? [`net:${f.net}`] : [])],
+      witness: {
+        layer: f.from.layer,
+        segments: [
+          [
+            [f.from.x, f.from.y],
+            [f.to.x, f.to.y],
+          ],
+        ],
+      },
+    })
     if (f.src) m.src = f.src
     return m
   })
@@ -83,14 +109,15 @@ export function keepoutFindings(board: Board): DrcMarker[] {
         const inter = polysToRings(intersection(rings, k.outline))
         // a pour cut by the keepout keeps slivers from the rounding of its min-width shrink and regrow
         if (it.kind === 'zone' && Math.abs(area(inter)) < ZONE_SLIVER) continue
-        const m: DrcMarker = {
+        const m = marker({
           severity: 'error',
           rule: 'keepout',
-          message: `${itemLabel(it)} is inside the keepout${where(k.src)} on ${layer}`,
+          args: { a: itemLabel(it), keepout: where(k.src) },
           at: centroid(inter.length ? inter : rings),
           layer,
           items: [it.id],
-        }
+          witness: { layer, rings: inter },
+        })
         if (it.src) m.src = it.src
         out.push(m)
         break
@@ -101,22 +128,17 @@ export function keepoutFindings(board: Board): DrcMarker[] {
     if (z.kind !== 'zone' || z.fill.length) continue
     const ks = (board.keepouts ?? []).filter(k => k.pours && k.layers.includes(z.layer) && !(z.net !== undefined && k.except?.includes(z.net)) && overlaps(z.outline, k.outline))
     if (!ks.length) continue
-    const m: DrcMarker = {
+    const m = marker({
       severity: 'warning',
       rule: 'pour-in-keepout',
-      message: `pour${z.net ? ` of ${z.net}` : ''}${where(z.src)} on ${z.layer} has no fill: the keepout${ks.length > 1 ? 's' : ''} ${ks.map(k => `${k.ref ? `${k.ref} ` : ''}${where(k.src).trim() || 'without a source'}`).join(', ')} forbid${ks.length > 1 ? '' : 's'} pours there`,
+      args: { pour: `pour${z.net ? ` of ${z.net}` : ''}${where(z.src)}`, keepouts: keepoutNames(ks) },
       at: centroid(z.outline),
       layer: z.layer,
       items: [z.id],
-    }
+    })
     if (z.src) m.src = z.src
-    if (z.net) m.net = z.net
+    if (z.net) m.refs = [`net:${z.net}`]
     out.push(m)
   }
   return out
-}
-
-/** Every finding of this module, for compile/index.ts to merge into board.drc. */
-export function routeFindings(board: Board, failures: RouteFailure[]): DrcMarker[] {
-  return [...routeFailedFindings(board, failures), ...keepoutFindings(board)]
 }

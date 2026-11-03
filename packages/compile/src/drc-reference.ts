@@ -1,6 +1,7 @@
 // DRC of board references, see references.md: reference-mate, reference-net and reference-collision.
+import { marker } from './messages.js'
 import type { Board, DrcMarker, Footprint, Pad, Pt, Ring } from '@pcbjs/core/model'
-import type { BoardReference, MatePair } from '@pcbjs/core/reference'
+import type { BoardReference, MatePair } from '@pcbjs/core/internal/reference'
 import { area, centroid, clipRings, offsetRings } from './geom.js'
 import { bareHole } from './bare.js'
 
@@ -8,7 +9,6 @@ import { bareHole } from './bare.js'
 export const MATE_TOLERANCE = 0.1
 export const COLLISION_DEPTH = 0.1
 
-const f2 = (v: number) => (Math.round(v * 100) / 100).toFixed(2)
 const dist = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1])
 
 export function referenceDrc(board: Board): DrcMarker[] {
@@ -57,12 +57,23 @@ function mateFinding(r: BoardReference, pair: MatePair): DrcMarker | null {
   const pin = local.pads.find(q => q.num === local.pin)?.at
   const turned = pin && remote.pads.every(q => nearest([2 * pin[0] - q.at[0], 2 * pin[1] - q.at[1]], local.pads) <= MATE_TOLERANCE)
   const first = miss[0]
-  return {
+  return marker({
     severity: 'error',
     rule: 'reference-mate',
-    message: `${r.name} ${remote.ref} pin ${first.q.num} lands ${f2(first.d)} mm from the nearest pad of ${local.ref}${miss.length > 1 ? `, ${miss.length} of ${remote.pads.length} pins miss` : ''}${turned ? `; rotate: ${(r.rotate + 180) % 360 || 0} lands every pin` : ''}`,
+    args: {
+      reference: r.name,
+      remote: remote.ref,
+      pin: first.q.num,
+      local: local.ref,
+      miss: miss.length,
+      pins: remote.pads.length,
+      ...(turned ? { rotate: (r.rotate + 180) % 360 || 0 } : {}),
+    },
+    refs: [local.ref],
+    measured: { value: first.d, unit: 'mm' },
+    required: { value: MATE_TOLERANCE, unit: 'mm' },
     at: first.q.at,
-  }
+  })
 }
 
 /** `reference-net`: each local pad's net against the name the mate's `nets` maps it to on the remote pad landing there. */
@@ -82,20 +93,41 @@ function netFindings(r: BoardReference, m: MatePair, landed: boolean): DrcMarker
       }
     }
     if (!q || best > MATE_TOLERANCE) {
-      if (landed) out.push({ severity: 'error', rule: 'reference-net', message: `${m.local.ref} pin ${p.num} ${named(p.net)} meets no pin of ${r.name} ${m.remote.ref}`, at: p.at })
+      if (landed)
+        out.push(
+          marker({
+            severity: 'error',
+            rule: 'reference-net',
+            args: { local: m.local.ref, pin: p.num, net: named(p.net), reference: r.name, remote: m.remote.ref },
+            refs: [`${m.local.ref}/${p.num}`],
+            at: p.at,
+          }),
+        )
       continue
     }
     // a remote pin with no net is a no-connect there
     if (!q.net) continue
     const wants = Array.isArray(p.want) ? p.want : [p.want]
     if (wants.includes(q.net ?? '')) continue
-    const mapped = wants.length > 1 || wants[0] !== p.net ? `; the mate maps ${p.net} to ${wants.join(' or ')}` : ''
-    out.push({
-      severity: 'error',
-      rule: 'reference-net',
-      message: `${m.local.ref} pin ${p.num} ${named(p.net)} meets ${r.name} ${m.remote.ref} pin ${q.num} ${named(q.net)}${mapped}`,
-      at: p.at,
-    })
+    const mapped = wants.length > 1 || wants[0] !== p.net
+    out.push(
+      marker({
+        severity: 'error',
+        rule: 'reference-net',
+        args: {
+          local: m.local.ref,
+          pin: p.num,
+          net: named(p.net),
+          reference: r.name,
+          remote: m.remote.ref,
+          remotePin: q.num,
+          remoteNet: named(q.net),
+          ...(mapped ? { mapsFrom: p.net, maps: wants } : {}),
+        },
+        refs: [`${m.local.ref}/${p.num}`],
+        at: p.at,
+      }),
+    )
   }
   return out
 }
@@ -149,13 +181,18 @@ function meet(theirs: Solid[], mine: Solid[], pairs: MatePair[], into: (b: Solid
       if (depth <= COLLISION_DEPTH || !boxesMeet(a.ring, b.ring)) continue
       const inside = clipRings('intersection', offsetRings([a.ring], -COLLISION_DEPTH / 2), offsetRings([b.ring], -COLLISION_DEPTH / 2))
       if (!inside.length || Math.abs(area(inside)) < 1e-6) continue
-      out.push({
-        severity: 'warning',
-        rule: 'reference-collision',
-        message: `${a.what} ${a.ref ? 'body ' : ''}reaches ${f2(depth)} mm into ${into(b)}`,
-        at: centroid(inside),
-        ...(b.items?.length ? { items: b.items } : {}),
-      })
+      out.push(
+        marker({
+          severity: 'warning',
+          rule: 'reference-collision',
+          args: { what: a.what, ...(a.ref ? { body: true } : {}), into: into(b) },
+          ...(b.ref ? { refs: [b.ref] } : {}),
+          measured: { value: depth, unit: 'mm' },
+          at: centroid(inside),
+          ...(b.items?.length ? { items: b.items } : {}),
+          witness: { rings: inside },
+        }),
+      )
     }
   return out
 }

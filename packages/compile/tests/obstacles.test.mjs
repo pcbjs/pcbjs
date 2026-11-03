@@ -1,7 +1,8 @@
 // The router's obstacle store and rasterisation, src/compile/obstacles.ts, and the crossover of a pair, src/compile/pair.ts.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { fill, fillAdd, ringSet, inside, ObstacleStore } from '../dist/obstacles.js'
+import { fill, fillAdd, ObstacleWorld } from '../dist/obstacles.js'
+import { ringSet, inside } from '../dist/spatial.js'
 import { circleRing } from '../dist/path.js'
 import { crossVias, pairPaths } from '../dist/pair.js'
 import { flatten } from '../dist/round.js'
@@ -28,9 +29,10 @@ test('fill: a ring with vertices on a scanline fills that scanline, though the r
   }
 })
 
-test('obstacle store: its counts follow the board as items come and go, equal to filling the items afresh', () => {
+test('obstacle world: the store counts follow each add, replace and remove, equal to filling the items afresh, and a time tells what came and went since', () => {
   const track = (id, net, pts) => ({ kind: 'track', id, layer: 'F.Cu', net, pts, width: 0.2 })
   const board = {
+    copper: 2,
     items: [
       track(1, 'A', [
         [1, 1],
@@ -44,32 +46,51 @@ test('obstacle store: its counts follow the board as items come and go, equal to
     classes: undefined,
   }
   const rules = { clearance: 0.15, holeClearance: 0.25, minHoleToHole: 0.25 }
-  const st = new ObstacleStore(board, rules, ['F.Cu', 'B.Cu'])
+  const world = new ObstacleWorld(board, rules)
+  const st = world.store
   const g = { x0: 0, y0: 0, p: 0.1, nx: 101, ny: 51 }
   const counts = () => st.trackCounts(g, 'F.Cu', 0.24, 0).slice()
   const fresh = () => {
     const a = new Uint16Array(g.nx * g.ny)
-    for (const it of board.items) st.trackFill(g, it, st.rec(it), 'F.Cu', 0.24, 0, a, 1)
+    for (const it of world.items()) st.trackFill(g, it, st.rec(it), 'F.Cu', 0.24, 0, a, 1)
     return a
   }
   assert.deepEqual(counts(), fresh())
-  board.items.push(
-    track(3, 'C', [
-      [2, 0.5],
-      [2, 4.5],
-    ]),
-  )
+  const t0 = world.time
+  const c = track(3, 'C', [
+    [2, 0.5],
+    [2, 4.5],
+  ])
+  world.add([c])
   assert.deepEqual(counts(), fresh(), 'an item added')
-  board.items[0] = {
-    ...board.items[0],
+  const moved = {
+    ...world.items()[0],
     pts: [
       [1, 4],
       [9, 4],
     ],
   }
+  world.replace(moved)
   assert.deepEqual(counts(), fresh(), 'an item replaced by another, the count of items the same')
-  board.items.splice(0, 1)
+  assert.equal(world.items()[0], moved, 'in the place of the one it replaced')
+  world.remove(new Set([2]))
   assert.deepEqual(counts(), fresh(), 'an item removed')
+  assert.deepEqual(
+    world.items().map(it => it.id),
+    [1, 3],
+  )
+  const { came, went } = world.since(t0)
+  assert.deepEqual(
+    came.map(it => it.id),
+    [3, 1],
+  )
+  assert.deepEqual(
+    went.map(it => it.id),
+    [1, 2],
+  )
+  assert.deepEqual(world.net('C'), [c])
+  assert.equal(world.signature([1.5, 0, 2.5, 2], () => false).length, 1, 'the track near the box')
+  assert.equal(world.signature([1.5, 0, 2.5, 2], it => it.id === 3).length, 0, 'skipped')
 })
 
 test('crossover: P and N swap sides at a via pair, with the two vias staggered on the incoming P side and no track crossing another on one layer', () => {

@@ -1,8 +1,8 @@
 import type { Board, Pad, Ring } from '@pcbjs/core/model'
-import { offset, polysToRings } from '@pcbjs/compile/geom'
+import { offset, polysToRings } from '@pcbjs/compile/internal/geom'
 
 // the mask opening lives in @pcbjs/compile, which the DRC rule mask-web measures with
-export { padMask } from '@pcbjs/compile/mask'
+export { padMask } from '@pcbjs/compile/internal/mask'
 
 /** The paste of a pad on `side`: its `pasteRings`, else an SMD pad less its paste shrink; null when it prints none there. */
 export function padPaste(p: Pad, side: string, rules: Board['rules']): Ring[] | null {

@@ -1,3 +1,4 @@
+import { validateBoard } from './validate.js'
 import type { Board } from '@pcbjs/core/model'
 import { drillFunction } from './gerber.js'
 
@@ -13,9 +14,14 @@ export interface DrillTable {
   text: string
 }
 
-const f3 = (v: number) => (Math.round(v * 1000) / 1000).toFixed(3)
+const f3 = (v: number) => {
+  const scaled = Math.round(v * 1000)
+  if (!Number.isSafeInteger(scaled)) throw new Error('Excellon coordinate or dimension exceeds representable 0.001 mm precision')
+  return (scaled / 1000).toFixed(3)
+}
 
 export function excellon(board: Board, plated: boolean, date: string): DrillTable | null {
+  validateBoard(board)
   type Hole = { x: number; y: number; w: number; h: number; rot: number; via: boolean; end?: [number, number]; start?: [number, number] }
   const holes: Hole[] = []
   for (const it of board.items) {
@@ -48,7 +54,7 @@ export function excellon(board: Board, plated: boolean, date: string): DrillTabl
       else {
         // slot: route between the two end centres
         const len = Math.abs(h.w - h.h),
-          a = (((h.w > h.h ? 0 : 90) - h.rot) * Math.PI) / 180
+          a = (((h.w > h.h ? 0 : 90) - (h.rot % 360)) * Math.PI) / 180
         const dx = (len / 2) * Math.cos(a),
           dy = (len / 2) * Math.sin(a)
         out.push(`X${f3(h.x - dx)}Y${f3(-(h.y - dy))}G85X${f3(h.x + dx)}Y${f3(-(h.y + dy))}`)

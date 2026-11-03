@@ -1,8 +1,6 @@
 // KiCad's `(font (face "Roboto Slab") (bold yes))` found among the installed fonts, and its size as pcbjs's cap height.
-import { existsSync, readdirSync, statSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { basename, join } from 'node:path'
-import { loadOutlineFont, kicadOutlineSize, type OutlineFont } from '@pcbjs/core/outline'
+import { basename, env, exists, home as homedir, isDir, join, readDir } from './host.js'
+import { loadOutlineFont, kicadOutlineSize, type OutlineFont } from '@pcbjs/core/internal/outline'
 
 export interface FoundFont {
   path: string
@@ -32,8 +30,8 @@ export function fontDirs(): string[] {
     join(home, '.fonts'),
     '/usr/local/share/fonts',
     '/usr/share/fonts',
-    ...(process.env.WINDIR ? [join(process.env.WINDIR, 'Fonts')] : []),
-    ...(process.env.LOCALAPPDATA ? [join(process.env.LOCALAPPDATA, 'Microsoft/Windows/Fonts')] : []),
+    ...(env('WINDIR') ? [join(env('WINDIR')!, 'Fonts')] : []),
+    ...(env('LOCALAPPDATA') ? [join(env('LOCALAPPDATA')!, 'Microsoft/Windows/Fonts')] : []),
   ]
 }
 
@@ -42,7 +40,7 @@ const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 function fontFiles(dir: string, depth = 3, out: string[] = []): string[] {
   let names: string[]
   try {
-    names = readdirSync(dir)
+    names = readDir(dir)
   } catch {
     return out
   }
@@ -50,11 +48,7 @@ function fontFiles(dir: string, depth = 3, out: string[] = []): string[] {
     const f = join(dir, n)
     if (/\.(ttf|otf)$/i.test(n)) out.push(f)
     else if (depth > 0 && !n.startsWith('.')) {
-      try {
-        if (statSync(f).isDirectory()) fontFiles(f, depth - 1, out)
-      } catch {
-        /* unreadable */
-      }
+      if (isDir(f)) fontFiles(f, depth - 1, out)
     }
   }
   return out
@@ -81,7 +75,7 @@ export function findFont(face: string, o: { bold?: boolean; italic?: boolean; di
   if (!want) return null
   const found: { path: string; f: OutlineFont; style: string; variable: boolean }[] = []
   for (const dir of o.dirs ?? fontDirs()) {
-    if (!existsSync(dir)) continue
+    if (!exists(dir)) continue
     for (const path of fontFiles(dir)) {
       if (!squash(basename(path)).startsWith(want)) continue
       let f: OutlineFont
