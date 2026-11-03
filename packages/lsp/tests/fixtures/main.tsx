@@ -9,7 +9,7 @@ const W = 30, H = 20, R = 2
 const outline = `M 0 0 H ${W} V ${H} H 0 Z`
 
 export default (
-  <PCB name="Blinky" title="Blinky" revision="0.1.0" copper={2} rules={{ clearance: 0.2, minTrackWidth: 0.2, strictNets: true, requireSourcing: true }} autoroute={{ bend: '45', viaCost: 4 }}>
+  <PCB name="Blinky" title="Blinky" rev="0.1.0" rules={{ clearance: 0.2, minTrackWidth: 0.2, requireSourcing: true }} autoroute={{ bend: '45', viaCost: 4 }}>
     {/* outline: rounded rectangle */}
     <path layer="Edge.Cuts" d={`M ${R} 0 H ${W - R} A ${R} ${R} 0 0 1 ${W} ${R} V ${H - R} A ${R} ${R} 0 0 1 ${W - R} ${H} H ${R} A ${R} ${R} 0 0 1 0 ${H - R} V ${R} A ${R} ${R} 0 0 1 ${R} 0 Z`} />
 
@@ -27,15 +27,17 @@ export default (
     <text layer="B.SilkS" at="15 8.3" size={0.8}>C1</text>
 
     {/* VCC: from J1.2 to a vertical bus feeding the channels, and down to C1 through a via */}
-    {route(VCC, { width: 0.3, d: 'M 3 10 H 9 M 9 5 V 15 M 9 11.6 H 15.8' })}
+    {route('3 10').net(VCC).width(0.3).H(9)}
+    {route('9 5').net(VCC).width(0.3).V(15)}
+    {route('9 11.6').net(VCC).width(0.3).H(15.8)}
     {via(VCC, '15.8 11.6')}
-    {route(VCC, { layer: 'B.Cu', width: 0.3, d: 'M 15.8 11.6 V 10' })}
+    {route('15.8 11.6').net(VCC).layer('B.Cu').width(0.3).V(10)}
 
     {/* SW: LED cathodes to Q1.3 */}
-    {route(SW, { width: 0.3, d: 'M 22.2 5 V 16.5 H 27 V 10' })}
+    {route('22.2 5').net(SW).width(0.3).V(16.5).H(27).V(10)}
 
     {/* SIG: J1.3 to Q1.1, drawn down and across under the LEDs on the back, the last hop to Q1.1 autorouted */}
-    {route(J1[3], Q1[1], 'V 14 L 5 16 @B.Cu H 24 V 7.5 @F.Cu XZ').width(0.25)}
+    {route(J1[3], Q1[1]).width(0.25).V(14).L(5, 16).via('B.Cu').H(24).V(7.5).via('F.Cu').X()}
 
     {/* GND: Q1.2 to a point on the back pour, autorouted all the way; the via comes from the router */}
     {route(Q1[2], '25 12.5 B.Cu').width(0.3)}

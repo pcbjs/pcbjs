@@ -5,10 +5,11 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import ts from 'typescript'
 import type { SiteData, SiteFootprint, SourceRange } from '@pcbjs/core/site-data'
 import type { Hit } from './detect.js'
+import type { DocModel } from './doc.js'
 import type { Target } from './target.js'
 import { padItems, renderPreview, type Preview, type PreviewSpec } from './preview.js'
 import { schPreview } from './sch-preview.js'
-import { formatNum } from './values.js'
+import { formatNum } from '@pcbjs/core/internal/units'
 
 export interface PreviewBoard {
   root: string
@@ -18,7 +19,8 @@ export interface PreviewBoard {
 export interface PreviewContext {
   /** the file, absolute */
   file: string
-  text?: string
+  /** the open document */
+  doc?: DocModel
   offset?: number
   /** the literal under the cursor */
   hit?: Hit
@@ -37,13 +39,15 @@ export interface HoverPreview {
   board: string
   /** markdown lines to show below the image */
   lines: string[]
+  /** what the preview shows, in the grammar of docs/refs.md: `J1/3`, `net:GND`, `R1`, `CH2` */
+  refs?: string[]
   /** a note on what the preview leaves out, such as the 3D model */
   note?: string
 }
 
 /** The image of a hover, or undefined when nothing under the cursor has one. */
 export function hoverPreview(ctx: PreviewContext): HoverPreview | undefined {
-  const sf = ctx.text !== undefined ? parse(ctx.file, ctx.text) : undefined
+  const sf = ctx.doc?.sf()
   const node = sf && ctx.offset !== undefined ? nodeAt(sf, ctx.offset) : undefined
   return (
     padPreview(ctx) ??
@@ -54,17 +58,30 @@ export function hoverPreview(ctx: PreviewContext): HoverPreview | undefined {
   )
 }
 
+/** A part's pins as a markdown table, number, name and net, one row per pad number; null for a part with no numbered pad. */
+export function pinTable(site: SiteData, ref: string): string | null {
+  const seen = new Set<string>()
+  const rows: string[] = []
+  for (const p of padItems(site, ref)) {
+    if (!p.num || seen.has(p.num)) continue
+    seen.add(p.num)
+    rows.push(`| ${cell(p.num)} | ${cell(p.name || p.num)} | ${p.item.net ? cell(p.item.net) : 'no net'} |`)
+  }
+  return rows.length ? [`pins of **${ref}**`, '', '| pad | name | net |', '| --- | --- | --- |', ...rows].join('\n') : null
+}
+const cell = (v: string) => v.replace(/\|/g, '\\|')
+
 /** The markdown of an image, first in a hover. */
 export function imageMarkdown(p: HoverPreview, alt: string): string {
   return `![${alt.replace(/[[\]\\]/g, '')}](${p.preview.uri})`
 }
 
-/** A pad: `J1[3]`, `'U1.3'`, `U1.pad('6')`. */
+/** A pad: `J1[3]`, `J1['B4']`. */
 function padPreview(ctx: PreviewContext): HoverPreview | undefined {
   const hit = ctx.hit
   if (hit?.kind !== 'pinRef') return undefined
   const ref = hit.context.ref ?? ''
-  const num = hit.context.form === 'dotted' ? hit.value.slice(ref.length + 1) : hit.value
+  const num = hit.value
   for (const { fp, site } of ctx.parts(ref)) {
     const pads = padItems(site, fp.ref)
     const pad = pads.find(p => p.num === num) ?? pads.find(p => p.name === num)
@@ -75,8 +92,9 @@ function padPreview(ctx: PreviewContext): HoverPreview | undefined {
       kind: 'pad',
       preview,
       board: site.name,
+      refs: [`${fp.ref}/${pad.num}`],
       lines: [
-        `pad **${fp.ref}.${pad.num}**${pad.name && pad.name !== pad.num ? ` ${pad.name}` : ''} · ${pad.item.net ? `net ${pad.item.net}` : 'no net'} · at ${xy(pad.at)} · ${pad.item.layers.length > 1 ? 'through hole' : (pad.item.layers[0] ?? 'no copper')}`,
+        `pad **${fp.ref}/${pad.num}**${pad.name && pad.name !== pad.num ? ` ${pad.name}` : ''} · ${pad.item.net ? `net ${pad.item.net}` : 'no net'} · at ${xy(pad.at)} · ${pad.item.layers.length > 1 ? 'through hole' : (pad.item.layers[0] ?? 'no copper')}`,
       ],
     }
   }
@@ -95,17 +113,17 @@ export function targetPreview(t: Target, boards: PreviewBoard[]): HoverPreview |
 }
 
 function targetImage(t: Target, bt: Target['boards'][number], site: SiteData): HoverPreview | undefined {
-  const at = (preview: Preview | undefined, kind: HoverPreview['kind'], lines: string[]) => (preview ? { kind, preview, board: site.name, lines } : undefined)
+  const at = (preview: Preview | undefined, kind: HoverPreview['kind'], lines: string[]) => (preview ? { kind, preview, board: site.name, lines, refs: [...bt.refs] } : undefined)
   switch (t.kind) {
     case 'part': {
-      const fp = site.footprints.find(f => f.ref === bt.refs[0])!
+      const fp = site.footprints.find(f => f.ref === bt.parts[0])!
       const sp = site.schematic.parts.find(p => p.ref === fp.ref)
       const named = fp.pads.filter(p => p.num).length
       const lines = [
-        `land pattern **${sp?.footprint ?? fp.id}** · ${named} pad${named === 1 ? '' : 's'} · ${formatNum(fp.body.w, 2)} x ${formatNum(fp.body.h, 2)} mm body · placed as ${refsText(bt.refs)}`,
+        `land pattern **${sp?.footprint ?? fp.id}** · ${named} pad${named === 1 ? '' : 's'} · ${formatNum(fp.body.w, 2)} x ${formatNum(fp.body.h, 2)} mm body · placed as ${refsText(bt.parts)}`,
       ]
-      lines.push(...bt.refs.slice(0, 3).map(r => placementText(site, r)))
-      if (bt.refs.length > 3) lines.push(`and ${bt.refs.length - 3} more parts`)
+      lines.push(...bt.parts.slice(0, 3).map(r => placementText(site, r)))
+      if (bt.parts.length > 3) lines.push(`and ${bt.parts.length - 3} more parts`)
       return at(renderPreview(site, { frame: fp.ref }), 'footprint', lines)
     }
     case 'pad': {
@@ -117,7 +135,7 @@ function targetImage(t: Target, bt: Target['boards'][number], site: SiteData): H
         .slice(0, 4)
         .map(
           p =>
-            `pad **${ref}.${p.num}**${p.name && p.name !== p.num ? ` ${p.name}` : ''} · ${p.item.net ? `net ${p.item.net}` : 'no net'} · at ${xy(p.at)} · ${p.item.layers.length > 1 ? 'through hole' : (p.item.layers[0] ?? 'no copper')}`,
+            `pad **${ref}/${p.num}**${p.name && p.name !== p.num ? ` ${p.name}` : ''} · ${p.item.net ? `net ${p.item.net}` : 'no net'} · at ${xy(p.at)} · ${p.item.layers.length > 1 ? 'through hole' : (p.item.layers[0] ?? 'no copper')}`,
         )
       if (bt.ids.length > pads.length) lines.push(`and the same pad of ${bt.name.split(', ').length - pads.length} more parts`)
       return at(renderPreview(site, { frame: ref, pads: pads.map(p => p.num) }), 'pad', lines)
@@ -125,7 +143,7 @@ function targetImage(t: Target, bt: Target['boards'][number], site: SiteData): H
     case 'net':
       return netImage(site, bt.name.split(', ')[0])
     case 'group':
-      return at(renderPreview(site, { refs: bt.refs }), 'group', [`instance **${bt.name}** · ${refsText(bt.refs)}`])
+      return at(renderPreview(site, { refs: bt.parts }), 'group', [`instance **${bt.name}** · ${refsText(bt.parts)}`])
     case 'point':
       return at(renderPreview(site, { points: bt.points }), 'point', [`point ${bt.points!.map(xy).join(' · ')}`])
     case 'reference': {
@@ -160,16 +178,21 @@ function modelPreview(ctx: PreviewContext, node: ts.Node): HoverPreview | undefi
       `model \`${step.file}\` on ${refsText(fps.map(f => f.ref))} · ${step.mesh ? 'mesh ready' : 'file missing'}${size ? ` · ${size}` : ''}`,
       ...(step.issue ? [`model issue: ${step.issue}`] : []),
     ]
-    return { kind: 'model', preview, board: b.site.name, lines, note: 'the land pattern it sits on; the 3D model itself is not drawn in a hover, open the 3D view' }
+    return {
+      kind: 'model',
+      preview,
+      board: b.site.name,
+      lines,
+      refs: fps.map(f => f.ref),
+      note: 'the land pattern it sits on; the 3D model itself is not drawn in a hover, open the 3D view',
+    }
   }
   return undefined
 }
 
 function keepoutPreview(ctx: PreviewContext, node: ts.Node): HoverPreview | undefined {
   for (let n: ts.Node | undefined = node; n; n = n.parent) {
-    const isCall = ts.isCallExpression(n) && calleeText(n.expression) === 'keepout'
-    const isJsx = (ts.isJsxSelfClosingElement(n) || ts.isJsxElement(n)) && tagOf(n) === 'keepout'
-    if (!isCall && !isJsx) continue
+    if (!ts.isCallExpression(n) || calleeText(n.expression) !== 'keepout') continue
     const sf = n.getSourceFile()
     const s = sf.getLineAndCharacterOfPosition(n.getStart(sf)),
       e = sf.getLineAndCharacterOfPosition(n.getEnd())
@@ -220,7 +243,7 @@ function netImage(site: SiteData, name: string): HoverPreview | undefined {
     for (const p of fp.pads)
       if (p.net === name) {
         pads++
-        labels.push({ at: p.at, text: `${fp.ref}.${p.num}` })
+        labels.push({ at: p.at, text: `${fp.ref}/${p.num}` })
       }
   const preview = renderPreview(site, { net: name, labels: labels.length <= 24 ? labels : [] })
   if (!preview) return undefined
@@ -245,7 +268,7 @@ function netImage(site: SiteData, name: string): HoverPreview | undefined {
         .map(l => l.text)
         .join(', ')}, and ${labels.length - 24} more; pads are named in the image up to 24`,
     )
-  return { kind: 'net', preview, board: site.name, lines }
+  return { kind: 'net', preview, board: site.name, lines, refs: [`net:${name}`] }
 }
 
 /** A footprint factory call: `R0603('10k')`, `kicadFootprint('Lib:Name')`, `const HUB = QFN(64, ...)`. */
@@ -275,6 +298,7 @@ function factoryPreview(ctx: PreviewContext, node: ts.Node): HoverPreview | unde
         kind: 'footprint',
         preview,
         board: b.site.name,
+        refs: parts.map(p => p.ref),
         lines: [
           `land pattern **${sp?.footprint ?? fp.id}** · ${named} pad${named === 1 ? '' : 's'} · ${formatNum(fp.body.w, 2)} x ${formatNum(fp.body.h, 2)} mm body · placed as ${refsText(parts.map(p => p.ref))}`,
         ],
@@ -286,11 +310,11 @@ function factoryPreview(ctx: PreviewContext, node: ts.Node): HoverPreview | unde
 
 /** What a symbol placement, <Label>, <Power>, <Sheet> or wire() chain drew. */
 function schematicPreview(ctx: PreviewContext): HoverPreview | undefined {
-  if (ctx.text === undefined || ctx.offset === undefined) return undefined
-  const before = ctx.text.slice(0, ctx.offset).split('\n')
+  if (!ctx.doc || ctx.offset === undefined) return undefined
+  const p = ctx.doc.pos(ctx.offset)
   // the middle of the character under the mouse, so its first and last characters both count
-  const line = before.length,
-    col = before[before.length - 1].length + 1.5
+  const line = p.line + 1,
+    col = p.character + 1.5
   for (const b of ctx.boards) {
     const got = schPreview(b.site, b.root, ctx.file, line, col)
     if (got) return { kind: 'schematic', preview: got.preview, board: b.site.name, lines: got.lines }
@@ -300,24 +324,21 @@ function schematicPreview(ctx: PreviewContext): HoverPreview | undefined {
 
 function rangePreview(ctx: PreviewContext): HoverPreview | undefined {
   const at = ctx.at
-  if (!at || (!at.range.ids.length && !at.range.refs.length)) return undefined
+  if (!at || (!at.range.uids.length && !at.range.refs.length)) return undefined
   const site = at.ref.site
   const refs = at.range.refs.filter(r => site.footprints.some(f => f.ref === r))
+  const drawn = (site.items ?? []).filter(it => it.uid && at.range.uids.includes(it.uid))
   if (refs.length) {
     const own = new Set(refs)
-    const items = new Map((site.items ?? []).map(i => [i.id, i]))
-    const ids = at.range.ids.filter(i => {
-      const it = items.get(i)
-      return it && !(it.ref && own.has(it.ref))
-    })
+    const ids = drawn.filter(it => !(it.ref && own.has(it.ref))).map(it => it.id)
     const preview = renderPreview(site, { refs, ids })
     if (!preview) return undefined
     const lines = refs.slice(0, 3).map(r => placementText(site, r))
     if (refs.length > 3) lines.push(`and ${refs.length - 3} more parts`)
-    return { kind: 'placement', preview, board: site.name, lines }
+    return { kind: 'placement', preview, board: site.name, lines, refs }
   }
-  const preview = renderPreview(site, { ids: at.range.ids })
-  return preview && { kind: 'items', preview, board: site.name, lines: [] }
+  const preview = renderPreview(site, { ids: drawn.map(it => it.id) })
+  return preview && { kind: 'items', preview, board: site.name, lines: [], refs: [...at.range.uids] }
 }
 
 /** A builder chain whose later calls have no range of their own, `route(a).V(33).X(b)`: the range of the call it starts with. */
@@ -327,7 +348,7 @@ function callPreview(ctx: PreviewContext, node: ts.Node): HoverPreview | undefin
     if (!ts.isCallExpression(n)) continue
     const s = sf.getLineAndCharacterOfPosition(n.getStart(sf))
     for (const b of ctx.boards) {
-      const range = b.site.sources?.[relKey(b.root, ctx.file)]?.find(r => r.start[0] === s.line + 1 && r.start[1] === s.character + 1 && (r.ids.length || r.refs.length))
+      const range = b.site.sources?.[relKey(b.root, ctx.file)]?.find(r => r.start[0] === s.line + 1 && r.start[1] === s.character + 1 && (r.uids.length || r.refs.length))
       if (range) return rangePreview({ ...ctx, at: { ref: b, range } })
     }
   }
@@ -343,17 +364,6 @@ function placementText(site: SiteData, ref: string): string {
 
 const xy = (p: [number, number]) => `${formatNum(p[0], 3)}, ${formatNum(p[1], 3)} mm`
 const refsText = (refs: string[]) => `${refs.slice(0, 6).join(', ')}${refs.length > 6 ? ` and ${refs.length - 6} more` : ''}`
-
-const parsed = new Map<string, { text: string; sf: ts.SourceFile }>()
-function parse(file: string, text: string): ts.SourceFile {
-  const hit = parsed.get(file)
-  if (hit && hit.text === text) return hit.sf
-  const kind = /\.tsx$/i.test(file) ? ts.ScriptKind.TSX : /\.jsx$/i.test(file) ? ts.ScriptKind.JSX : ts.ScriptKind.TS
-  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind)
-  parsed.set(file, { text, sf })
-  if (parsed.size > 16) parsed.delete(parsed.keys().next().value!)
-  return sf
-}
 
 /** The innermost token-like node at an offset: an identifier or a literal, else the innermost node. */
 function nodeAt(sf: ts.SourceFile, offset: number): ts.Node | undefined {
@@ -385,7 +395,6 @@ function candidates(e: ts.Node): string[] {
 
 const nameOf = (n: ts.Node): string | undefined => (ts.isIdentifier(n) || ts.isStringLiteral(n) ? n.text : undefined)
 const calleeText = (e: ts.Expression): string | undefined => (ts.isIdentifier(e) ? e.text : ts.isPropertyAccessExpression(e) ? e.name.text : undefined)
-const tagOf = (n: ts.JsxElement | ts.JsxSelfClosingElement): string => (ts.isJsxElement(n) ? n.openingElement.tagName : n.tagName).getText()
 const within = (p: [number, number], a: [number, number], b: [number, number]) => !(p[0] < a[0] || (p[0] === a[0] && p[1] < a[1]) || p[0] > b[0] || (p[0] === b[0] && p[1] > b[1]))
 
 function relKey(root: string, file: string): string {
@@ -394,24 +403,21 @@ function relKey(root: string, file: string): string {
 }
 
 const lineCache = new Map<string, { stamp: string; lines: string[] }>()
-let openText: string | undefined,
-  openLines: string[] = []
 /** The text from a 1-based position of a file to the end of its line: the open document's, else the file's on disk. */
 function textAt(file: string, line: number, col: number, ctx: PreviewContext): string {
-  let lines: string[] | undefined
-  if (file === ctx.file && ctx.text !== undefined) {
-    if (openText !== ctx.text) openLines = (openText = ctx.text).split('\n')
-    lines = openLines
-  } else {
-    try {
-      const st = statSync(file),
-        stamp = `${st.size}:${st.mtimeMs}`
-      let e = lineCache.get(file)
-      if (!e || e.stamp !== stamp) lineCache.set(file, (e = { stamp, lines: readFileSync(file, 'utf8').split('\n') }))
-      lines = e.lines
-    } catch {
-      return ''
-    }
+  const doc = file === ctx.file ? ctx.doc : undefined
+  if (doc) {
+    const ls = doc.lines()
+    const start = ls[line - 1]
+    return start === undefined ? '' : doc.text.slice(start + col - 1, line < ls.length ? ls[line] - 1 : doc.text.length)
   }
-  return lines[line - 1]?.slice(col - 1) ?? ''
+  try {
+    const st = statSync(file),
+      stamp = `${st.size}:${st.mtimeMs}`
+    let e = lineCache.get(file)
+    if (!e || e.stamp !== stamp) lineCache.set(file, (e = { stamp, lines: readFileSync(file, 'utf8').split('\n') }))
+    return e.lines[line - 1]?.slice(col - 1) ?? ''
+  } catch {
+    return ''
+  }
 }

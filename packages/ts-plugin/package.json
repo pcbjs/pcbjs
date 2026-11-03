@@ -25,7 +25,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit && node scripts/bundle.mjs",
-    "test": "npm run build && node --test \"tests/**/*.test.mjs\"",
+    "test": "npm run build && node --import ../../scripts/test-watchdog.mjs --test \"tests/**/*.test.mjs\"",
     "prepack": "npm run build && node ../../scripts/pack-files.mjs pre",
     "postpack": "node ../../scripts/pack-files.mjs post"
   },

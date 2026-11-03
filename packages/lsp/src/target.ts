@@ -4,7 +4,10 @@ import { dirname, isAbsolute, resolve } from 'node:path'
 import ts from 'typescript'
 import type { SiteData } from '@pcbjs/core/site-data'
 import { padItems } from './preview.js'
-import { isCoordinate, lengthMm, parseAt, parsePoint } from './values.js'
+import { siteIn } from './edits.js'
+import { lengthMm, parseAt } from '@pcbjs/core/internal/units'
+import { defName } from '@pcbjs/core/internal/instances'
+import { isCoordinate, parsePoint } from './values.js'
 
 export type TargetKind = 'part' | 'pad' | 'net' | 'group' | 'point' | 'reference'
 
@@ -13,11 +16,15 @@ type Pt = [number, number]
 /** What a target is on one board: the items, the parts, the points or the reference to highlight. */
 export interface BoardTarget {
   board: string
+  /** the items to highlight, ids of this snapshot */
   ids: number[]
+  /** the parts to highlight, by ref */
+  parts: string[]
+  /** what it names in the grammar of docs/refs.md: `Q1`, `Q1/2`, `net:GND`, `CH1`; none for a point or a reference */
   refs: string[]
   points?: Pt[]
   reference?: string
-  /** what the target is called on this board: `Q1`, `Q1.2`, `GND`, `CH1`, `25 12.5` */
+  /** what the target is called on this board: `Q1`, `Q1/2`, `GND`, `CH1`, `25 12.5` */
   name: string
 }
 
@@ -55,7 +62,7 @@ interface Cx {
 
 const BRANDS: Record<string, TargetKind> = { part: 'part', pin: 'pad', net: 'net', circuit: 'group' }
 const KIND_BRAND = { part: 'part', pad: 'pin', net: 'net', group: 'circuit' }
-const SAME_PART = new Set(['connect', 'ref', 'source', 'rules'])
+const SAME_PART = new Set(['connect', 'source', 'rules'])
 const PIN_REF = /^([A-Za-z_][\w]*)\.([\w+\-]+)$/
 
 /** The target at an offset: the innermost node strictly around it that names something on a board. */
@@ -81,15 +88,27 @@ export function targetAt(program: ts.Program, file: string, offset: number, boar
   return undefined
 }
 
+/** Resolve exactly one receiver expression, without climbing into an unrelated surrounding target. */
+export function partTarget(program: ts.Program, expression: ts.Expression, boards: TargetBoard[]): Target | undefined {
+  const sf = expression.getSourceFile()
+  const checker = program.getTypeChecker()
+  const found: BoardTarget[] = []
+  for (const b of boardsOf(sf.fileName, boards)) {
+    const value = valueAt(expression, { checker, site: b.site, root: b.root, depth: 0 })
+    if (value?.kind !== 'part') continue
+    const target = onBoard(value, b.site)
+    if (target) found.push(target)
+  }
+  return found.length ? { kind: 'part', start: expression.getStart(sf), end: expression.getEnd(), boards: found } : undefined
+}
+
 /** True inside the tag of a part element that placed a symbol, `<U1 at="4 6" />` in a `<Schematic>`: hover and highlight are the symbol's. */
 function inSymbolTag(n: ts.Node, boards: TargetBoard[]): boolean {
   for (let p: ts.Node | undefined = n; p && !ts.isSourceFile(p); p = p.parent) {
     if (!ts.isJsxSelfClosingElement(p) && !ts.isJsxOpeningElement(p)) continue
     const sf = p.getSourceFile()
-    const at = sf.getLineAndCharacterOfPosition((ts.isJsxOpeningElement(p) ? p.parent : p).getStart(sf))
-    return boards.some(b =>
-      b.site.schematic.drawing?.symbols.some(s => s.src && s.src.line === at.line + 1 && s.src.col === at.character + 1 && abs(b.root, s.src.file) === sf.fileName),
-    )
+    const at = siteIn(sf, (ts.isJsxOpeningElement(p) ? p.parent : p).getStart(sf))
+    return boards.some(b => b.site.schematic.drawing?.symbols.some(s => s.src && s.src.line === at.line && s.src.col === at.col && abs(b.root, s.src.file) === sf.fileName))
   }
   return false
 }
@@ -187,26 +206,12 @@ function callValue(e: ts.CallExpression, cx: Cx): Val | undefined {
   const callee = e.expression
   if (ts.isPropertyAccessExpression(callee)) {
     const m = callee.name.text
-    if (m === 'pad' || m === 'pin') {
-      const part = evalExpr(callee.expression, cx),
-        key = e.arguments[0] && literalText(e.arguments[0])
-      if (part?.kind === 'part' && key !== undefined) return { kind: 'pad', pads: part.refs.map(ref => ({ ref, key })) }
-    }
     if (SAME_PART.has(m)) {
       const v = evalExpr(callee.expression, cx)
       if (v?.kind === 'part') return v
     }
   }
-  // `buck.named('Buck1')(ports)`
-  if (ts.isCallExpression(callee) && ts.isPropertyAccessExpression(callee.expression) && callee.expression.name.text === 'named') {
-    const name = callee.arguments[0] && literalText(callee.arguments[0])
-    if (name) return groupNamed(name, cx)
-  }
   const name = calleeName(callee)
-  if (name === 'group' && e.arguments[0]) {
-    const g = literalText(e.arguments[0])
-    if (g) return groupNamed(g, cx)
-  }
   if (name === 'nets') {
     const p = e.arguments[0] && literalText(e.arguments[0])
     return { kind: 'prefix', prefix: p ? `${p.replace(/\/+$/, '')}/` : '' }
@@ -217,14 +222,10 @@ function callValue(e: ts.CallExpression, cx: Cx): Val | undefined {
   }
   const made = partsMadeAt(e, cx)
   if (made.length) return { kind: 'part', refs: made }
-  // a circuit call names its instance with its last string argument, `ledChannel({ VCC, SW }, 'CH1')`
-  const last = e.arguments[e.arguments.length - 1]
-  const inst = last && e.arguments.length > 1 ? literalText(last) : undefined
-  if (inst) {
-    const g = groupNamed(inst, cx)
-    if (g) return g
-  }
-  return undefined
+  // a circuit call names its instance by its index, `channel(ports, 'CH2')` or `channel(ports, 2)`, channel2
+  const index = e.arguments[1]
+  const inst = index && ts.isNumericLiteral(index) ? `${circuitName(callee, cx) ?? ''}${index.text}` : index && ts.isStringLiteralLike(index) ? index.text : undefined
+  return inst ? groupNamed(inst, cx) : undefined
 }
 
 function symbolValue(sym: ts.Symbol | undefined, cx: Cx): Val | undefined {
@@ -286,7 +287,7 @@ function paramValue(p: ts.ParameterDeclaration, cx: Cx): Val | undefined {
   }
   if (name === 'layout' && idx === 0) {
     const label = call.arguments[2] && literalText(call.arguments[2])
-    const byLayout = label ? cx.site.schematic.circuits.filter(c => c.layout === label) : []
+    const byLayout = label ? cx.site.schematic.circuits.filter(c => c.layout && defName(c.layout) === label) : []
     if (byLayout.length) return { kind: 'group', paths: byLayout.map(c => c.path) }
     const target = call.arguments[0] && evalExpr(call.arguments[0], cx)
     if (target?.kind === 'group') return target
@@ -349,8 +350,8 @@ function namedFallback(name: string, cx: Cx): Val | undefined {
 /** The parts whose factory call starts where this call does. */
 function partsMadeAt(e: ts.CallExpression, cx: Cx): string[] {
   const sf = e.getSourceFile()
-  const p = sf.getLineAndCharacterOfPosition(e.getStart(sf))
-  return cx.site.schematic.parts.filter(x => x.src && x.src.line === p.line + 1 && x.src.col === p.character + 1 && abs(cx.root, x.src.file) === sf.fileName).map(x => x.ref)
+  const p = siteIn(sf, e.getStart(sf))
+  return cx.site.schematic.parts.filter(x => x.src && x.src.line === p.line && x.src.col === p.col && abs(cx.root, x.src.file) === sf.fileName).map(x => x.ref)
 }
 
 function stringValue(s: ts.StringLiteralLike, cx: Cx): Val | undefined {
@@ -390,11 +391,11 @@ function referenceValue(call: ts.CallExpression, cx: Cx): Val | undefined {
 }
 
 function onBoard(v: Val, site: SiteData): BoardTarget | undefined {
-  const base = { board: site.name, ids: [] as number[], refs: [] as string[] }
+  const base = { board: site.name, ids: [] as number[], parts: [] as string[], refs: [] as string[] }
   switch (v.kind) {
     case 'part': {
       const refs = v.refs.filter(r => site.footprints.some(f => f.ref === r))
-      return refs.length ? { ...base, refs, name: refs.join(', ') } : undefined
+      return refs.length ? { ...base, parts: refs, refs, name: refs.join(', ') } : undefined
     }
     case 'pad': {
       const ids: number[] = [],
@@ -404,15 +405,15 @@ function onBoard(v: Val, site: SiteData): BoardTarget | undefined {
         const hit = pads.filter(p => p.num === key)
         for (const p of hit.length ? hit : pads.filter(q => q.name === key)) {
           ids.push(p.item.id)
-          names.push(`${ref}.${p.num}`)
+          names.push(`${ref}/${p.num}`)
         }
       }
-      return ids.length ? { ...base, ids, name: names.join(', ') } : undefined
+      return ids.length ? { ...base, ids, refs: names, name: names.join(', ') } : undefined
     }
     case 'net': {
       const nets = new Set(v.nets.filter(n => site.nets.includes(n)))
       const ids = (site.items ?? []).filter(i => i.net !== undefined && nets.has(i.net)).map(i => i.id)
-      return nets.size ? { ...base, ids, name: [...nets].join(', ') } : undefined
+      return nets.size ? { ...base, ids, refs: [...nets].map(n => `net:${n}`), name: [...nets].join(', ') } : undefined
     }
     case 'group': {
       const under = (p: string[], q: string[]) => q.length <= p.length && q.every((x, i) => p[i] === x)
@@ -420,7 +421,8 @@ function onBoard(v: Val, site: SiteData): BoardTarget | undefined {
         .filter(p => v.paths.some(q => under(p.path, q)))
         .map(p => p.ref)
         .filter(r => site.footprints.some(f => f.ref === r))
-      return refs.length ? { ...base, refs, name: v.paths.map(q => q.join('/')).join(', ') } : undefined
+      const paths = v.paths.map(q => q.join('/'))
+      return refs.length ? { ...base, parts: refs, refs: paths, name: paths.join(', ') } : undefined
     }
     case 'point': {
       const fps = site.footprints.filter(f => v.refs.includes(f.ref))
@@ -459,8 +461,12 @@ export function padSource(
   ref: string,
   num: string,
 ): { file: string; start: number; end: number } | undefined {
-  const sp = board.site.schematic.parts.find(p => p.ref === ref)
-  const pad = board.site.footprints.find(f => f.ref === ref)?.pads.find(p => p.num === num)
+  // the part by its ref or by a unique tail of its tree path, `CH2/R01`
+  const tail = ref.split('/')
+  const path = (p: { ref: string; path: string[]; local: string }) => (p.path.length ? [...p.path, p.local] : [p.ref])
+  const ends = board.site.schematic.parts.filter(p => path(p).slice(-tail.length).join('/') === ref)
+  const sp = board.site.schematic.parts.find(p => p.ref === ref) ?? (ends.length === 1 ? ends[0] : undefined)
+  const pad = board.site.footprints.find(f => f.ref === sp?.ref)?.pads.find(p => p.num === num || p.name === num)
   if (!sp?.src || !pad) return undefined
   const file = abs(board.root, sp.src.file)
   const ls = service(file),
@@ -470,12 +476,15 @@ export function padSource(
   const at = sf.getPositionOfLineAndCharacter(sp.src.line - 1, sp.src.col - 1)
   const visit = (n: ts.Node): void => {
     if (n.getStart(sf) <= at && at < n.getEnd()) {
-      if (ts.isCallExpression(n) && n.getStart(sf) === at) made = n
+      // the call made at the site: one starting there, else for f(2)() the innermost call holding it
+      if (ts.isCallExpression(n) && (n.getStart(sf) === at || !made || made.getStart(sf) !== at)) made = n
       n.forEachChild(visit)
     }
   }
   sf.forEachChild(visit)
   if (!made) return undefined
+  // a generator's factory called in turn, PinHeader(4)('x'), is one part
+  while (ts.isCallExpression(made.parent) && made.parent.expression === made) made = made.parent
   const calls: ts.CallExpression[] = []
   let top: ts.Node = made
   for (;;) {

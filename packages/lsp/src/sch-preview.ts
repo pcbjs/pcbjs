@@ -1,5 +1,5 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path'
-import type { SchDrawing } from '@pcbjs/core/sch-model'
+import type { SchDrawing } from '@pcbjs/core/internal/sch-model'
 import type { SiteData } from '@pcbjs/core/site-data'
 import { WIDTH, type Preview } from './preview.js'
 

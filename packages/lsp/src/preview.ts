@@ -1,7 +1,8 @@
 // Text is stroked in Hershey Simplex, never an SVG font; docs/ide-bridge.md describes the payload.
 
-import { strokeText } from '@pcbjs/core/text'
+import { strokeText } from '@pcbjs/core/internal/text'
 import type { SiteData, SiteItem } from '@pcbjs/core/site-data'
+import { shapeOf } from '@pcbjs/core/site-shapes'
 
 type Pt = [number, number]
 type Ring = Pt[]
@@ -64,6 +65,7 @@ const COLORS = {
 
 interface Indexed {
   it: SiteItem
+  rings: Pt[][]
   box: Box
   boxes: Box[]
 }
@@ -82,8 +84,9 @@ function indexOf(site: SiteData): SiteIndex {
   let ix = indexes.get(site)
   if (ix) return ix
   const items = (site.items ?? []).map(it => {
-    const boxes = it.rings.map(boxOf)
-    return { it, boxes, box: boxes.length ? boxes.reduce(union) : boxOf([]) }
+    const rings = shapeOf(site, it.id)
+    const boxes = rings.map(boxOf)
+    return { it, rings, boxes, box: boxes.length ? boxes.reduce(union) : boxOf([]) }
   })
   ix = {
     items,
@@ -203,7 +206,7 @@ function drawBoard(site: SiteData, ix: SiteIndex, crop: Box, st: DrawState): str
   const paths = new Map<number, string>()
   const itemPath = (x: Indexed) => {
     let d = paths.get(x.it.id)
-    if (d === undefined) paths.set(x.it.id, (d = x.it.rings.map((r, i) => t.ring(clipRing(r, pad(crop, 1), x.boxes[i]), tol)).join('')))
+    if (d === undefined) paths.set(x.it.id, (d = x.rings.map((r, i) => t.ring(clipRing(r, pad(crop, 1), x.boxes[i]), tol)).join('')))
     return d
   }
   const minSize = [0, 1, 2, 3][st.level]
@@ -263,7 +266,7 @@ function drawBoard(site: SiteData, ix: SiteIndex, crop: Box, st: DrawState): str
       .filter((x): x is Indexed => !!x)
       .map(x => {
         const i = x.boxes.reduce((m, b, k) => ((b.x1 - b.x0) * (b.y1 - b.y0) > (x.boxes[m].x1 - x.boxes[m].x0) * (x.boxes[m].y1 - x.boxes[m].y0) ? k : m), 0)
-        return t.ring(x.it.rings[i], tol)
+        return t.ring(x.rings[i], tol)
       })
       .join('')
     if (d)
@@ -335,14 +338,14 @@ function renderFrame(site: SiteData, ref: string, outlined: string[]): Preview |
     return [fp.side === 'B' ? -lx : lx, ly]
   }
   const front = (l: string) => (l.startsWith('B.') ? `F.${l.slice(2)}` : l)
-  const mine = ix.items.filter(x => x.it.ref === ref).map(x => ({ it: x.it, rings: x.it.rings.map(r => r.map(local)) }))
+  const mine = ix.items.filter(x => x.it.ref === ref).map(x => ({ it: x.it, rings: x.rings.map(r => r.map(local)) }))
   if (!mine.length) return undefined
   const all = mine.flatMap(m => m.rings.flat())
   const crop = cropAround(boxOf(all), 0.6)
   const pads = padItems(site, ref)
   const minPad = Math.min(
     ...pads.map(p => {
-      const b = boxOf(p.item.rings.flat())
+      const b = boxOf(shapeOf(site, p.item.id).flat())
       return Math.min(b.x1 - b.x0, b.y1 - b.y0)
     }),
     2,
@@ -364,7 +367,11 @@ function renderFrame(site: SiteData, ref: string, outlined: string[]): Preview |
     for (const l of ORDER) if (groups.get(l)) parts.push(`<path d='${groups.get(l)}' fill='${color(l)}' opacity='${l === 'F.Cu' ? 1 : 0.85}'/>`)
     const hl = pads
       .filter(p => outlined.includes(p.num))
-      .map(p => p.item.rings.map(r => t.ring(r.map(local), tol)).join(''))
+      .map(p =>
+        shapeOf(site, p.item.id)
+          .map(r => t.ring(r.map(local), tol))
+          .join(''),
+      )
       .join('')
     if (hl)
       parts.push(

@@ -1,4 +1,4 @@
-import { toInjected, toSource, type ScopeInjection } from '@pcbjs/compile/scope'
+import { toInjected, toSource, type ScopeInjection } from '@pcbjs/compile/internal/scope'
 
 export type Inj = ScopeInjection | null | undefined
 export interface Span {
@@ -62,15 +62,4 @@ export function outResult(v: any, file: string | undefined, injOf: (f: string) =
     }
   }
   return o
-}
-
-/** The line starts of a text, as TypeScript counts lines. */
-export function lineStarts(text: string): number[] {
-  const out = [0]
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i)
-    if (c === 13 && text.charCodeAt(i + 1) === 10) i++
-    if (c === 10 || c === 13 || c === 0x2028 || c === 0x2029) out.push(i + 1)
-  }
-  return out
 }

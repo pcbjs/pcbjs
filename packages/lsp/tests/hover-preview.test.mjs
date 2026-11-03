@@ -5,21 +5,22 @@ import assert from 'node:assert/strict'
 import { readFileSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { dev } from '@pcbjs/cli/server'
+import { dev } from './fixtures/dev.mjs'
 import { renderPreview } from '../dist/preview.js'
 import { makeProject } from './fixtures/project.mjs'
-import { initParams, posOf, viteClient } from './fixtures/client.mjs'
+import { initParams, posOf, sessionClient } from './fixtures/client.mjs'
+import { shapeOf } from '@pcbjs/core/site-shapes'
 
 const EXAMPLES = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'examples')
-const PORT = 5351
-
 /** One dev server with a language client, its boards' data fetched once. */
-async function session(root, boards) {
-  const server = await dev({ root, port: PORT, host: '127.0.0.1' })
+async function session(from, boards) {
+  const server = await dev({ root: from, port: 0, host: '127.0.0.1' })
+  const root = server.root
+  const port = server.httpServer.address().port
   server.config.logger.info = () => {}
   const sites = {}
-  for (const b of boards) sites[b] = await (await fetch(`http://127.0.0.1:${PORT}/__pcbjs/board.json${b ? `?board=${b}` : ''}`)).json()
-  const client = await viteClient(PORT)
+  for (const [k, name] of Object.entries(boards)) sites[k] = await (await fetch(`http://127.0.0.1:${port}/__pcbjs/${encodeURIComponent(name)}/board.json`)).json()
+  const client = await sessionClient(port)
   await client.conn.sendRequest('initialize', initParams(root))
   await client.conn.sendNotification('initialized', {})
   const open = async file => {
@@ -28,12 +29,19 @@ async function session(root, boards) {
     await client.conn.sendNotification('textDocument/didOpen', { textDocument: { uri, languageId: 'typescriptreact', version: 1, text } })
     return { text, uri }
   }
+  // the image follows the session's first pass over the opened text, so a hover without one is asked again for a while
   const hover = async (d, needle, delta = 0, n = 0) => {
-    const t0 = performance.now()
-    const h = await client.conn.sendRequest('textDocument/hover', { textDocument: { uri: d.uri }, position: posOf(d.text, needle, delta, n) })
-    return { value: h?.contents.value ?? '', ms: performance.now() - t0 }
+    const end = Date.now() + 3000
+    for (;;) {
+      const t0 = performance.now()
+      const h = await client.conn.sendRequest('textDocument/hover', { textDocument: { uri: d.uri }, position: posOf(d.text, needle, delta, n) })
+      const value = h?.contents.value ?? ''
+      if (value.startsWith('![') || Date.now() > end) return { value, ms: performance.now() - t0 }
+      await new Promise(r => setTimeout(r, 100))
+    }
   }
   return {
+    root,
     server,
     client,
     sites,
@@ -66,7 +74,7 @@ const boxOf = pts =>
     x1: -Infinity,
     y1: -Infinity,
   })
-const itemsBox = (site, pred) => boxOf(site.items.filter(pred).flatMap(i => i.rings.flat()))
+const itemsBox = (site, pred) => boxOf(site.items.filter(pred).flatMap(i => shapeOf(site, i.id).flat()))
 /** The ids of the innermost source range at a needle, as the server finds it. */
 function rangeIds(site, rel, d, needle, delta = 0, n = 0) {
   const p = posOf(d.text, needle, delta, n),
@@ -76,7 +84,7 @@ function rangeIds(site, rel, d, needle, delta = 0, n = 0) {
     r => (r.start[0] < line || (r.start[0] === line && r.start[1] <= col)) && (r.end[0] > line || (r.end[0] === line && r.end[1] >= col - 1)),
   )
   at.sort((a, b) => (a.end[0] - a.start[0]) * 1e6 + a.end[1] - a.start[1] - ((b.end[0] - b.start[0]) * 1e6 + b.end[1] - b.start[1]))
-  return new Set(at[0].ids)
+  return new Set(site.items.filter(i => at[0].uids.includes(i.uid)).map(i => i.id))
 }
 /** A footprint's pads in its own frame. */
 const localPads = fp =>
@@ -91,7 +99,7 @@ const localPads = fp =>
 
 let demo
 before(async () => {
-  demo = await session(join(EXAMPLES, 'demo'), ['blinky'])
+  demo = await session(join(EXAMPLES, 'demo'), { blinky: 'Blinky' })
 })
 after(async () => {
   await demo?.close()
@@ -99,7 +107,7 @@ after(async () => {
 
 test('blinky: a placement shows its courtyard in the crop, with ref, value, footprint and position', async () => {
   const s = demo.sites.blinky,
-    d = await demo.open(join(EXAMPLES, 'demo', 'blinky.pcb.tsx'))
+    d = await demo.open(join(demo.root, 'blinky.pcb.tsx'))
   // on `at`, outside the tag name, which is the part itself and shows its land pattern
   const img = image((await demo.hover(d, '<Q1 at', 5)).value)
   assert.match(image((await demo.hover(d, '<Q1 at', 2)).value).alt, /^footprint on Blinky$/)
@@ -110,11 +118,23 @@ test('blinky: a placement shows its courtyard in the crop, with ref, value, foot
   assert.match(img.svg, /stroke-dasharray/, 'the selection is dashed as the viewer draws it')
 })
 
-test('blinky: a route path, a chain command, a pour, a via and a text crop around what they drew', async () => {
+test('blinky: a part handle and its placement show the pin table, number, name and net, above the docs excerpt', async () => {
+  const table = 'pins of **J1**\n\n| pad | name | net |\n| --- | --- | --- |\n| 1 | 1 | GND |\n| 2 | 2 | VCC |\n| 3 | 3 | SIG |'
+  const board = await demo.open(join(demo.root, 'blinky.pcb.tsx'))
+  const placed = (await demo.hover(board, '<J1 at', 2)).value
+  assert.ok(placed.includes(table), placed)
+  const sch = await demo.open(join(demo.root, 'blinky.sch.tsx'))
+  const handle = (await demo.hover(sch, 'export const J1', 14)).value
+  assert.ok(handle.includes(table), handle)
+  const doc = handle.indexOf('https://pcbjs.dev/docs/')
+  assert.ok(doc < 0 || handle.indexOf(table) < doc, 'the table sits above the docs excerpt')
+})
+
+test('blinky: drawn copper, a chain command, a pour, a via and a text crop around what they drew', async () => {
   const s = demo.sites.blinky,
-    d = await demo.open(join(EXAMPLES, 'demo', 'blinky.pcb.tsx'))
+    d = await demo.open(join(demo.root, 'blinky.pcb.tsx'))
   for (const [needle, delta, n] of [
-    ["'M 3 10 H 9", 4, 0],
+    ["route('3 10'", 1, 0],
     ['.V(14)', 2, 0],
     ['pour(GND', 1, 0],
     ["via(VCC, '15.8", 1, 0],
@@ -140,12 +160,12 @@ test('blinky: a route path, a chain command, a pour, a via and a text crop aroun
 
 test('blinky: a pad reference shows the pad, a net name the whole net with its pads named', async () => {
   const s = demo.sites.blinky,
-    d = await demo.open(join(EXAMPLES, 'demo', 'blinky.pcb.tsx'))
+    d = await demo.open(join(demo.root, 'blinky.pcb.tsx'))
   // the pad outlined on its part's land pattern, in the footprint's own frame
   const pad = image((await demo.hover(d, 'route(J1[3]', 9)).value)
   assert.match(pad.alt, /^pad on Blinky$/)
   assert.ok(pad.box.x < 0 && pad.box.x + pad.box.w > 0 && pad.box.y < 0 && pad.box.y + pad.box.h > 0, JSON.stringify(pad.box))
-  assert.match(pad.rest, /^pad \*\*J1\.3\*\* \S* ?· net SIG · at /)
+  assert.match(pad.rest, /^pad \*\*J1\/3\*\* \S* ?· net SIG · at /)
   const net = image((await demo.hover(d, 'pour(GND', 6)).value)
   assert.ok(
     contains(
@@ -154,12 +174,12 @@ test('blinky: a pad reference shows the pad, a net name the whole net with its p
     ),
   )
   assert.match(net.alt, /^net on Blinky$/)
-  assert.match(net.rest, /^net \*\*GND\*\* · 3 pads · \d+ tracks? · \d+ vias? · 1 pour\n\nJ1\.1, Q1\.2, C1\.2\n\n/)
+  assert.match(net.rest, /^net \*\*GND\*\* · 3 pads · \d+ tracks? · \d+ vias? · 1 pour\n\nJ1\/1, Q1\/2, C1\/2\n\n/)
 })
 
 test('blinky: a footprint factory call shows the land pattern in its own frame with pad numbers', async () => {
   const s = demo.sites.blinky,
-    d = await demo.open(join(EXAMPLES, 'demo', 'blinky.sch.tsx'))
+    d = await demo.open(join(demo.root, 'blinky.sch.tsx'))
   const img = image((await demo.hover(d, "C0603('100n')", 2)).value)
   const fp = s.footprints.find(f => f.ref === 'C1')
   assert.ok(contains(img.box, boxOf(localPads(fp))), JSON.stringify(img.box))
@@ -170,10 +190,10 @@ test('blinky: a footprint factory call shows the land pattern in its own frame w
 test('usb3-hub: every hover kind has its image, each render under 50 ms', async () => {
   await demo.close()
   demo = null
-  const hub = await session(join(EXAMPLES, 'usb3-hub'), [''])
+  const hub = await session(join(EXAMPLES, 'usb3-hub'), { '': 'usb3-hub' })
   try {
     const s = hub.sites[''],
-      d = await hub.open(join(EXAMPLES, 'usb3-hub', 'pcb.tsx'))
+      d = await hub.open(join(hub.root, 'pcb.tsx'))
     const times = []
     const look = async (needle, delta = 0, n = 0) => {
       const h = await hub.hover(d, needle, delta, n)
@@ -181,8 +201,8 @@ test('usb3-hub: every hover kind has its image, each render under 50 ms', async 
       return image(h.value)
     }
     // placement
-    const ldo = await look('<LDO at', 6)
-    const ref = s.sources['pcb.tsx'].find(r => r.refs.length === 1 && r.start[0] === posOf(d.text, '<LDO at').line + 1).refs[0]
+    const ldo = await look('<U15 at', 6)
+    const ref = s.sources['pcb.tsx'].find(r => r.refs.length === 1 && r.start[0] === posOf(d.text, '<U15 at').line + 1).refs[0]
     const fp = s.footprints.find(f => f.ref === ref)
     assert.match(ldo.rest, new RegExp(`^\\*\\*${ref}\\*\\* `))
     assert.ok(fp && contains(ldo.box, { x0: fp.bbox.x, y0: fp.bbox.y, x1: fp.bbox.x + fp.bbox.w, y1: fp.bbox.y + fp.bbox.h }))
@@ -211,9 +231,9 @@ test('usb3-hub: every hover kind has its image, each render under 50 ms', async 
       )
     }
     // a pad
-    const pad = await look("E0.pad('4')", 8)
+    const pad = await look('E0[4]', 3)
     assert.match(pad.alt, /^pad on /)
-    assert.match(pad.rest, /^pad \*\*E0\.4\*\*/)
+    assert.match(pad.rest, /^pad \*\*E0\/4\*\*/)
     // nets: UP.DP is the net UP/DP, GND the ground of the whole board
     const dp = await look('DP_UP: UP.DP', 11)
     assert.match(dp.rest, /^net \*\*UP\/DP\*\* · class usb · /)
@@ -231,7 +251,7 @@ test('usb3-hub: every hover kind has its image, each render under 50 ms', async 
       ),
     )
     // factory calls: the call itself, and a factory assigned to a name
-    const c = await look("C0402('100n')", 2)
+    const c = await look("C0402('100n'", 2)
     assert.match(c.rest, /^land pattern \*\*pcbjs:C_0402_1005Metric\*\*/)
     const qfn = await look('QFN(64', 1)
     assert.match(qfn.rest, /^land pattern \*\*\S+\*\* · 81 pads · .* · placed as U1/)
@@ -265,12 +285,12 @@ test('a keepout call shows its rings', async () => {
 export default (
   <PCB name="Keep">
     <path layer="Edge.Cuts" d="M 0 0 H 30 V 20 H 0 Z" />
-    {keepout('F.Cu', 'M 10 5 H 20 V 15 H 10 Z', { pours: false })}
+    {keepout('M 10 5 H 20 V 15 H 10 Z', { layers: ['F.Cu'], pours: false })}
   </PCB>
 )
 `
   const project = makeProject(board)
-  const k = await session(project.root, [''])
+  const k = await session(project.root, { '': 'Keep' })
   try {
     const d = await k.open(project.main)
     const img = image((await k.hover(d, 'keepout(', 2)).value)

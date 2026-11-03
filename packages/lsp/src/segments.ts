@@ -1,35 +1,17 @@
 // Offsets are UTF-16 code units of the document text.
 
+import type ts from 'typescript'
 import { detect, encodeValue, type Hit } from './detect.js'
 import { summary } from './describe.js'
-import { commands, parsePath, setCommand, validate, serialise, type Grammar, type Row } from './path-model.js'
-import {
-  angleDeg,
-  canonicalLayer,
-  formatAt,
-  formatNum,
-  formatPoint,
-  formatToken,
-  layerChoices,
-  lengthMm,
-  nudgeAt,
-  numericRange,
-  parseAt,
-  parsePoint,
-  parseToken,
-  rotateAt,
-  toggleSide,
-  withDeg,
-  withMm,
-  type Token,
-} from './values.js'
-import type { Constraints, SegmentKind } from './protocol.js'
+import { commands, parsePath, setCommand, validate, serialise, type Row } from './path-model.js'
+import { angleDeg, isPlainNumber, formatAt, formatNum, formatToken, lengthMm, parseAt, parseToken, type Token } from '@pcbjs/core/internal/units'
+import { canonicalLayer, formatPoint, layerChoices, nudgeAt, numericRange, parsePoint, rotateAt, toggleSide, withDeg, withMm } from './values.js'
+import type { Constraints, Segment, SegmentKind, SegmentsParams } from '@pcbjs/core/protocol'
+import type { DocModel } from './doc.js'
+import { widgetOf } from './protocol.js'
+import { CHAIN, CHAIN_NAMES, isChain, isCopperHelper, type ChainName, type ChainSpec } from '@pcbjs/core/internal/syntax'
 
-export interface OffsetEdit {
-  start: number
-  end: number
-  newText: string
-}
+import type { OffsetEdit } from '@pcbjs/core/internal/textdoc'
 export interface RawPresentation {
   label: string
   detail?: string
@@ -63,15 +45,14 @@ export interface SegmentContext {
   routeHelpers?: ReadonlySet<string>
 }
 
-const COPPER_OWNERS = new Set(['route', 'track', 'via', 'zone'])
 const PRESETS_MM = [0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]
 const IMPEDANCES = [50, 85, 90, 100]
 
 /** Every segment of a file, in document order. */
-export function segmentsOf(text: string, fileName: string, ctx: SegmentContext = {}): RawSegment[] {
+export function segmentsOf(sf: ts.SourceFile, ctx: SegmentContext = {}): RawSegment[] {
   let hits: Hit[] = []
   try {
-    hits = detect(text, fileName, { routeHelpers: ctx.routeHelpers })
+    hits = detect(sf, { routeHelpers: ctx.routeHelpers })
   } catch {
     return []
   }
@@ -79,8 +60,8 @@ export function segmentsOf(text: string, fileName: string, ctx: SegmentContext =
 }
 
 /** The innermost segment at an offset with its presentations computed for writing `value`, or with `error` set. */
-export function typedSegment(text: string, fileName: string, ctx: SegmentContext, offset: number, value: string): RawSegment | undefined {
-  const seg = innermost(segmentsOf(text, fileName, ctx), offset)
+export function typedSegment(sf: ts.SourceFile, ctx: SegmentContext, offset: number, value: string): RawSegment | undefined {
+  const seg = innermost(segmentsOf(sf, ctx), offset)
   if (!seg) return undefined
   const r = typedEdit(seg, value, ctx)
   if ('error' in r) return { ...seg, presentations: [], error: r.error }
@@ -106,7 +87,7 @@ function pres(hit: Hit, value: string, detail?: string, label = value): RawPrese
   return 'error' in e ? [] : [{ label, ...(detail ? { detail } : {}), edit: e }]
 }
 
-const isCopper = (h: Hit) => !!h.context.chain || COPPER_OWNERS.has(h.context.owner) || (h.context.owner === 'pad' && h.context.prop === 'layers')
+const isCopper = (h: Hit) => !!h.context.chain || isCopperHelper(h.context.owner) || (h.context.owner === 'pad' && h.context.prop === 'layers')
 
 function title(h: Hit): string {
   const c = h.context
@@ -129,18 +110,13 @@ function build(h: Hit, ctx: SegmentContext): RawSegment[] {
       const choices = layerChoices(ctx.layers, copper)
       const current = canonicalLayer(h.value) ?? h.value
       const s = base(h, 'layer', { choices: choices.map(l => l.name) })
-      s.presentations = choices.filter(l => l.name !== current).flatMap(l => pres(h, l.name, l.aliases.join(', ') || undefined))
+      s.presentations = choices.filter(l => l.name !== current).flatMap(l => pres(h, l.name))
       return [s]
     }
     case 'side': {
       const s = base(h, 'enum', { choices: ['F', 'B'] })
       const next = toggleSide(h.value)
-      if (next) s.presentations = pres(h, next, /^(b|bottom|back)$/i.test(next) ? 'back side, mirrored' : 'front side')
-      return [s]
-    }
-    case 'copper': {
-      const s = base(h, 'enum', { choices: ['2', '4', '6', '8'] })
-      s.presentations = ['2', '4', '6', '8'].flatMap(n => pres(h, n, `${n} copper layers`))
+      if (next) s.presentations = pres(h, next, next === 'B' ? 'back side, mirrored' : 'front side')
       return [s]
     }
     case 'number': {
@@ -156,9 +132,8 @@ function build(h: Hit, ctx: SegmentContext): RawSegment[] {
     case 'drill':
     case 'length':
       return [length(h)]
-    case 'routePath':
     case 'svgPath':
-      return pathSegments(h, ctx)
+      return pathSegments(h)
     case 'pinRef':
       return [pin(h, ctx)]
     case 'chainCommand':
@@ -186,12 +161,17 @@ function chainSegment(h: Hit, ctx: SegmentContext): RawSegment {
     if (text !== h.value) out.push({ label, detail, edit: { start: h.start, end: h.end, newText: text } })
   }
   const q = quoteOf(h)
+  const c: ChainSpec = CHAIN[m as ChainName]
   const up = m.toUpperCase()
-  const rel = m !== up && m !== 'via'
-  if (m === 'Z' || m === 'X') put(`${m === 'Z' ? 'X' : 'Z'}(${args.join(', ')})`, m === 'Z' ? 'autoroute this leg' : 'a straight track')
-  else if (m === 'via') {
+  const rel = c.rel
+  const layered = c.args[0] === 'layer'
+  const finish = (m === 'Z' || m === 'X') && !args.length
+  if (finish) put(`${m === 'Z' ? 'X' : 'Z'}()`, m === 'Z' ? 'an automatic leg to the end' : 'a straight track to the end')
+  else if ((m === 'X' || m === 'L') && args.length === 1)
+    put(`${m === 'X' ? 'L' : 'X'}(${args[0]})`, m === 'X' ? 'a straight track to the waypoint' : 'an automatic leg to the waypoint')
+  else if (layered) {
     const cur = canonicalLayer(args[0]?.replace(/^['"`]|['"`]$/g, '') ?? '')
-    for (const l of layerChoices(ctx.layers, true)) if (l.name !== cur) put(`via(${q}${l.name}${q})`, `via to ${l.name}`)
+    for (const l of layerChoices(ctx.layers, true)) if (l.name !== cur) put(`${m}(${q}${l.name}${q})`, `${m} to ${l.name}`)
   } else if (up === 'H' || up === 'V') {
     const other = up === 'H' ? 'V' : 'H'
     put(`${rel ? other.toLowerCase() : other}(${args[0] ?? '0'})`, `a ${other === 'H' ? 'horizontal' : 'vertical'} track`)
@@ -199,39 +179,42 @@ function chainSegment(h: Hit, ctx: SegmentContext): RawSegment {
     put(`${rel ? 'h' : 'H'}(${args[0]})`, 'a horizontal track')
     put(`${rel ? 'v' : 'V'}(${args[1]})`, 'a vertical track')
   }
-  if (m !== 'Z' && m !== 'X') {
-    if (m !== 'via') for (const l of ['F.Cu', 'B.Cu']) put(`${h.value}.via(${q}${l}${q})`, `add a via to ${l} after it`)
+  if (!finish) {
+    if (!layered) for (const l of ['F.Cu', 'B.Cu']) put(`${h.value}.via(${q}${l}${q})`, `add a via to ${l} after it`)
     out.push({ label: 'delete', detail: 'delete this command', edit: { start: h.context.dot ?? h.start, end: h.end, newText: '' } })
   }
   s.presentations = out
   return s
 }
 
-const CHAIN_NAMES = ['L', 'l', 'H', 'h', 'V', 'v', 'via', 'Z', 'X']
-
-/** A typed chain command, `V 16`, `V(16)`, `@B.Cu`, `via B.Cu` or `X`, as the call text, or why it cannot be. */
+/** A typed chain command, `V 16`, `V(16)`, `A 5 6 90`, `via B.Cu`, `X` or `Z`, as the call text, or why it cannot be. */
 function chainText(h: Hit, typed: string): string | { error: string } {
-  const m = /^\s*(@|[A-Za-z]+)\s*\(?\s*(.*?)\s*\)?\s*$/.exec(typed)
-  if (!m) return { error: 'a chain command, such as V 14, L 5 16, @B.Cu or X' }
-  const name = m[1] === '@' ? 'via' : m[1] === 'U' || m[1] === 'u' ? 'via' : m[1]
-  if (!CHAIN_NAMES.includes(name)) return { error: `${name} is not a chain command: L, l, H, h, V, v, via, Z or X` }
+  const m = /^\s*([A-Za-z]+)\s*\(?\s*(.*?)\s*\)?\s*$/.exec(typed)
+  if (!m) return { error: 'a chain command, such as V 14, L 5 16, via B.Cu or X' }
+  const name = m[1]
+  if (!isChain(name)) return { error: `${name} is not a chain command: ${CHAIN_NAMES.join(', ')}` }
+  const c: ChainSpec = CHAIN[name]
   const raw = m[2].split(/\s*,\s*|\s+/).filter(Boolean)
-  const wasEnd = h.context.prop === 'Z' || h.context.prop === 'X'
-  if (wasEnd && name !== 'Z' && name !== 'X') return { error: 'this command ends the route: it stays .Z() or .X()' }
+  const wasEnd = (h.context.prop === 'Z' || h.context.prop === 'X') && !(h.context.args ?? []).length
+  if (wasEnd !== ((name === 'Z' || name === 'X') && !raw.length))
+    return { error: wasEnd ? 'this command finishes the route: it stays .Z() or .X()' : '.Z() and .X() finish the route, at its end only' }
   const q = quoteOf(h)
-  if (name === 'Z' || name === 'X') return `${name}(${raw.length ? m[2] : (h.context.args ?? []).join(', ')})`
-  if (name === 'via') {
+  if (name === 'Z') return raw.length ? { error: '.Z() takes no target; a straight track to a point is .L(p)' } : 'Z()'
+  if (c.args[0] === 'layer') {
     const l = raw[0]?.replace(/^['"`]|['"`]$/g, '')
-    if (!l || (!canonicalLayer(l) && !/^[A-Za-z0-9._]+$/.test(l))) return { error: 'via needs a layer, such as B.Cu' }
-    return `via(${q}${l}${q})`
+    if (!l || (!canonicalLayer(l) && !/^[A-Za-z0-9._]+$/.test(l))) return { error: `${name} needs a layer, such as B.Cu` }
+    return `${name}(${q}${l}${q})`
   }
-  const n = name.toUpperCase() === 'L' ? 2 : 1
-  if (raw.length !== n) return { error: `${name} takes ${n === 2 ? 'x and y' : 'one length'}` }
+  // a waypoint of .X(p) is one coordinate string
+  if (name === 'X') return raw.length === 2 ? `X(${q}${raw.join(' ')}${q})` : raw.length ? { error: '.X() takes one waypoint, such as X 5 16, or nothing' } : 'X()'
+  const n = c.args.length
+  if (raw.length !== n) return { error: `${name} takes ${n === 2 ? 'x and y' : n === 3 ? 'x, y and the angle' : 'one length'}` }
   const lit: string[] = []
-  for (const a of raw) {
+  for (const [k, a] of raw.entries()) {
     const t = parseToken(a)
-    if (!t || lengthMm(t) === undefined) return { error: `${JSON.stringify(a)} is not a length` }
-    lit.push(t.unit ? `${q}${a}${q}` : a)
+    const angle = c.args[k] === 'angle'
+    if (!t || (angle ? angleDeg(t) : lengthMm(t)) === undefined) return { error: `${JSON.stringify(a)} is not ${angle ? 'an angle' : 'a length'}` }
+    lit.push(t!.unit ? `${q}${a}${q}` : a)
   }
   return `${name}(${lit.join(', ')})`
 }
@@ -300,62 +283,50 @@ function position(h: Hit, ctx: SegmentContext): RawSegment {
 function pin(h: Hit, ctx: SegmentContext): RawSegment {
   const ref = h.context.ref ?? ''
   const pads = ctx.pads?.(ref) ?? []
-  const current = h.context.form === 'dotted' ? h.value.slice(ref.length + 1) : h.value
+  const current = h.value
   // a string can name the pin as well as the pad number, `'U2.IN'` or `U2['IN']`; a number literal and `.pad()` only the number
-  const named = (p: PadFact) => h.context.quote !== 'number' && h.context.form !== 'pad' && !!p.name && p.name !== p.num && /^[\w+\-]+$/.test(p.name)
+  const named = (p: PadFact) => h.context.quote !== 'number' && !!p.name && p.name !== p.num && /^[\w+\-]+$/.test(p.name)
   const s = base(h, 'pinRef', { choices: [...new Set([...pads.map(p => p.num), ...pads.filter(named).map(p => p.name!)])] })
   s.label = `pad of ${ref}`
-  const text = (v: string) => (h.context.form === 'dotted' ? `${ref}.${v}` : v)
+  const text = (v: string) => v
   s.presentations = pads.flatMap(p => {
     const net = p.net ?? 'no net'
     const out: RawPresentation[] = []
     if (p.num !== current && (h.context.quote !== 'number' || /^\d+$/.test(p.num)))
-      out.push(...pres(h, text(p.num), [p.name && p.name !== p.num ? p.name : '', net].filter(Boolean).join(' · '), `${ref}.${p.num}`))
-    if (named(p) && p.name !== current) out.push(...pres(h, text(p.name!), `pad ${p.num} · ${net}`, `${ref}.${p.name}`))
+      out.push(...pres(h, text(p.num), [p.name && p.name !== p.num ? p.name : '', net].filter(Boolean).join(' · '), `${ref}/${p.num}`))
+    if (named(p) && p.name !== current) out.push(...pres(h, text(p.name!), `pad ${p.num} · ${net}`, `${ref}/${p.name}`))
     return out
   })
   return s
 }
 
 /** One segment per command, each edit confined to the command's own text. */
-function pathSegments(h: Hit, ctx: SegmentContext): RawSegment[] {
-  const grammar: Grammar = h.kind === 'routePath' ? 'route' : 'svg'
-  const { rows } = parsePath(h.value, grammar)
-  const copper = layerChoices(ctx.layers, true).map(l => l.name)
+function pathSegments(h: Hit): RawSegment[] {
+  const { rows } = parsePath(h.value)
   return rows.map((row, i) => {
-    const start = h.start + (row.start ?? 0)
-    const end = h.start + (row.end ?? h.value.length)
-    const value = h.value.slice(row.start ?? 0, row.end ?? h.value.length)
     const s: RawSegment = {
-      start,
-      end,
+      start: h.start + (row.start ?? 0),
+      end: h.start + (row.end ?? h.value.length),
       kind: 'pathCommand',
-      value,
-      label: `${grammar === 'route' ? 'route path' : 'path data'}, command ${i + 1}`,
-      constraints: { grammar, index: i, choices: commands(grammar) },
+      value: h.value.slice(row.start ?? 0, row.end ?? h.value.length),
+      label: `path data, command ${i + 1}`,
+      constraints: { grammar: 'svg', index: i, choices: commands() },
       presentations: [],
       hit: h,
     }
     const out: RawPresentation[] = []
     const put = (text: string, detail: string, label = text) => {
-      const e = spliceRow(h, rows, i, text, grammar)
+      const e = spliceRow(h, rows, i, text)
       if (!('error' in e)) out.push({ label, detail, edit: e })
     }
-    const up = row.cmd === '@' || row.cmd === 'XZ' ? row.cmd : row.cmd.toUpperCase()
-    if (up === 'Z' || up === 'XZ') {
-      if (grammar === 'route') put(up === 'Z' ? 'XZ' : 'Z', up === 'Z' ? 'autoroute the last leg to b' : 'a straight track to b')
-    } else if (up === '@') {
-      for (const l of copper) if (l !== canonicalLayer(row.args[0] ?? '')) put(`@${l}`, `via to ${l}`)
-    } else if (['L', 'H', 'V', 'X'].includes(up)) {
+    const up = row.cmd.toUpperCase()
+    if (['L', 'H', 'V'].includes(up)) {
       const rel = row.cmd !== up
-      for (const c of grammar === 'route' ? ['L', 'H', 'V', 'X'] : ['L', 'H', 'V']) {
+      for (const c of ['L', 'H', 'V']) {
         if (c === up) continue
-        const cmd = rel ? c.toLowerCase() : c
-        put(serialise([setCommand(rows, i, cmd, grammar)[i]]), c === 'X' ? 'an automatic leg' : `a ${c === 'L' ? 'line' : c === 'H' ? 'horizontal' : 'vertical'} track`)
+        put(serialise([setCommand(rows, i, rel ? c.toLowerCase() : c)[i]]), `a ${c === 'L' ? 'line' : c === 'H' ? 'horizontal' : 'vertical'} line`)
       }
     }
-    if (grammar === 'route' && up !== 'Z' && up !== 'XZ' && up !== '@')
-      for (const l of copper.filter(x => x === 'F.Cu' || x === 'B.Cu')) put(`${value} @${l}`, `add a via to ${l} after it`)
     put('', 'delete this command', 'delete')
     s.presentations = out
     return s
@@ -363,7 +334,7 @@ function pathSegments(h: Hit, ctx: SegmentContext): RawSegment[] {
 }
 
 /** Replace row i's text with `text`, '' deleting it with the space before it, when the whole path stays valid. */
-function spliceRow(h: Hit, rows: Row[], i: number, text: string, grammar: Grammar): OffsetEdit | { error: string } {
+function spliceRow(h: Hit, rows: Row[], i: number, text: string): OffsetEdit | { error: string } {
   const row = rows[i]
   let a = row.start ?? 0
   let b = row.end ?? h.value.length
@@ -373,8 +344,8 @@ function spliceRow(h: Hit, rows: Row[], i: number, text: string, grammar: Gramma
     else while (b < h.value.length && /[\s,]/.test(h.value[b])) b++
   }
   const next = h.value.slice(0, a) + text + h.value.slice(b)
-  const parsed = parsePath(next, grammar)
-  const errs = parsed.errors.length ? parsed.errors : validate(parsed.rows, grammar)
+  const parsed = parsePath(next)
+  const errs = parsed.errors.length ? parsed.errors : validate(parsed.rows)
   if (errs.length) return { error: errs[0] }
   const enc = encodeValue(h, next)
   if ('error' in enc) return enc
@@ -408,7 +379,7 @@ function typedEdit(seg: RawSegment, typed: string, ctx: SegmentContext): { edit:
       return whole(formatToken(next))
     }
     case 'number':
-      if (!/^-?(?:\d+\.?\d*|\.\d+)$/.test(value)) return { error: `${JSON.stringify(value)} is not a number` }
+      if (!isPlainNumber(value)) return { error: `${JSON.stringify(value)} is not a number` }
       return whole(value)
     case 'position':
       if (h.kind === 'at' ? !parseAt(value) : !parsePoint(value))
@@ -421,29 +392,30 @@ function typedEdit(seg: RawSegment, typed: string, ctx: SegmentContext): { edit:
     }
     case 'enum': {
       const choices = seg.constraints.choices ?? []
-      if (h.kind === 'side' ? !toggleSide(value) : !choices.includes(value))
-        return { error: `${value} is not one of ${h.kind === 'side' ? 'F, B, top, bottom, front, back' : choices.join(', ')}` }
+      if (h.kind === 'side' ? !toggleSide(value) : !choices.includes(value)) return { error: `${value} is not one of ${h.kind === 'side' ? 'F, B' : choices.join(', ')}` }
       return whole(value)
     }
     case 'pinRef': {
       const ref = h.context.ref ?? ''
-      const pad = h.context.form === 'dotted' ? value.replace(new RegExp(`^${ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.`), '') : value
+      // a reference of the pad, `U2/IN`, names its pad after the part
+      const slash = value.lastIndexOf('/')
+      if (slash >= 0 && value.slice(0, slash) !== ref) return { error: `${value} is a pad of ${value.slice(0, slash)}, not of ${ref}` }
+      const pad = value.slice(slash + 1)
       const pads = ctx.pads?.(ref)
       const hit = pads?.find(p => p.num === pad || p.name === pad)
       if (pads && !hit) return { error: `${ref} has no pad ${pad}` }
       const num = hit?.num ?? pad
       if (h.context.quote === 'number' && !/^\d+$/.test(num)) return { error: `${ref}[...] takes a pad number` }
-      const r = whole(h.context.form === 'dotted' ? `${ref}.${num}` : num)
-      return 'error' in r ? r : { ...r, label: `${ref}.${num}` }
+      const r = whole(num)
+      return 'error' in r ? r : { ...r, label: `${ref}/${num}` }
     }
     case 'pathCommand': {
       if (h.kind === 'chainCommand') {
         const t = chainText(h, value)
         return typeof t === 'string' ? { edit: { start: h.start, end: h.end, newText: t }, newText: t, label: t } : t
       }
-      const grammar: Grammar = h.kind === 'routePath' ? 'route' : 'svg'
-      const { rows } = parsePath(h.value, grammar)
-      const e = spliceRow(h, rows, seg.constraints.index ?? 0, value, grammar)
+      const { rows } = parsePath(h.value)
+      const e = spliceRow(h, rows, seg.constraints.index ?? 0, value)
       return 'error' in e ? e : { edit: e, newText: value, label: value || 'delete' }
     }
   }
@@ -457,4 +429,32 @@ function dedupe(ps: RawPresentation[]): RawPresentation[] {
 /** One line on what a literal holds, for the hover. */
 export function describeHit(h: Hit): string {
   return summary(h)
+}
+
+/** `pcbjs/segments`: the one segment at a position with `value` typed into it, else the innermost at a position, else every one in a range or the document. */
+export function segmentsFor(doc: DocModel, ctx: SegmentContext, p: Pick<SegmentsParams, 'position' | 'range' | 'value'>): Segment[] {
+  const toSeg = (s: RawSegment): Segment => ({
+    range: doc.range(s),
+    kind: s.kind,
+    value: s.value,
+    label: s.label,
+    constraints: s.constraints,
+    widget: widgetOf(s.kind, s.constraints),
+    presentations: s.presentations.map(x => ({ label: x.label, ...(x.detail ? { detail: x.detail } : {}), edit: doc.edit(x.edit) })),
+    ...(s.error ? { error: s.error } : {}),
+  })
+  if (p.position && typeof p.value === 'string') {
+    const s = typedSegment(doc.sf(), ctx, doc.offset(p.position), p.value)
+    return s ? [toSeg(s)] : []
+  }
+  let segs = segmentsOf(doc.sf(), ctx)
+  if (p.position) {
+    const one = innermost(segs, doc.offset(p.position))
+    segs = one ? [one] : []
+  } else if (p.range) {
+    const a = doc.offset(p.range.start),
+      b = doc.offset(p.range.end)
+    segs = segs.filter(s => s.end >= a && s.start <= b)
+  }
+  return segs.map(toSeg)
 }

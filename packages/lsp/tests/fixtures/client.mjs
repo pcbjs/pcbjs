@@ -1,17 +1,18 @@
-// A language client for the tests: vscode-jsonrpc over a WebSocket to the dev server, each message a `pcbjs:lsp` event on
-// Vite's socket, the way the dev.json fallback carries it.
+// A language client for the tests: vscode-jsonrpc over the dev server's session WebSocket, /__pcbjs/session, one JSON-RPC
+// message per frame after a hello, the way the session's own connections carry it.
 import WebSocket from 'ws'
 import { createMessageConnection } from 'vscode-jsonrpc'
 import { messageChannel } from '../../dist/channel.js'
 
-export async function viteClient(port) {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/`, 'vite-hmr')
+export async function sessionClient(port, role = 'editor') {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/__pcbjs/session`)
   await new Promise((ok, fail) => { ws.once('open', ok); ws.once('error', fail) })
-  const ch = messageChannel(msg => ws.send(JSON.stringify({ type: 'custom', event: 'pcbjs:lsp', data: msg })))
+  ws.send(JSON.stringify({ event: 'pcbjs:ide:hello', data: { name: 'test', version: '0', protocol: 3, major: 1, capabilities: [], role } }))
+  const ch = messageChannel(msg => ws.send(JSON.stringify(msg)))
   ws.on('message', raw => {
     let m
     try { m = JSON.parse(raw.toString()) } catch { return }
-    if (m?.type === 'custom' && m.event === 'pcbjs:lsp') ch.push(m.data)
+    if (m?.jsonrpc === '2.0') ch.push(m)
   })
   ws.on('close', () => ch.close())
   const conn = createMessageConnection(ch.reader, ch.writer)
@@ -19,9 +20,7 @@ export async function viteClient(port) {
   return { ws, conn, close: () => { conn.dispose(); ws.close() } }
 }
 
-export const ALL_KINDS = ['number', 'length', 'angle', 'position', 'layer', 'enum', 'pathCommand', 'pinRef']
-
-export function initParams(root, pcbjs = { protocol: 1, kinds: ALL_KINDS, name: 'test', version: '0' }) {
+export function initParams(root, pcbjs = { protocol: 5, major: 1, capabilities: [], name: 'test', version: '0' }) {
   return {
     processId: null,
     rootUri: null,

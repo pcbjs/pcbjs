@@ -1,6 +1,7 @@
 // Makes an unsaved buffer compile for the preview; docs/editor.md, Drafts, has the rules.
 
 import ts from 'typescript'
+import { parse } from './doc.js'
 
 export interface Span {
   start: number
@@ -34,10 +35,9 @@ interface Diag {
   message: string
 }
 
-const kindOf = (file: string) => (/\.[cm]?tsx$|\.jsx$/.test(file) ? ts.ScriptKind.TSX : /\.[cm]?js$/.test(file) ? ts.ScriptKind.JS : ts.ScriptKind.TS)
-
-function parse(text: string, file: string): { sf: ts.SourceFile; diags: Diag[] } {
-  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kindOf(file))
+/** A tree with its syntax errors; `sf` itself when `text` is its text. */
+function parsed(text: string, sf: ts.SourceFile): { sf: ts.SourceFile; diags: Diag[] } {
+  if (text !== sf.text) sf = parse(text, sf.fileName)
   const raw = (sf as unknown as { parseDiagnostics: ts.DiagnosticWithLocation[] }).parseDiagnostics ?? []
   return { sf, diags: raw.map(d => ({ start: d.start, length: d.length, code: d.code, message: ts.flattenDiagnosticMessageText(d.messageText, ' ') })) }
 }
@@ -48,17 +48,21 @@ export function toOverlay(r: Pick<Repaired, 'limit'>, offset: number): number {
 }
 
 /** Repairs `text` until TypeScript parses it; `errors` are offsets another parser such as esbuild rejected, each one more syntax error. */
-export function repair(text: string, file: string, errors: number[] = []): Repaired {
-  let out = text
+export function repair(source: ts.SourceFile, errors: number[] = []): Repaired {
+  const text = source.text
+  const cut = cutCalls(source)
+  let out = cut.text
   let limit: number | null = null
   let added = 0
-  const spans: Span[] = []
+  const spans: Span[] = [...cut.spans]
   let extra = [...errors]
   let drops = 0,
     closes = 0
   let lastClose = ''
+  let ok = false
   for (;;) {
-    const { sf, diags } = parse(out, file)
+    const { sf, diags } = parsed(out, source)
+    ok = !diags.length && !extra.length
     const all = [...diags, ...extra.map(start => ({ start, length: 0, code: 0, message: '' }))]
     if (!all.length) break
     const tail = sf.endOfFileToken.pos
@@ -84,10 +88,51 @@ export function repair(text: string, file: string, errors: number[] = []): Repai
     spans.push(span)
     extra = extra.filter(p => p < span.start || p >= span.end)
   }
-  const ok = !parse(out, file).diags.length && !extra.length
   const back = (o: number) => Math.min(toOverlay({ limit }, o), text.length)
   const skipped = spans.map(s => ({ start: back(s.start), end: Math.max(back(s.start), Math.min(back(s.end - 1) + 1, text.length)) })).filter(s => s.end > s.start)
   return { text: out, skipped: merge(skipped), limit: added ? limit : null, ok }
+}
+
+/** Chain commands a cut may drop: those that take a point or a layer; an empty `.X()` or `.Z()` finishes the route and stays. */
+const CUTTABLE = new Set(['L', 'l', 'H', 'h', 'V', 'v', 'A', 'a', 'X', 'Z', 'via'])
+const NEEDS_ARGS = new Set(['L', 'l', 'H', 'h', 'V', 'v', 'A', 'a', 'via'])
+
+/** True when the expression is a `route(...)` call, possibly with builder calls after it. */
+function onRoute(e: ts.Expression): boolean {
+  for (let depth = 0; depth < 64; depth++) {
+    if (!ts.isCallExpression(e)) return false
+    const c = e.expression
+    if (ts.isIdentifier(c)) return c.text === 'route'
+    if (!ts.isPropertyAccessExpression(c)) return false
+    e = c.expression
+  }
+  return false
+}
+
+/** Blanks every chain call still waiting for its argument, `.H()` or an unclosed `.H(9`, so the chain compiles up to it; offsets stay. */
+export function cutCalls(sf: ts.SourceFile): { text: string; spans: Span[] } {
+  const text = sf.text
+  if (!/\.\s*(?:[LlHhVvAaXZ]|via)\s*\(/.test(text)) return { text, spans: [] }
+  const spans: Span[] = []
+  const visit = (n: ts.Node): void => {
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && CUTTABLE.has(n.expression.name.text) && onRoute(n.expression.expression)) {
+      const name = n.expression.name
+      const paren = text.indexOf('(', name.end)
+      let dot = name.getStart(sf) - 1
+      while (dot > 0 && text[dot] !== '.') dot--
+      const closed = text[n.end - 1] === ')' && n.end - 1 > paren
+      if (!closed) {
+        let end = paren + 1
+        while (end < text.length && !/[\n)\]};]/.test(text[end])) end++
+        spans.push({ start: dot, end })
+      } else if (!n.arguments.length && NEEDS_ARGS.has(name.text)) spans.push({ start: dot, end: n.end })
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  let out = text
+  for (const s of spans) out = out.slice(0, s.start) + blank(out.slice(s.start, s.end)) + out.slice(s.end)
+  return { text: out, spans }
 }
 
 const blank = (s: string) => s.replace(/[^\r\n]/g, ' ')

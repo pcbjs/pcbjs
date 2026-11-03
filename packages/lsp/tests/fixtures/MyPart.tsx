@@ -1,8 +1,8 @@
 // A user footprint written from scratch: SOT-23, pins 1 and 2 on the left, 3 on the right.
-// defineFootprint makes it dual-mode: SOT23('MMBT3904') is a part for the schematic, <SOT23 ref="Q1" … /> renders as before.
+// defineFootprint makes a factory of it: SOT23('MMBT3904') is a part, placed as <Q1 at="…" />.
 import { defineFootprint, type FootprintProps } from '@pcbjs/core'
 
-function SOT23Footprint(props: FootprintProps) {
+export const SOT23 = defineFootprint(function SOT23(props: FootprintProps) {
   const { children, ...rest } = props
   return (
     <footprint id="pcbjs:SOT-23" value="SOT-23" height={1.1} model={{ kind: 'sot23', pins: 3 }} {...rest}>
@@ -16,6 +16,4 @@ function SOT23Footprint(props: FootprintProps) {
       {children}
     </footprint>
   )
-}
-
-export const SOT23 = defineFootprint(SOT23Footprint, { pins: ['1', '2', '3'], prefix: 'Q', id: 'pcbjs:SOT-23', name: 'SOT23' })
+}, { pins: ['1', '2', '3'], prefix: 'Q' })

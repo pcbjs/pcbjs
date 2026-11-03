@@ -1,6 +1,6 @@
 import type * as TS from 'typescript'
-import { moduleExports, scopeInject, ScopeError, type ResolveModule, type ScopeInjection } from '@pcbjs/compile/scope'
-import { DROP, inside, into, intoEnd, intoSpan, lineStarts, out, outResult, outSpan, type Inj } from './map'
+import { moduleExports, scopeInject, ScopeError, type ResolveModule, type ScopeInjection } from '@pcbjs/compile/internal/scope'
+import { DROP, inside, into, intoEnd, intoSpan, out, outResult, outSpan, type Inj } from './map'
 
 interface Entry {
   key: string
@@ -17,7 +17,7 @@ interface Entry {
   view?: TS.SourceFile
 }
 
-const CONFIGS = ['pcb.config', 'pcbjs.config'].flatMap(n => ['ts', 'mts', 'js', 'mjs'].map(x => `${n}.${x}`))
+const CONFIGS = ['ts', 'mts', 'js', 'mjs'].map(x => `pcb.config.${x}`)
 const WRAPPED = Symbol.for('pcbjs.ts-plugin')
 const CANNOT_FIND = new Set([2304, 2552])
 const SCOPE_ERROR = 99001
@@ -195,7 +195,8 @@ function init({ typescript: ts }: { typescript: typeof TS }) {
     }
 
     function view(sf: TS.SourceFile, e: Entry): TS.SourceFile {
-      return (e.view ??= Object.create(sf, { text: { value: e.source }, lineMap: { value: lineStarts(e.source) } }))
+      // an empty line map, which TypeScript computes from `text` on first use by its own line rule
+      return (e.view ??= Object.create(sf, { text: { value: e.source }, lineMap: { value: undefined, writable: true } }))
     }
 
     function outDiag<D extends TS.Diagnostic | TS.DiagnosticRelatedInformation>(d: D): D | undefined {

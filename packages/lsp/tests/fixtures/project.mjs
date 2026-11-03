@@ -1,5 +1,5 @@
 // A one-board project for the language server tests, written into a new temporary directory whose node_modules links the
-// repository's @pcbjs packages. The board has a route between two pads with a path string, the same in the chain form, two placements and a track
+// repository's @pcbjs packages. The board has two test pad parts, two routes between their pads with chains and drawn copper
 // too thin for the rules, so it has a DRC finding with a source.
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,16 +8,23 @@ import { fileURLToPath } from 'node:url'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..')
 
-export const BOARD = `import PCB, { route } from '@pcbjs/core'
+export const BOARD = `import PCB, { defineFootprint, nets, route, type FootprintProps } from '@pcbjs/core'
+
+const TestPad = defineFootprint(function TestPad(props: FootprintProps) {
+  return <footprint value="V" id="pcbjs:TestPad" bom={false} {...props}><pad num={1} size={2} shape="circle" /></footprint>
+}, { pins: ['1'], prefix: 'TP' })
+const { V } = nets()
+const TP1 = TestPad().connect({ 1: V })
+const TP2 = TestPad().connect({ 1: V })
 
 export default (
   <PCB name="Fix" rules={{ minTrackWidth: 0.2 }}>
     <path layer="Edge.Cuts" d="M 0 0 H 30 V 20 H 0 Z" />
-    <footprint ref="TP1" value="V" id="pcbjs:TestPad" at="5 10" net:pad1="V" bom={false}><pad num={1} size={2} shape="circle" /></footprint>
-    <footprint ref="TP2" value="V" id="pcbjs:TestPad" at="25 10" net:pad1="V" bom={false}><pad num={1} size={2} shape="circle" /></footprint>
-    {route('TP1.1', 'TP2.1', 'H 15 V 14 H 25 Z')}
-    {route('TP1.1').V(17).H(25).Z('TP2.1')}
-    <track net="V" layer="F.Cu" width={0.1} d="M 5 3 H 10" />
+    <TP1 at="5 10" />
+    <TP2 at="25 10" />
+    {route(TP1[1], TP2[1]).H(15).V(14).H(25).Z()}
+    {route(TP1[1], TP2[1]).V(17).H(25).Z()}
+    {route('5 3').net(V).width(0.1).H(10)}
   </PCB>
 )
 `

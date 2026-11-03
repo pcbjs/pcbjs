@@ -1,14 +1,12 @@
 // Offsets are UTF-16 code units; `start` to `end` is a literal's inner text, inside the quotes or the number with its minus sign.
 
 import ts from 'typescript'
-import { isCoordinate, parseToken, lengthMm, parseAt } from './values.js'
+import { isPlainNumber, parseToken, lengthMm, parseAt } from '@pcbjs/core/internal/units'
+import { isCoordinate } from './values.js'
+import { CHAIN, isChain } from '@pcbjs/core/internal/syntax'
 
-/** What a literal holds; `rotation` nests inside an `at`, `copper` is a layer count, `length` any other length prop. */
-export type Kind =
-  'at' | 'point' | 'layer' | 'size' | 'width' | 'thickness' | 'drill' | 'side' | 'routePath' | 'svgPath' | 'rotation' | 'pinRef' | 'copper' | 'number' | 'length' | 'chainCommand'
-
-/** The commands of a route chain, `route(a).V(14).via('B.Cu').X(b)`; a `chainCommand` hit spans one call from its name to its parenthesis. */
-export const CHAIN_COMMANDS: ReadonlySet<string> = new Set(['L', 'l', 'H', 'h', 'V', 'v', 'via', 'Z', 'X'])
+/** What a literal holds; `rotation` nests inside an `at`, `length` any other length prop. */
+export type Kind = 'at' | 'point' | 'layer' | 'size' | 'width' | 'thickness' | 'drill' | 'side' | 'svgPath' | 'rotation' | 'pinRef' | 'number' | 'length' | 'chainCommand'
 
 export const NUMERIC_KINDS: ReadonlySet<Kind> = new Set(['size', 'width', 'thickness', 'drill', 'length'])
 
@@ -23,9 +21,8 @@ export interface HitContext {
   index?: number
   /** true for a builder method such as `.width(0.25)` or `.layer('B.Cu')`. */
   chain?: boolean
-  /** For a pinRef: the part as written, `U1` in `'U1.3'`, `J1[3]` or `U1.pad('6')`, and the form the pad is written in. */
+  /** For a pinRef: the part as written, `J1` in `J1[3]`. */
   ref?: string
-  form?: 'dotted' | 'index' | 'pad'
   /** For a chainCommand: the offset of the dot before the method name, and the argument texts as written. */
   dot?: number
   args?: string[]
@@ -49,7 +46,6 @@ const JSX_PROPS: Record<string, Kind> = {
   thickness: 'thickness',
   drill: 'drill',
   side: 'side',
-  copper: 'copper',
   x: 'length',
   y: 'length',
   w: 'length',
@@ -61,10 +57,9 @@ const JSX_PROPS: Record<string, Kind> = {
   ry: 'length',
   height: 'length',
 }
-const D_ELEMENTS = new Set(['track', 'path', 'zone'])
-const OBJ_PROPS: Record<string, Kind> = { at: 'at', layer: 'layer', layers: 'layer', width: 'width', drill: 'drill', size: 'size', d: 'svgPath' }
+const D_ELEMENTS = new Set(['path'])
+const OBJ_PROPS: Record<string, Kind> = { layers: 'layer', drill: 'drill', size: 'size' }
 const CHAIN_METHODS: Record<string, Kind> = { width: 'width', layer: 'layer', layers: 'layer', impedance: 'number', priority: 'number' }
-const PIN_DOTTED = /^([A-Za-z_][\w]*)\.([\w+\-]+)$/
 
 /** What else the detector may know: the names of the functions that make routes, whose arguments are route ends too. */
 export interface DetectOptions {
@@ -72,9 +67,8 @@ export interface DetectOptions {
 }
 
 /** Every editable literal in document order; the pad arguments of a call of one of `routeHelpers` are route ends too. */
-export function detect(text: string, fileName = 'design.tsx', opts: DetectOptions = {}): Hit[] {
-  const kind = /\.tsx$/i.test(fileName) ? ts.ScriptKind.TSX : /\.jsx$/i.test(fileName) ? ts.ScriptKind.JSX : ts.ScriptKind.TS
-  const sf = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, kind)
+export function detect(sf: ts.SourceFile, opts: DetectOptions = {}): Hit[] {
+  const text = sf.text
   const hits: Hit[] = []
 
   const add = (k: Kind, expr: ts.Expression | undefined, prop: string, owner: string, extra: Partial<HitContext> = {}): void => {
@@ -84,7 +78,7 @@ export function detect(text: string, fileName = 'design.tsx', opts: DetectOption
     if (NUMERIC_KINDS.has(k)) {
       const t = parseToken(lit.value)
       if (!t || lengthMm(t) === undefined) return
-    } else if (k === 'copper' || k === 'number') {
+    } else if (k === 'number') {
       if (lit.quote !== 'number') return
     } else if (lit.quote === 'number') return
     if (k === 'point' && !isCoordinate(lit.value)) return
@@ -93,19 +87,19 @@ export function detect(text: string, fileName = 'design.tsx', opts: DetectOption
     // the rotation of a position is a value of its own, nested inside it
     if (k === 'at') {
       const a = parseAt(lit.value)
-      const m = a?.rot && /^(\s*\S+[\s,]+\S+[\s,]+)(\S+)\s*$/.exec(lit.value)
-      if (m)
+      const w = a?.rot && [...lit.value.matchAll(/\S+/g)][2]
+      if (w)
         hits.push({
           kind: 'rotation',
-          start: lit.start + m[1].length,
-          end: lit.start + m[1].length + m[2].length,
-          value: m[2],
+          start: lit.start + w.index,
+          end: lit.start + w.index + w[0].length,
+          value: w[0],
           context: { prop, owner, quote: lit.quote, ...extra },
         })
     }
   }
 
-  /** A route end naming a pad, `'U1.3'`, `J1[3]`, `U1.pad('6')` or `A.CF[2]`, or a pair of them in an array. */
+  /** A route end naming a pad, `J1[3]` or `A.CF[2]`, or a pair of them in an array. */
   const addPin = (expr: ts.Expression | undefined, prop: string, owner = 'route'): void => {
     if (!expr) return
     const e = unwrap(expr)
@@ -113,23 +107,10 @@ export function detect(text: string, fileName = 'design.tsx', opts: DetectOption
       e.elements.forEach(el => addPin(el, prop, owner))
       return
     }
-    if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) {
-      const lit = literal(e, sf, text)
-      const m = lit && PIN_DOTTED.exec(lit.value)
-      if (lit && m && !isCoordinate(lit.value))
-        hits.push({ kind: 'pinRef', start: lit.start, end: lit.end, value: lit.value, context: { prop, owner, quote: lit.quote, ref: m[1], form: 'dotted' } })
-      return
-    }
     if (ts.isElementAccessExpression(e)) {
       const ref = partName(e.expression)
       const lit = ref && literal(e.argumentExpression, sf, text)
-      if (lit) hits.push({ kind: 'pinRef', start: lit.start, end: lit.end, value: lit.value, context: { prop, owner, quote: lit.quote, ref, form: 'index' } })
-      return
-    }
-    if (ts.isCallExpression(e) && ts.isPropertyAccessExpression(e.expression) && e.expression.name.text === 'pad' && e.arguments[0]) {
-      const ref = partName(e.expression.expression)
-      const lit = ref && literal(e.arguments[0], sf, text)
-      if (lit) hits.push({ kind: 'pinRef', start: lit.start, end: lit.end, value: lit.value, context: { prop, owner, quote: lit.quote, ref, form: 'pad' } })
+      if (lit) hits.push({ kind: 'pinRef', start: lit.start, end: lit.end, value: lit.value, context: { prop, owner, quote: lit.quote, ref } })
     }
   }
 
@@ -138,7 +119,7 @@ export function detect(text: string, fileName = 'design.tsx', opts: DetectOption
     if (!expr) return
     const e = unwrap(expr)
     if (ts.isArrayLiteralExpression(e)) {
-      if (k === 'at' || k === 'side' || k === 'copper') return
+      if (k === 'at' || k === 'side') return
       e.elements.forEach((el, index) => add(k, el, prop, owner, { ...extra, index }))
     } else add(k, e, prop, owner, extra)
   }
@@ -185,34 +166,33 @@ export function detect(text: string, fileName = 'design.tsx', opts: DetectOption
       return
     }
     if (callee === 'route') {
-      const first = args[0] && unwrap(args[0])
-      if (first && ts.isObjectLiteralExpression(first)) return addObject(first, 'track', OBJ_PROPS)
-      const second = args[1] && unwrap(args[1])
-      if (second && ts.isObjectLiteralExpression(second)) return addObject(second, 'route', OBJ_PROPS)
-      add('point', args[0], 'a', 'route')
-      add('point', args[1], 'b', 'route')
-      addPin(args[0], 'a')
-      addPin(args[1], 'b')
-      if (args.length >= 3) add('routePath', args[2], 'path', 'route')
+      // the ends: a, b, then end3 and on
+      args.forEach((a, i) => {
+        const prop = i < 2 ? 'ab'[i] : `end${i + 1}`
+        add('point', a, prop, 'route')
+        addPin(a, prop)
+      })
       return
     }
     if (callee === 'via') {
-      const first = args[0] && unwrap(args[0])
-      if (first && ts.isObjectLiteralExpression(first)) return addObject(first, 'via', OBJ_PROPS)
       add('at', args[1], 'at', 'via')
       addObject(args[2], 'via', OBJ_PROPS)
       return
     }
     if (callee === 'pour') {
-      const first = args[0] && unwrap(args[0])
-      if (first && ts.isObjectLiteralExpression(first)) return addObject(first, 'zone', OBJ_PROPS)
-      add('layer', args[1], 'layer', 'zone')
-      add('svgPath', args[2], 'd', 'zone')
+      add('layer', args[1], 'layer', 'pour')
+      add('svgPath', args[2], 'area', 'pour')
+      return
+    }
+    if (callee === 'keepout') {
+      add('svgPath', args[0], 'area', 'keepout')
+      addObject(args[1], 'keepout', OBJ_PROPS)
       return
     }
     if (ts.isPropertyAccessExpression(node.expression) && onRoute(node.expression.expression)) {
       const method = node.expression.name.text
-      if (CHAIN_COMMANDS.has(method)) {
+      // a `chainCommand` hit spans one call of the chain from its name to its parenthesis
+      if (isChain(method)) {
         const name = node.expression.name
         const start = name.getStart(sf)
         let dot = start - 1
@@ -227,10 +207,7 @@ export function detect(text: string, fileName = 'design.tsx', opts: DetectOption
             context: { prop: method, owner: 'route', quote: 'number', chain: true, dot: text[dot] === '.' ? dot : start, args: args.map(a => a.getText(sf)) },
           })
         }
-        if (method === 'Z' || method === 'X') {
-          add('point', args[0], 'target', 'route')
-          addPin(args[0], 'target')
-        }
+        if ('waypoint' in CHAIN[method] && args.length === 1) add('point', args[0], 'waypoint', 'route')
       } else if (CHAIN_METHODS[method]) addMaybeArray(CHAIN_METHODS[method], args[0], method, 'route', { chain: true })
       else if (method === 'vias') addObject(args[0], 'via', { drill: 'drill', size: 'size' })
     }
@@ -252,7 +229,7 @@ export function hitAt(hits: Hit[], offset: number): Hit | undefined {
 export function encodeValue(hit: Hit, value: string): { text: string } | { error: string } {
   const q = hit.context.quote
   if (q === 'number') {
-    if (!/^-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?$/i.test(value)) return { error: `${JSON.stringify(value)} is not a plain number` }
+    if (!isPlainNumber(value)) return { error: `${JSON.stringify(value)} is not a plain number` }
     return { text: value }
   }
   if (/[\\\r\n]/.test(value) || value.includes(q) || (q === '`' && value.includes('${'))) return { error: `${JSON.stringify(value)} cannot be written inside ${q}${q}` }
@@ -276,9 +253,7 @@ function partName(e: ts.Expression): string | undefined {
 }
 
 /** Every call expression of a file as offsets, from its callee to its closing parenthesis: where a helper's call site may sit. */
-export function callSpans(text: string, fileName = 'design.tsx'): { start: number; end: number }[] {
-  const kind = /\.tsx$/i.test(fileName) ? ts.ScriptKind.TSX : /\.jsx$/i.test(fileName) ? ts.ScriptKind.JSX : ts.ScriptKind.TS
-  const sf = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, kind)
+export function callSpans(sf: ts.SourceFile): { start: number; end: number }[] {
   const out: { start: number; end: number }[] = []
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) out.push({ start: node.getStart(sf), end: node.end })
@@ -356,9 +331,7 @@ export interface RouteCall {
 }
 
 /** Every route call of a file, in document order, for the lenses and the inlay hints of resolved widths. */
-export function routeCalls(text: string, fileName = 'design.tsx'): RouteCall[] {
-  const kind = /\.tsx$/i.test(fileName) ? ts.ScriptKind.TSX : /\.jsx$/i.test(fileName) ? ts.ScriptKind.JSX : ts.ScriptKind.TS
-  const sf = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, kind)
+export function routeCalls(sf: ts.SourceFile): RouteCall[] {
   const out: RouteCall[] = []
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && calleeName(node.expression) === 'route' && !ts.isPropertyAccessExpression(unwrap(node.expression))) {

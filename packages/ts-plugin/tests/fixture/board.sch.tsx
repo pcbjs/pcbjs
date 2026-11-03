@@ -12,4 +12,4 @@ function Mcu(props: FootprintProps) {
 const MCU = defineFootprint(Mcu, { pins: ['VDD', 'VSSA', 'PA0'], prefix: 'U' })
 
 export const { GND, VCC, SIG } = nets()
-export const U1 = MCU('STM32').connect(VCC, GND, SIG)
+export const U1 = MCU('STM32').connect({ VDD: VCC, VSSA: GND, PA0: SIG })

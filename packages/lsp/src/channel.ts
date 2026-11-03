@@ -34,16 +34,21 @@ class ChannelReader extends AbstractMessageReader {
 }
 
 class ChannelWriter extends AbstractMessageWriter {
+  private gone = false
   constructor(private readonly send: (msg: Message) => boolean | void) {
     super()
   }
+  /** A message to a channel that went away is dropped and the channel closes: an error would be logged through the channel again, without end. */
   async write(msg: Message): Promise<void> {
+    if (this.gone) return
     try {
-      if (this.send(msg) === false) throw new Error('the channel is closed')
+      if (this.send(msg) !== false) return
     } catch (err) {
       this.fireError(err as Error, msg, 1)
       throw err
     }
+    this.gone = true
+    this.fireClose()
   }
   end(): void {}
   close(): void {

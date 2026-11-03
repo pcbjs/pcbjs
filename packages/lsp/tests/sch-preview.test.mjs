@@ -1,7 +1,7 @@
 // The hover image of schematic code: the element a range drew, cropped from the schematic SVG and outlined.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { SCH_THEMES, schematicMarkup, schematicStyle } from '@pcbjs/export/sch-svg'
+import { SCH_THEMES, schematicMarkup, schematicStyle } from '@pcbjs/export/internal/sch-svg'
 import { schPreview } from '../dist/sch-preview.js'
 
 const src = (line, col, endLine, endCol) => ({ file: 'pcb.tsx', line, col, endLine, endCol })

@@ -2,6 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { repair, toOverlay } from '../dist/repair.js'
+import { docOf, parse } from '../dist/doc.js'
 
 const PCB = body => `export default <PCB>\n${body}\n</PCB>\n`
 
@@ -11,9 +12,10 @@ const table = [
   ['unterminated string at the end', `export default <PCB><R1 at="1 2`, [], '"/></PCB>'],
   ['open JSX tag mid-typing', PCB('  <R1 at="1 2" />\n  <C1 at="3 4"'), ['<C1 at="3 4"'], ''],
   ['open JSX tag at the end', `export default <PCB>\n  <R1 at="1 2" />\n  <C1 at="3 4"`, [], '/></PCB>'],
-  ['dangling route(U1.VSSA).h( call', PCB('  {route(U1.VSSA).h(}\n  <R1 at="1 2" />'), ['{route(U1.VSSA).h(}'], ''],
-  ['dangling call at the end', `const x = 1\nroute(U1.VSSA).h(`, [], ')'],
-  ['dangling call in a function', `function f() {\n  route(U1.VSSA).h(\n  return 1\n}\n`, ['route(U1.VSSA).h('], ''],
+  ['dangling route(U1.VSSA).h( call', PCB('  {route(U1.VSSA).h(}\n  <R1 at="1 2" />'), ['.h('], ''],
+  ['dangling call at the end', `const x = 1\nroute(U1.VSSA).h(`, ['.h('], ''],
+  ['dangling call in a function', `function f() {\n  route(U1.VSSA).h(\n  return 1\n}\n`, ['.h('], ''],
+  ['empty chain call', PCB('  {route(U1.VSSA).H(2).v()}'), ['.v()'], ''],
   ['half-typed object property', `const o = { width: 0.3, d: }\n${PCB('')}`, ['d:'], ''],
   ['extra closing brace', `function f() {\n  return 1\n}}\n${PCB('')}`, ['}'], ''],
   ['half-typed attribute', PCB('  <R1 at= />'), ['at='], ''],
@@ -23,7 +25,7 @@ const table = [
 
 for (const [name, text, skipped, closers] of table) {
   test(`repair: ${name}`, () => {
-    const r = repair(text, 'pcb.tsx')
+    const r = repair(parse(text, 'pcb.tsx'))
     assert.ok(r.ok, r.text)
     assert.deepEqual(
       r.skipped.map(s => text.slice(s.start, s.end)),
@@ -42,12 +44,12 @@ for (const [name, text, skipped, closers] of table) {
 
 test('repair: a text that parses comes back as it is', () => {
   const text = PCB('  <R1 at="1 2" />')
-  assert.deepEqual(repair(text, 'pcb.tsx'), { text, skipped: [], limit: null, ok: true })
+  assert.deepEqual(repair(parse(text, 'pcb.tsx')), { text, skipped: [], limit: null, ok: true })
 })
 
 test('repair: an offset another parser rejected is skipped as a syntax error', () => {
   const text = `const a = 1\nconst b = 2\n`
-  const r = repair(text, 'pcb.ts', [text.indexOf('b')])
+  const r = repair(parse(text, 'pcb.ts'), [text.indexOf('b')])
   assert.ok(r.ok)
   assert.deepEqual(
     r.skipped.map(s => text.slice(s.start, s.end)),
@@ -57,14 +59,14 @@ test('repair: an offset another parser rejected is skipped as a syntax error', (
 
 test('repair: more broken statements than the rounds allow stays broken', () => {
   const text = Array.from({ length: 6 }, (_, i) => `const v${i} = (\n;`).join('\n')
-  const r = repair(text, 'pcb.ts')
+  const r = repair(parse(text, 'pcb.ts'))
   assert.equal(r.ok, false)
   assert.equal(r.skipped.length, 4)
 })
 
 test('toOverlay: an offset in the closers maps to the last character of the overlay', () => {
   const text = `const x = 1\nroute(U1.VSSA).h(`
-  const r = repair(text, 'pcb.ts')
+  const r = repair(parse(text, 'pcb.ts'))
   assert.equal(toOverlay(r, r.text.length - 1), text.length - 1)
   assert.equal(toOverlay(r, 3), 3)
 })

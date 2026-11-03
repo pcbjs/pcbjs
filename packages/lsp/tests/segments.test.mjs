@@ -4,7 +4,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { segmentsOf, typedSegment } from '../dist/segments.js'
-import { forClient, negotiate, KINDS } from '../dist/protocol.js'
+import { negotiate } from '../dist/protocol.js'
+import { docOf, parse } from '../dist/doc.js'
+import { KINDS, PROTOCOL } from '@pcbjs/core/protocol'
 
 const text = readFileSync(new URL('./fixtures/main.tsx', import.meta.url), 'utf8')
 const apply = (t, e) => t.slice(0, e.start) + e.newText + t.slice(e.end)
@@ -19,7 +21,7 @@ const ctx = {
         ]
       : undefined,
 }
-const segs = segmentsOf(text, 'main.tsx', ctx)
+const segs = segmentsOf(parse(text, 'main.tsx'), ctx)
 const at = (value, kind) => segs.find(s => s.value === value && (!kind || s.kind === kind))
 
 test('every literal maps to a kind of the vocabulary', () => {
@@ -28,10 +30,16 @@ test('every literal maps to a kind of the vocabulary', () => {
   assert.equal(at('B', 'enum').label, 'C1 side')
   assert.equal(at('F.SilkS', 'layer').kind, 'layer')
   assert.equal(at('0.25').kind, 'length')
-  assert.equal(at('2', 'enum').label, 'PCB copper')
   assert.deepEqual(
-    segs.filter(s => s.constraints.grammar === 'route').map(s => s.value),
-    ['V 14', 'L 5 16', '@B.Cu', 'H 24', 'V 7.5', '@F.Cu', 'XZ'],
+    segs
+      .filter(s => s.constraints.grammar === 'chain')
+      .map(s => s.value)
+      .slice(-7),
+    ['V(14)', 'L(5, 16)', "via('B.Cu')", 'H(24)', 'V(7.5)', "via('F.Cu')", 'X()'],
+  )
+  assert.deepEqual(
+    segs.filter(s => s.constraints.grammar === 'svg'),
+    [],
   )
   for (const s of segs) assert.equal(text.slice(s.start, s.end), s.value)
 })
@@ -61,23 +69,17 @@ test('presentations carry edits: a nudge, a turn, a layer, a flip, a width step'
   assert.deepEqual([w.constraints.min, w.constraints.max, w.constraints.unit], [0.1, 2, 'mm'])
 })
 
-test('path commands: each edit stays inside its command and keeps the path valid', () => {
-  const v = at('V 14', 'pathCommand')
+test('path commands: each edit stays inside its command of the path data and keeps it valid', () => {
+  const d = 'import PCB from \'@pcbjs/core\'\nexport default <PCB name="P"><path layer="F.SilkS" d="M 3 10 H 9 V 15" /></PCB>\n'
+  const ss = segmentsOf(parse(d, 'p.tsx'), ctx)
+  const v = ss.find(s => s.constraints.grammar === 'svg' && s.value === 'V 15')
+  assert.ok(v.presentations.some(p => p.edit.newText === 'H 15'))
   const toL = v.presentations.find(p => p.label.startsWith('L '))
   assert.ok(toL && toL.edit.start === v.start && toL.edit.end === v.end)
-  // deleting the end would break the route: not offered
-  const end = at('XZ', 'pathCommand')
-  assert.ok(!end.presentations.some(p => p.label === 'delete'))
-  assert.equal(apply(text, end.presentations.find(p => p.edit.newText === 'Z').edit).includes("'V 14 L 5 16 @B.Cu H 24 V 7.5 @F.Cu Z'"), true)
-  const via = at('@B.Cu', 'pathCommand')
-  assert.deepEqual(
-    via.presentations.map(p => p.edit.newText),
-    ['@F.Cu', ''],
-  )
-  const del = apply(text, via.presentations.find(p => p.label === 'delete').edit)
-  assert.ok(del.includes("'V 14 L 5 16 H 24 V 7.5 @F.Cu XZ'"))
-  const svg = segs.find(s => s.constraints.grammar === 'svg' && s.value === 'V 15')
-  assert.ok(svg.presentations.some(p => p.edit.newText === 'H 15'))
+  // deleting the M would leave path data that does not start with M: not offered
+  const m = ss.find(s => s.value === 'M 3 10')
+  assert.ok(!m.presentations.some(p => p.label === 'delete'))
+  assert.ok(apply(d, v.presentations.find(p => p.label === 'delete').edit).includes('d="M 3 10 H 9"'))
 })
 
 test('pad references: the other pads of the part, with their nets', () => {
@@ -85,8 +87,8 @@ test('pad references: the other pads of the part, with their nets', () => {
   assert.deepEqual(
     q.presentations.map(p => [p.label, p.detail, p.edit.newText]),
     [
-      ['Q1.2', 'S · GND', '2'],
-      ['Q1.3', 'D · SW', '3'],
+      ['Q1/2', 'S · GND', '2'],
+      ['Q1/3', 'D · SW', '3'],
     ],
   )
   const j = segs.find(s => s.kind === 'pinRef' && s.value === '3')
@@ -95,56 +97,69 @@ test('pad references: the other pads of the part, with their nets', () => {
 
 test('typed values: written in the unit and grammar of the literal, or refused with a reason', () => {
   const off = (needle, d = 0) => text.indexOf(needle) + d
-  assert.equal(typedSegment(text, 'main.tsx', ctx, off("'V 14", 2), 'V 15').presentations[0].edit.newText, 'V 15')
-  assert.match(typedSegment(text, 'main.tsx', ctx, off("'V 14", 2), 'M 1 2').error, /leave out M/)
-  assert.equal(typedSegment(text, 'main.tsx', ctx, off('0.25'), '10mil').presentations[0].edit.newText, '0.254')
-  assert.match(typedSegment(text, 'main.tsx', ctx, off('0.25'), 'wide').error, /not a length/)
-  assert.equal(typedSegment(text, 'main.tsx', ctx, off('"3 7.46', 1), '4 8 180').presentations[0].edit.newText, '4 8 180')
-  assert.match(typedSegment(text, 'main.tsx', ctx, off('"3 7.46', 1), '4').error, /x y/)
-  assert.match(typedSegment(text, 'main.tsx', ctx, off('layer="F.SilkS', 8), 'In9.Cu').error, /not a layer/)
-  assert.match(typedSegment(text, 'main.tsx', ctx, off('Q1[1]', 3), '7').error, /Q1 has no pad 7/)
+  assert.equal(typedSegment(parse(text, 'main.tsx'), ctx, off('.V(14)', 2), 'V 15').presentations[0].edit.newText, 'V(15)')
+  assert.match(typedSegment(parse(text, 'main.tsx'), ctx, off('.V(14)', 2), 'M 1 2').error, /M is not a chain command/)
+  assert.equal(typedSegment(parse(text, 'main.tsx'), ctx, off('0.25'), '10mil').presentations[0].edit.newText, '0.254')
+  assert.match(typedSegment(parse(text, 'main.tsx'), ctx, off('0.25'), 'wide').error, /not a length/)
+  assert.equal(typedSegment(parse(text, 'main.tsx'), ctx, off('"3 7.46', 1), '4 8 180').presentations[0].edit.newText, '4 8 180')
+  assert.match(typedSegment(parse(text, 'main.tsx'), ctx, off('"3 7.46', 1), '4').error, /x y/)
+  assert.match(typedSegment(parse(text, 'main.tsx'), ctx, off('layer="F.SilkS', 8), 'In9.Cu').error, /not a layer/)
+  assert.match(typedSegment(parse(text, 'main.tsx'), ctx, off('Q1[1]', 3), '7').error, /Q1 has no pad 7/)
 })
 
-test('handshake: kinds per client version, unknown kinds as enum', () => {
-  assert.deepEqual(negotiate(undefined, '1.0').kinds, [...KINDS])
-  assert.deepEqual(negotiate({ protocol: 1, kinds: ['length', 'enum', 'nope'] }, '1.0').kinds, ['length', 'enum'])
-  assert.equal(negotiate({ protocol: 99 }, '1.0').protocol, 2)
-  assert.deepEqual(negotiate({ protocol: 1, kinds: ['length'], capabilities: ['widget'] }, '1.0').kinds, ['length'], 'widget needs protocol 2')
-  const cmd = { range: null, kind: 'pathCommand', value: 'V 14', label: 'x', constraints: { grammar: 'route' }, presentations: [] }
-  assert.deepEqual(forClient(cmd, ['enum']), { ...cmd, kind: 'enum', constraints: {}, widget: { input: 'enum', typed: false } })
-  assert.equal(forClient(cmd, ['length']), undefined)
-  assert.equal(forClient(cmd, ['pathCommand']), cmd)
+test('handshake: protocol, major and capabilities are required, a newer protocol is answered with ours', () => {
+  assert.equal(negotiate(undefined, '1.0'), null)
+  assert.equal(negotiate({ protocol: 1, kinds: ['length'] }, '1.0'), null)
+  assert.equal(negotiate({ protocol: 99, major: 1 }, '1.0'), null)
+  const h = negotiate({ protocol: 99, major: 1, capabilities: ['widget'] }, '1.0')
+  assert.deepEqual([h.protocol, h.major, h.capabilities, h.version], [PROTOCOL, 1, [], '1.0'])
 })
 
-test('route chains: examples/demo/blinky.pcb.tsx, each call a pathCommand with edits of its own', () => {
-  const demo = readFileSync(new URL('../../../examples/demo/blinky.pcb.tsx', import.meta.url), 'utf8')
-  const segs = segmentsOf(demo, 'blinky.pcb.tsx', { layers: ['F.Cu', 'B.Cu'] })
+test('route chains: each call a pathCommand with edits of its own', () => {
+  const demo = [
+    "import PCB, { route } from '@pcbjs/core'",
+    'export default (',
+    '  <PCB name="C">',
+    "    {route(J1[3], Q1[1]).V(14).L(5, 16).via('B.Cu').H(24).V(7.5).via('F.Cu').X()}",
+    "    {route(Q1[2], '25 12.5 B.Cu').X('20 10').Z()}",
+    '  </PCB>',
+    ')',
+  ].join('\n')
+  const segs = segmentsOf(parse(demo, 'chain.tsx'), { layers: ['F.Cu', 'B.Cu'] })
   const chain = segs.filter(s => s.constraints.grammar === 'chain')
   assert.deepEqual(
     chain.map(s => s.value),
-    ['V(14)', 'L(5, 16)', "via('B.Cu')", 'H(24)', 'V(7.5)', "via('F.Cu')", 'X(Q1[1])', "X('25 12.5 B.Cu')"],
+    ['V(14)', 'L(5, 16)', "via('B.Cu')", 'H(24)', 'V(7.5)', "via('F.Cu')", 'X()', "X('20 10')", 'Z()'],
   )
   for (const s of chain) assert.equal(s.kind, 'pathCommand')
   const v = chain[0]
   assert.ok(v.presentations.some(p => p.edit.newText === 'H(14)'))
   // delete takes the dot with it
   const del = v.presentations.find(p => p.label === 'delete')
-  assert.equal(apply(demo, del.edit).includes('route(J1[3]).L(5, 16)'), true)
+  assert.equal(apply(demo, del.edit).includes('route(J1[3], Q1[1]).L(5, 16)'), true)
   assert.deepEqual(
     chain[2].presentations.map(p => p.edit.newText),
     ["via('F.Cu')", ''],
   )
+  // a finish toggles between an automatic leg and a straight track, a waypoint between the two ways to reach it
   assert.deepEqual(
     chain[6].presentations.map(p => p.edit.newText),
-    ['Z(Q1[1])'],
+    ['Z()'],
+  )
+  assert.ok(chain[7].presentations.some(p => p.edit.newText === "L('20 10')"))
+  assert.deepEqual(
+    chain[8].presentations.map(p => p.edit.newText),
+    ['X()'],
   )
   const at = demo.indexOf('.V(14)') + 2
-  assert.equal(typedSegment(demo, 'blinky.pcb.tsx', {}, at, 'V(15)').presentations[0].edit.newText, 'V(15)')
-  assert.equal(typedSegment(demo, 'blinky.pcb.tsx', {}, at, 'l 1 2').presentations[0].edit.newText, 'l(1, 2)')
-  assert.equal(typedSegment(demo, 'blinky.pcb.tsx', {}, at, '@In1.Cu').presentations[0].edit.newText, "via('In1.Cu')")
-  assert.equal(typedSegment(demo, 'blinky.pcb.tsx', {}, at, 'V 10mil').presentations[0].edit.newText, "V('10mil')")
-  assert.match(typedSegment(demo, 'blinky.pcb.tsx', {}, demo.indexOf('X(Q1') + 1, 'H 3').error, /ends the route/)
-  // the pad of the end is a pinRef inside the call, and wins at its position
+  assert.equal(typedSegment(parse(demo, 'chain.tsx'), {}, at, 'V(15)').presentations[0].edit.newText, 'V(15)')
+  assert.equal(typedSegment(parse(demo, 'chain.tsx'), {}, at, 'l 1 2').presentations[0].edit.newText, 'l(1, 2)')
+  assert.equal(typedSegment(parse(demo, 'chain.tsx'), {}, at, 'via In1.Cu').presentations[0].edit.newText, "via('In1.Cu')")
+  assert.equal(typedSegment(parse(demo, 'chain.tsx'), {}, at, 'A 5 6 90').presentations[0].edit.newText, 'A(5, 6, 90)')
+  assert.equal(typedSegment(parse(demo, 'chain.tsx'), {}, at, 'V 10mil').presentations[0].edit.newText, "V('10mil')")
+  assert.match(typedSegment(parse(demo, 'chain.tsx'), {}, demo.indexOf('X()') + 1, 'H 3').error, /finishes the route/)
+  assert.match(typedSegment(parse(demo, 'chain.tsx'), {}, at, 'Z').error, /at its end only/)
+  // the pads of the ends are pinRefs inside the call
   const q = segs.filter(s => s.kind === 'pinRef').map(s => s.value)
   assert.ok(q.includes('1') && q.includes('3'))
 })

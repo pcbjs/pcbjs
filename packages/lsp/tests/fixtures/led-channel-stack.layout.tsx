@@ -5,8 +5,8 @@ import { ledChannel } from './led-channel.sch'
 
 export const LedChannelStack = layout(ledChannel, (g, { at, side }) => (
   <g at={at} side={side}>
-    <g.R at="0 0 90deg" />
-    <g.D at="0 4 90deg" />
+    <g.R at="0 -2 90deg" />
+    <g.D at="0 2 90deg" />
     {route(g.R[2], g.D.A).width(0.3)}
   </g>
 ), 'LedChannelStack')

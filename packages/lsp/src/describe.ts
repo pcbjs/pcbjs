@@ -1,6 +1,7 @@
 import type { Hit } from './detect.js'
-import { angleDeg, canonicalLayer, formatNum, lengthMm, parseAt, parsePoint, parseToken } from './values.js'
-import { ending, parsePath, validate } from './path-model.js'
+import { angleDeg, formatNum, lengthMm, parseAt, parseToken } from '@pcbjs/core/internal/units'
+import { canonicalLayer, parsePoint } from './values.js'
+import { parsePath, validate } from './path-model.js'
 
 const mm = (n: number | undefined) => (n === undefined ? '?' : `${formatNum(n)} mm`)
 
@@ -22,7 +23,7 @@ export function summary(hit: Hit): string {
       return c ? (c === hit.value ? c : `${hit.value} is ${c}`) : `${hit.value}, not a standard layer name`
     }
     case 'side':
-      return /^(b|bottom|back)$/i.test(hit.value) ? 'back side, mirrored' : 'front side'
+      return hit.value === 'B' ? 'back side, mirrored' : 'front side'
     case 'size':
     case 'width':
     case 'thickness':
@@ -36,30 +37,21 @@ export function summary(hit: Hit): string {
       return `rotated ${formatNum((t && angleDeg(t)) ?? 0)}°`
     }
     case 'pinRef':
-      return `pad ${hit.context.form === 'dotted' ? hit.value : `${hit.context.ref}.${hit.value}`}`
+      return `pad ${hit.context.ref}/${hit.value}`
     case 'chainCommand': {
       const m = hit.context.prop
       if (m === 'via') return `a via to ${hit.context.args?.[0]?.replace(/^['"`]|['"`]$/g, '') ?? '?'}`
-      if (m === 'Z' || m === 'X') return `${m === 'Z' ? 'a straight track' : 'an automatic leg'} to ${hit.context.args?.[0] ?? '?'}`
+      if ((m === 'Z' || m === 'X') && !hit.context.args?.length) return `${m === 'Z' ? 'a straight track' : 'an automatic leg'} to the end`
+      if (m === 'X' || (m === 'L' && hit.context.args?.length === 1)) return `${m === 'X' ? 'an automatic leg' : 'a straight track'} to ${hit.context.args?.[0]}`
+      if (m === 'A' || m === 'a') return `${m === 'a' ? 'relative ' : ''}arc to ${hit.context.args?.slice(0, 2).join(', ')}, turning ${hit.context.args?.[2]}`
       return `${m === m.toLowerCase() ? 'relative ' : ''}${m.toUpperCase() === 'L' ? 'line' : m.toUpperCase() === 'H' ? 'horizontal' : 'vertical'} to ${hit.context.args?.join(', ')}`
     }
-    case 'copper':
-      return `${hit.value} copper layers`
     case 'number':
       return hit.context.prop === 'impedance' ? `${hit.value} ohm` : `${hit.context.prop} ${hit.value}`
-    case 'routePath':
     case 'svgPath': {
-      const grammar = hit.kind === 'routePath' ? 'route' : 'svg'
-      const { rows, errors } = parsePath(hit.value, grammar)
-      const errs = errors.length ? errors : validate(rows, grammar)
-      if (grammar === 'route' && !rows.length) return 'autorouted the whole way'
-      const vias = rows.filter(r => r.cmd === '@').length
-      const end = ending(rows)
+      const { rows, errors } = parsePath(hit.value)
+      const errs = errors.length ? errors : validate(rows)
       const parts = [`${rows.length} command${rows.length === 1 ? '' : 's'}`]
-      if (grammar === 'route') {
-        if (vias) parts.push(`${vias} via${vias === 1 ? '' : 's'}`)
-        if (end) parts.push(end === 'XZ' ? 'autorouted to b' : 'straight to b')
-      }
       if (errs.length) parts.push(`error: ${errs[0]}`)
       return parts.join(', ')
     }
