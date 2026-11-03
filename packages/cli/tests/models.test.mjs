@@ -5,10 +5,14 @@ import assert from 'node:assert/strict'
 import { copyFileSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { meshFor, modelBoxLoader, modelMiddleware, modelsDir, usedModels } from '../dist/models.js'
+import { fileURLToPath } from 'node:url'
+import { meshFor, modelBoxLoader, modelsDir, usedModels } from '../dist/project/models.js'
+import { modelMiddleware } from '../dist/server/models-plugin.js'
 import { meshKey, meshFromBinary } from '@pcbjs/step'
 
-const PIN = new URL('../../step/tests/fixtures/pin.step', import.meta.url).pathname
+const PIN = fileURLToPath(new URL('../../step/tests/fixtures/pin.step', import.meta.url))
+// an empty user cache, so each conversion here runs; user-cache.test.mjs covers the cache
+process.env.PCBJS_CACHE_DIR = mkdtempSync(join(tmpdir(), 'pcbjs-models-cache-'))
 
 function project() {
   const root = mkdtempSync(join(tmpdir(), 'pcbjs-models-'))
@@ -21,7 +25,7 @@ function project() {
 const compiled = (file, hash) => ({
   board: {
     footprints: [
-      { ref: 'J1', model: { kind: 'step', step: './pin.step', path: file } },
+      { ref: 'J1', model: { file: './pin.step', path: file } },
       { ref: 'R1', model: { kind: 'box', w: 1, h: 1, height: 1 } },
     ],
   },
@@ -47,6 +51,8 @@ test('a STEP file converts once into the cache under its hash, and concurrent re
 
 test('a file whose content changed since the compile is refused, and nothing is cached', async () => {
   const p = project()
+  // the first test put the unchanged file's mesh in the user cache
+  process.env.PCBJS_CACHE_DIR = join(p.root, 'user-cache')
   try {
     writeFileSync(p.file, readFileSync(p.file, 'utf8').replace('0.8,0.6,0.2', '0.2,0.6,0.8'))
     await assert.rejects(meshFor(p.hash, p.file, modelsDir(p.root)), /changed since the board compiled/)
@@ -61,9 +67,7 @@ test('the used models are the STEP footprints with a mesh', () => {
   const m = usedModels([compiled('/x/pin.step', 'a'.repeat(64))])
   assert.deepEqual([...m], [['a'.repeat(64), '/x/pin.step']])
   assert.equal(
-    usedModels([
-      { board: { footprints: [{ ref: 'J1', model: { kind: 'step', step: 'x', path: '/x' } }] }, site: { footprints: [{ ref: 'J1', step: { file: 'x', transform: {} } }] } },
-    ]).size,
+    usedModels([{ board: { footprints: [{ ref: 'J1', model: { file: 'x', path: '/x' } }] }, site: { footprints: [{ ref: 'J1', step: { file: 'x', transform: {} } }] } }]).size,
     0,
   )
 })
@@ -87,7 +91,7 @@ test('the dev endpoint serves the mesh of a used model, 404 for any other hash, 
   const p = project()
   try {
     const state = { slots: [{ compiled: [compiled(p.file, p.hash)] }] }
-    const mw = modelMiddleware({ root: p.root }, state)
+    const mw = modelMiddleware(() => [{ root: p.root, compiled: state.slots.flatMap(s => s.compiled) }])
     const r = await call(mw, `/__pcbjs/model/${p.hash}`)
     assert.equal(r.status, 200)
     assert.equal(r.headers['content-type'], 'application/octet-stream')
@@ -105,7 +109,7 @@ test('two processes converting the same file at once leave one complete cache fi
   const p = project()
   try {
     const { spawn } = await import('node:child_process')
-    const url = new URL('../dist/models.js', import.meta.url).href
+    const url = new URL('../dist/project/models.js', import.meta.url).href
     const script = `import { meshFor } from ${JSON.stringify(url)}; const b = await meshFor(process.argv[1], process.argv[2], process.argv[3]); process.stdout.write(String(b.byteLength))`
     const run = () =>
       new Promise((resolve, reject) => {
@@ -125,23 +129,18 @@ test('two processes converting the same file at once leave one complete cache fi
   }
 })
 
-test('after a compile, a model file entry gets its mesh box, the courtyard and the issue when it sits off the courtyard', async () => {
+test('the model facet gives a model file its mesh box, the courtyard and the issue when it sits off the courtyard', async () => {
   const p = project()
   try {
     const { compileBoard } = await import('@pcbjs/compile')
-    const { siteData } = await import('@pcbjs/export/site-data')
+    const { siteData } = await import('@pcbjs/export/internal/site-data')
     const { h, PCB } = await import('@pcbjs/core').then(m => ({ h: m.h, PCB: m.default }))
-    const { placeModels } = await import('../dist/models.js')
-    const fp = (ref, at, offset) =>
-      h(
-        'footprint',
-        { ref, at, model: { file: p.file, offset } },
-        h('pad', { num: 1, size: 2, at: '0 0' }),
-        h('rect', { layer: 'F.CrtYd', x: -1.5, y: -1.5, w: 3, h: 3, width: 0.05 }),
-      )
-    const board = compileBoard(h(PCB, { name: 'M' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 30, h: 20 }), fp('J1', '5 5', [0, 0, 0]), fp('J2', '15 5', [3, 0, 0])))
-    const site = siteData(board, { root: p.root, fabUrl: '', fabName: '', fabFiles: [], fabStatus: '', svgUrl: '', dev: false, bom: [] })
-    await placeModels([{ board, site }], p.root)
+    const { meshBoundsOf } = await import('../dist/project/models.js')
+    const { fp } = await import('./parts.mjs')
+    const place = (ref, pos, offset) =>
+      fp({ ref, at: pos, model: { file: p.file, offset } }, h('pad', { num: 1, size: 2, at: '0 0' }), h('rect', { layer: 'F.CrtYd', x: -1.5, y: -1.5, w: 3, h: 3, width: 0.05 }))
+    const board = compileBoard(h(PCB, { name: 'M' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 30, h: 20 }), place('J1', '5 5', [0, 0, 0]), place('J2', '15 5', [3, 0, 0])))
+    const site = siteData(board, { root: p.root, fabUrl: '', fabName: '', fabFiles: [], fabStatus: '', svgUrl: '', dev: false, bom: [], meshBounds: meshBoundsOf(p.root) })
     const [j1, j2] = site.footprints.map(f => f.step)
     assert.deepEqual(j1.courtyard, { x0: -1.5, y0: -1.5, x1: 1.5, y1: 1.5 })
     assert.deepEqual(

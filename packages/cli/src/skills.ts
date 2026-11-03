@@ -1,7 +1,8 @@
-// skills from the @pcbjs/skills the project resolves, so this command and its pcbjs-skills bin never disagree
+// skills from the @pcbjs/skills the project resolves, so the command and the installed skills never disagree
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { registerAgents, type Harness } from './agent-config.js'
 
 interface SkillsPackage {
   skillsDir: string
@@ -31,7 +32,7 @@ async function load(cwd: string): Promise<SkillsPackage | null> {
 }
 
 /** The command. Returns the exit code. */
-export async function skills(action: string, opts: { to?: string; claude?: boolean; cwd?: string } = {}): Promise<number> {
+export async function skills(action: string, opts: { to?: string; claude?: boolean; hooks?: boolean; mcp?: Harness[]; cwd?: string } = {}): Promise<number> {
   const cwd = opts.cwd ?? process.cwd()
   const pkg = await load(cwd)
   if (!pkg) {
@@ -40,6 +41,9 @@ export async function skills(action: string, opts: { to?: string; claude?: boole
   }
   if (action === 'install') {
     for (const s of pkg.install(cwd, { to: opts.to, claude: opts.claude })) console.log(pkg.installLine(s, cwd))
+    // a skills folder of its own, such as ~/.agents/skills, is no project to register in
+    if (opts.to === undefined)
+      for (const w of registerAgents(cwd, { claude: opts.claude, hooks: opts.hooks, mcp: opts.mcp })) console.log(`wrote      ${w.what.padEnd(18)} ${w.file}`)
   } else if (action === 'list') {
     for (const n of pkg.skillNames()) console.log(`${n.padEnd(32)}  ${pkg.describe(n)}`)
   } else if (action === 'path') {

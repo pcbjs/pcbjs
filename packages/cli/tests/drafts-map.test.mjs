@@ -2,16 +2,19 @@
 // overlay's last character instead.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { repair } from '@pcbjs/lsp/repair'
-import { transformSourceRanges } from '../dist/source-ranges.js'
-import { prepare } from '../dist/drafts.js'
+import { repair } from '@pcbjs/lsp/internal/repair'
+import { parse } from '@pcbjs/lsp'
+import { transformSourceRanges } from '../dist/project/source-ranges.js'
+import { prepare } from '../dist/session/drafts.js'
+// the transform's text hashes, which tests/source-ranges.test.mjs checks, left out of the literals compared here
+const plain = s => s.replace(/, hash: "[0-9a-f]{12}"/g, '')
 
 const overlay = `import PCB from '@pcbjs/core'\nexport default <PCB name="M">\n  <circle layer="Edge.Cuts" cx={10} cy={10} r={10} />`
 
 test("drafts: a range that ends in the closers ends on the overlay's last character", () => {
-  const r = repair(overlay, 'pcb.tsx')
+  const r = repair(parse(overlay, 'pcb.tsx'))
   assert.ok(r.ok && r.limit !== null, r.text)
-  const out = transformSourceRanges(r.text, '/p/pcb.tsx', 'pcb.tsx', r.limit).code
+  const out = plain(transformSourceRanges(r.text, '/p/pcb.tsx', 'pcb.tsx', r.limit).code)
   const pcb = /<PCB name="M" __src=\{\{ file: "pcb.tsx", line: (\d+), col: (\d+), endLine: (\d+), endCol: (\d+) \}\}/.exec(out)
   const lines = overlay.split('\n')
   assert.deepEqual(pcb.slice(1).map(Number), [2, 16, lines.length, lines.at(-1).length])

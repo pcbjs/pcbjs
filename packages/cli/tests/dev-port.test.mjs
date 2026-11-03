@@ -1,8 +1,12 @@
-// `pcbjs dev --port 0`: Vite reads port 0 as unset, so the dev server probes a free port itself and holds Vite to it.
+// `pcbjs dev --port 0`: Vite reads port 0 as unset, so the session probes a free port itself and holds Vite to it.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
-import { freePort } from '../dist/server.js'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { freePort } from '../dist/server/listen.js'
+import { serveSession } from './fixtures/proc.mjs'
 
 const canListen = (port, host) =>
   new Promise(done => {
@@ -28,5 +32,18 @@ test('free port: a port held by another server is never handed out', async () =>
     for (let i = 0; i < 5; i++) assert.notEqual(await freePort('127.0.0.1'), taken)
   } finally {
     held.close()
+  }
+})
+
+test('free port: a session started with -p 0 listens on the port its dev.json names', async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-port-')))
+  const session = await serveSession(root)
+  try {
+    assert.ok(session.port > 1024, session.info.url)
+    assert.equal(await canListen(session.port, '127.0.0.1'), false, 'the session holds the port')
+    assert.equal((await fetch(`http://127.0.0.1:${session.port}/__pcbjs/scopes`)).status, 200)
+  } finally {
+    await session.stop()
+    rmSync(root, { recursive: true, force: true })
   }
 })

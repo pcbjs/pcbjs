@@ -1,5 +1,5 @@
 // node fetch-model-child.js <root> <source>: downloads one model for a compile that needs it at once; exit 1 with the reason, 2 when the network is down.
-import { download } from './fetch-model.js'
+import { download } from './project/fetch-model.js'
 
 const [root, source] = process.argv.slice(2)
 try {

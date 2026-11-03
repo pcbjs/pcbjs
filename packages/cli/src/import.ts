@@ -1,9 +1,9 @@
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { findFootprint, footprintRoots, loadFootprint, readKicadMod } from '@pcbjs/kicad'
-import { footprintFileName, footprintModule } from '@pcbjs/kicad/emit'
-import { importBoard } from '@pcbjs/kicad/import-board'
-import { loadUserConfig } from './config.js'
+import { footprintFileName, footprintModule } from '@pcbjs/kicad/internal/emit'
+import { importBoard } from '@pcbjs/kicad/internal/import-board'
+import { loadUserConfig } from './project/config.js'
 import { cliVersion, installRange } from './doctor.js'
 
 export interface ImportOptions {
@@ -154,7 +154,7 @@ export async function importCommand(o: ImportOptions): Promise<number> {
     }
     const c = res.counts
     log(
-      `pcbjs: imported ${o.source}: ${c.parts} parts and ${c.plain} plain footprints, ${c.footprints} footprints (${c.kicadLibrary} from the KiCad library, ${c.lib} in lib/), ${c.nets} nets, ${c.chains} route chains of ${c.segments} segments${c.arcs ? ` and ${c.arcs} arcs` : ''}, ${c.vias} vias, ${c.pours} pours, ${c.keepouts} keepouts, ${c.texts} texts, ${c.graphics} graphics${c.sourced ? `, sourcing of ${c.sourced} parts` : ''}`,
+      `pcbjs: imported ${o.source}: ${c.parts} parts, ${c.footprints} footprints (${c.kicadLibrary} from the KiCad library, ${c.lib} in lib/), ${c.nets} nets, ${c.chains} route chains of ${c.segments} segments${c.arcs ? ` and ${c.arcs} arcs` : ''}, ${c.vias} vias, ${c.pours} pours, ${c.keepouts} keepouts, ${c.texts} texts, ${c.graphics} graphics${c.sourced ? `, sourcing of ${c.sourced} parts` : ''}`,
     )
     log(`  wrote ${written.map(shown).join(', ')}`)
     if (kept.includes('pcb.config.ts')) {
@@ -162,7 +162,7 @@ export async function importCommand(o: ImportOptions): Promise<number> {
       log(
         `  kept ${shown('pcb.config.ts')}; add ${entry} to its entries if it is not there; the rules of the board are:\n${config
           .split('\n')
-          .filter(l => l.startsWith('defineDefaultRules'))
+          .filter(l => l.startsWith('defineDefaultBoard'))
           .join('\n')}`,
       )
     }

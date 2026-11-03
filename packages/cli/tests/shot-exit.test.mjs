@@ -1,4 +1,4 @@
-// `pcbjs shot` exits as soon as its files are written, with no esbuild service left keeping the process up.
+// `pcbjs shot` exits as soon as its files are written, with no esbuild service or renderer worker left keeping the process up.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
@@ -6,18 +6,22 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, 
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { findChrome } from '../dist/shot.js'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const BIN = join(REPO, 'packages', 'pcbjs', 'bin', 'pcbjs.js')
 const EXIT_MS = 2000
 
-const BOARD = `import PCB from '@pcbjs/core'
+const BOARD = `import PCB, { defineFootprint, type FootprintProps } from '@pcbjs/core'
+
+const TestPad = defineFootprint(function TestPad(props: FootprintProps) {
+  return <footprint value="V" id="pcbjs:TestPad" bom={false} {...props}><pad num={1} size={2} shape="circle" /></footprint>
+}, { pins: ['1'], prefix: 'TP' })
+const TP1 = TestPad()
 
 export default (
   <PCB name="Exit">
     <path layer="Edge.Cuts" d="M 0 0 H 20 V 10 H 0 Z" />
-    <footprint ref="TP1" value="V" id="pcbjs:TestPad" at="5 5" net:pad1="V" bom={false}><pad num={1} size={2} shape="circle" /></footprint>
+    <TP1 at="5 5" />
   </PCB>
 )
 `
@@ -36,8 +40,8 @@ after(() => {
   if (root) rmSync(root, { recursive: true, force: true })
 })
 
-test('pcbjs shot --view 3d exits within 2 s of writing its PNG', { skip: !findChrome() && 'no Chrome', timeout: 120000 }, async () => {
-  const child = spawn(process.execPath, [BIN, 'shot', '--view', '3d', '--fresh', '-p', '0'], {
+test('pcbjs shot --view 3d exits within 2 s of writing its PNG', { timeout: 120000 }, async () => {
+  const child = spawn(process.execPath, [BIN, 'shot', '--view', '3d', '--fresh'], {
     cwd: root,
     env: { ...process.env, NO_COLOR: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],

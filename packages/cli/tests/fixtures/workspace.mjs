@@ -7,19 +7,26 @@ import { fileURLToPath } from 'node:url'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..')
 
-const board = (name, extra = '') => `import PCB from '@pcbjs/core'
+const board = (name, extra = '') => `import PCB, { defineFootprint, nets, route, type FootprintProps } from '@pcbjs/core'
 ${extra}
+const TestPad = defineFootprint(function TestPad(props: FootprintProps) {
+  return <footprint value="V" id="pcbjs:TestPad-2mm" bom={false} {...props}><pad num={1} size={2} shape="circle" /></footprint>
+}, { pins: ['1'], prefix: 'TP' })
+const { V } = nets()
+const TP1 = TestPad().connect({ 1: V })
+const TP2 = TestPad().connect({ 1: V })
+
 export default (
   <PCB name="${name}">
     <circle layer="Edge.Cuts" cx={10} cy={10} r={10} />
-    <footprint ref="TP1" value="V" id="pcbjs:TestPad-2mm" at="5mm 10mm" net:pad1="V" bom={false}><pad num={1} size={2} shape="circle" /></footprint>
-    <footprint ref="TP2" value="V" id="pcbjs:TestPad-2mm" at="15mm 10mm" net:pad1="V" bom={false}><pad num={1} size={2} shape="circle" /></footprint>
-    <track net="V" layer="F.Cu" width={0.5} d="M 5 10 H 15" />
+    <TP1 at="5mm 10mm" />
+    <TP2 at="15mm 10mm" />
+    {route('5 10').net(V).width(0.5).H(15)}
   </PCB>
 )
 `
-const config = (revision, clearance) => `import { defineConfig, defineDefaultBoard } from '@pcbjs/core'
-defineDefaultBoard({ revision: '${revision}', rules: { clearance: ${clearance} } })
+const config = (rev, clearance) => `import { defineConfig, defineDefaultBoard } from '@pcbjs/core'
+defineDefaultBoard({ rev: '${rev}', rules: { clearance: ${clearance} } })
 export default defineConfig({ entries: ['pcb.tsx'], vite: { logLevel: 'silent' } })
 `
 
@@ -61,4 +68,4 @@ export function makeStack() {
   return { root, stack, lib, a: join(stack, 'a'), b: join(stack, 'b') }
 }
 export const shared = title => `export const TITLE = '${title}'\n`
-export const stackBoard = (name, rev = '1') => board(name, "import { TITLE } from '../lib/shared'").replace(`<PCB name="${name}">`, `<PCB name="${name}" title={TITLE} revision="${rev}">`)
+export const stackBoard = (name, rev = '1') => board(name, "import { TITLE } from '../lib/shared'").replace(`<PCB name="${name}">`, `<PCB name="${name}" title={TITLE} rev="${rev}">`)

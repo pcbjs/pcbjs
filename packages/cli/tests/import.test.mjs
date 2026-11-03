@@ -6,16 +6,17 @@ import { execFileSync } from 'node:child_process'
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { resolveConfig } from '../dist/config.js'
-import { pluginState } from '../dist/plugin.js'
-import { compileServer, compileSlots } from '../dist/check.js'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { resolveConfig } from '../dist/project/config.js'
+import { pluginState } from '../dist/server/site.js'
+import { compileServer, compileSlots } from '../dist/project/compile.js'
+import { viteLoader } from '../dist/project/loader.js'
 import { resetDefaults } from '@pcbjs/core'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const BIN = join(REPO, 'packages', 'pcbjs', 'bin', 'pcbjs.js')
 const FIX = join(REPO, 'packages', 'kicad', 'tests', 'fixtures')
-const { gerberBox, drillHits, syntheticKicad } = await import(join(REPO, 'packages', 'kicad', 'tests', 'helpers.mjs'))
+const { gerberBox, drillHits, syntheticKicad } = await import(pathToFileURL(join(REPO, 'packages', 'kicad', 'tests', 'helpers.mjs')).href)
 
 const top = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-import-')))
 const env = { ...process.env, KICAD10_FOOTPRINT_DIR: join(FIX, 'footprints') }
@@ -45,10 +46,10 @@ async function compile(root) {
     const cfg = await resolveConfig([], 'build', undefined, root, () => {})
     cfg.fabCheck = true
     const state = pluginState(cfg)
-    const server = await compileServer(cfg, state)
+    const server = await compileServer(cfg)
     const errors = new Map()
     try {
-      await compileSlots(server, cfg, state.slots, errors)
+      await compileSlots(viteLoader(server), cfg, state.slots, errors)
     } finally {
       await server.close()
     }
@@ -78,7 +79,7 @@ function compareFab(fab, kicadDir, pairs) {
 
 test('import board: the small KiCad board compiles with the pads, Gerbers and holes KiCad has', async () => {
   const { dst, out } = importFixture('small', ['small.kicad_pcb', 'small.kicad_pro'])
-  assert.match(out, /6 parts and 0 plain footprints, 6 footprints \(6 from the KiCad library, 0 in lib\/\), 3 nets/)
+  assert.match(out, /6 parts, 6 footprints \(6 from the KiCad library, 0 in lib\/\), 3 nets/)
   const sch = readFileSync(join(dst, 'pcb.sch.ts'), 'utf8')
   assert.match(sch, /export const U1 = SOIC_8_3_9x4_9mm_P1_27mm\('LM358'\)\.connect\(\{ 1: SIG, 2: NC, 3: NC, 4: GND, 5: NC, 6: NC, 7: NC, 8: VCC \}\)/)
   const pcb = readFileSync(join(dst, 'pcb.tsx'), 'utf8')
@@ -88,10 +89,12 @@ test('import board: the small KiCad board compiles with the pads, Gerbers and ho
   const copper = readFileSync(join(dst, 'pcb.copper.tsx'), 'utf8')
   assert.match(
     copper,
-    /route\(U1\[1\]\)\.width\(0\.25\)\.neck\(AS_DRAWN\)\.vias\(VIA\)\.Z\('12\.095 17'\)\.Z\('16 19'\)\.via\('B\.Cu'\)\.Z\('16 23'\)\.via\('F\.Cu'\)\.Z\(R1\[1\]\)/,
+    /route\(U1\[1\], R1\[1\]\)\.width\(0\.25\)\.neck\(AS_DRAWN\)\.vias\(VIA\)\.L\('12\.095 17'\)\.L\('16 19'\)\.via\('B\.Cu'\)\.L\('16 23'\)\.via\('F\.Cu'\)\.Z\(\)/,
   )
   assert.match(copper, /pour\(GND, 'B\.Cu', /)
-  assert.match(copper, /keepout\('F\.Cu', '[^']+', \{ tracks: false, vias: false \}\)/)
+  assert.match(copper, /keepout\('[^']+', \{ layers: \['F\.Cu'\], tracks: false, vias: false \}\)/)
+  // an arc is a chain arc from a coordinate, a chain from a pad that ends in the open runs the other way
+  assert.match(copper, /route\(J1\[1\], U1\[8\]\)\.width\(0\.4\)\.neck\(AS_DRAWN\)\.L\('7 9'\)\.A\(8, 4, -151\.9\d*\)\.L\('12\.095 4'\)\.Z\(\)/)
   const c = await compile(dst)
   const b = c.board
   assert.deepEqual(
@@ -115,11 +118,11 @@ test('import board: the small KiCad board compiles with the pads, Gerbers and ho
 
 test("import board: the tabs board with its rules and schematic is clean and its Gerbers match KiCad's", async () => {
   const { dst, out } = importFixture('tabs', ['tabs.kicad_pcb', 'tabs.kicad_pro', 'tabs.kicad_dru', 'tabs.kicad_sch'])
-  assert.match(out, /3 parts and 0 plain footprints, 3 footprints \(0 from the KiCad library, 3 in lib\/\), 2 nets, 4 route chains of 8 segments and 1 arcs/)
+  assert.match(out, /3 parts, 3 footprints \(0 from the KiCad library, 3 in lib\/\), 2 nets, 5 route chains of 8 segments and 1 arcs/)
   assert.match(out, /2 custom rules of the \.kicad_dru carried/)
   assert.deepEqual(readdirSync(join(dst, 'lib')).sort(), ['Hdr_1x02_P2_54mm.tsx', 'R_1206.tsx', 'Tab_Slot_1x02_P3_00mm.tsx'])
   const sch = readFileSync(join(dst, 'pcb.sch.ts'), 'utf8')
-  assert.match(sch, /export const J1 = Tab_Slot_1x02_P3_00mm\('Tabs'\)\.connect\(\{ 1: SIG, 2: GND \}\)\.rules\(\{ edgeClearance: 0\.5 \}\)/)
+  assert.match(sch, /export const J1 = Tab_Slot_1x02_P3_00mm\('Tabs'\)\.connect\(\{ 1: SIG, 2: GND \}\)\.source\(\{ Assembly: 'hand' \}\)\.rules\(\{ edgeClearance: 0\.5 \}\)/)
   assert.match(readFileSync(join(dst, 'pcb.config.ts'), 'utf8'), /clearance: 0\.2032, .*edgeClearance: 0\.4, .*maskExpansion: 0\.0762/)
   const c = await compile(dst)
   const b = c.board
@@ -157,7 +160,7 @@ test('import board: into a folder of a project with a package.json, the config a
   const out = execFileSync(process.execPath, [BIN, 'import', 'board', join(src, 'synth.kicad_pcb'), '-o', 'pcb/synth.tsx'], { cwd: dst, env, encoding: 'utf8' })
   assert.match(out, /sourcing of 4 parts/)
   assert.equal(readFileSync(join(dst, 'package.json'), 'utf8'), pkg, "the project's package.json is never replaced")
-  assert.deepEqual(readdirSync(join(dst, 'pcb')).sort(), ['lib', 'synth.art.tsx', 'synth.copper.tsx', 'synth.sch.ts', 'synth.sourcing.ts', 'synth.tsx'])
+  assert.deepEqual(readdirSync(join(dst, 'pcb')).sort(), ['lib', 'synth.art.tsx', 'synth.copper.tsx', 'synth.sch.ts', 'synth.tsx'])
   assert.match(readFileSync(join(dst, 'pcb.config.ts'), 'utf8'), /entries: \['pcb\/synth\.tsx'\]/)
   assert.deepEqual(JSON.parse(readFileSync(join(dst, 'tsconfig.json'), 'utf8')).include, ['*.ts', '*.tsx', 'pcb'])
   // a second import keeps the config and names the entry to add
@@ -173,6 +176,12 @@ test('import board: into a folder of a project with a package.json, the config a
   )
   assert.ok(pad('D1', '1').pasteRings?.length === 1, 'the LED land pastes its window only')
   assert.equal(b.footprints.find(f => f.ref === 'D1').dnp, true)
+  // the arc in its chain, and the track, via, pour and copper graphic on no net
+  assert.ok(b.items.some(i => i.kind === 'track' && i.net === 'VCC' && i.prims?.some(p => p.kind === 'arc')))
+  assert.ok(b.items.some(i => i.kind === 'track' && i.layer === 'B.Cu' && i.net === undefined && i.width === 0.5))
+  assert.ok(b.items.some(i => i.kind === 'track' && i.layer === 'F.Cu' && i.net === undefined && i.width === 0.4))
+  assert.ok(b.items.some(i => i.kind === 'via' && i.net === undefined && i.at[0] === 40 && i.at[1] === 5))
+  assert.ok(b.items.some(i => i.kind === 'zone' && i.layer === 'B.Cu' && i.net === undefined))
 })
 
 test('import footprint: a library footprint becomes a module a board compiles; an existing file is kept', async () => {

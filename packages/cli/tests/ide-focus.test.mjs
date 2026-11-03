@@ -2,16 +2,17 @@
 // an editor host gets.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { boardsPayload, focusTarget, ideBoards, markConflicts, slotsFor } from '../dist/boards.js'
-import { isPreviewName, previewDir, previewName, previewRoute } from '../dist/preview.js'
-import { pluginState, previewable, virtualModule } from '../dist/plugin.js'
+import { boardsPayload, focusTarget, ideBoards, markConflicts, slotsFor } from '../dist/project/boards.js'
+import { isPreviewName, previewDir, previewName, previewRoute } from '../dist/project/preview.js'
+import { pluginState, virtualModule } from '../dist/server/site.js'
+import { previewable } from '../dist/session/plugin.js'
 import { buildPayload } from '../dist/build.js'
 
 const entry = rel => ({ file: `/p/${rel}`, rel })
 const target = (rel, name, variant, status = 'ok') => ({
   entry: entry(rel),
-  board: { name, title: `${name} board`, revision: '1', ...(variant ? { variant: { name: variant } } : {}) },
-  site: { name, fab: { status } },
+  board: { name, title: `${name} board`, rev: '1', ...(variant ? { variant: { name: variant } } : {}) },
+  site: { name, footprints: [], fab: { status } },
 })
 
 /** A module graph as Vite's moduleGraph answers it: modules by file, each with the modules that import it. */
@@ -148,10 +149,10 @@ test('transient: dev carries the preview last, flagged transient, and the build 
   const preview = target('scratch.tsx', 'preview:scratch.tsx')
   const dev = boardsPayload(slots, preview)
   assert.deepEqual(
-    dev.boards.map(b => b.name),
+    dev.boards.map(b => b.board),
     ['Blinky', 'Coin', 'Quad', 'Multi', 'Multi', 'Multi', 'preview:scratch.tsx'],
   )
-  assert.equal(dev.boards.at(-1).transient, true)
+  assert.equal(dev.boards.at(-1).facets.meta.transient, true)
   assert.equal(dev.entries['preview:scratch.tsx'], undefined)
   assert.equal(dev.errors['scratch.tsx'], undefined)
   // the virtual module of dev has it, the build's payload does not, even with a preview left in the state
@@ -160,9 +161,8 @@ test('transient: dev carries the preview last, flagged transient, and the build 
   state.preview = { file: '/p/scratch.tsx', rel: 'scratch.tsx', kind: 'board', compiled: preview }
   assert.match(virtualModule(state), /preview:scratch\.tsx/)
   const built = buildPayload(state)
-  assert.ok(built.boards.every(b => !b.transient && !b.name.startsWith('preview:')))
+  assert.ok(built.boards.every(b => !b.facets.meta.transient && !b.board.startsWith('preview:')))
   assert.equal(built.boards.length, 6)
-  state.inline = false
-  assert.doesNotMatch(virtualModule(state), /preview:/)
+  assert.doesNotMatch(virtualModule(state, null, null, null, false), /preview:/)
   assert.ok(ideBoards(slots).boards.every(b => !b.name.startsWith('preview:')))
 })

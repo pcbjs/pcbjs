@@ -4,18 +4,15 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import { create, boardName, templates, examples, EXAMPLES_DIR } from '../dist/create.js'
+import { create, boardName, examples, EXAMPLES_DIR } from '../dist/create.js'
 import { parseBoard } from '../dist/board-flags.js'
 import { drift, EXAMPLES } from '../scripts/sync-examples.mjs'
 
-const BIN = new URL('../../pcbjs/bin/pcbjs.js', import.meta.url).pathname
+const BIN = fileURLToPath(new URL('../../pcbjs/bin/pcbjs.js', import.meta.url))
 
 const scratch = () => mkdtempSync(join(tmpdir(), 'pcbjs-create-'))
-
-test('create: the board template is listed', () => {
-  assert.ok(templates().includes('board'))
-})
 
 test('create: copies the template and names the board after the directory', () => {
   const cwd = scratch(),
@@ -23,9 +20,10 @@ test('create: copies the template and names the board after the directory', () =
   try {
     const r = create({ dir: 'blinky-mini', cwd, log: l => lines.push(l) })
     assert.equal(r.name, 'blinky-mini')
-    assert.deepEqual(readdirSync(r.dir).sort(), ['.gitignore', 'README.md', 'package.json', 'pcb.config.ts', 'pcb.tsx', 'tsconfig.json'])
+    assert.deepEqual(readdirSync(r.dir).sort(), ['.gitignore', '.vscode', 'README.md', 'package.json', 'pcb.config.ts', 'pcb.tsx', 'tsconfig.json'])
+    assert.deepEqual(JSON.parse(readFileSync(join(r.dir, '.vscode', 'extensions.json'), 'utf8')), { recommendations: ['pcbjs.vscode-pcbjs'] }, 'a clone prompts for the extension')
     const main = readFileSync(join(r.dir, 'pcb.tsx'), 'utf8')
-    assert.match(main, /<PCB name="blinky-mini" revision="0\.1\.0">/)
+    assert.match(main, /<PCB name="blinky-mini" rev="0\.1\.0">/)
     assert.match(main, />\s*blinky-mini\s*<\/text>/)
     assert.doesNotMatch(main, /\bHello\b/)
     assert.match(readFileSync(join(r.dir, 'README.md'), 'utf8'), /^# blinky-mini\n/)
@@ -55,14 +53,32 @@ test('create: an empty directory is fine, a package name is lowercase', () => {
   }
 })
 
-test('create: refuses a directory that is not empty, and an unknown template', () => {
+test('create: a devcontainer of the repository around the project lists the extension for Codespaces', () => {
+  const cwd = scratch(),
+    lines = []
+  try {
+    mkdirSync(join(cwd, '.git'))
+    mkdirSync(join(cwd, '.devcontainer'))
+    writeFileSync(join(cwd, '.devcontainer', 'devcontainer.json'), JSON.stringify({ image: 'node:22', customizations: { vscode: { extensions: ['dbaeumer.vscode-eslint'] } } }))
+    const r = create({ dir: 'boards/amp', cwd, log: l => lines.push(l) })
+    assert.deepEqual(JSON.parse(readFileSync(join(cwd, '.devcontainer', 'devcontainer.json'), 'utf8')).customizations.vscode.extensions, [
+      'dbaeumer.vscode-eslint',
+      'pcbjs.vscode-pcbjs',
+    ])
+    assert.ok(r.files.includes(join('.vscode', 'extensions.json')))
+    assert.ok(lines.includes(`pcbjs: recommended pcbjs.vscode-pcbjs in .devcontainer/devcontainer.json of ${cwd}`), lines.join('\n'))
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
+})
+
+test('create: refuses a directory that is not empty', () => {
   const cwd = scratch()
   try {
     mkdirSync(join(cwd, 'taken'))
     writeFileSync(join(cwd, 'taken', 'notes.txt'), 'mine')
     assert.throws(() => create({ dir: 'taken', cwd, log: () => {} }), /taken is not empty/)
     assert.deepEqual(readdirSync(join(cwd, 'taken')), ['notes.txt'])
-    assert.throws(() => create({ dir: 'x', cwd, template: 'nope', log: () => {} }), /unknown template "nope", available: board/)
   } finally {
     rmSync(cwd, { recursive: true, force: true })
   }
@@ -77,7 +93,6 @@ test('create: board names keep letters, digits, dot, dash and underscore', () =>
 test('create: the examples in templates match examples/, run scripts/sync-examples.mjs after changing one', () => {
   assert.deepEqual(drift(), [])
   assert.deepEqual(Object.keys(examples()), Object.keys(EXAMPLES))
-  assert.ok(!templates().includes('examples'))
 })
 
 test('create --list-examples prints each example with its line', () => {
@@ -99,7 +114,7 @@ test('create --example copies the example as it is, a single board in pcb.tsx', 
     const out = execFileSync(process.execPath, [BIN, 'create', 'mine', '--example', 'blinky'], { cwd, encoding: 'utf8' })
     assert.match(out, /created mine from the blinky example/)
     const dir = join(cwd, 'mine')
-    assert.deepEqual(readdirSync(dir).sort(), ['.gitignore', 'blinky.sch.tsx', 'blinky.sourcing.ts', 'lib', 'package.json', 'pcb.config.ts', 'pcb.tsx', 'tsconfig.json'])
+    assert.deepEqual(readdirSync(dir).sort(), ['.gitignore', '.vscode', 'blinky.sch.tsx', 'blinky.sourcing.ts', 'lib', 'package.json', 'pcb.config.ts', 'pcb.tsx', 'tsconfig.json'])
     assert.equal(readFileSync(join(dir, 'pcb.tsx'), 'utf8'), readFileSync(join(EXAMPLES_DIR, 'blinky', 'pcb.tsx'), 'utf8'))
     assert.match(readFileSync(join(dir, 'pcb.config.ts'), 'utf8'), /entries: \['pcb\.tsx'\]/)
     const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))

@@ -4,21 +4,26 @@ import { inflateRawSync } from 'node:zlib'
 import ts from 'typescript'
 import type { Board, Footprint, Pad } from '@pcbjs/core/model'
 import type { SiteFootprint } from '@pcbjs/core/site-data'
-import { MODEL_LABEL, modelSource } from '@pcbjs/core/model-source'
-import { meshKey } from '@pcbjs/step/key'
+import { isFileModel, MODEL_LABEL, modelSource } from '@pcbjs/core/internal/model-source'
+import { textDoc, toSite } from '@pcbjs/core/internal/textdoc'
+import { sourceWriter } from './session/source-write.js'
+import { meshKey } from '@pcbjs/step/internal/key'
 import { meshFromBinary } from '@pcbjs/step/binary'
-import { bounds, type StepModel } from '@pcbjs/step/mesh'
-import { modelFormat, MODEL_EXTENSIONS, type ModelFormat } from '@pcbjs/step/format'
-import { alignModel, guessUnit, type AlignPad, type AlignResult } from '@pcbjs/step/align'
-import type { StepTransform } from '@pcbjs/step/place'
-import { resolveConfig, type ResolvedConfig } from './config.js'
-import { pluginState } from './plugin.js'
-import { compileServer, compileSlots, errorText } from './check.js'
-import { courtyardRect, meshFor, modelsDir, toFootprint } from './models.js'
-import { fetchedDir, lcscModel, noteSource, retryFetches } from './fetch-model.js'
+import { bounds, type StepModel } from '@pcbjs/step/internal/mesh'
+import { modelFormat, MODEL_EXTENSIONS, type ModelFormat } from '@pcbjs/step/internal/format'
+import { alignModel, guessUnit, type AlignPad, type AlignResult } from '@pcbjs/step/internal/align'
+import type { StepTransform } from '@pcbjs/step/internal/place'
+import { cached, entryOf, latestOf, storeContent, type CacheEntry } from '@pcbjs/compile/internal/user-cache'
+import { resolveConfig, type ResolvedConfig } from './project/config.js'
+import { pluginState } from './server/site.js'
+import { compileServer, compileSlots, errorText } from './project/compile.js'
+import { viteLoader } from './project/loader.js'
+import { meshFor, modelsDir } from './project/models.js'
+import { courtyardRect, toFootprint } from '@pcbjs/export/internal/models'
+import { fetchedDir, lcscModel, noteSource, retryFetches } from './project/fetch-model.js'
 
 export { lcscModel, noteSource }
-import type { Compiled } from './project.js'
+import type { Compiled } from './project/project.js'
 
 const f2 = (v: number) => (Math.round(v * 100) / 100).toFixed(2)
 const num = (v: number) => String(Math.round(v * 1000) / 1000)
@@ -74,19 +79,59 @@ export function unzipModel(zip: Uint8Array): (ZipFile & { terms: ZipFile[] }) | 
   return { ...read(pick), terms }
 }
 
-// a URL's name is the one its response gives, else the last part of its path
-async function fetchSource(source: string): Promise<{ data: Uint8Array; name: string; url: string | null }> {
-  if (/^https?:\/\//i.test(source)) {
-    const r = await fetch(source, { redirect: 'follow' })
-    if (!r.ok) throw new Error(`${source}: HTTP ${r.status} ${r.statusText}`.trim())
-    const data = new Uint8Array(await r.arrayBuffer())
-    const cd = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(r.headers.get('content-disposition') ?? '')
-    const name = cd ? decodeURIComponent(cd[1]) : decodeURIComponent(basename(new URL(r.url || source).pathname)) || 'model'
-    return { data, name, url: source }
-  }
+type Download = { data: Uint8Array; name: string; url: string | null; note?: string; etag?: string; modified?: string }
+
+/** A local file as a download. */
+function readSource(source: string): Download {
   const file = resolve(source)
   if (!existsSync(file)) throw new Error(`no such file: ${source}`)
   return { data: new Uint8Array(readFileSync(file)), name: basename(file), url: null }
+}
+
+// a URL's name is the one its response gives, else the last part of its path; null when the server says the cached copy is current
+async function fetchUrl(source: string, prev?: CacheEntry): Promise<Download | null> {
+  const headers: Record<string, string> = {}
+  if (prev?.options?.etag) headers['if-none-match'] = String(prev.options.etag)
+  if (prev?.options?.modified) headers['if-modified-since'] = String(prev.options.modified)
+  const r = await fetch(source, { redirect: 'follow', headers })
+  if (r.status === 304 && prev) return null
+  if (!r.ok) throw new Error(`${source}: HTTP ${r.status} ${r.statusText}`.trim())
+  const data = new Uint8Array(await r.arrayBuffer())
+  const cd = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(r.headers.get('content-disposition') ?? '')
+  const name = cd ? decodeURIComponent(cd[1]) : decodeURIComponent(basename(new URL(r.url || source).pathname)) || 'model'
+  const etag = r.headers.get('etag'),
+    modified = r.headers.get('last-modified')
+  return { data, name, url: source, ...(etag ? { etag } : {}), ...(modified ? { modified } : {}) }
+}
+
+const fromCache = (file: string, e: CacheEntry): Download => ({
+  data: new Uint8Array(readFileSync(file)),
+  name: String(e.options!.name),
+  url: e.options!.url ? String(e.options!.url) : null,
+  ...(e.note ? { note: e.note } : {}),
+})
+
+/** A download of `model add` through the user cache, kept by content: `get` has the cached entry and gives null to take it, or new content. */
+async function downloadOnce(source: string, get: (prev?: CacheEntry) => Promise<Download | null>): Promise<Download> {
+  const key = latestOf('downloads', source)
+  const file = key ? cached(key) : null,
+    e = file ? entryOf(key!) : undefined
+  const prev = file && e?.options ? e : undefined
+  let d: Download | null
+  try {
+    d = await get(prev)
+  } catch (err) {
+    if (!prev) throw err
+    console.log(`from the model cache, the source did not answer: ${source}`)
+    return fromCache(file!, prev)
+  }
+  if (!d) {
+    console.log(`from the model cache: ${source}`)
+    return fromCache(file!, prev!)
+  }
+  const options = { name: d.name, ...(d.url ? { url: d.url } : {}), ...(d.etag ? { etag: d.etag } : {}), ...(d.modified ? { modified: d.modified } : {}) }
+  storeContent('downloads', d.data, '', { source, options, ...(d.note ? { note: d.note } : {}) })
+  return d
 }
 
 export interface Project {
@@ -100,9 +145,9 @@ export async function compileProject(entries: string[], o: { config?: string; ro
   const cfg = await resolveConfig(entries, 'build', o.config, o.root, () => {})
   const state = pluginState(cfg)
   const errors = new Map<(typeof state.slots)[number], unknown>()
-  const server = await compileServer(cfg, state, { verbose: o.verbose })
+  const server = await compileServer(cfg, { verbose: o.verbose })
   try {
-    await compileSlots(server, cfg, state.slots, errors)
+    await compileSlots(viteLoader(server), cfg, state.slots, errors)
   } finally {
     await server.close()
   }
@@ -133,16 +178,9 @@ export function boardMatches(c: Pick<Compiled, 'board' | 'entry'>, name: string)
   return c.board.name.toLowerCase() === n || rel === n || base === n || base.replace(/\.[^.]+$/, '') === n || rel.replace(/\/[^/]+$/, '') === n
 }
 
-/** `SW1`, or `Sense/SW1` with the board first, named as `--entry` takes it. */
-export function splitRef(ref: string): { board?: string; ref: string } {
-  const i = ref.lastIndexOf('/')
-  return i > 0 && i < ref.length - 1 ? { board: ref.slice(0, i), ref: ref.slice(i + 1) } : { ref }
-}
-
 /** A ref on several boards without its board is an error that lists them; `--footprint` takes the first board's. */
 export function findFootprint(p: Pick<Project, 'compiled'>, ref?: string, footprint?: string, entry?: string): Found | null {
-  let boards = p.compiled,
-    want = ref
+  let boards = p.compiled
   const pick = (name: string) => {
     if (boards.length < 2 && p.compiled.length < 2) return
     const named = boards.filter(c => boardMatches(c, name))
@@ -150,21 +188,14 @@ export function findFootprint(p: Pick<Project, 'compiled'>, ref?: string, footpr
     boards = named
   }
   if (entry) pick(entry)
-  if (ref && !boards.some(c => c.board.footprints.some(fp => fp.ref === ref))) {
-    const s = splitRef(ref)
-    if (s.board) {
-      pick(s.board)
-      want = s.ref
-    }
-  }
   const hits: Found[] = []
   for (const c of boards) {
-    const fp = c.board.footprints.find(fp => (want ? fp.ref === want : !!footprint && (fp.id === footprint || fp.id.split(':').pop()!.toLowerCase() === footprint.toLowerCase())))
+    const fp = c.board.footprints.find(fp => (ref ? fp.ref === ref : !!footprint && (fp.id === footprint || fp.id.split(':').pop()!.toLowerCase() === footprint.toLowerCase())))
     if (fp) hits.push({ c, fp, site: c.site.footprints.find(s => s.ref === fp.ref)! })
   }
-  if (want && hits.length > 1) {
-    const list = hits.map(h => `${h.c.board.name}/${want} in ${posix(h.c.entry.rel)}${h.fp.value ? `, ${h.fp.value}` : ''}`)
-    throw new Error(`${want} is on ${hits.length} boards, ${list.slice(0, -1).join('; ')} and ${list[list.length - 1]}: name one with --entry <board> or --ref <board>/${want}`)
+  if (ref && hits.length > 1) {
+    const list = hits.map(h => `${h.c.board.name} in ${posix(h.c.entry.rel)}${h.fp.value ? `, ${h.fp.value}` : ''}`)
+    throw new Error(`${ref} is on ${hits.length} boards, ${list.slice(0, -1).join('; ')} and ${list[list.length - 1]}: name the board`)
   }
   return hits[0] ?? null
 }
@@ -204,20 +235,10 @@ const relPath = (fromDir: string, file: string) => {
   return r.startsWith('.') ? r : `./${r}`
 }
 
-function offsetOf(code: string, line: number, col: number): number {
-  let off = 0
-  for (let l = 1; l < line; l++) {
-    const n = code.indexOf('\n', off)
-    if (n < 0) return code.length
-    off = n + 1
-  }
-  return off + col - 1
-}
-
 /** Put `model: <snippet>` into the options of the part call at a position; `value` tells the value argument from a shape argument. Null without a part call there. */
 export function writePartModel(code: string, file: string, line: number, col: number, snippet: string, value?: string): string | null {
   const sf = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
-  const at = offsetOf(code, line, col)
+  const at = textDoc(code).span({ line, col }).start
   let call: ts.CallExpression | null = null
   const visit = (n: ts.Node) => {
     if (at < n.getStart(sf) || at >= n.getEnd()) return
@@ -250,16 +271,14 @@ export function writePartModel(code: string, file: string, line: number, col: nu
         break
       }
   } else if (ts.isStringLiteralLike(args[0]) && args.length <= 2) vi = 0
+  // F(value, options): the options after the value take the model
   if (vi >= 0) {
-    // F(value, sourcing): the sourcing spec moves under source
-    const next = args[vi + 1] && ts.isObjectLiteralExpression(args[vi + 1]) ? args[vi + 1] : undefined
-    const source = next ? `, source: ${next.getText(sf)}` : ''
-    return edit(args[vi].getStart(sf), (next ?? args[vi]).getEnd(), `{ value: ${args[vi].getText(sf)}${source}, model: ${snippet} }`)
+    const next = args[vi + 1] && ts.isObjectLiteralExpression(args[vi + 1]) ? (args[vi + 1] as ts.ObjectLiteralExpression) : undefined
+    return next ? into(next) : edit(args[vi].getEnd(), args[vi].getEnd(), `, { model: ${snippet} }`)
   }
   const objects = args.filter(ts.isObjectLiteralExpression)
   if (objects.length) return into(objects[objects.length - 1])
-  // F(v) holds the value in a variable; else shape arguments only, USBC('power6') or PinHeader(4)
-  if (args.length === 1 && !lit(args[0])) return edit(args[0].getStart(sf), args[0].getEnd(), `{ value: ${args[0].getText(sf)}, model: ${snippet} }`)
+  // F(v) holds the value in a variable
   const last = args[args.length - 1]
   return edit(last.getEnd(), last.getEnd(), `, { model: ${snippet} }`)
 }
@@ -267,7 +286,7 @@ export function writePartModel(code: string, file: string, line: number, col: nu
 /** Put `model={<snippet>}` on the `<footprint>` element at a position, replacing one it has. Null when there is none there. */
 export function writeElementModel(code: string, file: string, line: number, col: number, snippet: string): string | null {
   const sf = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
-  const at = offsetOf(code, line, col)
+  const at = textDoc(code).span({ line, col }).start
   let el: ts.JsxOpeningElement | ts.JsxSelfClosingElement | null = null
   const visit = (n: ts.Node) => {
     if (at < n.getStart(sf) || at >= n.getEnd()) return
@@ -339,8 +358,7 @@ export function findFootprintElement(files: string[], id: string): { file: strin
     }
     visit(sf)
     if (hit !== null) {
-      const lc = sf.getLineAndCharacterOfPosition(hit)
-      return { file, line: lc.line + 1, col: lc.character + 1 }
+      return { file, ...toSite(sf.getLineAndCharacterOfPosition(hit)) }
     }
   }
   return null
@@ -349,7 +367,7 @@ export function findFootprintElement(files: string[], id: string): { file: strin
 function footprintAt(file: string, line: number, col: number): boolean {
   try {
     const code = readFileSync(file, 'utf8')
-    return code.startsWith('<footprint', offsetOf(code, line, col))
+    return code.startsWith('<footprint', textDoc(code).span({ line, col }).start)
   } catch {
     return false
   }
@@ -403,7 +421,7 @@ function alignLines(ref: string, fileShown: string, model: StepModel, r: AlignRe
 
 // undefined for a model other than STEP
 function transformOf(m: Footprint['model']): StepTransform | undefined {
-  if (m?.kind !== 'step') return undefined
+  if (!isFileModel(m)) return undefined
   return { offset: m.offset ?? [0, 0, 0], rotate: m.rotate ?? [0, 0, 0], scale: m.scale ?? [1, 1, 1] }
 }
 
@@ -452,8 +470,13 @@ export async function modelAdd(o: ModelAddOptions): Promise<number> {
     note: string | null = null,
     terms: ZipFile[] = []
   const lcsc = /^lcsc:(.+)$/i.exec(source)
-  if (lcsc) ({ data, name, url, note } = await lcscModel(lcsc[1].trim()))
-  else ({ data, name, url } = await fetchSource(source))
+  const got: Download = await (lcsc
+    ? downloadOnce(source, prev => (prev ? Promise.resolve(null) : lcscModel(lcsc[1].trim())))
+    : /^https?:\/\//i.test(source)
+      ? downloadOnce(source, prev => fetchUrl(source, prev))
+      : readSource(source))
+  ;({ data, name, url } = got)
+  note = got.note ?? null
   if (data.length >= 4 && data[0] === 0x50 && data[1] === 0x4b && data[2] === 3 && data[3] === 4) {
     const inner = unzipModel(data)
     if (!inner) throw new Error(`${source}: the zip has no .step, .stp, .wrl, .glb or .gltf file`)
@@ -526,7 +549,7 @@ export async function modelAdd(o: ModelAddOptions): Promise<number> {
   }
   const found = await lookup()
   // the part's own transform stays when it already has this file and it fits
-  const now = found.fp.model?.kind === 'step' && found.fp.model.path === dest ? transformOf(found.fp.model) : undefined
+  const now = isFileModel(found.fp.model) && found.fp.model.path === dest ? transformOf(found.fp.model) : undefined
   const r = alignModel(model, alignTarget(found), { keep: now ? [now] : [] })
   const site = modelSite(found, root, !o.ref)
   // relative to the file it is written in, as any import is
@@ -547,7 +570,9 @@ export async function modelAdd(o: ModelAddOptions): Promise<number> {
       throw new Error(
         `no ${site.kind === 'part' ? 'part call' : '<footprint> element'} at ${posix(relative(root, site.file))}:${site.line}:${site.col}; paste the model option yourself`,
       )
-    writeFileSync(site.file, next)
+    const writer = await sourceWriter((await compiled()).cfg.root, 'pcbjs model')
+    const w = await writer.write(site.file, code, next).finally(() => writer.close())
+    if (!w.applied) throw new Error(`${posix(relative(root, site.file))}: ${w.reason ?? 'not written'}`)
     console.log(`wrote ${posix(relative(root, site.file))}:${site.line}`)
   } else if (site)
     console.log(
@@ -555,7 +580,7 @@ export async function modelAdd(o: ModelAddOptions): Promise<number> {
     )
   // one model on the project's own <footprint> serves every part on it
   if (o.ref) {
-    const others = found.c.board.footprints.filter(f => f !== found.fp && f.id === found.fp.id && !(f.model?.kind === 'step' && f.model.path === dest)).map(f => f.ref)
+    const others = found.c.board.footprints.filter(f => f !== found.fp && f.id === found.fp.id && !(isFileModel(f.model) && f.model.path === dest)).map(f => f.ref)
     if (others.length && modelSite(found, root, true))
       console.log(
         `note  ${others.join(', ')} use${others.length === 1 ? 's' : ''} the same footprint: pcbjs model add ${shown} --footprint ${found.fp.id} --write puts the model on the <footprint> once for all of them`,
@@ -591,7 +616,7 @@ export async function modelAlign(o: ModelAlignOptions): Promise<number> {
     return 1
   }
   const m = found.fp.model
-  const file = o.file ? resolve(o.file) : m?.kind === 'step' ? m.path : undefined
+  const file = o.file ? resolve(o.file) : isFileModel(m) ? m.path : undefined
   if (!file) {
     console.error(`pcbjs: ${o.ref} has a generated model; give a file with --file, or add one with pcbjs model add <file> --ref ${o.ref}`)
     return 1
@@ -663,9 +688,9 @@ export async function modelCheck(o: ModelCheckOptions): Promise<number> {
       console.log(`  ${r.ref.padEnd(w)}  ${r.source.padEnd(ws)}  ${r.status}${r.issue ? `: ${r.issue}` : ''}`)
       if (r.status !== 'ok') {
         flagged++
-        const ref = many ? `${c.board.name}/${r.ref}` : r.ref
+        const ref = many ? `${r.ref} --entry ${entry}` : r.ref
         console.log(
-          `  ${' '.repeat(w)}  fix: ${r.source.startsWith('not fetched') ? 'pcbjs model fetch' : r.status === 'missing' ? `pcbjs model add <file-or-url> --ref ${ref} --write` : r.status === 'unread' ? `pcbjs model add <file-or-url> --ref ${ref} --write --force, a STEP, glTF or WRL file` : `pcbjs model align ${many ? `${entry} ` : ''}${r.ref}`}`,
+          `  ${' '.repeat(w)}  fix: ${r.source.startsWith('not fetched') ? 'pcbjs model fetch' : r.status === 'missing' ? `pcbjs model add <file-or-url> --ref ${ref} --write` : r.status === 'unread' ? `pcbjs model add <file-or-url> --ref ${ref} --write --force, a STEP, glTF or WRL file` : `pcbjs model align ${r.ref}${many ? ` --entry ${entry}` : ''}`}`,
         )
       }
     }

@@ -1,5 +1,5 @@
 // `pcbjs model` in a project of two boards that share a ref: add and align refuse a bare ref on both and list the boards,
-// `--entry` or `<board>/<ref>` picks one and --write edits that board's code only, and check's fixes name the board.
+// `--entry` picks one and --write edits that board's code only, and check's fixes name the board.
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -7,7 +7,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSyn
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { boardMatches, findFootprint, splitRef } from '../dist/model.js'
+import { boardMatches, findFootprint } from '../dist/model.js'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const BIN = join(REPO, 'packages', 'pcbjs', 'bin', 'pcbjs.js')
@@ -26,7 +26,7 @@ export default (
 )
 `
 const BASE = board('Base', '10k')
-const SENSE = board('Sense', '22k', "\nconst R3 = R0603({ value: '2k', model: { file: './models/nowhere.step' } })")
+const SENSE = board('Sense', '22k', "\nconst R3 = R0603('2k', { model: { file: './models/nowhere.step' } })")
 
 const root = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-model-entry-')))
 mkdirSync(join(root, 'node_modules'))
@@ -50,23 +50,23 @@ const read = f => readFileSync(join(root, f), 'utf8')
 test('add with a ref on two boards refuses and lists them, writing nothing', () => {
   const r = run('add', 'models/R.step', '--ref', 'SW1', '--write')
   assert.equal(r.code, 1, r.out)
-  assert.match(r.err, /SW1 is on 2 boards, Base\/SW1 in base\.tsx, 10k and Sense\/SW1 in sense\.tsx, 22k: name one with --entry <board> or --ref <board>\/SW1/)
+  assert.match(r.err, /SW1 is on 2 boards, Base in base\.tsx, 10k and Sense in sense\.tsx, 22k: name the board/)
   assert.equal(read('base.tsx'), BASE)
   assert.equal(read('sense.tsx'), SENSE)
 })
 
-test('add --ref <board>/<ref> writes into that board only', () => {
-  const r = run('add', 'models/R.step', '--ref', 'Sense/SW1', '--write')
+test('add --ref with --entry writes into that board only', () => {
+  const r = run('add', 'models/R.step', '--ref', 'SW1', '--entry', 'Sense', '--write')
   assert.equal(r.code, 0, r.err)
   assert.match(r.out, /wrote sense\.tsx:4/)
-  assert.match(read('sense.tsx'), /const SW1 = R0603\(\{ value: '22k', model: /)
+  assert.match(read('sense.tsx'), /const SW1 = R0603\('22k', \{ model: /)
   assert.equal(read('base.tsx'), BASE)
 })
 
 test('add --entry picks the board by entry file or board name; a ref on one board needs neither', () => {
   const r = run('add', 'models/R.step', '--ref', 'SW1', '--entry', 'base.tsx', '--write')
   assert.equal(r.code, 0, r.err)
-  assert.match(read('base.tsx'), /const SW1 = R0603\(\{ value: '10k', model: /)
+  assert.match(read('base.tsx'), /const SW1 = R0603\('10k', \{ model: /)
   const bad = run('add', 'models/R.step', '--ref', 'SW1', '--entry', 'Nowhere')
   assert.equal(bad.code, 1)
   assert.match(bad.err, /no board Nowhere; the boards: Base \(base\.tsx\), Sense \(sense\.tsx\)/)
@@ -75,11 +75,14 @@ test('add --entry picks the board by entry file or board name; a ref on one boar
   assert.match(one.out, /paste it into the options of R3 at sense\.tsx:6/)
 })
 
-test('align refuses a bare ref on two boards and takes <board>/<ref>, --entry or the entry argument', () => {
+test('align refuses a bare ref on two boards and takes --entry by board name or entry file', () => {
   const r = run('align', 'R1')
   assert.equal(r.code, 1)
   assert.match(r.err, /R1 is on 2 boards/)
-  for (const args of [['Sense/SW1'], ['--entry', 'Sense', 'SW1'], ['sense.tsx', 'SW1']]) {
+  for (const args of [
+    ['SW1', '--entry', 'Sense'],
+    ['SW1', '--entry', 'sense.tsx'],
+  ]) {
     const a = run('align', ...args)
     assert.equal(a.code, 0, `${args.join(' ')}: ${a.err}`)
     assert.match(a.out, /^SW1\s+models\/R\.step/m)
@@ -89,7 +92,7 @@ test('align refuses a bare ref on two boards and takes <board>/<ref>, --entry or
 test('check names the board in the fix of a flagged part', () => {
   const r = run('check')
   assert.equal(r.code, 1)
-  assert.match(r.out, /fix: pcbjs model add <file-or-url> --ref Sense\/R3 --write/)
+  assert.match(r.out, /fix: pcbjs model add <file-or-url> --ref R3 --entry sense\.tsx --write/)
 })
 
 test('findFootprint and boardMatches on their own', () => {
@@ -98,11 +101,7 @@ test('findFootprint and boardMatches on their own', () => {
   const p = { compiled: [c('Base', 'Base/pcb.tsx', ['SW1', 'R1']), c('Sense', 'Sense/pcb.tsx', ['SW1', 'U1'])] }
   assert.throws(() => findFootprint(p, 'SW1'), /SW1 is on 2 boards/)
   assert.equal(findFootprint(p, 'SW1', undefined, 'Sense').c.board.name, 'Sense')
-  assert.equal(findFootprint(p, 'Sense/SW1').c.board.name, 'Sense')
   assert.equal(findFootprint(p, 'U1').c.board.name, 'Sense')
-  assert.equal(findFootprint(p, 'Base/U1'), null)
   for (const n of ['Base', 'base', 'Base/pcb.tsx', './Base/pcb.tsx', 'Base/']) assert.ok(boardMatches(p.compiled[0], n), n)
   assert.ok(!boardMatches(p.compiled[0], 'Sense'))
-  assert.deepEqual(splitRef('Sense/SW1'), { board: 'Sense', ref: 'SW1' })
-  assert.deepEqual(splitRef('SW1'), { ref: 'SW1' })
 })

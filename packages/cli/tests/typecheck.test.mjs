@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { typecheck, typeErrorLine } from '../dist/typecheck.js'
+import { typecheck, typeErrorLine } from '../dist/project/typecheck.js'
 
 test('typecheck: reports an error as one findings line, caches it, and skips a project without tsconfig.json', () => {
   const dir = mkdtempSync(join(tmpdir(), 'pcbjs-tc-'))

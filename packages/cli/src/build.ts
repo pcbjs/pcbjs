@@ -2,16 +2,21 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } fr
 import { join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { build as viteBuild, preview as vitePreview } from 'vite'
-import { resolveConfig } from './config.js'
-import { CLIENT_DIR, viteConfig } from './vite.js'
-import { pluginState, type PluginState } from './plugin.js'
-import { boardDir, boardFile, writeFab, type Compiled } from './project.js'
-import { boardsIndex, boardsPayload, type BoardSlot } from './boards.js'
-import { CHECK_CAP, compileServer, compileSlots, errorText, logLevelFor, markStale, reportOf, slotLines, slotsFailed, totalLine, writeReport, type OutputOptions } from './check.js'
-import { msText } from '@pcbjs/export/findings'
-import { fabDate } from '@pcbjs/export/fab'
-import { pageHtml, previewPrerendered, safeSegment, scriptJson, siteRoutes, type Rendered } from './prerender.js'
-import { resolveRepo } from './repo.js'
+import { resolveConfig } from './project/config.js'
+import { viteConfig } from './server/vite-config.js'
+import { CLIENT_DIR } from './project/vite-base.js'
+import { pluginState, type PluginState } from './server/site.js'
+import { boardDir, boardFile, writeFab, type BoardOut, type Compiled } from './project/project.js'
+import { boardsIndex, boardsPayload, type BoardSlot } from './project/boards.js'
+import type { OutputOptions } from './check.js'
+import { CHECK_CAP, checkReport, failedReport, markStale, slotLines, slotsFailed, totalLine, writeReport } from './project/report.js'
+import { compileServer, compileSlots, errorText, logLevelFor } from './project/compile.js'
+import { viteLoader } from './project/loader.js'
+import { msText } from '@pcbjs/export/internal/findings'
+import { fabDate } from '@pcbjs/export/internal/fab'
+import { pageHtml, previewPrerendered, safeSegment, scriptJson, siteRoutes, type Rendered } from './server/prerender.js'
+import { resolveRepo } from './project/repo.js'
+import { freshCache } from '@pcbjs/compile/internal/cache'
 
 export interface BuildOptions extends OutputOptions {
   entries?: string[]
@@ -19,17 +24,27 @@ export interface BuildOptions extends OutputOptions {
   config?: string
   outDir?: string
   date?: string
+  /** every stage rebuilt; 'all' drops the route memos too */
+  fresh?: boolean | 'all'
 }
 
 export async function build(opts: BuildOptions): Promise<void> {
   // createServer would set NODE_ENV to development, giving the builds below Vue's development build
   process.env.NODE_ENV ??= 'production'
-  const cfg = await resolveConfig(opts.entries ?? [], 'build', opts.config, opts.root)
+  const started = performance.now()
+  let cfg: Awaited<ReturnType<typeof resolveConfig>>
+  try {
+    cfg = await resolveConfig(opts.entries ?? [], 'build', opts.config, opts.root)
+  } catch (e) {
+    if (opts.json) writeReport(opts.root ?? process.cwd(), opts.json, failedReport('build', opts.root ?? process.cwd(), e, performance.now() - started))
+    throw e
+  }
   if (opts.outDir) cfg.outDir = resolve(cfg.root, opts.outDir)
   // one date for every file of every set: --date, else SOURCE_DATE_EPOCH, else now, see fabDate
   cfg.fabDate = fabDate(opts.date)
   // every fab set written is read back and compared with its board, see fab-check.ts in @pcbjs/export
   cfg.fabCheck = true
+  if (opts.fresh) freshCache(cfg.root, opts.fresh === 'all')
   const state = pluginState(cfg)
   const say = (line: string) => {
     if (!opts.quiet) console.log(line)
@@ -38,9 +53,9 @@ export async function build(opts: BuildOptions): Promise<void> {
 
   // a failed entry does not stop the others
   const errors = new Map<BoardSlot, unknown>()
-  const server = await compileServer(cfg, state, { verbose: opts.verbose })
+  const server = await compileServer(cfg, { verbose: opts.verbose })
   try {
-    await compileSlots(server, cfg, state.slots, errors)
+    await compileSlots(viteLoader(server), cfg, state.slots, errors)
   } finally {
     await server.close()
   }
@@ -53,7 +68,7 @@ export async function build(opts: BuildOptions): Promise<void> {
 
   // a failed entry keeps its last fab set, marked stale
   if (!broken.length) rmSync(cfg.fabDir, { recursive: true, force: true })
-  const fabs = new Map<Compiled, { dir: string; zip: string; files: number }>()
+  const fabs = new Map<BoardOut, { dir: string; zip: string; files: number }>()
   for (const c of all) {
     const dir = join(cfg.fabDir, ...boardDir(c.board))
     if (broken.length) rmSync(dir, { recursive: true, force: true })
@@ -66,8 +81,8 @@ export async function build(opts: BuildOptions): Promise<void> {
   if (all.length) say(`fab    ${rel(cfg.fabDir)}  ${all.length} set${all.length === 1 ? '' : 's'}, ${files} files`)
   const report = (pages: string[]) => {
     if (!opts.json) return
-    const boards = state.slots.flatMap(s => reportOf(cfg, s, errors.get(s), { pages, fab: c => fabs.get(c) ?? null }))
-    console.log(`json   ${writeReport(cfg, opts.json, { boards })}`)
+    const r = checkReport(cfg, 'build', state.slots, s => errors.get(s as BoardSlot), 'skipped', performance.now() - started, { pages, fab: c => fabs.get(c) ?? null })
+    console.log(`json   ${writeReport(cfg.root, opts.json, r)}`)
   }
 
   if (broken.length) {
@@ -85,15 +100,14 @@ export async function build(opts: BuildOptions): Promise<void> {
 
   // a relative base cannot name the routes' URLs, so only an absolute one is prerendered
   const t0 = performance.now()
-  const vc = viteConfig(cfg, state, 'build')
   const logLevel = logLevelFor(cfg, opts.verbose)
   const prerender = isAbsoluteBase(cfg.base)
   if (!prerender) say(`site   base "${cfg.base}" is relative: client-rendered pages only, set an absolute base such as "/" to prerender every route`)
-  state.inline = !prerender
+  const vc = viteConfig(cfg, state, !prerender)
   await viteBuild({ ...vc, logLevel, mode: 'production', build: { ...vc.build, manifest: true } })
   let pages: string[] = []
   if (prerender) {
-    const ssrDir = join(cfg.root, '.pcbjs', 'cache', 'ssr')
+    const ssrDir = join(cfg.root, '.pcbjs', 'cache', 'vite', 'ssr')
     await viteBuild({
       ...vc,
       mode: 'production',
@@ -119,6 +133,7 @@ export async function build(opts: BuildOptions): Promise<void> {
     const file = join(cfg.outDir, ...boardFile(c.board).split('/').map(decodeURIComponent))
     mkdirSync(join(file, '..'), { recursive: true })
     writeFileSync(file, JSON.stringify(c.site))
+    if (c.glb) writeFileSync(file.replace(/\.json$/, '.glb'), c.glb)
   }
   writeFileSync(join(cfg.outDir, 'boards.json'), JSON.stringify(boardsIndex(all, state.slots.length === 1), null, 2))
   const n = state.slots.length,
@@ -165,7 +180,7 @@ export async function preview(opts: BuildOptions & { port?: number; host?: strin
   const cfg = await resolveConfig(opts.entries ?? [], 'build', opts.config, opts.root)
   if (opts.outDir) cfg.outDir = resolve(cfg.root, opts.outDir)
   if (!existsSync(cfg.outDir)) throw new Error(`${cfg.outDir} does not exist: run pcbjs build first`)
-  const vc = viteConfig(cfg, pluginState(cfg), 'build')
+  const vc = viteConfig(cfg, pluginState(cfg))
   // a prerendered site is served as a static host serves it, a client-rendered one with Vite's index.html fallback
   const prerendered = existsSync(join(cfg.outDir, '404.html')) && isAbsoluteBase(cfg.base)
   const server = await vitePreview({

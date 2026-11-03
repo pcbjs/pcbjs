@@ -4,8 +4,10 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { remoteSource } from '@pcbjs/compile/models'
-import { KICAD_3D_TAG, fetchedPath, fetchNotice, licenceOf, remoteResolver, retryFetches, sourceUrl } from '../dist/fetch-model.js'
+import { modelFiles, remoteSource } from '@pcbjs/compile/internal/models'
+import { realm } from '@pcbjs/core/internal/realm'
+import { cacheIndex } from '@pcbjs/compile/internal/user-cache'
+import { KICAD_3D_TAG, fetchedPath, fetchNotice, licenceOf, remoteResolver, retryFetches, sourceUrl } from '../dist/project/fetch-model.js'
 
 const KICAD = 'kicad:Crystal.3dshapes/Crystal_SMD_3225-4Pin_3.2x2.5mm.step'
 
@@ -18,8 +20,9 @@ test('a source is cached by its kind under .pcbjs/models/fetched', () => {
   assert.match(licenceOf('lcsc:C1'), /no licence stated/)
 })
 
-test('the compile takes kicad:, lcsc:, https and KiCad variable paths as fetched sources', () => {
-  assert.equal(remoteSource('${KICAD9_3DMODEL_DIR}/Crystal.3dshapes/X.step'), 'kicad:Crystal.3dshapes/X.step')
+test('the compile takes kicad:, lcsc: and https as fetched sources; a KiCad variable path is no source in code', () => {
+  assert.equal(remoteSource('${KICAD9_3DMODEL_DIR}/Crystal.3dshapes/X.step'), null)
+  assert.equal(remoteSource('kicad:Crystal.3dshapes/X.step'), 'kicad:Crystal.3dshapes/X.step')
   assert.equal(remoteSource('lcsc:C123'), 'lcsc:C123')
   assert.equal(remoteSource('https://x.org/a.step'), 'https://x.org/a.step')
   assert.equal(remoteSource('./models/a.step'), null)
@@ -44,6 +47,26 @@ test('the resolver finds a cached file, and offline gives null and one notice na
     if (had === undefined) delete process.env.PCBJS_OFFLINE
     else process.env.PCBJS_OFFLINE = had
     retryFetches()
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('a model still waiting keys the cache on where it would land: the project folder and the user cache', () => {
+  const root = mkdtempSync(join(tmpdir(), 'pcbjs-fetch-'))
+  const had = realm().remoteModel
+  try {
+    realm().remoteModel = remoteResolver(root)
+    const box = { kind: 'box', w: 1, h: 1, height: 1, fetch: 'lcsc:C1' }
+    const local = { file: './m.step', path: join(root, 'm.step') }
+    const files = modelFiles({
+      footprints: [
+        { ref: 'J1', model: box },
+        { ref: 'J2', model: local },
+      ],
+    })
+    assert.deepEqual(files, [cacheIndex(), fetchedPath(root, 'lcsc:C1'), join(root, 'm.step')].sort())
+  } finally {
+    realm().remoteModel = had
     rmSync(root, { recursive: true, force: true })
   }
 })

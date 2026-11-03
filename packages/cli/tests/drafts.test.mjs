@@ -1,5 +1,5 @@
-// Drafts through a mock editor host: the language client's didChange compiles the unsaved text, repaired when it is broken,
-// the board says draft and the skipped span comes back as a hint; text past repair keeps the last good board; a close
+// Drafts through a mock editor on the session WebSocket: the language client's didChange compiles the unsaved text, repaired when
+// it is broken, the board says draft and the skipped span comes back as a hint; text past repair keeps the last good board; a close
 // drops the draft and the file on disk compiles again.
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
@@ -7,15 +7,13 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { WebSocketServer } from 'ws'
+import WebSocket from 'ws'
 import { createMessageConnection } from 'vscode-jsonrpc'
-import { messageChannel } from '@pcbjs/lsp/channel'
-import { dev } from '../dist/server.js'
+import { messageChannel } from '@pcbjs/lsp/internal/channel'
+import { serveSession } from './fixtures/proc.mjs'
 import { board } from './fixtures/workspace.mjs'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
-const PORT = 5263
-const HOST_PORT = 5273
 
 const root = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-drafts-')))
 mkdirSync(join(root, 'node_modules'))
@@ -26,37 +24,34 @@ const saved = board('Draft')
 writeFileSync(file, saved)
 const uri = pathToFileURL(file).href
 
-/** The editor host: takes the dev server's connection, records its events and runs a language client on the same socket. */
-function mockHost() {
-  const wss = new WebSocketServer({ host: '127.0.0.1', port: HOST_PORT })
+/** The editor: connects to the session WebSocket, records its events and runs a language client on the same socket. */
+function mockEditor(port) {
+  const sock = new WebSocket(`ws://127.0.0.1:${port}/__pcbjs/session`)
   const events = []
   const waiters = []
-  const connected = new Promise(ok =>
-    wss.on('connection', (sock, req) => {
-      if (req.url !== '/tok') {
-        sock.close()
-        return
-      }
-      const ch = messageChannel(m => sock.send(JSON.stringify(m)))
-      sock.on('message', raw => {
-        const m = JSON.parse(raw.toString())
-        if (m.jsonrpc === '2.0') {
-          ch.push(m)
-          return
-        }
-        events.push(m)
-        for (const w of waiters.slice())
-          if (w.pred(m)) {
-            waiters.splice(waiters.indexOf(w), 1)
-            w.ok(m)
-          }
-      })
-      sock.send(JSON.stringify({ event: 'pcbjs:ide:hello', data: { name: 'mock', version: '0', protocol: 2, major: 1, capabilities: ['boards', 'lsp'] } }))
+  const ch = messageChannel(m => sock.send(JSON.stringify(m)))
+  const connected = new Promise((ok, fail) => {
+    sock.once('error', fail)
+    sock.once('open', () => {
+      sock.send(JSON.stringify({ event: 'pcbjs:ide:hello', data: { name: 'mock', version: '0', protocol: 2, major: 1, capabilities: ['boards', 'lsp'], role: 'editor' } }))
       const conn = createMessageConnection(ch.reader, ch.writer)
       conn.listen()
       ok(conn)
-    }),
-  )
+    })
+  })
+  sock.on('message', raw => {
+    const m = JSON.parse(raw.toString())
+    if (m.jsonrpc === '2.0') {
+      ch.push(m)
+      return
+    }
+    events.push(m)
+    for (const w of waiters.slice())
+      if (w.pred(m)) {
+        waiters.splice(waiters.indexOf(w), 1)
+        w.ok(m)
+      }
+  })
   const next = (pred, ms = 30000) =>
     new Promise((ok, fail) => {
       const hit = events.find(pred)
@@ -73,22 +68,22 @@ function mockHost() {
         },
       })
     })
-  return { wss, connected, next, events }
+  return { sock, connected, next, events }
 }
 
-const host = mockHost()
-const server = await dev({ root, port: PORT, host: '127.0.0.1', ide: `ws://127.0.0.1:${HOST_PORT}/tok` })
+const session = await serveSession(root)
+const editor = mockEditor(session.port)
 after(async () => {
-  await server.close()
-  host.wss.close()
+  editor.sock.close()
+  await session.stop()
   rmSync(root, { recursive: true, force: true })
 })
 
-const boards = pred => host.next(m => m.event === 'pcbjs:ide:boards' && pred(m.data)).then(m => m.data)
+const boards = pred => editor.next(m => m.event === 'pcbjs:ide:boards' && pred(m.data)).then(m => m.data)
 const draftBoard = d => d.boards[0]
 
 test('drafts: broken unsaved text previews repaired, marked draft, its skipped span a hint; past repair the last good board stays', async () => {
-  const conn = await host.connected
+  const conn = await editor.connected
   const diags = []
   conn.onNotification('textDocument/publishDiagnostics', p => diags.push(p))
   await boards(d => draftBoard(d)?.status === 'ok')

@@ -1,16 +1,17 @@
-// inspect and shot from one compile: several queries in one run, every --select and --layer combination of shot, and the
-// answer from a running dev server of the project when its board is current, through /__pcbjs/cli/.
+// inspect and shot from one compile: several queries in one run, a shot per --select with the layers together, and the
+// answer from a live session of the project, through its socket, shot rendered there.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { realpathSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { dev } from '../dist/server.js'
 import { inspectRequests } from '../dist/cli.js'
-import { inspectOutput } from '../dist/inspect.js'
-import { shotCombos, shotJobs } from '../dist/shot.js'
+import { inspectOutput } from '../dist/project/inspect.js'
+import { shotJobs } from '../dist/shot.js'
 import { makeStack, stackBoard } from './fixtures/workspace.mjs'
+import { ask, sessionOf } from '../dist/session/thin.js'
+import { stop } from './fixtures/proc.mjs'
 
 const BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'pcbjs', 'bin', 'pcbjs.js')
 const run = (cwd, ...args) =>
@@ -62,76 +63,71 @@ test('inspect: one answer prints as before, several share the frame lines under 
   })
 })
 
-test('shot: every --select with every --layer, --layer for 2D only once there are several', () => {
-  assert.deepEqual(shotCombos('2d', ['U1', 'Q1'], ['F.Cu', 'B.Cu']), [
-    { select: 'U1', layer: 'F.Cu' },
-    { select: 'U1', layer: 'B.Cu' },
-    { select: 'Q1', layer: 'F.Cu' },
-    { select: 'Q1', layer: 'B.Cu' },
-  ])
-  assert.deepEqual(shotCombos('3d', ['U1', 'Q1'], ['F.Cu', 'B.Cu']), [{ select: 'U1' }, { select: 'Q1' }])
-  assert.deepEqual(shotCombos('3d', [], ['F.Cu']), [{ layer: 'F.Cu' }], 'one layer keeps its old file name')
-  assert.deepEqual(shotCombos('2d', [], []), [{}])
-  const files = shotJobs([{ name: 'B', targets: [null] }], ['2d', '3d'], '/o', { select: ['U1', 'Q1'], layer: ['F.Cu', 'B.Cu'] }).map(j => j.file)
-  assert.deepEqual(files, [
-    '/o/B-2d-select-U1-F.Cu.png',
-    '/o/B-2d-select-U1-B.Cu.png',
-    '/o/B-2d-select-Q1-F.Cu.png',
-    '/o/B-2d-select-Q1-B.Cu.png',
-    '/o/B-3d-select-U1.png',
-    '/o/B-3d-select-Q1.png',
-  ])
+test('shot: one shot per --select and view, the layers shown together in one', () => {
+  const files = shotJobs([{ entry: '/p/b.tsx', name: 'B', targets: [null] }], ['2d', '3d'], '/o', { layers: ['F.Cu', 'B.Cu'] }, ['U1', 'Q1']).map(j => j.file)
+  assert.deepEqual(files, ['/o/B-2d-select-U1-F.Cu+B.Cu.png', '/o/B-2d-select-Q1-F.Cu+B.Cu.png', '/o/B-3d-select-U1-F.Cu+B.Cu.png', '/o/B-3d-select-Q1-F.Cu+B.Cu.png'])
+  const [j] = shotJobs([{ entry: '/p/b.tsx', name: 'B', targets: [null] }], ['3d'], '/o', {}, ['U1'])
+  assert.deepEqual(j.spec, { view: '3d', entry: '/p/b.tsx', frame: 'U1', highlight: ['U1'] }, '--select frames and highlights')
 })
 
-// ---- a dev server of the project answers ----
-let w, server, base
+// ---- a session of the project answers ----
+let w, session, root
 before(async () => {
   w = makeStack()
-  server = await dev({ root: w.a, port: 0, host: '127.0.0.1' })
-  server.config.logger.info = () => {}
-  base = `http://127.0.0.1:${server.httpServer.address().port}`
-  await fetch(`${base}/__pcbjs/board.json`)
+  root = realpathSync(w.a)
+  session = spawn(process.execPath, [BIN, 'session', 'serve', '--port', '0', '--host', '127.0.0.1'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
+  let out = ''
+  session.stdout.on('data', d => (out += d))
+  session.stderr.on('data', d => (out += d))
+  for (let i = 0; i < 600 && !/\[pcbjs\] session \w+, pid/.test(out); i++) await new Promise(r => setTimeout(r, 50))
 })
 after(async () => {
-  await server?.close()
+  if (session && session.exitCode === null) {
+    await stop(session)
+  }
   if (w) rmSync(w.root, { recursive: true, force: true })
 })
 
-test('dev reuse: /__pcbjs/cli/board says whether the board of an entry is current', async () => {
-  const entry = realpathSync(join(w.a, 'pcb.tsx'))
-  const b = await (await fetch(`${base}/__pcbjs/cli/board?entry=${encodeURIComponent(entry)}`)).json()
-  assert.equal(b.current, true)
-  assert.deepEqual([b.name, b.targets, b.refs, b.route, b.displayed], ['A', [null], ['TP1', 'TP2'], '/', true])
-  const none = await (await fetch(`${base}/__pcbjs/cli/board?entry=/nope.tsx`)).json()
-  assert.deepEqual(none, { current: false, reason: 'no such entry on this server' })
-})
-
-test('dev reuse: inspect with several queries answers from the dev server in one line, and --fresh compiles here', async () => {
-  const r = await run(w.a, 'inspect', 'TP1', 'V', '--lengths', 'V')
-  // the board has a track and no route: that one answer is not found, so the run exits with 1 after printing all
+test('session reuse: inspect with several queries answers from the session in one line, and --fresh compiles here', async () => {
+  const r = await run(w.a, 'inspect', 'TP1', 'V', '--lengths', 'W')
+  // the board has no net W: that one answer is not found, so the run exits with 1 after printing all
   assert.equal(r.code, 1, r.stderr)
-  assert.match(r.stderr, new RegExp(`^dev server  ${base}/  pcb\\.tsx current, compiled .* ago in .*; --fresh compiles here$`, 'm'))
+  assert.match(r.stderr, /^session \w{8}  snapshot \w{8}\.\d+; --fresh compiles here$/m)
   assert.doesNotMatch(r.stderr, /^compiled /m)
   assert.match(r.stdout, /^A 1  pcb\.tsx  mm/)
   assert.match(r.stdout, /^== TP1\nTP1  V  /m)
   assert.match(r.stdout, /^== V\nnet V  2 pads/m)
-  assert.match(r.stdout, /^== --lengths V\nno route of the net, pair or group V$/m)
+  assert.match(r.stdout, /^== --lengths W\nno route of the net, pair or group W$/m)
   const f = await run(w.a, 'inspect', 'TP1', '--fresh')
   assert.equal(f.code, 0, f.stderr)
   assert.match(f.stderr, /^compiled  pcb\.tsx  \d/m)
-  assert.doesNotMatch(f.stderr, /dev server/)
+  assert.doesNotMatch(f.stderr, /^session /m)
 })
 
-test('dev reuse: an edit just made is compiled first, so the answer is never older than the files', async () => {
+test('session reuse: an edit just made is compiled first, so the answer is never older than the files', async () => {
   writeFileSync(join(w.a, 'pcb.tsx'), stackBoard('A', '7'))
   const r = await run(w.a, 'inspect', 'TP1')
-  assert.match(r.stderr, /^dev server  /m)
+  assert.match(r.stderr, /^session /m)
   assert.match(r.stdout, /^A 7  pcb\.tsx  /)
 })
 
-test('dev reuse: without a live dev server inspect compiles itself', async () => {
-  await server.close()
-  server = null
+test('session reuse: shot renders in the session by its worker, each PNG naming the snapshot, a bad spec refused', async () => {
+  const r = await run(w.a, 'shot', '--view', '3d', '--view', '2d', '--size', '200x150', '--select', 'TP1')
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+  const m = /^session \w{8}  snapshot (\S+); --fresh compiles here$/m.exec(r.stderr)
+  assert.ok(m, r.stderr)
+  for (const f of ['A-2d-select-TP1.png', 'A-3d-select-TP1.png']) assert.ok(existsSync(join(w.a, '.pcbjs', 'shots', f)), f)
+  assert.match(r.stdout, new RegExp(`A-3d-select-TP1\\.png  200x150  .*A 3d iso; snapshot ${m[1].replace('.', '\\.')}; frame TP1`))
+  const info = await sessionOf(root)
+  await assert.rejects(ask(info, 'test', root, 'session/render', { project: root, spec: { view: '4d' } }), /view must be 2d, 3d or sch/)
+  const e = await ask(info, 'test', root, 'session/render', { project: root, spec: { view: 'sch', size: [100, 80] } })
+  assert.equal(Buffer.from(e.value.png, 'base64').toString('latin1', 1, 4), 'PNG')
+  assert.equal(e.value.width, 100)
+  assert.match(e.value.legend, new RegExp(`^A sch; snapshot ${e.snapshot.replace('.', '\\.')}$`))
+})
+
+test('session reuse: without a live session inspect compiles itself', async () => {
+  await stop(session)
   assert.ok(!existsSync(join(w.a, '.pcbjs', 'dev.json')))
   const r = await run(w.a, 'inspect', 'TP1', 'TP2')
   assert.equal(r.code, 0, r.stderr)

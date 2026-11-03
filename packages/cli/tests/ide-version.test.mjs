@@ -2,7 +2,7 @@
 // compareExtensions also reads the Marketplace scheme scripts/package.mjs of @pcbjs/vscode packs the VSIX with.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { compareExtensions, compareVersions, marketVersion } from '../dist/ide.js'
+import { compareExtensions, compareVersions, marketVersion } from '../dist/session/ide.js'
 
 test('compareVersions: semver order, pre-releases before their release, numeric identifiers by number', () => {
   const order = [

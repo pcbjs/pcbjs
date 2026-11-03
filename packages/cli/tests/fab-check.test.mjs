@@ -4,9 +4,10 @@ import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveConfig } from '../dist/config.js'
-import { pluginState } from '../dist/plugin.js'
-import { compileServer, compileSlots } from '../dist/check.js'
+import { resolveConfig } from '../dist/project/config.js'
+import { pluginState } from '../dist/server/site.js'
+import { compileServer, compileSlots } from '../dist/project/compile.js'
+import { viteLoader } from '../dist/project/loader.js'
 
 const EXAMPLES = fileURLToPath(new URL('../../../examples/', import.meta.url))
 // usb3-hub and motor-stack are boards under review that are still being built
@@ -33,10 +34,10 @@ for (const ex of BOARDS) {
     const cfg = await resolveConfig([], 'build', undefined, root, () => {})
     cfg.fabCheck = true
     const state = pluginState(cfg)
-    const server = await compileServer(cfg, state)
+    const server = await compileServer(cfg)
     const errors = new Map()
     try {
-      await compileSlots(server, cfg, state.slots, errors)
+      await compileSlots(viteLoader(server), cfg, state.slots, errors)
     } finally {
       await server.close()
     }

@@ -5,6 +5,16 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { skills } from '../dist/skills.js'
+import { codexToml } from '../dist/agent-config.js'
+
+test('skills install: a Codex config keeps its other tables, and the pcbjs table is replaced in place', () => {
+  const table = '[mcp_servers.pcbjs]\ncommand = "npx"\nargs = ["--no-install", "pcbjs", "mcp"]\n'
+  assert.equal(codexToml(''), table)
+  const other = 'model = "o3"\n\n[mcp_servers.other]\ncommand = "x"\n'
+  assert.equal(codexToml(other), `${other}\n${table}`)
+  const old = 'model = "o3"\n\n[mcp_servers.pcbjs]\ncommand = "old"\n\n[mcp_servers.other]\ncommand = "x"\n'
+  assert.equal(codexToml(old), `model = "o3"\n\n${table}\n[mcp_servers.other]\ncommand = "x"\n`)
+})
 
 const pkg = dirname(createRequire(import.meta.url).resolve('@pcbjs/skills/package.json'))
 const target = (up, name) => join(up, 'node_modules', '@pcbjs', 'skills', name)

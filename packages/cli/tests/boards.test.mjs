@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { boardsIndex, boardsPayload, entriesReaching, markConflicts, routeEndpoint, slotsFor } from '../dist/boards.js'
-import { boardUrls } from '../dist/project.js'
-import { pluginState, virtualModule } from '../dist/plugin.js'
-import { CONFIG_NAMES, LEGACY_CONFIG_NAMES, findConfig, followMode, legacyWarning, resolveConfig } from '../dist/config.js'
+import { boardsIndex, boardsPayload, entriesReaching, markConflicts, routeEndpoint, slotsFor } from '../dist/project/boards.js'
+import { boardUrls } from '../dist/project/project.js'
+import { pluginState, virtualModule } from '../dist/server/site.js'
+import { CONFIG_NAMES, findConfig, resolveConfig } from '../dist/project/config.js'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,8 +11,8 @@ import { join } from 'node:path'
 const entry = rel => ({ file: `/p/${rel}`, rel })
 const fake = (rel, name, status = 'ok') => ({
   entry: entry(rel),
-  board: { name, title: name, revision: '1' },
-  site: { name, fab: { status } },
+  board: { name, title: name, rev: '1' },
+  site: { name, footprints: [], fab: { status } },
 })
 // a slot's compile: one Compiled per target
 const one = (...a) => [fake(...a)]
@@ -28,7 +28,7 @@ test('boards: a repeated board name is a conflict naming both files, the first e
   assert.match(slots[2].conflict, /"X".*a\.tsx.*c\.tsx/)
   const p = boardsPayload(slots)
   assert.deepEqual(
-    p.boards.map(b => b.name),
+    p.boards.map(b => b.board),
     ['X', 'Y'],
   )
   assert.equal(p.single, false)
@@ -40,7 +40,7 @@ test('boards: a repeated board name is a conflict naming both files, the first e
   slots[2].error = 'syntax error'
   markConflicts(slots)
   assert.deepEqual(
-    boardsPayload(slots).boards.map(b => b.name),
+    boardsPayload(slots).boards.map(b => b.board),
     ['X', 'Y'],
   )
   slots[2].error = null
@@ -54,8 +54,8 @@ test('boards: boards.json index', () => {
   const idx = boardsIndex([fake('main.tsx', 'Blinky'), fake('coin.tsx', 'Coin', 'incomplete')], false)
   assert.deepEqual(idx, {
     boards: [
-      { name: 'Blinky', title: 'Blinky', revision: '1', file: 'boards/Blinky.json', entry: 'main.tsx', status: 'ok' },
-      { name: 'Coin', title: 'Coin', revision: '1', file: 'boards/Coin.json', entry: 'coin.tsx', status: 'incomplete' },
+      { name: 'Blinky', title: 'Blinky', rev: '1', file: 'boards/Blinky.json', entry: 'main.tsx', status: 'ok' },
+      { name: 'Coin', title: 'Coin', rev: '1', file: 'boards/Coin.json', entry: 'coin.tsx', status: 'incomplete' },
     ],
     single: false,
   })
@@ -84,78 +84,59 @@ test('boards: a changed file reaches only the entries that import it', () => {
   assert.equal(entriesReaching(new Set(), entries), null)
 })
 
-test('boards: /__pcbjs/ paths with and without a board prefix', () => {
+test('boards: /__pcbjs/ paths start with the board name', () => {
   const names = ['Blinky', 'Coin']
   assert.deepEqual(routeEndpoint('Coin/board.json', names), { name: 'Coin', file: 'board.json' })
   assert.deepEqual(routeEndpoint('Coin/fab/Coin-fab-1.zip', names), { name: 'Coin', file: 'fab/Coin-fab-1.zip' })
-  assert.deepEqual(routeEndpoint('board.json', names), { name: 'Blinky', file: 'board.json' })
-  assert.deepEqual(routeEndpoint('fab/Blinky-F_Cu.gtl', names), { name: 'Blinky', file: 'fab/Blinky-F_Cu.gtl' })
-  assert.deepEqual(routeEndpoint('Blinky.pcb.svg', names), { name: 'Blinky', file: 'Blinky.pcb.svg' })
+  assert.deepEqual(routeEndpoint('Blinky/Blinky.pcb.svg', names), { name: 'Blinky', file: 'Blinky.pcb.svg' })
+  assert.equal(routeEndpoint('board.json', names), null)
+  assert.equal(routeEndpoint('fab/Blinky-F_Cu.gtl', names), null)
   assert.equal(routeEndpoint('board.json', []), null)
 })
 
-test('boards: the virtual module keeps the single-board default export and error', async () => {
+test('boards: the virtual module carries each target as its facets', async () => {
   const state = pluginState({ entries: [entry('a.tsx'), entry('b.tsx')] })
   state.slots[0].error = 'boom'
   state.slots[1].compiled = one('b.tsx', 'B')
   const src = virtualModule(state)
   const mod = await import('data:text/javascript,' + encodeURIComponent(src))
-  assert.equal(mod.default, null)
-  assert.equal(mod.error, 'boom')
   assert.equal(mod.single, false)
   assert.deepEqual(
-    mod.boards.map(b => b.name),
+    mod.boards.map(b => b.board),
     ['B'],
   )
   assert.deepEqual(mod.errors, { 'a.tsx': 'boom', 'b.tsx': null })
   assert.deepEqual(mod.entries, { B: 'b.tsx' })
 })
 
-test('config: pcb.config.{ts,mts,js,mjs} first, the old pcbjs.config.* after them and flagged legacy', () => {
+test('config: pcb.config.{ts,mts,js,mjs} in that order, no other name', () => {
   assert.deepEqual(CONFIG_NAMES, ['pcb.config.ts', 'pcb.config.mts', 'pcb.config.js', 'pcb.config.mjs'])
-  assert.deepEqual(LEGACY_CONFIG_NAMES, ['pcbjs.config.ts', 'pcbjs.config.mts', 'pcbjs.config.js', 'pcbjs.config.mjs'])
   const having =
     (...names) =>
     f =>
       names.some(n => f === `/p/${n}`)
   assert.equal(findConfig('/p', having()), null)
-  assert.deepEqual(findConfig('/p', having('pcb.config.mjs', 'pcb.config.mts')), { file: '/p/pcb.config.mts', legacy: false })
-  assert.deepEqual(findConfig('/p', having('pcbjs.config.ts', 'pcb.config.js')), { file: '/p/pcb.config.js', legacy: false })
-  assert.deepEqual(findConfig('/p', having('pcbjs.config.js')), { file: '/p/pcbjs.config.js', legacy: true })
-  assert.equal(legacyWarning('/p/pcbjs.config.ts'), 'pcbjs: pcbjs.config.ts is deprecated, rename it to pcb.config.ts')
+  assert.equal(findConfig('/p', having('pcb.config.mjs', 'pcb.config.mts')), '/p/pcb.config.mts')
+  assert.equal(findConfig('/p', having('pcbjs.config.js')), null)
 })
 
-test('config: an old pcbjs.config.ts still loads, with one deprecation line; editor.follow defaults to click', async () => {
+test('config: pcb.config.mjs loads silently and reloads', async () => {
   const root = mkdtempSync(join(tmpdir(), 'pcbjs-config-'))
   const warn = console.warn,
     lines = []
   console.warn = (...a) => lines.push(a.join(' '))
   try {
     writeFileSync(join(root, 'main.tsx'), 'export default null\n')
-    writeFileSync(join(root, 'pcbjs.config.mjs'), "export default { base: '/old/', editor: { follow: 'meta-click' } }\n")
+    writeFileSync(join(root, 'pcb.config.mjs'), "export default { base: '/b/' }\n")
     let cfg = await resolveConfig(['main.tsx'], 'build', undefined, root)
-    assert.equal(cfg.configFile, join(root, 'pcbjs.config.mjs'))
-    assert.equal(cfg.base, '/old/')
-    assert.deepEqual(cfg.editor, { follow: 'meta-click' })
-    assert.deepEqual(lines, ['pcbjs: pcbjs.config.mjs is deprecated, rename it to pcb.config.mjs'])
-    // the new name wins and says nothing
-    lines.length = 0
+    assert.equal(cfg.configFile, join(root, 'pcb.config.mjs'))
+    assert.equal(cfg.base, '/b/')
     writeFileSync(join(root, 'pcb.config.mjs'), "export default { base: '/new/' }\n")
     cfg = await resolveConfig(['main.tsx'], 'build', undefined, root)
-    assert.equal(cfg.configFile, join(root, 'pcb.config.mjs'))
     assert.equal(cfg.base, '/new/')
-    assert.deepEqual(cfg.editor, { follow: 'click' })
     assert.deepEqual(lines, [])
   } finally {
     console.warn = warn
     rmSync(root, { recursive: true, force: true })
   }
-  const notes = []
-  assert.equal(followMode(undefined), 'click')
-  assert.equal(followMode('meta-click'), 'meta-click')
-  assert.equal(
-    followMode('double-click', m => notes.push(m)),
-    'click',
-  )
-  assert.equal(notes.length, 1)
 })

@@ -3,6 +3,7 @@ import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cliVersion, installRange } from './doctor.js'
 import { parseBoard, shapeBoard, type BoardFlags } from './board-flags.js'
+import { recommendExtension, recommendInDevcontainers, repoRoot } from './recommend.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 /** packages/cli/templates, from dist or src alike. */
@@ -19,7 +20,6 @@ const RENAME: Record<string, string> = { _gitignore: '.gitignore' }
 
 export interface CreateOptions extends BoardFlags {
   dir: string
-  template?: string
   /** an example board instead of the template */
   example?: string
   cwd?: string
@@ -29,17 +29,8 @@ export interface CreateOptions extends BoardFlags {
 export interface CreateResult {
   dir: string
   name: string
-  template: string
   example?: string
   files: string[]
-}
-
-export function templates(): string[] {
-  return existsSync(TEMPLATES_DIR)
-    ? readdirSync(TEMPLATES_DIR)
-        .filter(f => f !== 'examples' && statSync(join(TEMPLATES_DIR, f)).isDirectory())
-        .sort()
-    : []
 }
 
 /** Each example board and its one-line description. */
@@ -70,6 +61,7 @@ function packageName(name: string): string {
 
 function walk(dir: string, base = dir): string[] {
   return readdirSync(dir)
+    .filter(f => !['.pcbjs', 'node_modules', '.git'].includes(f))
     .sort()
     .flatMap(f => {
       const p = join(dir, f)
@@ -80,19 +72,15 @@ function walk(dir: string, base = dir): string[] {
 function source(opts: CreateOptions): string {
   const flags = [opts.layers, opts.fab, opts.size, opts.outline].some(v => v !== undefined)
   if (opts.example !== undefined) {
-    if (opts.template !== undefined || flags) throw new Error('--example takes no --template, --layers, --fab, --size or --outline')
+    if (flags) throw new Error('--example takes no --layers, --fab, --size or --outline')
     const all = Object.keys(examples())
     if (!all.includes(opts.example)) throw new Error(`unknown example ${JSON.stringify(opts.example)}, available: ${all.join(', ') || 'none'}`)
     return join(EXAMPLES_DIR, opts.example)
   }
-  const template = opts.template ?? 'board'
-  const available = templates()
-  if (!available.includes(template)) throw new Error(`unknown template ${JSON.stringify(template)}, available: ${available.join(', ') || 'none'}`)
-  return join(TEMPLATES_DIR, template)
+  return join(TEMPLATES_DIR, 'board')
 }
 
 export function create(opts: CreateOptions): CreateResult {
-  const template = opts.template ?? 'board'
   const log = opts.log ?? (line => console.log(line))
   const src = source(opts)
   const board = opts.example === undefined ? parseBoard(opts) : undefined
@@ -119,14 +107,20 @@ export function create(opts: CreateOptions): CreateResult {
     writeFileSync(join(target, out), body)
     files.push(out)
   }
+  // a clone prompts for the extension; a devcontainer of the project or of the repository around it lists it for Codespaces
+  const repo = repoRoot(dirname(target))
+  const recommended = [...recommendExtension(target), ...recommendInDevcontainers(target), ...(repo ? recommendInDevcontainers(repo).map(l => `${l} of ${repo}`) : [])]
+  files.push(join('.vscode', 'extensions.json'))
   const shown = relative(opts.cwd ?? process.cwd(), target) || '.'
-  log(opts.example === undefined ? `pcbjs: created the board ${name} in ${shown} from the ${template} template\n` : `pcbjs: created ${shown} from the ${opts.example} example\n`)
+  log(opts.example === undefined ? `pcbjs: created the board ${name} in ${shown} from the board template\n` : `pcbjs: created ${shown} from the ${opts.example} example\n`)
+  for (const l of recommended) log(`pcbjs: ${l}`)
   log('Next:')
   if (shown !== '.') log(`  cd ${shown}`)
   log('  npm install')
+  log('  npx pcbjs check  # check the board and TypeScript before building')
   log('  npm run dev      # edit pcb.tsx, the viewer updates on every save')
   log('  npm run build    # fab files and the site, with the DRC and ERC summary')
-  return { dir: target, name, template, ...(opts.example === undefined ? {} : { example: opts.example }), files }
+  return { dir: target, name, ...(opts.example === undefined ? {} : { example: opts.example }), files }
 }
 
 /** `pcbjs create`: --list-examples prints the examples, else a project in dir. */

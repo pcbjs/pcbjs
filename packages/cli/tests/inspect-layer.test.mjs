@@ -2,14 +2,14 @@
 // with their fill area, pieces and removed islands; inspectRequests turns --layer into requests.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h, stitch } from '@pcbjs/core'
+import PCB, { h, pour, stitch } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
-import { inspectBoard } from '../dist/inspect.js'
+import { fp, net } from './parts.mjs'
+import { inspectBoard } from '../dist/project/inspect.js'
 import { inspectRequests } from '../dist/cli.js'
 
 const pad = (ref, x, y, net) =>
-  h(
-    'footprint',
+  fp(
     { ref, value: 'V', id: 'pcbjs:TestPad', at: `${x}mm ${y}mm`, 'net:pad1': net, bom: false },
     h('pad', { num: 1, size: 1, shape: 'circle', drill: 0.5 }),
     h('path', { layer: 'F.SilkS', d: 'M -1 -1.5 A 1.5 1.5 0 0 1 1 -1.5', width: 0.2 }),
@@ -23,7 +23,7 @@ const board = () =>
       pad('TP1', 5, 10, 'GND'),
       pad('TP2', 25, 10, 'GND'),
       h('text', { layer: 'F.SilkS', at: '15 3', size: 1 }, 'rev 2'),
-      h('zone', { layer: 'B.Cu', net: 'GND', d: 'M 1 1 H 29 V 19 H 1 Z' }),
+      pour(net('GND'), 'B.Cu', 'M 1 1 H 29 V 19 H 1 Z'),
     ),
   )
 
@@ -31,17 +31,17 @@ test('inspect --layer F.SilkS: texts with their strokes, drawings with their arc
   const r = inspectBoard(board(), 'pcb.tsx', '/', undefined, { layer: 'silk' })
   assert.equal(r.found, true)
   assert.equal(r.json.layer, 'F.SilkS', 'the alias resolves')
-  const t = r.json.items.find(i => i.kind === 'text')
+  const t = r.json.items.find(i => i.type === 'text')
   assert.equal(t.text, 'rev 2')
-  assert.ok(t.strokes.length > 3 && t.strokes.every(s => s.bounds && s.pts.length >= 2))
-  assert.ok(t.bounds.x[0] < 15 && t.bounds.x[1] > 15, 'centred on its at')
-  assert.ok('src' in t, 'src is null without the JSX dev runtime')
-  const d = r.json.items.filter(i => i.kind === 'drawing')
-  assert.deepEqual(d.map(i => i.ref).sort(), ['TP1', 'TP2'])
+  assert.ok(t.strokes.length > 3 && t.strokes.every(s => s.length >= 2))
+  assert.ok(t.bounds.x < 15 && t.bounds.x + t.bounds.w > 15, 'centred on its at')
+  assert.ok('source' in t, 'source is null without the JSX dev runtime')
+  const d = r.json.items.filter(i => i.type === 'graphic')
+  assert.deepEqual(d.map(i => i.part).sort(), ['TP1', 'TP2'])
   assert.equal(d[0].prims[0][0].kind, 'arc')
   // the arc's ink runs half its width past its ends
-  const tp1 = d.find(i => i.ref === 'TP1')
-  assert.deepEqual(tp1.bounds.x, [3.9, 6.1])
+  const tp1 = d.find(i => i.part === 'TP1')
+  assert.deepEqual([tp1.bounds.x, tp1.bounds.x + tp1.bounds.w], [3.9, 6.1])
   assert.ok(r.text.some(l => /^layer F\.SilkS  Front silkscreen  3 items: /.test(l)))
   assert.ok(r.text.some(l => l.includes('"rev 2"') && l.includes('strokes')))
   assert.ok(r.text.some(l => l.includes('1 arc')))
@@ -51,17 +51,17 @@ test('inspect --layer: a query filters by part, mask and paste give the Gerber o
   const b = board()
   const tp = inspectBoard(b, 'pcb.tsx', '/', 'TP1', { layer: 'F.SilkS' })
   assert.deepEqual(
-    tp.json.items.map(i => i.ref),
+    tp.json.items.map(i => i.part),
     ['TP1'],
   )
   const mask = inspectBoard(b, 'pcb.tsx', '/', undefined, { layer: 'F.Mask' }).json.items
   assert.equal(mask.length, 2)
-  assert.ok(mask[0].bounds.x[1] - mask[0].bounds.x[0] > 1, 'the opening is the pad grown by the mask expansion')
+  assert.ok(mask[0].bounds.w > 1, 'the opening is the pad grown by the mask expansion')
   const edge = inspectBoard(b, 'pcb.tsx', '/', undefined, { layer: 'edge' }).json
   assert.equal(edge.layer, 'Edge.Cuts')
   assert.equal(edge.items.length, 1)
-  const zone = inspectBoard(b, 'pcb.tsx', '/', undefined, { layer: 'B.Cu' }).json.items.find(i => i.kind === 'zone')
-  assert.ok(zone.fill.area > 400 && zone.fill.pieces === 1)
+  const zone = inspectBoard(b, 'pcb.tsx', '/', undefined, { layer: 'B.Cu' }).json.items.find(i => i.type === 'zone')
+  assert.ok(zone.area > 400 && zone.pieces === 1)
   const bad = inspectBoard(b, 'pcb.tsx', '/', undefined, { layer: 'Nope' })
   assert.equal(bad.found, false)
   assert.match(bad.text.at(-1), /unknown layer "Nope"/)
@@ -75,7 +75,7 @@ test('inspect <net>: one zone line per layer with fill area, pieces and islands 
   assert.ok(z.area > 400 && z.area < 28 * 18, `area ${z.area}`)
   assert.deepEqual(z.islandsRemoved, { count: 0, area: 0 })
   assert.ok(
-    r.text.some(l => /^\s+B\.Cu\s+\d+\.\d\d mm²\s+1\s+0\s+#\d+$/.test(l)),
+    r.text.some(l => /^\s+B\.Cu\s+\d+\.\d\d mm²\s+1\s+0\s+#\d+ item:[0-9a-f]{12}$/.test(l)),
     r.text.join('\n'),
   )
 })
@@ -110,22 +110,22 @@ test('inspect <net>: the copper area per layer in the header, pads, vias, tracks
   )
 })
 
-test('inspect <net>: stitch() vias say stitch as their route in the text and in --json', () => {
+test('inspect <net>: stitch() vias say stitch as their route in the text and carry stitch in --json', () => {
   const b = compileBoard(
     h(
       PCB,
       { name: 'Stitched' },
       h('path', { layer: 'Edge.Cuts', d: 'M 0 0 H 30 V 20 H 0 Z' }),
       pad('TP1', 5, 10, 'GND'),
-      h('zone', { layer: 'F.Cu', net: 'GND', d: 'M 1 1 H 29 V 19 H 1 Z' }),
-      h('zone', { layer: 'B.Cu', net: 'GND', d: 'M 1 1 H 29 V 19 H 1 Z' }),
-      stitch('GND', { pitch: 5 }),
+      pour(net('GND'), 'F.Cu', 'M 1 1 H 29 V 19 H 1 Z'),
+      pour(net('GND'), 'B.Cu', 'M 1 1 H 29 V 19 H 1 Z'),
+      stitch(net('GND'), { pitch: 5 }),
     ),
   )
   const r = inspectBoard(b, 'pcb.tsx', '/', 'GND')
   assert.ok(r.json.vias.length > 4)
   assert.ok(
-    r.json.vias.every(v => v.route === 'stitch'),
+    r.json.vias.every(v => v.stitch === true && v.route === undefined),
     JSON.stringify(r.json.vias[0]),
   )
   assert.equal(r.json.stitch.count, r.json.vias.length)

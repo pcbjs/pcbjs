@@ -28,22 +28,22 @@ export function Chip(props: FootprintProps) {
     </footprint>
   )
 }
-export const CHIP = defineFootprint(Chip, { pins: ['1', '2'], prefix: 'R', id: '${id}' })
+export const CHIP = defineFootprint(Chip, { pins: ['1', '2'], prefix: 'R' })
 `
 const PCB = `import PCB from '@pcbjs/core'
 import { CHIP } from './lib/parts'
 import { SHARED } from '../shared/parts'
 
-const R1 = CHIP('10k', { MPN: 'RC0603', 'MPN:LCSC': 'C22775' })
+const R1 = CHIP('10k').source({ MPN: 'RC0603', 'MPN:LCSC': 'C22775' })
 const R2 = CHIP('1k')
-const R3 = SHARED({ value: '2k' })
-const R4 = CHIP({ value: '4k7', model: { file: './models/R.step' } })
-const R5 = CHIP('5k')
+const R3 = SHARED('2k')
+const R4 = CHIP('4k7', { model: { file: './models/R.step' } })
+const R5 = CHIP('5k', { model: { file: './models/R.step' } })
 
 export default (
   <PCB name="Paths">
     <rect layer="Edge.Cuts" x={0} y={0} w={30} h={20} />
-    <R1 at="5 5" /><R2 at="10 5" /><g at="15 5"><R3 /></g><R4 at="20 5" /><R5 at="25 5" model={{ file: './models/R.step' }} />
+    <R1 at="5 5" /><R2 at="10 5" /><g at="15 5"><R3 /></g><R4 at="20 5" /><R5 at="25 5" />
   </PCB>
 )
 `
@@ -74,16 +74,16 @@ test('a model path is relative to the file that holds the literal: a part call, 
   assert.equal(r.code, 0, r.out + r.err)
   assert.match(r.out, /R3\s+file \S*shared\/models\/R\.step\s+ok/)
   assert.match(r.out, /R4\s+file models\/R\.step\s+ok/)
-  // the prop where the part is placed, in pcb.tsx, though the footprint is in lib/
+  // the option of the part call, in pcb.tsx, though the footprint is in lib/
   assert.match(r.out, /R5\s+file models\/R\.step\s+ok/)
 })
 
-test('--ref writes the options form into the part call, the sourcing spec under source, the path relative to that file', () => {
+test('--ref writes the model into the options after the value, the path relative to that file', () => {
   const r = run('add', 'models/R.step', '--ref', 'R1', '--write')
   assert.equal(r.code, 0, r.out + r.err)
   assert.match(
     readFileSync(join(root, 'pcb.tsx'), 'utf8'),
-    /const R1 = CHIP\(\{ value: '10k', source: \{ MPN: 'RC0603', 'MPN:LCSC': 'C22775' \}, model: \{ file: '\.\/models\/R\.step' \} \}\)/,
+    /const R1 = CHIP\('10k', \{ model: \{ file: '\.\/models\/R\.step' \} \}\)\.source\(\{ MPN: 'RC0603', 'MPN:LCSC': 'C22775' \}\)/,
   )
   assert.match(r.out, /fit  the file's own frame/)
   // the board compiles with it and the shared footprint's other part is named for --footprint
@@ -109,19 +109,20 @@ test('--footprint writes on the <footprint> element in lib/, relative to that fi
   assert.match(run('check').out, /R3\s+file models\/R\.step\s+ok/)
 })
 
-test('the write forms: a value and a sourcing spec, shape arguments, a count first, and a <footprint> only', () => {
+test('the write forms: a value then options, shape arguments, a count first, and a <footprint> only', () => {
   const m = "{ file: 'x.step' }"
   const cases = [
-    ["F('val', { MPN: 'y' })", 'val', "F({ value: 'val', source: { MPN: 'y' }, model: { file: 'x.step' } })"],
-    ["PinHeader(2)('x', { MPN: 'y' })", 'x', "PinHeader(2)({ value: 'x', source: { MPN: 'y' }, model: { file: 'x.step' } })"],
-    ["PinHeader(4, 'J')", 'J', "PinHeader(4, { value: 'J', model: { file: 'x.step' } })"],
-    ['PinHeader(4, { rows: 2 })', '', "PinHeader(4, { rows: 2, model: { file: 'x.step' } })"],
-    ['PinHeader(4)', '', "PinHeader(4, { model: { file: 'x.step' } })"],
-    ["USBC('power6', { value: 'T', source: { MPN: 'T' } })", 'T', "USBC('power6', { value: 'T', source: { MPN: 'T' }, model: { file: 'x.step' } })"],
-    ["USBC('power6')", '', "USBC('power6', { model: { file: 'x.step' } })"],
-    ["JST_PH(2, 'top', { value: 'B2B' })", 'B2B', "JST_PH(2, 'top', { value: 'B2B', model: { file: 'x.step' } })"],
-    ['R0603(330)', '330', "R0603({ value: 330, model: { file: 'x.step' } })"],
-    ['R0603(v)', 'whatever', "R0603({ value: v, model: { file: 'x.step' } })"],
+    ["F('val').source({ MPN: 'y' })", 'val', "F('val', { model: { file: 'x.step' } }).source({ MPN: 'y' })"],
+    ["F('val', { dnp: true })", 'val', "F('val', { dnp: true, model: { file: 'x.step' } })"],
+    ["PinHeader(2)('x')", 'x', "PinHeader(2)('x', { model: { file: 'x.step' } })"],
+    ["PinHeader(4)('J')", 'J', "PinHeader(4)('J', { model: { file: 'x.step' } })"],
+    ['PinHeader(4, { rows: 2 })()', '', "PinHeader(4, { rows: 2 })({ model: { file: 'x.step' } })"],
+    ['PinHeader(4)()', '', "PinHeader(4)({ model: { file: 'x.step' } })"],
+    ["USBC('power6')('T')", 'T', "USBC('power6')('T', { model: { file: 'x.step' } })"],
+    ["USBC('power6')()", '', "USBC('power6')({ model: { file: 'x.step' } })"],
+    ["JST_PH(2, 'top')('B2B')", 'B2B', "JST_PH(2, 'top')('B2B', { model: { file: 'x.step' } })"],
+    ['R0603(330)', '330', "R0603(330, { model: { file: 'x.step' } })"],
+    ['R0603(v)', 'whatever', "R0603(v, { model: { file: 'x.step' } })"],
   ]
   for (const [call, value, want] of cases) assert.equal(writePartModel(`const A = ${call}\n`, 'a.ts', 1, 11, m, value), `const A = ${want}\n`, call)
   assert.equal(writeElementModel('<g.QH at="1 2"><R1 /></g.QH>\n', 'a.tsx', 1, 1, m), null)

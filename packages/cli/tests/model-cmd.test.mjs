@@ -15,16 +15,15 @@ import { modelSnippet, noteSource, unzipModel, writeElementModel, writePartModel
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const BIN = join(REPO, 'packages', 'pcbjs', 'bin', 'pcbjs.js')
 const KICAD = join(REPO, 'examples', 'highspeed', 'models')
-const PORT = 5278
 
 const PCB = `import PCB from '@pcbjs/core'
 import { R0603, PinHeader } from '@pcbjs/lib'
 
 const R1 = R0603('10k')
-const R2 = R0603({ value: '1k', model: { file: './models/R.step', offset: [3, 0, 0] } })
-const R3 = R0603({ value: '2k', model: { file: './models/nowhere.step' } })
-const R4 = R0603({ value: '3k', model: { file: './models/bad.glb' } })
-const J1 = PinHeader(4)
+const R2 = R0603('1k', { model: { file: './models/R.step', offset: [3, 0, 0] } })
+const R3 = R0603('2k', { model: { file: './models/nowhere.step' } })
+const R4 = R0603('3k', { model: { file: './models/bad.glb' } })
+const J1 = PinHeader(4)()
 
 export default (
   <PCB name="Models">
@@ -82,7 +81,7 @@ test('add copies a local file, notes it, fits it to a part and writes the model 
   assert.match(r.out, /box  x .* 2\.54 x 10\.16 x 11\.54 mm/)
   assert.match(r.out, /pins 4, 4 on 4 pads/)
   assert.match(r.out, /model: \{ file: '\.\/models\/header\.step' \}/)
-  assert.match(readFileSync(join(root, 'pcb.tsx'), 'utf8'), /const J1 = PinHeader\(4, \{ model: \{ file: '\.\/models\/header\.step' \} \}\)/)
+  assert.match(readFileSync(join(root, 'pcb.tsx'), 'utf8'), /const J1 = PinHeader\(4\)\(\{ model: \{ file: '\.\/models\/header\.step' \} \}\)/)
   assert.match(readFileSync(join(root, 'models', 'LICENSES.md'), 'utf8'), /- `header\.step`: local file .*downloads\/header\.step, added \d{4}-\d\d-\d\d/)
   // the board reads the written option: J1 now has a model file that fits
   assert.match(run('check').out, /J1\s+file models\/header\.step\s+ok/)
@@ -103,9 +102,10 @@ test('add downloads a URL, takes the name from the URL, and notes the URL as the
       res.end()
     }
   })
-  await new Promise(r => server.listen(PORT, '127.0.0.1', r))
+  await new Promise(r => server.listen(0, '127.0.0.1', r))
+  const port = server.address().port
   try {
-    const url = `http://127.0.0.1:${PORT}/dl/R_0603.step`
+    const url = `http://127.0.0.1:${port}/dl/R_0603.step`
     const r = await new Promise(resolve => {
       // spawned, not spawnSync, so this process's server can answer the download
       const child = spawn(process.execPath, [BIN, 'model', 'add', url, '--ref', 'R1', '--as', 'r0603'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } })
@@ -126,7 +126,7 @@ test('add downloads a URL, takes the name from the URL, and notes the URL as the
     assert.match(r.out, /paste it into the options of R1 at pcb\.tsx:4/)
     assert.match(readFileSync(join(root, 'models', 'LICENSES.md'), 'utf8'), new RegExp(`- \`r0603\\.step\`: ${url.replace(/[.]/g, '\\.')}, added`))
     const miss = await new Promise(resolve => {
-      const child = spawn(process.execPath, [BIN, 'model', 'add', `http://127.0.0.1:${PORT}/nothing.step`], { cwd: root })
+      const child = spawn(process.execPath, [BIN, 'model', 'add', `http://127.0.0.1:${port}/nothing.step`], { cwd: root })
       let err = ''
       child.stderr.on('data', d => {
         err += d
@@ -140,15 +140,55 @@ test('add downloads a URL, takes the name from the URL, and notes the URL as the
   }
 })
 
-test('--write edits: a value becomes { value, model }, an options object gets or replaces the key, an element gets the attribute', () => {
+test('add asks the server again: an unchanged file comes from the model cache, a changed one downloads', async () => {
+  let body = readFileSync(join(KICAD, 'R_0603_1608Metric.step')),
+    etag = '"v1"'
+  const asked = []
+  const server = createServer((req, res) => {
+    asked.push(req.headers['if-none-match'] ?? null)
+    if (req.headers['if-none-match'] === etag) {
+      res.statusCode = 304
+      return res.end()
+    }
+    res.setHeader('etag', etag)
+    res.end(body)
+  })
+  await new Promise(r => server.listen(0, '127.0.0.1', r))
+  const url = `http://127.0.0.1:${server.address().port}/v/part.step`
+  const add = () =>
+    new Promise(resolve => {
+      const child = spawn(process.execPath, [BIN, 'model', 'add', url, '--as', 'etag-part'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } })
+      let out = '',
+        err = ''
+      child.stdout.on('data', d => (out += d))
+      child.stderr.on('data', d => (err += d))
+      child.on('close', code => resolve({ code, out, err }))
+    })
+  try {
+    assert.equal((await add()).code, 0)
+    const again = await add()
+    assert.match(again.out, /from the model cache/)
+    assert.match(again.out, /have models\/etag-part\.step/)
+    body = readFileSync(join(KICAD, 'PinHeader_1x04_P2.54mm_Vertical.step'))
+    etag = '"v2"'
+    const changed = await add()
+    assert.doesNotMatch(changed.out, /from the model cache/)
+    assert.match(changed.err, /exists with other content/)
+    assert.deepEqual(asked, [null, '"v1"', '"v1"'])
+  } finally {
+    server.close()
+  }
+})
+
+test('--write edits: the options after the value get or replace the model key, an element gets the attribute', () => {
   const s = modelSnippet('./models/x.step', { offset: [1, 0, -0.5], rotate: [0, 0, 90], scale: [1, 1, 1] })
   assert.equal(s, "{ file: './models/x.step', offset: [1, 0, -0.5], rotate: [0, 0, 90] }")
   assert.equal(modelSnippet('./m.glb', { offset: [0, 0, 0], rotate: [0, 0, 0], scale: [25.4, 25.4, 25.4] }), "{ file: './m.glb', scale: [25.4, 25.4, 25.4] }")
-  const code = "const R1 = R0603('10k').connect(A, B)\nconst U1 = QFN(48, 7, 0.5)('KSZ')\nconst R2 = R0603({ value: '1k', model: { step: 'old.step' } })\nconst R3 = R0603()\n"
+  const code = "const R1 = R0603('10k').connect({ 1: A, 2: B })\nconst U1 = QFN(48, 7, 0.5)('KSZ')\nconst R2 = R0603('1k', { model: { step: 'old.step' } })\nconst R3 = R0603()\n"
   const m = "{ file: 'x.step' }"
-  assert.equal(writePartModel(code, 'a.ts', 1, 12, m).split('\n')[0], "const R1 = R0603({ value: '10k', model: { file: 'x.step' } }).connect(A, B)")
-  assert.equal(writePartModel(code, 'a.ts', 2, 12, m).split('\n')[1], "const U1 = QFN(48, 7, 0.5)({ value: 'KSZ', model: { file: 'x.step' } })")
-  assert.equal(writePartModel(code, 'a.ts', 3, 12, m).split('\n')[2], "const R2 = R0603({ value: '1k', model: { file: 'x.step' } })")
+  assert.equal(writePartModel(code, 'a.ts', 1, 12, m).split('\n')[0], "const R1 = R0603('10k', { model: { file: 'x.step' } }).connect({ 1: A, 2: B })")
+  assert.equal(writePartModel(code, 'a.ts', 2, 12, m).split('\n')[1], "const U1 = QFN(48, 7, 0.5)('KSZ', { model: { file: 'x.step' } })")
+  assert.equal(writePartModel(code, 'a.ts', 3, 12, m).split('\n')[2], "const R2 = R0603('1k', { model: { file: 'x.step' } })")
   assert.equal(writePartModel(code, 'a.ts', 4, 12, m).split('\n')[3], "const R3 = R0603({ model: { file: 'x.step' } })")
   assert.equal(writePartModel('x = 1\n', 'a.ts', 1, 1, m), null)
   const el = '  <footprint id="eth:RJ45" value="JK" {...rest}>\n  </footprint>\n'
@@ -217,9 +257,10 @@ test('add of a zipped download saves the licence file it ships and names it in L
     res.setHeader('content-disposition', 'attachment; filename="hr10.zip"')
     res.end(zip)
   })
-  await new Promise(r => server.listen(PORT, '127.0.0.1', r))
+  await new Promise(r => server.listen(0, '127.0.0.1', r))
+  const port = server.address().port
   try {
-    const url = `http://127.0.0.1:${PORT}/documents?path=%2Fmodel`
+    const url = `http://127.0.0.1:${port}/documents?path=%2Fmodel`
     const r = await new Promise(resolve => {
       const child = spawn(process.execPath, [BIN, 'model', 'add', url], { cwd: root, env: { ...process.env, NO_COLOR: '1' } })
       let out = '',

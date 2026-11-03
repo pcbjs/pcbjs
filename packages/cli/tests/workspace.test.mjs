@@ -1,16 +1,18 @@
 // Entries in the config, and the workspace dev server: scopes found by name, loaded on first use, each compiled with its own
-// default board, the watcher following the displayed scope, stale marking, the scope routes and the per-scope dev.json.
+// default board, the watcher following every compiled scope, stale marking, the scope routes and the per-scope dev.json.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import WebSocket from 'ws'
-import { expandEntries, pickEntries, resolveConfig } from '../dist/config.js'
-import { findScopes, scopeOf, slugOf } from '../dist/scopes.js'
-import { devWorkspace } from '../dist/workspace.js'
-import { captureDefaults } from '@pcbjs/core/defaults'
+import { expandEntries, pickEntries, resolveConfig } from '../dist/project/config.js'
+import { findScopes, scopeOf, slugOf } from '../dist/session/scopes.js'
+import { serveSession } from '../dist/session/serve.js'
+import { realm } from '@pcbjs/core/internal/realm'
 import { board, makeWorkspace } from './fixtures/workspace.mjs'
+import { viewerClient } from './fixtures/viewer.mjs'
 
 const scratch = () => mkdtempSync(join(tmpdir(), 'pcbjs-entries-'))
 const touch = (dir, ...files) => {
@@ -100,7 +102,7 @@ test('scopes: every directory with a config under the folders, outside node_modu
 })
 
 // ---- the workspace dev server, compiled for real ----
-let w, server, workspace, base
+let w, server, workspace, stop, base
 const get = async p => {
   const r = await fetch(base + p)
   return { status: r.status, type: r.headers.get('content-type') ?? '', text: await r.text() }
@@ -114,7 +116,7 @@ before(async () => {
   const log = console.log
   console.log = () => {}
   try {
-    ;({ server, workspace } = await devWorkspace({ folders: [w.f1, w.f2], port: 0, host: '127.0.0.1' }))
+    ;({ server, workspace, stop } = await serveSession({ folders: [w.f1, w.f2], port: 0, host: '127.0.0.1', log: () => {} }))
   } finally {
     console.log = log
   }
@@ -122,7 +124,7 @@ before(async () => {
   base = `http://127.0.0.1:${server.httpServer.address().port}`
 })
 after(async () => {
-  await server?.close()
+  await stop?.('test')
   if (w) rmSync(w.root, { recursive: true, force: true })
 })
 
@@ -156,32 +158,30 @@ test('workspace: a scope loads on first use with its own default board, and the 
   const a = await json('/__pcbjs/scope/alpha')
   assert.equal(a.scope, 'alpha')
   assert.deepEqual(
-    a.boards.map(b => [b.name, b.revision, b.rules.clearance]),
+    a.boards.map(b => [b.facets.meta.name, b.facets.meta.rev, b.facets.meta.rules.clearance]),
     [['Alpha', 'A-1', 0.3]],
   )
   assert.equal(scope('alpha').status, 'ready')
   assert.equal(scope('f2').status, 'unloaded', 'the other scope is still not loaded')
-  assert.deepEqual(captureDefaults(), { board: null, rules: null }, 'the process defaults are empty outside a compile')
+  assert.equal(realm().defaults, null, 'the process defaults are empty outside a compile')
   const b = await json('/__pcbjs/scope/f2')
   assert.deepEqual(
-    b.boards.map(x => [x.name, x.revision, x.rules.clearance]),
+    b.boards.map(x => [x.facets.meta.name, x.facets.meta.rev, x.facets.meta.rules.clearance]),
     [['Beta', 'B-2', 0.15]],
   )
   // the boards a viewer gets for a scope never carry the other scope's defaults, also after both loaded
   const again = await json('/__pcbjs/scope/alpha')
   assert.deepEqual(
-    again.boards.map(x => [x.revision, x.rules.clearance]),
+    again.boards.map(x => [x.facets.meta.rev, x.facets.meta.rules.clearance]),
     [['A-1', 0.3]],
   )
-  assert.deepEqual(captureDefaults(), { board: null, rules: null })
-  // each loaded scope wrote its own dev.json with its route
+  assert.equal(realm().defaults, null)
+  // each loaded scope wrote its own dev.json with its page
   for (const [dir, slug] of [
     [w.alpha, 'alpha'],
     [w.f2, 'f2'],
   ]) {
     const info = JSON.parse(readFileSync(join(dir, '.pcbjs', 'dev.json'), 'utf8'))
-    assert.equal(info.scope, slug)
-    assert.equal(info.route, `/${slug}/`)
     assert.equal(info.url, `${base}/${slug}/`)
     assert.equal(info.pid, process.pid)
   }
@@ -195,13 +195,13 @@ test('workspace: the watcher keeps the files of every compiled scope, so an edit
   let now = watched()
   assert.ok(
     alphaFiles.every(f => now.has(f)),
-    'alpha is watched while displayed',
+    'alpha is watched once compiled',
   )
   await json('/__pcbjs/scope/f2')
   now = watched()
   assert.ok(
     scope('f2').files.every(f => now.has(f)),
-    'f2 is watched once displayed',
+    'f2 is watched once compiled',
   )
   assert.ok(
     alphaFiles.every(f => now.has(f)),
@@ -209,7 +209,7 @@ test('workspace: the watcher keeps the files of every compiled scope, so an edit
   )
 })
 
-test('workspace: an edit in a scope not displayed marks it stale, and it recompiles when shown again', async () => {
+test('workspace: an edit in a scope no one observes marks it stale, and it recompiles when shown again', async () => {
   assert.equal((await json('/__pcbjs/scopes')).displayed, 'f2')
   const file = scope('alpha').files.find(f => f.endsWith('/alpha/pcb.tsx'))
   await new Promise(r => setTimeout(r, 20))
@@ -227,43 +227,49 @@ test('workspace: an edit in a scope not displayed marks it stale, and it recompi
   )
   const a = await json('/__pcbjs/scope/alpha')
   assert.deepEqual(
-    a.boards.map(b => [b.name, b.revision]),
+    a.boards.map(b => [b.facets.meta.name, b.facets.meta.rev]),
     [['Alpha2', 'A-1']],
   )
   assert.equal(scope('alpha').stale, false)
 })
 
-test('workspace: an editor focus on a file of another scope switches the displayed scope and tells the viewers', async () => {
-  const sock = new WebSocket(base.replace('http', 'ws') + '/', 'vite-hmr')
-  const got = []
-  sock.on('message', raw => {
-    const m = JSON.parse(String(raw))
-    if (m.type === 'custom') got.push(m)
-  })
+test('workspace: an editor focus on a file of another scope makes it the scope shown last and tells the viewers', async () => {
+  // a viewer showing no board yet, and an editor with a language client that sends pcbjs/focus
+  const sock = await viewerClient(new URL(base).port, { board: null, facets: ['meta'] })
+  const got = sock.got
+  const editor = new WebSocket(base.replace('http', 'ws') + '/__pcbjs/session')
+  const answers = []
+  editor.on('message', raw => answers.push(JSON.parse(String(raw))))
   await new Promise((ok, fail) => {
-    sock.once('open', ok)
-    sock.once('error', fail)
+    editor.once('open', ok)
+    editor.once('error', fail)
   })
   try {
-    const send = (event, data) => sock.send(JSON.stringify({ type: 'custom', event, data }))
-    send('pcbjs:ide:hello', { name: 'test', version: '1' })
-    send('pcbjs:ide:focus', { file: join(w.f2, 'pcb.tsx') })
+    const rpc = msg => editor.send(JSON.stringify({ jsonrpc: '2.0', ...msg }))
+    editor.send(JSON.stringify({ event: 'pcbjs:ide:hello', data: { name: 'test', version: '1', protocol: 2, major: 1, capabilities: [], role: 'editor' } }))
+    rpc({ id: 1, method: 'initialize', params: { processId: null, rootUri: null, capabilities: {} } })
+    for (let i = 0; i < 600 && !answers.some(m => m.id === 1); i++) await new Promise(r => setTimeout(r, 25))
+    rpc({ method: 'initialized', params: {} })
+    const focusOn = file => rpc({ method: 'pcbjs/focus', params: { textDocument: { uri: pathToFileURL(file).href } } })
+    focusOn(join(w.f2, 'pcb.tsx'))
     const until = async fn => {
       for (let i = 0; i < 400 && !fn(); i++) await new Promise(r => setTimeout(r, 25))
       assert.ok(fn())
     }
     await until(() => got.some(m => m.event === 'pcbjs:focus'))
-    const focus = got.find(m => m.event === 'pcbjs:focus').data
+    const focus = got.find(m => m.event === 'pcbjs:focus')
     assert.deepEqual([focus.scope, focus.board, focus.file], ['f2', 'Beta', 'pcb.tsx'])
-    assert.equal(workspace.displayed.slug, 'f2')
-    assert.ok(got.some(m => m.event === 'pcbjs:scopes' && m.data.displayed === 'f2'))
+    assert.deepEqual([focus.by?.name, focus.by?.role], ['test', 'editor'], 'the focus names the connection it came through')
+    assert.equal(workspace.recent.slug, 'f2')
+    assert.ok(got.some(m => m.event === 'pcbjs:scopes' && m.displayed === 'f2'))
     // a file in no scope changes nothing
     got.length = 0
-    send('pcbjs:ide:focus', { file: join(w.f1, 'loose.tsx') })
+    focusOn(join(w.f1, 'loose.tsx'))
     await new Promise(r => setTimeout(r, 200))
-    assert.equal(workspace.displayed.slug, 'f2')
+    assert.equal(workspace.recent.slug, 'f2')
     assert.ok(!got.some(m => m.event === 'pcbjs:focus'))
   } finally {
     sock.close()
+    editor.close()
   }
 })

@@ -7,8 +7,8 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, 
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { referenceResolver, referenceStats, boardMeshDir } from '../dist/references.js'
-import { devWorkspace } from '../dist/workspace.js'
+import { referenceResolver, referenceStats, boardMeshDir } from '../dist/project/references.js'
+import { serveSession } from '../dist/session/serve.js'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const roots = []
@@ -19,7 +19,7 @@ after(() => {
 const board = (name, title, extra = '', kids = '') => `import PCB, { reference } from '@pcbjs/core'
 import { PinHeader } from '@pcbjs/lib'
 ${extra}
-const J1 = PinHeader(2)
+const J1 = PinHeader(2)()
 export default (
   <PCB name="${name}" title="${title}">
     <rect layer="Edge.Cuts" x={0} y={0} w={20} h={20} />
@@ -78,18 +78,30 @@ test('references: a cycle across entries is an error naming it, found in the chi
   const s = stack()
   writeFileSync(join(s.b, 'pcb.tsx'), board('B', 'Beta', '', "{reference('../a/pcb.tsx', { at: [0, 0, -10] })}"))
   const r = referenceResolver(s.a, join(s.a, 'pcb.tsx'))
-  assert.throws(() => r.resolve(join(s.b, 'pcb.tsx')), /a reference cycle: a → b → a/)
+  // the code and each member by entry and the reference() call that leads on
+  assert.throws(
+    () => r.resolve(join(s.b, 'pcb.tsx')),
+    e =>
+      e.name === 'CycleError' &&
+      e.code === 'reference-cycle' &&
+      e.members.map(m => m.ref).join() === 'a,b' &&
+      /b[\\/]pcb\.tsx$/.test(e.members[1].src.file) &&
+      /a reference cycle: a → b \(.*pcb\.tsx:\d+:\d+\) → a$/.test(e.message),
+  )
   // an entry referencing itself
-  assert.throws(() => r.resolve(join(s.a, 'pcb.tsx')), /a reference cycle: a → a/)
+  assert.throws(
+    () => r.resolve(join(s.a, 'pcb.tsx')),
+    e => e.code === 'reference-cycle' && /a reference cycle: a → a$/.test(e.message),
+  )
 })
 
 test('references: the workspace server marks a scope stale when a board it references changes, and recompiles it when shown', async () => {
   const s = stack()
   const log = console.log
   console.log = () => {}
-  let server, workspace
+  let server, workspace, stop
   try {
-    ;({ server, workspace } = await devWorkspace({ folders: [s.stack], port: 0, host: '127.0.0.1' }))
+    ;({ server, workspace, stop } = await serveSession({ folders: [s.stack], port: 0, host: '127.0.0.1', log: () => {} }))
   } finally {
     console.log = log
   }
@@ -113,6 +125,6 @@ test('references: the workspace server marks a scope stale when a board it refer
     await until(() => refTitle() === 'Beta 2', 'shown again, it recompiles with the new reference')
     assert.equal(scope('a').stale, false)
   } finally {
-    await server.close()
+    await stop('test')
   }
 })

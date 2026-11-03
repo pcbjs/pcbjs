@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { distTag, installRange, doctor, installedPackages, minorOf, versionSkew, warnVersionSkew, UPDATE_COMMAND } from '../dist/doctor.js'
 
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
@@ -81,7 +82,7 @@ test('doctor: prints versions, formats and config, exits 1 on a skew', async () 
     assert.equal(code, 1)
     assert.match(out, /^node\s+v\d+/m)
     assert.match(out, /^@pcbjs\/core\s+0\.1\.0/m)
-    assert.match(out, /^formats\s+router \S+, tune \S+, reference \d+/m)
+    assert.match(out, /^formats\s+cache \d+, compile \S+, router \S+, tune \S+, reference \d+, realm \d+/m)
     assert.match(out, /^config\s+pcb\.config\.ts/m)
     assert.match(out, /^entries\s+pcb\.tsx/m)
     assert.ok(out.includes(`; run ${update}`), out)
@@ -93,7 +94,7 @@ test('doctor: prints versions, formats and config, exits 1 on a skew', async () 
 
 test('doctor: the repository tree agrees', async () => {
   const lines = []
-  assert.equal(await doctor({ root: new URL('../../../examples/demo', import.meta.url).pathname, log: l => lines.push(l) }), 0, lines.join('\n'))
+  assert.equal(await doctor({ root: fileURLToPath(new URL('../../../examples/demo', import.meta.url)), log: l => lines.push(l) }), 0, lines.join('\n'))
   assert.match(lines.join('\n'), /versions agree/)
 })
 

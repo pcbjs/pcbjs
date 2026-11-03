@@ -9,11 +9,12 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import WebSocket from 'ws'
 import { board } from './fixtures/workspace.mjs'
+import { printedPort, stop } from './fixtures/proc.mjs'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const BIN = join(REPO, 'packages', 'pcbjs', 'bin', 'pcbjs.js')
 const HOOK = join(REPO, 'packages', 'cli', 'tests', 'fixtures', 'trace-lsp.mjs')
-const PORT = 5272
+let PORT
 
 const root = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-lazy-')))
 mkdirSync(join(root, 'node_modules'))
@@ -42,8 +43,8 @@ test('pcbjs build never loads the language server', () => {
   assert.equal(loaded('build'), '')
 })
 
-test('pcbjs dev loads it on the first LSP initialize, not before', async () => {
-  const child = spawn(process.execPath, ['--import', HOOK, BIN, 'dev', '-p', String(PORT), '--host', '127.0.0.1'], {
+test('the session loads it on the first LSP initialize, not before', async () => {
+  const child = spawn(process.execPath, ['--import', HOOK, BIN, 'session', 'serve', '-p', '0', '--host', '127.0.0.1'], {
     cwd: root,
     env: env('dev'),
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -56,38 +57,36 @@ test('pcbjs dev loads it on the first LSP initialize, not before', async () => {
     child.stderr.on('data', d => {
       out += d
     })
-    const t0 = Date.now()
-    while (!/127\.0\.0\.1:5272/.test(out)) {
-      if (Date.now() - t0 > 30000) throw new Error(`dev did not start:\n${out}`)
-      await new Promise(r => setTimeout(r, 50))
-    }
-    // a viewer page, a compiled board, a bridge with cursor and focus: still nothing
+    PORT = await printedPort(() => out)
+    // a viewer page, a compiled board, a session connection with hello and a session request: still nothing
     assert.equal((await fetch(`http://127.0.0.1:${PORT}/__pcbjs/Lazy/board.json`)).status, 200)
-    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/`, 'vite-hmr')
+    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/__pcbjs/session`)
     await new Promise((ok, fail) => {
       ws.once('open', ok)
       ws.once('error', fail)
     })
-    const send = (event, data) => ws.send(JSON.stringify({ type: 'custom', event, data }))
-    send('pcbjs:ide:hello', { name: 'test', version: '0' })
-    send('pcbjs:ide:focus', { file: join(root, 'pcb.tsx') })
-    send('pcbjs:ide:cursor', { file: join(root, 'pcb.tsx'), line: 5, col: 5 })
-    await new Promise(r => setTimeout(r, 300))
+    const frames = []
+    ws.on('message', raw => frames.push(JSON.parse(raw.toString())))
+    const next = async pred => {
+      for (let i = 0; i < 600; i++) {
+        const m = frames.find(pred)
+        if (m) return m
+        await new Promise(r => setTimeout(r, 50))
+      }
+      throw new Error('no such frame')
+    }
+    ws.send(JSON.stringify({ event: 'pcbjs:ide:hello', data: { name: 'test', version: '0', protocol: 2, major: 1, capabilities: [] } }))
+    ws.send(JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'session/clients' }))
+    await next(m => m.event === 'pcbjs:ide:ready')
+    await next(m => m.id === 9)
     assert.equal(loaded('dev'), '')
     // the editor asks for the language server
-    const answer = new Promise(ok =>
-      ws.on('message', raw => {
-        const m = JSON.parse(raw.toString())
-        if (m.event === 'pcbjs:lsp' && m.data?.id === 1) ok(m.data)
-      }),
-    )
-    send('pcbjs:lsp', { jsonrpc: '2.0', id: 1, method: 'initialize', params: { processId: null, rootUri: null, capabilities: {} } })
-    const res = await answer
+    ws.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { processId: null, rootUri: null, capabilities: {} } }))
+    const res = await next(m => m.id === 1)
     assert.equal(res.result.serverInfo.name, 'pcbjs')
     assert.match(loaded('dev'), /@pcbjs\/lsp/)
     ws.close()
   } finally {
-    child.kill('SIGTERM')
-    await new Promise(r => child.once('exit', r))
+    await stop(child)
   }
 })

@@ -2,42 +2,69 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-/** The topics in reading order; any other top-level .md file in the directory follows them. */
+/** The topics in reading order, the basic path first; any other top-level .md file in the directory follows them. */
 export const TOPICS = [
+  'basics',
   'quickstart',
   'board',
   'schematic',
+  'layout',
+  'routing',
+  'check',
+  'editor',
+  'fab-set',
+  'import',
+  'advanced',
   'circuits',
+  'footprints',
   'schematic-graphic',
   'sourcing',
-  'layout',
+  'stdlib',
+  'placement',
+  'grids',
+  'stackup',
+  'fonts',
   'pours',
-  'routing',
+  'route-options',
   'autorouter',
   'pairs',
   'length',
+  'patches',
   'rules',
   'findings',
+  'refs',
+  'testing',
   'fab',
-  'fab-set',
-  'cli',
-  'inspect',
-  'workspace',
-  'viewer',
-  'editor',
-  'highlight',
+  'references',
   '3d',
   'models',
-  'references',
+  'cli',
+  'inspect',
+  'viewer',
+  'interaction',
+  'editing',
+  'keys',
+  'ui',
+  'render',
+  'diff',
+  'vscode',
+  'editor-actions',
+  'highlight',
+  'session',
+  'workspace',
+  'queries',
   'skills',
-  'stdlib',
+  'mcp',
+  'lsp',
+  'plugins',
+  'browser',
+  'library',
   'kicad',
-  'import',
   'stackup-and-rules',
-  'fonts',
   'ide-bridge',
   'design',
   'development',
+  'support',
 ]
 
 /** The docs directory: the package's own, else the repository's when running from a checkout. Null when neither exists. */
@@ -67,14 +94,30 @@ export function summaryOf(text: string): string {
   )
 }
 
-/** The topic list as lines. */
+/** A topic's level, the first word of its second summary line: `Basic.` or `Advanced.`, null when it has neither. */
+export function levelOf(text: string): 'basic' | 'advanced' | null {
+  const lines = text.split('\n')
+  const start = lines.findIndex(l => l.startsWith('# '))
+  const second = lines.slice(start + 1).filter(l => l.trim())[1] ?? ''
+  return /^Basic\./.test(second) ? 'basic' : /^Advanced\./.test(second) ? 'advanced' : null
+}
+
+/** The topic list as lines, under Basics and Advanced; a topic of no level goes under Advanced. */
 export function topicTable(dir: string): string[] {
-  const list = topics(dir)
-  const w = Math.max(...list.map(t => t.length))
+  const list = topics(dir).map(t => {
+    const text = readFileSync(join(dir, `${t}.md`), 'utf8')
+    return { t, summary: summaryOf(text), basic: levelOf(text) === 'basic' }
+  })
+  const w = Math.max(...list.map(x => x.t.length))
+  const rows = (basic: boolean) => list.filter(x => x.basic === basic).map(x => `  ${x.t.padEnd(w)}  ${x.summary}`)
   return [
-    'pcbjs docs <topic> prints one topic; pcbjs docs --grep <word|regex> searches them all.',
+    'pcbjs docs <topic> prints one topic; pcbjs docs --grep <word|regex> searches them all. Start with basics.',
     '',
-    ...list.map(t => `  ${t.padEnd(w)}  ${summaryOf(readFileSync(join(dir, `${t}.md`), 'utf8'))}`),
+    'Basics, a first board in order:',
+    ...rows(true),
+    '',
+    'Advanced:',
+    ...rows(false),
   ]
 }
 
@@ -92,16 +135,26 @@ export function grepTest(word: string): (line: string) => boolean {
   return l => l.toLowerCase().includes(needle)
 }
 
+let index: { topics: Record<string, { lines: string[] }> } | null | undefined
+/** Each topic's lines from the docs index the build wrote, which the language server's hover reads too; null without one. */
+function indexed(topic: string): string[] | null {
+  if (index === undefined)
+    try {
+      index = JSON.parse(readFileSync(new URL('./docs-index.json', import.meta.url), 'utf8'))
+    } catch {
+      index = null
+    }
+  return index?.topics[topic]?.lines ?? null
+}
+
 /** Lines of the topics that match `word`, see grepTest, as `topic:line: text`. */
 export function grepDocs(dir: string, word: string, only?: string[]): string[] {
   const test = grepTest(word)
   const out: string[] = []
   for (const t of only ?? topics(dir)) {
-    readFileSync(join(dir, `${t}.md`), 'utf8')
-      .split('\n')
-      .forEach((l, i) => {
-        if (test(l)) out.push(`${t}:${i + 1}: ${l}`)
-      })
+    ;(indexed(t) ?? readFileSync(join(dir, `${t}.md`), 'utf8').split('\n')).forEach((l, i) => {
+      if (test(l)) out.push(`${t}:${i + 1}: ${l}`)
+    })
   }
   return out
 }
