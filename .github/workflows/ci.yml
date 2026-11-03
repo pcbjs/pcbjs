@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, beta2]
 
 permissions:
   contents: read
@@ -11,6 +11,10 @@ permissions:
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+# one model cache for every example and test, kept by actions/cache
+env:
+  PCBJS_CACHE_DIR: ${{ github.workspace }}/.pcbjs-cache
 
 jobs:
   format:
@@ -24,6 +28,8 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run format:check
+      - name: Every import of a pcbjs package names an entry it lists
+        run: node scripts/check-entries.mjs
 
   test:
     name: Build and test, Node ${{ matrix.node }}
@@ -40,13 +46,36 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: Vendor models fetched from their LICENSES.md lines
+      - name: The user model cache, vendor and fetched models and their meshes
         uses: actions/cache@v4
         with:
-          path: |
-            examples/*/models/*.step
-            examples/*/models/*.wrl
-          key: vendor-models-${{ hashFiles('examples/**/models/LICENSES.md') }}
+          path: ${{ env.PCBJS_CACHE_DIR }}
+          key: model-cache-${{ hashFiles('examples/**/models/LICENSES.md') }}
+      - name: Fetch the vendor models the tests read
+        run: node scripts/check-examples.mjs --fetch
+      - run: npm test
+
+  test-os:
+    name: Build and test, ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: The user model cache, vendor and fetched models and their meshes
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PCBJS_CACHE_DIR }}
+          key: model-cache-${{ hashFiles('examples/**/models/LICENSES.md') }}
+          enableCrossOsArchive: true
       - name: Fetch the vendor models the tests read
         run: node scripts/check-examples.mjs --fetch
       - run: npm test
@@ -62,15 +91,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: Vendor models fetched from their LICENSES.md lines
+      - name: The user model cache, vendor and fetched models and their meshes
         uses: actions/cache@v4
         with:
-          path: |
-            examples/*/models/*.step
-            examples/*/models/*.wrl
-          key: vendor-models-${{ hashFiles('examples/**/models/LICENSES.md') }}
+          path: ${{ env.PCBJS_CACHE_DIR }}
+          key: model-cache-${{ hashFiles('examples/**/models/LICENSES.md') }}
       - name: Check every example, cold
         run: node scripts/check-examples.mjs
+      - name: Every example alike cold, warm, from the route memos alone and past a corrupt stage object
+        run: node scripts/stage-equality.mjs
       - name: Build the demo boards
         run: npm run demo:build
       - name: Every demo fab set is orderable
@@ -78,6 +107,53 @@ jobs:
           files=$(find examples/demo/.pcbjs/fab -name README-fab.txt)
           test -n "$files"
           for f in $files; do grep -q 'STATUS: ORDERABLE' "$f" || { echo "$f is not orderable"; exit 1; }; done
+
+  browser:
+    name: Browser compile, Chromium against Node
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Chromium
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+      - name: The demo boards and highspeed compiled in Chromium equal Node's, board JSON, finding ids and lengths
+        run: node scripts/browser-equality.mjs
+        env:
+          PCBJS_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+
+  bench:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: The user model cache, vendor and fetched models and their meshes
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PCBJS_CACHE_DIR }}
+          key: model-cache-${{ hashFiles('examples/**/models/LICENSES.md') }}
+      - name: Fetch the vendor models the boards read
+        run: node scripts/check-examples.mjs --fetch
+      - name: Cold and warm check time per example against bench.json
+        run: node scripts/bench.mjs --runs 3 --out bench-ci/bench.json
+      - name: The measured times, to commit as bench.json
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench
+          path: bench-ci/bench.json
+          if-no-files-found: ignore
 
   pack:
     name: Pack and install
@@ -93,4 +169,4 @@ jobs:
       - name: Bundle the VS Code extension into @pcbjs/cli
         run: npm run package -w @pcbjs/vscode
       - name: Pack smoke test
-        run: node scripts/pack-smoke.mjs --no-shot
+        run: node scripts/pack-smoke.mjs

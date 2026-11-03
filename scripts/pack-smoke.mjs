@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Installs pcbjs from `npm pack` tarballs into a fresh project and uses it; exits 1 on any problem.
-// Flags: --keep keeps the temp folder, --port <n> for shot, --no-shot.
+// Flags: --keep keeps the temp folder, --no-shot.
 import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { builtinModules } from 'node:module'
@@ -12,7 +12,6 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const args = process.argv.slice(2)
 const keep = args.includes('--keep')
 const noShot = args.includes('--no-shot')
-const port = args.includes('--port') ? args[args.indexOf('--port') + 1] : process.env.PACK_SMOKE_PORT
 const nodeDir = dirname(process.execPath)
 const env = { ...process.env, PATH: `${nodeDir}:${process.env.PATH}` }
 for (const k of Object.keys(env)) if (/^npm_(package|lifecycle)_|^INIT_CWD$/.test(k)) delete env[k]
@@ -98,8 +97,9 @@ function install(dir, label) {
     return false
   }
   const lock = JSON.parse(readFileSync(join(dir, 'package-lock.json'), 'utf8'))
+  // the renderer is released from its own repository, so it alone comes from the registry
   const fromRegistry = Object.entries(lock.packages ?? {})
-    .filter(([p, v]) => /node_modules\/@pcbjs\/[^/]+$/.test(p) && !v.resolved?.startsWith('file:') && !v.link)
+    .filter(([p, v]) => /node_modules\/@pcbjs\/[^/]+$/.test(p) && !p.endsWith('/@pcbjs/renderer') && !v.resolved?.startsWith('file:') && !v.link)
     .map(([p, v]) => `${p} ${v.resolved ?? v.version}`)
   if (fromRegistry.length) fail(`${label}: @pcbjs packages from the registry: ${fromRegistry.join(', ')}`)
   else ok(`npm install in ${label}`)
@@ -151,7 +151,7 @@ const filesUnder = dir =>
     return f === 'node_modules' ? [] : statSync(p).isDirectory() ? filesUnder(p) : [p]
   })
 /** What a relative import may resolve to, as the TypeScript configs and Vite allow. */
-const SOURCE = ['.ts', '.tsx', '.mts', '.js', '.mjs', '.vue']
+const SOURCE = ['.ts', '.tsx', '.mts', '.js', '.mjs', '.vue', '.d.ts']
 const importRe = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*|\bnew\s+URL\s*\(\s*)(['"`])([^'"`\n]+)\1/g
 
 for (const name of [...tarballs.keys()].sort()) {
@@ -197,6 +197,9 @@ const runtimeFiles = [
   ['@pcbjs/cli', 'vscode/manifest.json', 'the bundled VS Code extension, from npm run package -w @pcbjs/vscode'],
   ['@pcbjs/viewer', 'index.html', 'the viewer page Vite serves'],
   ['@pcbjs/viewer', 'src/main.ts', 'the viewer source Vite serves'],
+  ['@pcbjs/ui', 'dist/index.js', 'the prebuilt components the viewer imports'],
+  ['@pcbjs/ui', 'dist/index.d.ts', 'the types of the components'],
+  ['@pcbjs/ui', 'dist/style.css', 'the stylesheet of the components'],
   ['@pcbjs/lsp', 'dist/index.js', 'the language server'],
   ['occt-import-js', 'dist/occt-import-js.wasm', "the step converter's wasm"],
 ]
@@ -210,6 +213,7 @@ if (existsSync(join(extDir, 'manifest.json'))) {
   if (existsSync(join(extDir, vsix))) ok(`the bundled VSIX: @pcbjs/cli/vscode/${vsix}`)
   else fail(`the bundled VSIX missing: @pcbjs/cli/vscode/${vsix}`)
 }
+if (existsSync(join(nodeModules, '@pcbjs/ui/src'))) fail('@pcbjs/ui ships its src, which only a checkout has')
 const shippedDocs = join(nodeModules, '@pcbjs/cli/docs')
 const missingDocs = readdirSync(join(ROOT, 'docs')).filter(f => f.endsWith('.md') && !existsSync(join(shippedDocs, f)))
 if (missingDocs.length) fail(`@pcbjs/cli/docs lacks ${missingDocs.join(', ')}`)
@@ -240,6 +244,9 @@ expect(pcbjs('inspect', ['inspect']), /\bR1\b/, 'inspect: R1 not listed')
 pcbjs('inspect R1', ['inspect', 'R1'])
 expect(pcbjs('docs cli', ['docs', 'cli']), /^# CLI/, 'docs cli: not the CLI topic')
 pcbjs('docs', ['docs'])
+const uiSrc = spawnSync(bin, ['dev', '--ui-src'], { cwd: app, env, encoding: 'utf8', timeout: 60000 })
+if (uiSrc.status !== 0 && /--ui-src needs a pcbjs checkout/.test(`${uiSrc.stdout}${uiSrc.stderr}`)) ok('dev --ui-src refused on an installed copy')
+else fail(`dev --ui-src on an installed copy: exit ${uiSrc.status}, ${tail(`${uiSrc.stdout}${uiSrc.stderr}`, 3)}`)
 
 const stepFile = join(ROOT, 'examples/highspeed/models/R_0603_1608Metric.step')
 if (existsSync(stepFile)) {
@@ -253,20 +260,11 @@ if (existsSync(stepFile)) {
 
 if (noShot) console.log('  skip  shot, --no-shot')
 else {
-  const chrome = spawnSync(process.execPath, ['--input-type=module', '-e', "console.log((await import('@pcbjs/cli/shot')).findChrome() ?? '')"], {
-    cwd: app,
-    env,
-    encoding: 'utf8',
-  })
-  if (chrome.status !== 0) fail(`@pcbjs/cli/shot does not load: ${tail(chrome.stderr, 1).trim()}`)
-  else if (!chrome.stdout.trim()) console.log('  skip  shot, no Chrome found')
-  else {
-    const shots = join(work, 'shots')
-    if (pcbjs('shot', ['shot', '-o', shots, ...(port ? ['-p', String(port)] : [])], 300000).status === 0) {
-      const pngs = existsSync(shots) ? readdirSync(shots).filter(f => f.endsWith('.png')) : []
-      if (pngs.length < 2) fail(`shot wrote ${pngs.length} PNGs, expected 2`)
-      else ok(`shots: ${pngs.join(', ')}`)
-    }
+  const shots = join(work, 'shots')
+  if (pcbjs('shot', ['shot', '-o', shots, '--view', '2d', '--view', '3d', '--view', 'sch'], 300000).status === 0) {
+    const pngs = existsSync(shots) ? readdirSync(shots).filter(f => f.endsWith('.png')) : []
+    if (pngs.length < 3) fail(`shot wrote ${pngs.length} PNGs, expected 3`)
+    else ok(`shots: ${pngs.join(', ')}`)
   }
 }
 

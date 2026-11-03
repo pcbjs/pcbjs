@@ -59,7 +59,7 @@ function place(source, path, link) {
 
 export function install(cwd, { to, claude = true } = {}) {
   const into = resolve(cwd, to ?? agentsDir)
-  if (real(into) === real(skillsDir)) throw new Error(`pcbjs-skills: ${into} is the package's own folder`)
+  if (real(into) === real(skillsDir)) throw new Error(`pcbjs skills: ${into} is the package's own folder`)
   const pkg = projectSkills(into)
   const dir = to === undefined && claude ? resolve(cwd, claudeDir) : null
   fs.mkdirSync(into, { recursive: true })

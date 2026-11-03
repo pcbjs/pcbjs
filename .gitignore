@@ -7,6 +7,7 @@
 CLAUDE.md
 dist/
 docs/reviews/
+docs/local/
 examples/.tmp-*/
 examples/*/*/REVIEW.md
 examples/*/REVIEW.md
@@ -15,6 +16,7 @@ examples/sensor-hat/models/TYPE-C-31-M-17.step
 examples/sensor-hat/models/WS2812B-2020.step
 node_modules/
 packages/*/LICENSE
+packages/lib/LICENSES.md
 packages/cli/docs/
 packages/cli/vscode/
 packages/vscode/assets/*

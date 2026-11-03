@@ -1,18 +1,18 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
 import fs, { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { migrations, render } from '../scripts/sync-changelog.mjs'
-import { install, installLine, skillNames } from '../index.mjs'
+import { describe, install, installLine, skillNames, skillsDir } from '../index.mjs'
 
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const root = pkg
-const bin = join(pkg, 'bin', 'pcbjs-skills.mjs')
 const names = readdirSync(root).filter(n => existsSync(join(root, n, 'SKILL.md')))
-const run = (args, cwd) => spawnSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8' })
+const run = (cwd, opts) =>
+  install(cwd, opts)
+    .map(s => installLine(s, cwd))
+    .join('\n')
 
 test('skills: the five skills, each with valid frontmatter, a short body and only references that exist', () => {
   assert.deepEqual(names.sort(), ['pcbjs-basics', 'pcbjs-best-practices', 'pcbjs-port-from-kicad', 'pcbjs-port-from-python-scripted', 'pcbjs-upgrade'])
@@ -55,11 +55,10 @@ const project = () => {
   return dir
 }
 
-test("pcbjs-skills: install links .agents/skills and .claude/skills into the project's node_modules", () => {
+test("install: links .agents/skills and .claude/skills into the project's node_modules", () => {
   const dir = project()
   try {
-    const first = run(['install'], dir)
-    assert.equal(first.status, 0, first.stderr)
+    const first = run(dir)
     for (const name of names)
       for (const d of ['.agents', '.claude']) {
         const link = join(dir, d, 'skills', name)
@@ -67,31 +66,30 @@ test("pcbjs-skills: install links .agents/skills and .claude/skills into the pro
         assert.equal(readlinkSync(link), target(join('..', '..'), name))
         assert.ok(existsSync(join(link, 'SKILL.md')), link)
       }
-    assert.match(first.stdout, /^installed  pcbjs-basics  link .agents\/skills\/pcbjs-basics  link .claude\/skills\/pcbjs-basics$/m)
-    assert.equal(first.stdout.trim().split('\n').length, names.length)
+    assert.match(first, /^installed  pcbjs-basics  link .agents\/skills\/pcbjs-basics  link .claude\/skills\/pcbjs-basics$/m)
+    assert.equal(first.split('\n').length, names.length)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
 })
 
-test('pcbjs-skills: outside a project it copies into .agents/skills and links .claude/skills to the copy', () => {
+test('install: outside a project it copies into .agents/skills and links .claude/skills to the copy', () => {
   const dir = tmp()
   try {
-    const out = run(['install'], dir)
-    assert.equal(out.status, 0, out.stderr)
+    const out = run(dir)
     const copy = join(dir, '.agents', 'skills', 'pcbjs-basics')
     assert.ok(lstatSync(copy).isDirectory() && existsSync(join(copy, 'SKILL.md')))
     assert.equal(readlinkSync(join(dir, '.claude', 'skills', 'pcbjs-basics')), join('..', '..', '.agents', 'skills', 'pcbjs-basics'))
-    assert.match(out.stdout, /^installed  pcbjs-basics  copy .agents\/skills\/pcbjs-basics  link .claude\/skills\/pcbjs-basics$/m)
+    assert.match(out, /^installed  pcbjs-basics  copy .agents\/skills\/pcbjs-basics  link .claude\/skills\/pcbjs-basics$/m)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
 })
 
-test('pcbjs-skills: re-running replaces a copy, a folder or a stale link by a link, and leaves other folders alone', () => {
+test('install: re-running replaces a copy, a folder or a stale link by a link, and leaves other folders alone', () => {
   const dir = tmp()
   try {
-    run(['install'], dir)
+    run(dir)
     installHere(dir)
     const claude = join(dir, '.claude', 'skills')
     rmSync(join(claude, 'pcbjs-upgrade'))
@@ -102,9 +100,8 @@ test('pcbjs-skills: re-running replaces a copy, a folder or a stale link by a li
     writeFileSync(join(dir, 'elsewhere', 'keep.md'), 'mine')
     symlinkSync(join('..', '..', 'elsewhere'), join(claude, 'pcbjs-basics'))
     mkdirSync(join(claude, 'mine'))
-    const again = run(['install'], dir)
-    assert.equal(again.status, 0, again.stderr)
-    assert.match(again.stdout, /^updated    pcbjs-basics  link .agents\/skills\/pcbjs-basics  link .claude\/skills\/pcbjs-basics$/m)
+    const again = run(dir)
+    assert.match(again, /^updated    pcbjs-basics  link .agents\/skills\/pcbjs-basics  link .claude\/skills\/pcbjs-basics$/m)
     for (const name of names) for (const d of ['.agents', '.claude']) assert.equal(readlinkSync(join(dir, d, 'skills', name)), target(join('..', '..'), name))
     assert.ok(existsSync(join(claude, 'mine')) && existsSync(join(dir, 'elsewhere', 'keep.md')))
   } finally {
@@ -112,20 +109,18 @@ test('pcbjs-skills: re-running replaces a copy, a folder or a stale link by a li
   }
 })
 
-test('pcbjs-skills: --to installs into that folder alone, --no-claude skips the companion', () => {
+test('install: to installs into that folder alone, claude: false skips the companion', () => {
   const dir = project()
   try {
-    const to = run(['install', '--to', 'agents'], dir)
-    assert.equal(to.status, 0, to.stderr)
+    const to = run(dir, { to: 'agents' })
     assert.equal(readlinkSync(join(dir, 'agents', 'pcbjs-upgrade')), target('..', 'pcbjs-upgrade'))
-    assert.ok(existsSync(join(dir, 'agents', 'pcbjs-upgrade', 'references', 'pre-0.1.md')))
-    assert.match(to.stdout, /^installed  pcbjs-basics  link agents\/pcbjs-basics$/m)
+    assert.ok(existsSync(join(dir, 'agents', 'pcbjs-upgrade', 'SKILL.md')))
+    assert.match(to, /^installed  pcbjs-basics  link agents\/pcbjs-basics$/m)
     assert.ok(!existsSync(join(dir, '.claude')) && !existsSync(join(dir, '.agents')))
-    const bare = run(['install', '--no-claude'], dir)
-    assert.equal(bare.status, 0, bare.stderr)
+    const bare = run(dir, { claude: false })
     assert.ok(existsSync(join(dir, '.agents', 'skills', 'pcbjs-basics', 'SKILL.md')))
     assert.ok(!existsSync(join(dir, '.claude')))
-    assert.match(bare.stdout, /^installed  pcbjs-basics  link .agents\/skills\/pcbjs-basics$/m)
+    assert.match(bare, /^installed  pcbjs-basics  link .agents\/skills\/pcbjs-basics$/m)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -166,77 +161,10 @@ test('install: copies where a symlink cannot be made, and leaves a shared .claud
   assert.throws(() => install(pkg, { to: '.' }), /own folder/)
 })
 
-test('pcbjs-skills: list, path and usage errors', () => {
-  const dir = tmp()
-  try {
-    const list = run(['list'], dir).stdout.trim().split('\n')
-    assert.equal(list.length, names.length)
-    assert.match(list[0], /^pcbjs-basics\s+Design a PCB in pcbjs/)
-    assert.equal(run(['path'], dir).stdout.trim(), root)
-    assert.equal(run(['nonsense'], dir).status, 1)
-    assert.equal(run(['list', '--to', 'x'], dir).status, 1)
-    assert.equal(run(['list', '--no-claude'], dir).status, 1)
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
-})
-
-const CHANGELOG = `# @pcbjs/core
-
-## 0.2.1
-
-### Patch Changes
-
-- abc123: Fix a thing.
-
-## 0.2.0
-
-### Minor Changes
-
-- def456: Rename foo to bar.
-
-  #### Migration
-
-  Replace \`foo(\` with \`bar(\`.
-
-- 789abc: Other change.
-
-## 0.1.0
-
-### Migration
-
-Move to the scoped packages.
-
-### Minor Changes
-
-- First release.
-`
-
-test('sync-changelog: Migration sections per minor, newest first, one per text across packages', () => {
-  assert.deepEqual(migrations(CHANGELOG), [
-    { version: '0.2.0', body: 'Replace `foo(` with `bar(`.' },
-    { version: '0.1.0', body: 'Move to the scoped packages.' },
-  ])
-  const text = render([
-    { name: '@pcbjs/core', text: CHANGELOG },
-    { name: '@pcbjs/lib', text: CHANGELOG },
-  ])
-  assert.match(
-    text,
-    /## 0\.2\n\n### 0\.2\.0, @pcbjs\/core, @pcbjs\/lib\n\nReplace `foo\(` with `bar\(`\.\n\n## 0\.1\n\n### 0\.1\.0, @pcbjs\/core, @pcbjs\/lib\n\nMove to the scoped packages\.\n$/,
-  )
-  assert.match(render([]), /No release has a Migration section yet/)
-})
-
-test('sync-changelog: the script writes the reference file it is given', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'pcbjs-changelog-'))
-  try {
-    writeFileSync(join(dir, 'CHANGELOG.md'), CHANGELOG)
-    const out = join(dir, 'out.md')
-    const r = spawnSync(process.execPath, [join(pkg, 'scripts', 'sync-changelog.mjs'), '--out', out, join(dir, 'CHANGELOG.md')], { encoding: 'utf8' })
-    assert.equal(r.status, 0, r.stderr)
-    assert.match(readFileSync(out, 'utf8'), /### 0\.2\.0, pcbjs/)
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
+test('skills: describe, skillsDir and no bin', () => {
+  assert.match(`${skillNames()[0]}  ${describe(skillNames()[0])}`, /^pcbjs-basics {2}Design a PCB in pcbjs/)
+  assert.equal(skillsDir, root)
+  const { bin, files } = JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8'))
+  assert.equal(bin, undefined)
+  assert.ok(!files.includes('bin') && !existsSync(join(pkg, 'bin')))
 })

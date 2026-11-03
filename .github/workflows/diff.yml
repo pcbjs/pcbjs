@@ -1,0 +1,117 @@
+name: Diff
+
+on:
+  pull_request:
+    branches: [main, beta2]
+
+permissions:
+  pull-requests: write
+
+concurrency:
+  group: diff-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  PCBJS_CACHE_DIR: ${{ github.workspace }}/.pcbjs-cache
+
+jobs:
+  diff:
+    name: Visual diff of the changed examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: The examples whose files changed
+        id: changed
+        run: |
+          base=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+          projects=$(git diff --name-only "$base" HEAD -- examples | while read -r f; do
+            d=$(dirname "$f")
+            while [ "$d" != examples ] && [ "$d" != . ]; do
+              if ls "$d"/pcb.config.* >/dev/null 2>&1; then echo "$d"; break; fi
+              d=$(dirname "$d")
+            done
+          done | sort -u | tr '\n' ' ')
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "projects=$projects" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v5
+        if: steps.changed.outputs.projects != ''
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.changed.outputs.projects != ''
+        run: npm ci && npm run build
+      - name: The user model cache
+        if: steps.changed.outputs.projects != ''
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PCBJS_CACHE_DIR }}
+          key: model-cache-${{ hashFiles('examples/**/models/LICENSES.md') }}
+      - name: Fetch the vendor models
+        if: steps.changed.outputs.projects != ''
+        run: node scripts/check-examples.mjs --fetch
+      - name: pcbjs diff against the merge base
+        if: steps.changed.outputs.projects != ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/diff" "$RUNNER_TEMP/logs"
+          for d in ${{ steps.changed.outputs.projects }}; do
+            name=${d#examples/}
+            (cd "$d" && node "$GITHUB_WORKSPACE/packages/pcbjs/bin/pcbjs.js" diff "${{ steps.changed.outputs.base }}" -o "$RUNNER_TEMP/diff/$name") > "$RUNNER_TEMP/logs/${name//\//-}.log" 2>&1 || true
+            cat "$RUNNER_TEMP/logs/${name//\//-}.log"
+          done
+      - name: Upload the images
+        id: upload
+        if: steps.changed.outputs.projects != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcbjs-diff
+          path: ${{ runner.temp }}/diff
+          if-no-files-found: ignore
+      - name: Post or update the comment
+        if: steps.changed.outputs.projects != '' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        env:
+          DIFF: ${{ runner.temp }}/diff
+          LOGS: ${{ runner.temp }}/logs
+          PROJECTS: ${{ steps.changed.outputs.projects }}
+          ARTIFACT: ${{ steps.upload.outputs.artifact-url }}
+        with:
+          script: |
+            const fs = require('fs')
+            const path = require('path')
+            const marker = '<!-- pcbjs-diff -->'
+            const rows = []
+            let changed = 0
+            for (const d of process.env.PROJECTS.trim().split(/\s+/)) {
+              const name = d.replace(/^examples\//, '')
+              const dir = path.join(process.env.DIFF, name)
+              const reports = fs.existsSync(dir) ? fs.readdirSync(dir).filter(b => fs.existsSync(path.join(dir, b, 'diff.json'))) : []
+              const log = fs.readFileSync(path.join(process.env.LOGS, `${name.replace(/\//g, '-')}.log`), 'utf8')
+              const error = log.split('\n').find(l => /error|pcbjs diff:/.test(l))
+              if (!reports.length || error) rows.push(`| ${name} | | failed: ${(error ?? 'no output').replace(/\|/g, '\\|')} | | |`)
+              for (const b of reports) {
+                const r = JSON.parse(fs.readFileSync(path.join(dir, b, 'diff.json'), 'utf8'))
+                const c = r.counts
+                const any = c.added + c.removed + c.moved > 0 || r.pixels > 0 || r.findings.new.length + r.findings.fixed.length > 0
+                if (any) changed++
+                const images = any && process.env.ARTIFACT ? `[${name}/${b}/diff.png](${process.env.ARTIFACT}), before.png, after.png` : 'no change'
+                rows.push(`| ${name} | ${r.board}${r.target ? ` [${r.target}]` : ''} | +${c.added} -${c.removed} ~${c.moved} | +${r.findings.new.length} -${r.findings.fixed.length} | ${images} |`)
+              }
+            }
+            const body = [
+              marker,
+              `### pcbjs diff against ${context.payload.pull_request.base.ref}`,
+              '',
+              changed ? `Removed copper red, added green, moved amber; the images are in the [pcbjs-diff artifact](${process.env.ARTIFACT}).` : 'No board changed.',
+              '',
+              '| Example | Board | Items, added removed moved | Findings, new fixed | Images |',
+              '| --- | --- | --- | --- | --- |',
+              ...rows,
+            ].join('\n')
+            const { owner, repo } = context.repo
+            const issue_number = context.payload.pull_request.number
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number })
+            const mine = comments.find(c => c.body?.startsWith(marker))
+            if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body })
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body })

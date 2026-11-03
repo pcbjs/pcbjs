@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: Version the pending changesets and print the result, without pushing or publishing
+        description: Version and validate the train, including installed tarballs, without pushing or publishing
         type: boolean
         default: false
+      resume_version:
+        description: Recover this exact version commit or release tag; extension registries are not republished
+        type: string
+        default: ''
 
 concurrency:
   group: release
@@ -26,79 +30,95 @@ jobs:
       actions: write
     env:
       DRY_RUN: ${{ inputs.dry_run }}
+      RESUME_VERSION: ${{ inputs.resume_version }}
     steps:
       - uses: actions/checkout@v5
         with:
           ref: main
           fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
       - name: Bot identity for git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-      - id: pending
-        name: Pending changesets
-        run: |
-          if [ -n "$(find .changeset -maxdepth 1 -name '*.md' ! -name README.md -print -quit)" ]; then
-            echo "resume=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          version=$(node -p "require('./packages/pcbjs/package.json').version")
-          if [ "$DRY_RUN" != "true" ] && [ -z "$(git tag -l "@pcbjs/pcbjs@$version")" ]; then
-            echo "::notice title=Release::No pending changesets, but $version on main is untagged, so this run publishes it"
-            echo "resume=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "::error title=Release::No pending changeset in .changeset, nothing to release. Add one with npm run changeset and commit it to main first."
-          exit 1
+      - id: train
+        name: Select the new train or the explicitly requested recovery
+        run: node scripts/release-state.mjs
+      - name: Check out the recovery's version commit
+        if: steps.train.outputs.mode == 'resume'
+        run: git checkout --detach "$TRAIN_REF"
+        env:
+          TRAIN_REF: ${{ steps.train.outputs.ref }}
       # no npm cache and no registry-url: npm authenticates through OIDC, never a token
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
+      - name: npm with trusted publishing
+        run: npm install -g npm@11.21.1
       - run: npm ci
       - name: Version the train
-        if: steps.pending.outputs.resume == 'false'
+        if: steps.train.outputs.mode == 'new'
         run: |
           npx changeset version
+          # the example templates of pcbjs create pin the versions the bump just wrote
+          node packages/cli/scripts/sync-examples.mjs
           npm install --package-lock-only
           git add -A
           git commit -q -m "pcbjs $(node -p "require('./packages/pcbjs/package.json').version")"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Dry run, the train that would ship
+      - run: npm run build
+      - name: Bundle the VS Code extension into @pcbjs/cli
+        run: npm run package -w @pcbjs/vscode
+      - name: Fetch the vendor models and install the libraries the tests read
+        run: node scripts/check-examples.mjs --fetch
+      - run: npm test
+      - name: Check every example, cold
+        run: node scripts/check-examples.mjs
+      - name: Every example agrees cold, warm and through cache recovery
+        run: node scripts/stage-equality.mjs
+      - name: Build the demo fab sets
+        run: npm run demo:build
+      - name: Every demo fab set is orderable
+        run: |
+          files=$(find examples/demo/.pcbjs/fab -name README-fab.txt)
+          test -n "$files"
+          for f in $files; do grep -q 'STATUS: ORDERABLE' "$f" || { echo "$f is not orderable"; exit 1; }; done
+      - name: Install and exercise the versioned tarballs
+        run: node scripts/pack-smoke.mjs
+      - name: Validation left the version commit unchanged
+        run: git diff --exit-code
+      - name: Dry run, the validated train that would ship
         if: env.DRY_RUN == 'true'
         run: |
           git log -1 --format=%s
-          git diff --stat HEAD^ HEAD
+          git show --stat --oneline HEAD
           for p in packages/*/package.json; do node -p "const p = require('./$p'); p.name + ' ' + p.version"; done
           echo "Release notes:"
           node scripts/release-notes.mjs
       - name: Push the version commit to main
-        if: env.DRY_RUN != 'true' && steps.pending.outputs.resume == 'false'
+        if: env.DRY_RUN != 'true' && steps.train.outputs.mode == 'new'
         # a rejection means main moved since the checkout: rerun the workflow
         run: git push origin HEAD:main
       - id: vscode
         name: Did this train move the extension
-        if: env.DRY_RUN != 'true'
+        if: env.DRY_RUN != 'true' && steps.train.outputs.mode == 'new'
         run: |
           now=$(node -p "require('./packages/vscode/package.json').version")
           was=$(git show HEAD^:packages/vscode/package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8') || '{}').version")
           echo "changed=$([ "$now" != "$was" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-      - if: env.DRY_RUN != 'true'
-        run: npm run build
-      - name: Bundle the VS Code extension into @pcbjs/cli
-        if: env.DRY_RUN != 'true'
-        run: npm run package -w @pcbjs/vscode
-      - name: npm with trusted publishing
-        if: env.DRY_RUN != 'true'
-        run: npm install -g npm@11.21.1
-      - name: Publish under the beta dist-tag
-        if: env.DRY_RUN != 'true'
+      - name: Publish missing npm packages
+        if: env.DRY_RUN != 'true' && steps.train.outputs.publish == 'true'
         run: npx changeset publish
         env:
           NPM_CONFIG_PROVENANCE: true
       - name: Push the tags
-        if: env.DRY_RUN != 'true'
-        run: git push origin --tags
+        if: env.DRY_RUN != 'true' && steps.train.outputs.publish == 'true'
+        run: |
+          version=$(node -p "require('./packages/pcbjs/package.json').version")
+          tag="@pcbjs/pcbjs@$version"
+          # A retry can find every npm version published but no train tag pushed.
+          git rev-parse --verify --quiet "refs/tags/$tag" > /dev/null || git tag "$tag"
+          git push origin --tags
       - id: vsix
         name: The packaged VSIX
         if: env.DRY_RUN != 'true'
@@ -133,21 +153,26 @@ jobs:
       - name: Open VSX, no token
         if: steps.tokens.outputs.ovsx == 'false'
         run: echo "::notice title=VS Code extension::OVSX_TOKEN is not set, so ${{ steps.vsix.outputs.version }} was not published to Open VSX"
+      - name: Extension registries on recovery
+        if: env.DRY_RUN != 'true' && steps.train.outputs.mode == 'resume'
+        run: echo "::notice title=VS Code extension::Recovery skips registry publication. Check each registry for this exact extension version and retry only a missing version as described in RELEASING.md."
       - name: GitHub Release of the train
         if: env.DRY_RUN != 'true'
         run: |
           version=$(node -p "require('./packages/pcbjs/package.json').version")
           tag="@pcbjs/pcbjs@$version"
-          if gh release view "$tag" > /dev/null 2>&1; then
-            echo "::notice title=GitHub Release::$tag already has a release"
-            exit 0
+          if ! gh release view "$tag" > /dev/null 2>&1; then
+            node scripts/release-notes.mjs > "$RUNNER_TEMP/notes.md"
+            case "$version" in *-*) pre=--prerelease ;; *) pre= ;; esac
+            gh release create "$tag" --title "pcbjs $version" $pre --notes-file "$RUNNER_TEMP/notes.md"
           fi
-          node scripts/release-notes.mjs > "$RUNNER_TEMP/notes.md"
-          case "$version" in *-*) pre=--prerelease ;; *) pre= ;; esac
-          gh release create "$tag" --title "pcbjs $version" $pre --notes-file "$RUNNER_TEMP/notes.md" \
-            "${{ steps.vsix.outputs.path }}" packages/cli/vscode/manifest.json
+          assets=$(gh release view "$tag" --json assets --jq '.assets[].name')
+          for asset in "$VSIX" packages/cli/vscode/manifest.json; do
+            if ! printf '%s\n' "$assets" | grep -Fxq "$(basename "$asset")"; then gh release upload "$tag" "$asset"; fi
+          done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VSIX: ${{ steps.vsix.outputs.path }}
       - name: Refresh the stable site
         if: env.DRY_RUN != 'true'
         # a push by GITHUB_TOKEN starts no workflow, but a workflow_dispatch through the API does

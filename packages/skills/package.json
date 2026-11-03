@@ -1,7 +1,7 @@
 {
   "name": "@pcbjs/skills",
   "version": "0.0.1-beta.1",
-  "description": "Agent skills for pcbjs in the Agent Skills format: basics, best practices, porting from KiCad and from Python generators, and upgrading. The pcbjs-skills bin links them from .agents/skills and .claude/skills.",
+  "description": "Agent skills for pcbjs in the Agent Skills format: basics, best practices, porting from KiCad and from Python generators, and upgrading. `pcbjs skills install` links them from .agents/skills and .claude/skills.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -10,21 +10,16 @@
     "directory": "packages/skills"
   },
   "homepage": "https://pcbjs.dev",
-  "bin": {
-    "pcbjs-skills": "bin/pcbjs-skills.mjs"
-  },
   "exports": {
     ".": {
       "types": "./index.d.ts",
       "default": "./index.mjs"
     },
-    "./*": "./*"
+    "./package.json": "./package.json"
   },
   "files": [
-    "bin",
     "index.mjs",
     "index.d.ts",
-    "scripts",
     "pcbjs-basics",
     "pcbjs-best-practices",
     "pcbjs-port-from-kicad",
@@ -32,8 +27,8 @@
     "pcbjs-upgrade"
   ],
   "scripts": {
-    "test": "node --test \"tests/**/*.test.mjs\"",
-    "prepack": "node scripts/sync-changelog.mjs && node ../../scripts/pack-files.mjs pre",
+    "test": "node --import ../../scripts/test-watchdog.mjs --test \"tests/**/*.test.mjs\"",
+    "prepack": "node ../../scripts/pack-files.mjs pre",
     "postpack": "node ../../scripts/pack-files.mjs post"
   },
   "publishConfig": {

@@ -1,0 +1,6 @@
+# LF everywhere, also on a Windows checkout: tests compare text and hash sources
+* text=auto eol=lf
+# model files are hashed as they are
+*.step -text
+*.stp -text
+*.wrl -text
