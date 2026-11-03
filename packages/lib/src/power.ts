@@ -20,7 +20,7 @@ export const CR2032Holder = makeFootprint<'+' | '-'>({
   model: kicad3d('Battery.3dshapes/BatteryHolder_Keystone_3034_1x20mm.step', outline(21.26, 16.16, 4.2)),
   courtyard: [{ cx: 0, cy: 0, w: 23.74, h: 21.0 }],
   pin1: false,
-  silk: [h('text', { layer: 'F.SilkS', at: [-10.985, -3.6], size: 1.2 }, '+'), h('text', { layer: 'F.SilkS', at: [10.985, -3.6], size: 1.2 }, '+')],
+  silk: [h('text', { layer: 'F.SilkS', at: '-10.985 -3.6', size: 1.2 }, '+'), h('text', { layer: 'F.SilkS', at: '10.985 -3.6', size: 1.2 }, '+')],
   extra: [h('circle', { layer: 'Dwgs.User', r: 10, width: 0.1 }), h('circle', { layer: 'F.Fab', r: 10, width: 0.1 })],
 })
 
@@ -62,7 +62,7 @@ export function BatteryPads<const N extends string = never>(opts: BatteryPadsOpt
         model: { kind: 'none' },
         bom: false,
         pos: false,
-        silk: [h('text', { layer: 'F.SilkS', at: [r4(-pitch / 2), r4(-ph / 2 - 0.9)], size: 0.8 }, '+')],
+        silk: [h('text', { layer: 'F.SilkS', at: `${r4(-pitch / 2)} ${r4(-ph / 2 - 0.9)}`, size: 0.8 }, '+')],
         pin1: false,
       },
       gen as GeneratorOptions,

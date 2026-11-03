@@ -1,4 +1,7 @@
-import type { ModelSpec } from './types.js'
+import type { GeneratedKind, GeneratedModels, GeneratedSpec, ModelSpec, StepModelSpec } from './types.js'
+
+/** True for a model file spec, `{ file }`, which has no `kind`. */
+export const isFileModel = (m: unknown): m is StepModelSpec => !!m && typeof m === 'object' && (m as any).kind === undefined && typeof (m as any).file === 'string'
 
 /** Where a part's 3D body comes from; `missing` is drawn as a wireframe that says so. */
 export type ModelSource = 'file' | 'generated' | 'none' | 'missing'
@@ -6,13 +9,18 @@ export type ModelSource = 'file' | 'generated' | 'none' | 'missing'
 /** As `model check` and `inspect` print it. */
 export const MODEL_LABEL: Record<ModelSource, string> = { file: 'file', generated: 'generated', none: 'no body', missing: 'no model' }
 
-const GENERATED = new Set(['chip', 'led', 'header', 'sot23', 'ic'])
+/** The kinds of generated body, one per key of GeneratedModels. */
+export const GENERATED_KINDS = ['chip', 'led', 'header', 'sot23', 'ic'] as const satisfies readonly (keyof GeneratedModels)[]
+const GENERATED: ReadonlySet<string> = new Set<GeneratedKind>(GENERATED_KINDS)
+
+/** True for a body the 3D view, the GLB and references generate from its dimensions. */
+export const isGenerated = (m: ModelSpec | undefined): m is GeneratedSpec => !!m?.kind && GENERATED.has(m.kind)
 
 /** `height` as the site data gives it, 0 for a bare hole; a `box` stands in for a model, so it counts as missing. */
 export function modelSource(model: ModelSpec | undefined, height: number): ModelSource {
-  if (model && (model.kind === undefined || model.kind === 'step')) return 'file'
+  if (model && model.kind === undefined) return 'file'
   if (model?.kind === 'none') return 'none'
-  if (model?.kind && GENERATED.has(model.kind)) return 'generated'
+  if (isGenerated(model)) return 'generated'
   const box = model?.kind === 'box' ? model : null
   return (box ? box.w > 0 && box.h > 0 && box.height > 0 : height > 0) ? 'missing' : 'none'
 }

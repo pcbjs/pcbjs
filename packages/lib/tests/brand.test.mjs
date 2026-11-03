@@ -3,11 +3,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import PCB, { h } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
-import { Brand, brandMinHeight, OSHPARK } from '../dist/index.js'
+import { Brand, brandMinHeight } from '../dist/index.js'
+import { OSHPARK } from '../dist/rules.js'
 import { near } from './helpers.mjs'
 
 const board = (brand, rules) =>
-  compileBoard(h(PCB, { name: 'B', ...(rules ? { rules } : {}) }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 40, h: 30 }), h(Brand, brand)), { routeCache: false })
+  compileBoard(h(PCB, { name: 'B', ...(rules ? { rules } : {}) }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 40, h: 30 }), h(Brand, brand)), { cache: false })
 const ink = b => b.items.filter(i => i.kind === 'graphic' && /SilkS$/.test(i.layer))
 function bounds(items) {
   const r = [Infinity, Infinity, -Infinity, -Infinity]

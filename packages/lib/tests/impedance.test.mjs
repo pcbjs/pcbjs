@@ -3,7 +3,8 @@
 // (Saturn PCB Toolkit, KiCad's calculator, the JLCPCB impedance calculator). Tolerance 10 percent unless noted.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { impedanceOf, traceWidth, pairGeometry, traceModel, twoLayer, sixLayer, JLCPCB_4L_7628 } from '../dist/index.js'
+import { impedanceOf, traceWidth, pairGeometry, traceModel } from '../dist/impedance.js'
+import { twoLayer, sixLayer, JLCPCB_4L_7628 } from '../dist/stackups.js'
 
 const within = (actual, expected, frac, what) => assert.ok(Math.abs(actual - expected) <= frac * expected, `${what}: ${actual} is not within ${frac * 100}% of ${expected}`)
 const J = JLCPCB_4L_7628
@@ -15,14 +16,15 @@ test('impedance: the model reads planes, height, er and copper from the stackup'
   assert.equal(two.h, 1.51)
   assert.equal(two.er, 4.5)
   assert.equal(two.t, 0.035)
-  const in1 = traceModel(J, 'in1.cu')
+  const in1 = traceModel(J, 'In1.Cu')
   assert.equal(in1.kind, 'stripline')
   assert.deepEqual(in1.planes, ['F.Cu', 'In2.Cu'])
   assert.equal(in1.h, 0.2104)
   assert.equal(in1.h2, 1.065)
   // thickness weighted er of the 7628 prepreg above (4.4) and the core below (4.6)
   assert.ok(Math.abs(in1.er - (4.4 * 0.2104 + 4.6 * 1.065) / (0.2104 + 1.065)) < 1e-12)
-  assert.equal(traceModel(J, 'bottom').h, 0.2104)
+  assert.equal(traceModel(J, 'B.Cu').h, 0.2104)
+  assert.throws(() => traceModel(J, 'bottom'), /"bottom" is not a copper layer of the stackup/)
 })
 
 test('impedance: 50 ohm microstrip on a 1.6 mm two layer FR4 board is about 3 mm wide', () => {

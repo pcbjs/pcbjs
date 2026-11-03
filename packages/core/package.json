@@ -18,11 +18,6 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "default": "./dist/*.js"
-    },
-    "./package.json": "./package.json",
     "./jsx-runtime": {
       "types": "./dist/jsx-runtime.d.ts",
       "default": "./dist/jsx-runtime.js"
@@ -30,6 +25,187 @@
     "./jsx-dev-runtime": {
       "types": "./dist/jsx-dev-runtime.d.ts",
       "default": "./dist/jsx-dev-runtime.js"
+    },
+    "./model": {
+      "types": "./dist/model.d.ts",
+      "default": "./dist/model.js"
+    },
+    "./ref": {
+      "types": "./dist/ref.d.ts",
+      "default": "./dist/ref.js"
+    },
+    "./finding": {
+      "types": "./dist/finding.d.ts",
+      "default": "./dist/finding.js"
+    },
+    "./site-data": {
+      "types": "./dist/site-data.d.ts",
+      "default": "./dist/site-data.js"
+    },
+    "./site-facets": {
+      "types": "./dist/site-facets.d.ts",
+      "default": "./dist/site-facets.js"
+    },
+    "./site-shapes": {
+      "types": "./dist/site-shapes.d.ts",
+      "default": "./dist/site-shapes.js"
+    },
+    "./platform": {
+      "types": "./dist/platform.d.ts",
+      "default": "./dist/platform.js"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.ts",
+      "default": "./dist/protocol.js"
+    },
+    "./package.json": "./package.json",
+    "./internal/board-spec": {
+      "types": "./dist/board-spec.d.ts",
+      "default": "./dist/board-spec.js"
+    },
+    "./internal/circuit": {
+      "types": "./dist/circuit.d.ts",
+      "default": "./dist/circuit.js"
+    },
+    "./internal/config": {
+      "types": "./dist/config.d.ts",
+      "default": "./dist/config.js"
+    },
+    "./internal/defaults": {
+      "types": "./dist/defaults.d.ts",
+      "default": "./dist/defaults.js"
+    },
+    "./internal/fonts/hershey-simplex": {
+      "types": "./dist/fonts/hershey-simplex.d.ts",
+      "default": "./dist/fonts/hershey-simplex.js"
+    },
+    "./internal/fonts/newstroke": {
+      "types": "./dist/fonts/newstroke.d.ts",
+      "default": "./dist/fonts/newstroke.js"
+    },
+    "./internal/footprint": {
+      "types": "./dist/footprint.d.ts",
+      "default": "./dist/footprint.js"
+    },
+    "./internal/grid": {
+      "types": "./dist/grid.d.ts",
+      "default": "./dist/grid.js"
+    },
+    "./internal/impedance": {
+      "types": "./dist/impedance.d.ts",
+      "default": "./dist/impedance.js"
+    },
+    "./internal/instances": {
+      "types": "./dist/instances.d.ts",
+      "default": "./dist/instances.js"
+    },
+    "./internal/layers": {
+      "types": "./dist/layers.d.ts",
+      "default": "./dist/layers.js"
+    },
+    "./internal/model-source": {
+      "types": "./dist/model-source.d.ts",
+      "default": "./dist/model-source.js"
+    },
+    "./internal/netclass": {
+      "types": "./dist/netclass.d.ts",
+      "default": "./dist/netclass.js"
+    },
+    "./internal/nets": {
+      "types": "./dist/nets.d.ts",
+      "default": "./dist/nets.js"
+    },
+    "./internal/outline": {
+      "types": "./dist/outline.d.ts",
+      "default": "./dist/outline.js"
+    },
+    "./internal/part": {
+      "types": "./dist/part.d.ts",
+      "default": "./dist/part.js"
+    },
+    "./internal/patch": {
+      "types": "./dist/patch.d.ts",
+      "default": "./dist/patch.js"
+    },
+    "./internal/plugin": {
+      "types": "./dist/plugin.d.ts",
+      "default": "./dist/plugin.js"
+    },
+    "./internal/preset": {
+      "types": "./dist/preset.d.ts",
+      "default": "./dist/preset.js"
+    },
+    "./internal/provenance": {
+      "types": "./dist/provenance.d.ts",
+      "default": "./dist/provenance.js"
+    },
+    "./internal/realm": {
+      "types": "./dist/realm.d.ts",
+      "default": "./dist/realm.js"
+    },
+    "./internal/reference": {
+      "types": "./dist/reference.d.ts",
+      "default": "./dist/reference.js"
+    },
+    "./internal/rules": {
+      "types": "./dist/rules.d.ts",
+      "default": "./dist/rules.js"
+    },
+    "./internal/sch-elements": {
+      "types": "./dist/sch-elements.d.ts",
+      "default": "./dist/sch-elements.js"
+    },
+    "./internal/sch-model": {
+      "types": "./dist/sch-model.d.ts",
+      "default": "./dist/sch-model.js"
+    },
+    "./internal/sch-symbol": {
+      "types": "./dist/sch-symbol.d.ts",
+      "default": "./dist/sch-symbol.js"
+    },
+    "./internal/selection": {
+      "types": "./dist/selection.d.ts",
+      "default": "./dist/selection.js"
+    },
+    "./internal/sourcing": {
+      "types": "./dist/sourcing.d.ts",
+      "default": "./dist/sourcing.js"
+    },
+    "./internal/stackups": {
+      "types": "./dist/stackups.d.ts",
+      "default": "./dist/stackups.js"
+    },
+    "./internal/trace-arc": {
+      "types": "./dist/trace-arc.d.ts",
+      "default": "./dist/trace-arc.js"
+    },
+    "./internal/syntax": {
+      "types": "./dist/syntax.d.ts",
+      "default": "./dist/syntax.js"
+    },
+    "./internal/teardrop": {
+      "types": "./dist/teardrop.d.ts",
+      "default": "./dist/teardrop.js"
+    },
+    "./internal/text": {
+      "types": "./dist/text.d.ts",
+      "default": "./dist/text.js"
+    },
+    "./internal/textdoc": {
+      "types": "./dist/textdoc.d.ts",
+      "default": "./dist/textdoc.js"
+    },
+    "./internal/types": {
+      "types": "./dist/types.d.ts",
+      "default": "./dist/types.js"
+    },
+    "./internal/units": {
+      "types": "./dist/units.d.ts",
+      "default": "./dist/units.js"
+    },
+    "./internal/variants": {
+      "types": "./dist/variants.d.ts",
+      "default": "./dist/variants.js"
     }
   },
   "files": [
@@ -40,7 +216,7 @@
   "scripts": {
     "build": "tsc -b",
     "watch": "tsc -b --watch",
-    "test": "node --test \"tests/**/*.test.mjs\"",
+    "test": "node --import ../../scripts/test-watchdog.mjs --test \"tests/**/*.test.mjs\"",
     "prepack": "node ../../scripts/pack-files.mjs pre",
     "postpack": "node ../../scripts/pack-files.mjs post"
   },

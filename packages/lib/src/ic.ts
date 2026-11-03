@@ -1,5 +1,5 @@
 // Land patterns follow the KiCad 9 library, IPC-7351 nominal density; pins are numbered as the JEDEC outline does.
-import type { ModelSpec } from '@pcbjs/core/types'
+import type { ModelSpec } from '@pcbjs/core/internal/types'
 import { makeFootprint, r4, type FootprintDef, type GeneratorOptions, type LibFootprint, type PadDef, type PinsOf } from './footprint.js'
 import { intArg, memoised, mmArg, oneOf, optsArg, show, sizeArg } from './gen.js'
 
@@ -179,36 +179,29 @@ export function TSSOP<const N extends string = never>(pins: number, opts: Genera
 }
 
 export interface QFNOptions<N extends string = string> extends GeneratorOptions<N>, ExposedPadOptions {
+  /** the exposed pad, pad number pins + 1, pin EP, one size or [w, h] in mm; default none */
+  ep?: number | [number, number]
   /** the pad length across the edge and width along it; default from the KiCad QFN patterns for the body size and pitch */
   pad?: { l: number; w: number }
   /** body height, default 0.9 */
   height?: number
 }
 
-/** QFN, square body `size` mm, `pins` / 4 pads per side; `ep` adds the exposed pad, pad pins + 1 named EP. */
-export function QFN<const N extends string = never>(
-  pins: number,
-  size: number,
-  pitch: number,
-  ep?: number | [number, number],
-  opts: QFNOptions<N> = {},
-): LibFootprint<PinsOf<Num | 'EP', N>> {
+/** QFN, square body `size` mm, `pins` / 4 pads per side; the `ep` option adds the exposed pad, pad pins + 1 named EP. */
+export function QFN<const N extends string = never>(pins: number, size: number, pitch: number, opts: QFNOptions<N> = {}): LibFootprint<PinsOf<Num | 'EP', N>> {
   quadPins('QFN', pins, size, pitch)
-  if (ep !== undefined)
-    sizeArg(
-      'QFN',
-      'ep, the fourth argument and the exposed pad,',
-      ep,
-      `; leave it undefined for no exposed pad and pass options fifth, QFN(${pins}, ${size}, ${pitch}, 3.45, { vias: 3 })`,
-    )
-  optsArg('QFN', opts, ['pad', 'height', 'vias'], 'the fifth argument, the options,')
+  if (typeof opts === 'number' || Array.isArray(opts))
+    throw new TypeError(`QFN: the exposed pad is the ep option, QFN(${pins}, ${size}, ${pitch}, { ep: ${JSON.stringify(opts)} })`)
+  optsArg('QFN', opts, ['ep', 'pad', 'height', 'vias'], 'the fourth argument, the options,')
+  const ep = opts.ep
+  if (ep !== undefined) sizeArg('QFN', 'ep, the exposed pad,', ep)
   if (opts.pad !== undefined) {
     mmArg('QFN', 'pad.l, the pad length', opts.pad?.l)
     mmArg('QFN', 'pad.w, the pad width', opts.pad?.w)
   }
   if (opts.height !== undefined) mmArg('QFN', 'height', opts.height)
   if (opts.vias !== undefined) intArg('QFN', 'vias, the thermal via grid', opts.vias, 0, 10)
-  return memoised('QFN', [pins, size, pitch, ep ?? null, opts], () => {
+  return memoised('QFN', [pins, size, pitch, opts], () => {
     const l = opts.pad?.l ?? (size <= 3 ? 0.775 : 0.875)
     const w = opts.pad?.w ?? Math.min(0.4, r4(pitch / 2))
     const outer = size / 2 + (size <= 3 ? 0.35 : 0.375)

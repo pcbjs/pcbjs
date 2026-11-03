@@ -15,9 +15,9 @@ const FONTS: Record<StrokeFontName, StrokeFont> = {
   newstroke: { cap: NEWSTROKE_CAP, ascii: NEWSTROKE, extra: NEWSTROKE_EXTRA, alias: NEWSTROKE_ALIAS },
 }
 
-/** The stroke font a `font` prop names: "hershey" for undefined, "hershey" and "hershey-simplex", "newstroke"; null otherwise. */
+/** The stroke font a `font` prop names: "hershey" for undefined, "hershey", "newstroke"; null otherwise. */
 export function strokeFontName(f: unknown): StrokeFontName | null {
-  if (f === undefined || f === null || f === 'hershey' || f === 'hershey-simplex') return 'hershey'
+  if (f === undefined || f === null || f === 'hershey') return 'hershey'
   return f === 'newstroke' ? 'newstroke' : null
 }
 

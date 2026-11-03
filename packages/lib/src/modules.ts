@@ -1,5 +1,6 @@
 // Origin at the module centre, the antenna end at -y.
 import { h } from '@pcbjs/core/jsx-runtime'
+import { keepout } from '@pcbjs/core'
 import { makeFootprint, type GeneratorOptions, type LibFootprint, type PadDef, type PinsOf } from './footprint.js'
 import { rect } from './shapes.js'
 import { memoised, optsArg } from './gen.js'
@@ -76,8 +77,8 @@ export function ESP32C3Mini1Footprint<const N extends string = never>(opts: ESP3
         pin1: [-7.0, -1.3],
         extra: [
           h('line', { layer: 'F.Fab', x1: -6.6, y1: -2.9, x2: 6.6, y2: -2.9, width: 0.1 }),
-          h('text', { layer: 'F.Fab', at: [0, -5.6], size: 1 }, 'ANT'),
-          ...(antennaKeepout ? [h('keepout', { layers: 'all', d: rect(13.2, 5.4, -6.6, -8.3) })] : []), // the datasheet keeps the antenna area free of copper
+          h('text', { layer: 'F.Fab', at: '0 -5.6', size: 1 }, 'ANT'),
+          ...(antennaKeepout ? [keepout(rect(13.2, 5.4, -6.6, -8.3))] : []), // the datasheet keeps the antenna area free of copper
         ],
       },
       gen as GeneratorOptions,

@@ -12,7 +12,7 @@ const span = t => {
 
 test("newstroke: names, coverage and the cap height of KiCad's glyph size", () => {
   assert.equal(strokeFontName(undefined), 'hershey')
-  assert.equal(strokeFontName('hershey-simplex'), 'hershey')
+  assert.equal(strokeFontName('hershey-simplex'), null)
   assert.equal(strokeFontName('newstroke'), 'newstroke')
   assert.equal(strokeFontName('slab'), null)
   assert.equal(NEWSTROKE_CAP, 21)

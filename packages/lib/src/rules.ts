@@ -1,9 +1,9 @@
 // Millimetres. Sources: the fabs' capability pages on the dates given.
 import type { Rules } from '@pcbjs/core'
-import { BASE, deepFreeze, mergeRules } from '@pcbjs/core/rules'
+import { BASE, deepFreeze, mergeRules } from '@pcbjs/core/internal/rules'
 
-// deepFreeze, cloneData, mergeRules, BASE and defaultVia live in @pcbjs/core, which the board defaults need
-export { deepFreeze, cloneData, mergeRules, BASE, defaultVia, THERMAL, thermalRules, resolveRules, holeClearanceOn, holeToHole, withMaskColor } from '@pcbjs/core/rules'
+// mergeRules and BASE live in @pcbjs/core, which the board defaults need; this module is where code imports them
+export { mergeRules, BASE } from '@pcbjs/core/internal/rules'
 
 const fab = (overrides: Partial<Rules>): Readonly<Rules> => deepFreeze(mergeRules(BASE, overrides))
 

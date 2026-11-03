@@ -1,13 +1,11 @@
 // 4x4 matrices, column-major as THREE.Matrix4.fromArray reads them, in KiCad's model frame: mm, y along the footprint's -y, z up.
 // KiCad's model transform is translate(offset) * Rz(-rz) * Ry(-ry) * Rx(-rx) * scale.
+import type { StepTransform } from '@pcbjs/core/site-data'
+
+export type { StepTransform }
 export type Mat4 = number[]
 export type Vec3 = [number, number, number]
 
-export interface StepTransform {
-  offset: Vec3
-  rotate: Vec3
-  scale: Vec3
-}
 export interface StepPlacement {
   at: [number, number]
   rot: number

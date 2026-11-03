@@ -4,10 +4,12 @@ import type { SymbolDef } from './sch-symbol.js'
 
 export type Length = number | string
 export type Rotation = number | string
-/** "x y [rot]" with units, or a tuple in mm / degrees. */
-export type At = string | [Length, Length] | [Length, Length, Rotation]
-export type Side = 'F' | 'B' | 'top' | 'bottom'
-/** An outline font file, relative to the file that holds the literal, and for a variable font its weight. */
+/** "x y [rot]": lengths with units, mm when bare, and the rotation in degrees, such as "5 3 90". */
+export type At = string
+/** A current: amps as a number, or a string with A or mA, such as '2A' or '500mA'. */
+export type Current = number | string
+export type Side = 'F' | 'B'
+/** An outline font file, relative to the file that declares it, and for a variable font its weight. */
 export interface FontSpec {
   /** a .ttf or .otf file, such as './fonts/RobotoSlab-Bold.ttf' */
   file: string
@@ -42,6 +44,8 @@ export interface Src {
   col: number
   endLine?: number
   endCol?: number
+  /** 12 hex of the sha1 of the range's source text without its own `at` and `side` attributes, set by the source-range transform; item uids hash it */
+  hash?: string
   /** the command of a path string the range covers, such as "H 9" */
   seg?: string
   /** a call site read off the stack: where the helper that called route() was called from */
@@ -58,9 +62,6 @@ export interface PcbNode {
 /** What JSX takes as a child; any non-string iterable is a list, consumed once at compile time. */
 export type Child = PcbNode | Child[] | Iterable<Child> | string | number | null | undefined | false
 export type Component<P = any> = (props: P) => Child
-
-/** `net:pad1="GND"` sets pad 1, `net:A="LED"` the pad numbered or named A; JSX cannot write `net:1`, use `nets={{ 1: … }}`. */
-export type NetAttrs = { [k: `net:pad${number}`]: NetLike; [k: `net:${string}`]: NetLike }
 
 /** Thermal relief geometry of pours, KiCad's defaults: gap 0.5, spokeWidth 0.5, spokes 4, angle 90, minSpokes 2. */
 export interface ThermalRules {
@@ -116,8 +117,6 @@ export interface Rules {
   thermal?: Partial<ThermalRules>
   /** fill pieces that touch nothing of their net: 'remove' (default), 'keep', or `{ minArea }` mm²; a pour's `islands` wins */
   islands?: IslandMode
-  /** reject string nets once the board uses parts or Net values (default false) */
-  strictNets?: boolean
   /** ERC warning unsourced-part for every BOM row without an MPN (default false) */
   requireSourcing?: boolean
   /** a band along the outline that courtyards, silk and pads stay out of, such as an enclosure's sidewall */
@@ -128,7 +127,9 @@ export type EdgeBandKind = 'courtyard' | 'silk' | 'pad'
 export interface EdgeBand {
   width: number
   kinds?: EdgeBandKind[]
-  except?: (PartBase<any, any> | PinRef | string)[]
+  except?: (PartBase<any, any> | PinRef)[]
+  /** set by the compiler: the refs and `REF.PAD` keys `except` lets in */
+  refs?: string[]
 }
 /** Hole to copper: `outer` on F.Cu and B.Cu, `inner` on inner layers, `via` from a via's hole; a side left out keeps the level below. */
 export type HoleClearanceBySide = { inner?: number; outer?: number; via?: number }
@@ -143,16 +144,13 @@ export interface ResolvedRules extends Omit<Rules, 'holeClearance' | 'minHoleToH
 }
 /** What a pour does with fill pieces that touch no pad, via or track of its net. */
 export type IslandMode = 'remove' | 'keep' | { minArea: number }
-/** A complete rule set, such as `JLCPCB` from `@pcbjs/lib/rules`. */
-export type Ruleset = Rules
-
 export type CopperName = 'F.Cu' | 'B.Cu' | `In${number}.Cu`
 export type Finish = 'HASL' | 'LeadFreeHASL' | 'ENIG' | 'ImmersionSilver' | 'ImmersionTin' | 'OSP' | 'HardGold'
 /** One layer of the physical stackup, listed top to bottom. Thicknesses in mm, copper weight in oz. */
 export type StackupLayer =
   | { type: 'copper'; name: CopperName; thickness: number; weight?: number }
   | { type: 'core' | 'prepreg'; material?: string; thickness: number; er?: number; lossTangent?: number }
-  | { type: 'mask' | 'silk' | 'paste'; side: 'F' | 'B'; thickness?: number; color?: string }
+  | { type: 'mask' | 'silk' | 'paste'; side: 'F' | 'B'; thickness?: number }
 /** The physical board top to bottom; `thickness` is the ordered thickness, else the sum of the layers. */
 export interface Stackup {
   layers: StackupLayer[]
@@ -170,12 +168,9 @@ export interface CplOptions {
 export interface BoardProps {
   name: string
   title?: string
-  revision?: string
-  /** number of copper layers, the short form of `stackup`: 2, 4, 6 or 8 */
-  copper?: 2 | 4 | 6 | 8
-  /** board thickness (mm); with a stackup it must agree with the stackup */
-  thickness?: number
-  /** the physical stackup; when `copper` is given too, they must agree */
+  /** the revision, in the fab zip name and README-fab */
+  rev?: string
+  /** the physical stackup, such as `fourLayer()` or `JLCPCB_4L_7628` from `@pcbjs/lib/stackups`; default `twoLayer()` */
   stackup?: Stackup
   /** a partial rule set merged over the defaults, or a full one such as `JLCPCB` */
   rules?: Partial<Rules>
@@ -197,28 +192,51 @@ export interface BoardProps {
   teardrops?: boolean | TeardropSpec
   /** draw each footprint's ref on its side's silkscreen (default true) */
   silkRefs?: boolean
-  /** outline fonts for `<text font>` by name, a .ttf or .otf relative to this file, over pcb.config.ts */
-  fonts?: Record<string, string | FontSpec>
-  /** the schematic: a drawing, `<Schematic>` or `schematic({ … })`, or a module namespace, `import * as sch`, whose drawing export is used and whose export names name its parts; without a drawing the compiler draws one */
-  schematic?: PcbNode | import('./sch-elements.js').SchematicModule
+  /** outline fonts for `<text font>` by name, each file relative to this file */
+  fonts?: Record<string, FontSpec>
+  /** the schematic module as a namespace, `import * as sch`: its exports are in scope by name and its `drawing` export is the drawing; without one the compiler draws one */
+  schematic?: import('./sch-elements.js').SchematicModule
+  /** compiler plugins after the config's, see plugins.md */
+  plugins?: readonly import('./plugin.js').PcbPlugin[]
+  /** the placer of parts with an auto slot in their `at`: the seed of its search, see placement.md */
+  place?: { seed?: number }
+  /** patch() nodes, before the inline ones and the entry's .patches.ts file, see patches.md */
+  patches?: readonly PcbNode[]
+  /** the board's grid: bare positions under it are grid units, see grids.md */
+  grid?: import('./grid.js').Grid
+  /** grids no element attaches, listed for the viewer and inspect */
+  grids?: readonly import('./grid.js').Grid[]
   children?: Child
 }
 
 export interface GroupProps {
+  /** a hierarchy level: parts placed inside are `name/R1` in findings, inspect and the viewer */
+  name?: string
   at?: At
   side?: Side
+  /** a named grid for the contents, or { snap } for placement editing; named grids with a frame take no at or side */
+  grid?: import('./grid.js').Grid | import('./grid.js').PlacementGrid
   children?: Child
 }
 
-/** A part for the 3D view, generated on demand from this descriptor. Sizes are millimetres. */
-export type ModelSpec =
-  | { kind: 'chip'; part: 'R' | 'C' | 'L' | 'D'; size: '0402' | '0603' | '0805' | '1206'; marking?: string }
-  /** a chip LED, or a PLCC-4 RGB LED such as the WS2812B in 2020 and 5050 */
-  | { kind: 'led'; size: '0402' | '0603' | '0805' | '1206' | '2020' | '5050'; color?: string; lens?: 'dome' | 'flat' }
-  | { kind: 'header'; pins: number; rows: number; pitch: number; pinLength?: number }
-  | { kind: 'sot23'; pins: 3 | 5 | 6 }
+/** The generated bodies by kind, sizes in mm; `GENERATED_KINDS` in model-source.ts lists the kinds. */
+export interface GeneratedModels {
+  /** a chip passive: `body` its length along the pads and width, `cap` the end cap length */
+  chip: { part: 'R' | 'C' | 'L' | 'D'; body: [number, number]; cap: number; height: number; marking?: string }
+  /** a chip LED with end caps `cap` long, or a PLCC-4 LED such as the WS2812B: a lens `window` across and `lead` pads, length and width */
+  led: { body: [number, number]; height: number; color?: string; lens?: 'dome' | 'flat' } & ({ cap: number } | { window: number; lead: [number, number] })
+  header: { pins: number; rows: number; pitch: number; pinLength?: number }
+  sot23: { pins: 3 | 5 | 6 }
   /** an IC package body: SOIC, TSSOP, SOT-223, QFN, QFP */
-  | { kind: 'ic'; w: number; h: number; height: number; color?: string }
+  ic: { w: number; h: number; height: number; color?: string }
+}
+export type GeneratedKind = (typeof import('./model-source.js').GENERATED_KINDS)[number]
+/** A generated body, drawn from its own dimensions in the 3D view, the GLB, shots and references alike. */
+export type GeneratedSpec = { [K in GeneratedKind]: { kind: K } & GeneratedModels[K] }[GeneratedKind]
+
+/** A part for the 3D view: a generated body, a stand-in, none, or a model file. Sizes are millimetres. */
+export type ModelSpec =
+  | GeneratedSpec
   /** stands in for a missing model: the 3D view draws it as a dashed outline; `reason` says why there is no model, `fetch` names the one not fetched yet */
   | { kind: 'box'; w: number; h: number; height: number; color?: string; reason?: string; fetch?: string }
   /** no body: bare pads, test points and mounting holes */
@@ -227,11 +245,9 @@ export type ModelSpec =
 
 /** A model file with KiCad's conventions: STEP, glTF, GLB or `.wrl`; scale, then rotate about x, y, z in degrees, then offset in mm. */
 export interface StepModelSpec {
-  kind?: 'step'
-  /** such as './models/USB-C.step', relative to the file that holds the literal, or a model fetched on first use: `kicad:<Lib>.3dshapes/<Name>.step`, `lcsc:C123` or an https URL; `file` or `step` is needed */
-  file?: string
-  /** the older name of `file`; pcbjs sets it to the absolute path */
-  step?: string
+  kind?: never
+  /** such as './models/USB-C.step', relative to the file that holds the literal, or a model fetched on first use: `kicad:<Lib>.3dshapes/<Name>.step`, `lcsc:C123` or an https URL */
+  file: string
   offset?: [number, number, number]
   rotate?: [number, number, number]
   scale?: [number, number, number]
@@ -241,7 +257,7 @@ export interface StepModelSpec {
   path?: string
 }
 
-export interface FootprintProps extends NetAttrs {
+export interface FootprintProps {
   ref: string
   value?: string
   /** library id, "Lib:Name" */
@@ -255,14 +271,12 @@ export interface FootprintProps extends NetAttrs {
   pos?: boolean
   /** do not populate: out of the BOM and the placement file, still on the board and in the DRC (default false) */
   dnp?: boolean
-  /** pad number or name -> net, the object form of `net:pad1` / `net:A` attributes */
-  nets?: Record<string, NetLike>
   /** pad number or name -> how it joins a pour, over the pad's `thermal`, such as `{ EP: 'solid' }` */
   thermal?: Record<string, PadThermal>
   /** rule overrides for every pad of the footprint, as a part's; see PartRules */
   rules?: PartRules
   /** where the silk ref goes, "x y rot" in the footprint's frame, or false for none; by default above the courtyard */
-  refAt?: At | false
+  'ref:at'?: At | false
   description?: string
   /** net tie groups by pad number, `[['1', '2']]`: the pads of one group may touch inside the footprint */
   netTie?: readonly (readonly (string | number)[])[]
@@ -275,7 +289,7 @@ export interface FootprintProps extends NetAttrs {
 
 export interface PadProps {
   num: string | number
-  /** pin name, lets footprints expose `net:A` instead of `net:pad1` */
+  /** the pin name, when it is not the pad number */
   name?: string
   at?: At
   shape?: PadShape
@@ -289,7 +303,6 @@ export interface PadProps {
   roundness?: number
   /** the polygon of a `custom` pad in its own frame before rotation (mm); `size` stays its bounding box */
   points?: [number, number][]
-  net?: NetLike
   /** left unconnected on purpose: matches no pin, takes no net, raises no ERC finding */
   nc?: boolean
   /** copper clearance over the part's, class's and rules', one length or per kind of the other item; see rules.md Overrides */
@@ -319,16 +332,20 @@ export interface PasteWindows {
 
 /** A coordinate string, "x y" or "x y layer", numbers in mm, such as "5 16" or "5 16 B.Cu". */
 export type PosString = `${number} ${number}` | `${number} ${number} ${string}`
-/** A board position: `{ at, layer }`, a tuple, "x y [layer]", "REF.PAD", or a pin handle resolved after placement. */
-export type Pos = { at: At; layer?: string } | [Length, Length, string?] | PosString | `${string}.${string}` | PinRef | ViaNode
+/** A board position: `{ at, layer }`, a tuple, "x y [layer]", "REF.PAD", a pin handle resolved after placement, or a point of another route. */
+export type RouteEnd = { at: At | [number, number]; layer?: string } | [Length, Length, string?] | PosString | PinRef | ViaNode | RoutePoint
+/** A point of a route, `vccTrunk.end`, `ch2.vccTrunk.pt(2)`: where its `pt`-th chain call ends, `0` its start, on the layer it is on there; resolved once that route is laid. */
+export interface RoutePoint {
+  readonly $$: 'route-pt'
+  readonly route: RouteBuilder
+  readonly pt: number | 'end'
+}
 /** What `via()` returns: a node to place and a route end, positioned in the frame of the route's group. */
 export interface ViaNode extends PcbNode {
   readonly type: 'via'
 }
-/** One end of `route(a, b)`, the type to give a helper's end parameter: the same as `Pos`. A pair end is `[RouteEnd, RouteEnd]`. */
-export type RouteEnd = Pos
-/** What `.Z()` and `.X()` of a route chain take: an end, a pair end `[P, N]`, or a position with units such as '100mil 200mil'. */
-export type RouteTarget = Pos | readonly [Pos, Pos] | `${string} ${string}`
+/** A waypoint of `.L(p)` and `.X(p)` in a route chain: a coordinate on the chain's layer, such as '100mil 200mil' or [5, 16], or a via. */
+export type Waypoint = `${string} ${string}` | [Length, Length] | { at: At } | ViaNode
 /** Neck-down at pads: `width` near the pad, `length` at most from it (default 2 mm, 0 turns it off). */
 export interface NeckSpec {
   width?: Length
@@ -340,10 +357,6 @@ export interface TeardropSpec {
   length?: Length
   width?: Length
 }
-/** Corner `radius` on the centre line, or 'none'; default the pitch for a pair, 'none' for a single route. */
-export interface CornerSpec {
-  radius?: Length | 'none'
-}
 /** A route end in board mm; `layers` lists every layer it may be reached on. */
 export interface ResolvedPos {
   x: number
@@ -352,7 +365,7 @@ export interface ResolvedPos {
   layers?: string[]
 }
 /** A soft router keepout: a point avoided within 0.5 mm, or a rectangle from its top-left corner. */
-export type Avoid = Pos | { x: Length; y: Length; w: Length; h: Length; layer?: string }
+export type Avoid = RouteEnd | { x: Length; y: Length; w: Length; h: Length; layer?: string }
 /** Autorouter parameters; a route overrides the board's with `auto`. */
 export interface AutoRouteParams {
   /** "maze" (grid A* with vias), "straight", or your own RouteFn; default "maze" */
@@ -381,8 +394,8 @@ export interface AutoRouteParams {
   viaInPad?: boolean
   /** rounds of negotiated rip-up and reroute; 0 turns it off; default 12 */
   ripup?: number
-  /** a leg's cost bound: `ratio` times its straight line or the line plus `floor` mm, whichever is more; 0 for none; default { ratio: 3, floor: 10 } */
-  maxDetour?: number | { ratio?: number; floor?: number }
+  /** a leg's cost bound: `ratio` times its straight line or the line plus `floor` mm, whichever is more; ratio 0 for none; default { ratio: 3, floor: 10 } */
+  maxDetour?: { ratio?: number; floor?: number }
   /** meander `amplitude`, `spacing` edge to edge and `maxAmplitude` for length and skew tuning (mm); defaults 1, 0.6 and 3 */
   tune?: { amplitude?: Length; spacing?: Length; maxAmplitude?: Length }
 }
@@ -409,8 +422,8 @@ export interface NetClass {
   uncoupled?: Length
   /** neck-down at the pads of routes of this class, see `RouteBuilder.neck` */
   neck?: NeckSpec
-  /** the corners of the manual commands of routes of this class, see `RouteBuilder.corner` */
-  corner?: CornerSpec
+  /** the corner radius of the manual commands of routes of this class, or 'none', see `RouteBuilder.corner` */
+  corner?: Length | 'none'
   /** teardrops at pads: true for the board's, an object over the board's, false for none */
   teardrops?: boolean | TeardropSpec
   /** length and match tolerance; default 0.1 mm */
@@ -463,88 +476,73 @@ export interface RouteRequest {
   pair?: { partner: string; width: number; gap: number }
   /** the cost bound: `ratio` times the straight line or the line plus `floor` mm, whichever is more */
   maxDetour?: { ratio: number; floor: number }
+  /** the topology a plugin router lays the leg out in; absent, as for every built-in leg, it stays out of the leg's key */
+  topology?: string
+  /** the net class of the leg's net; absent, it stays out of the leg's key */
+  class?: string
 }
 export interface RouteResult {
   tracks: { layer: string; pts: [number, number][] }[]
   vias: { x: number; y: number; layers: [string, string] }[]
 }
+/** What a route's `.solver()` reads besides the router's context: parts, and the routes solvers before it laid out. */
+export interface RouteSolverContext extends RouteContext {
+  /** a part's origin, rotation and side, board mm */
+  part(ref: string): { x: number; y: number; r: number; side: Side } | null
+  /** the copper of a route a solver before this one laid out; reading any other route is the error solver-order */
+  route(ref: string | RouteBuilder): RouteResult | null
+}
+/** `.solver(fn)`: the leg's copper, or null to leave the leg to the router. */
+export type RouteSolver = (req: RouteRequest, ctx: RouteSolverContext) => RouteResult | null
 /** A routing algorithm: returns geometry for the request, or throws with a reason. */
 export type RouteFn = (req: RouteRequest, ctx: RouteContext) => RouteResult
-/** One autorouted connection, the legacy form: `start`, `end` and any autoroute parameter. */
-export interface AutoRoute extends Partial<AutoRouteParams> {
-  start: Pos
-  end: Pos
-}
-/** A track: `d` is an SVG path, an AutoRoute, a RouteFn, or omitted to connect every item of `net`; `from`, `to` and `path` come from `route()`. */
+/** The raw track the compiler makes: a polyline of `points` in the frame of its group. Hand-drawn copper is a `route()` chain. */
 export interface TrackProps {
-  net?: NetLike
+  net?: Net
   layer: string
   width: Length
-  d?: string | AutoRoute | RouteFn
-  points?: At[]
-  layers?: string[]
-  via?: { drill?: Length; size?: Length }
-  auto?: Partial<AutoRouteParams>
-  from?: Pos | [Pos, Pos]
-  to?: Pos | [Pos, Pos]
-  path?: string
-  /** pin the automatic legs to their stored result, see `RouteBuilder.lock` */
-  lock?: boolean
-  /** reach the end pads without joining other copper of the net, see `RouteBuilder.direct` */
-  direct?: boolean
-  /** a loop in the net is intended, see `RouteBuilder.loop` */
-  loop?: boolean
-  /** let the router place vias inside SMD pads of this net */
-  viaInPad?: boolean
-  /** set by route() when both ends are [P, N] pairs */
-  pair?: boolean
-  /** pair gap edge to edge, see `RouteBuilder.gap` */
-  gap?: Length
-  /** allowed length difference of a pair, see `RouteBuilder.skew` */
-  skew?: Length
-  /** ohms, see `RouteBuilder.impedance` */
-  impedance?: number
-  /** a length target, see `RouteBuilder.length` */
-  length?: Length | LengthSpec
-  /** a match group and its tolerance, see `RouteBuilder.match` */
-  match?: string | { group: string; tolerance?: Length }
-  /** the N net of a pair, see `RouteBuilder.net` */
-  netN?: NetLike
-  /** neck-down at the pads, see `RouteBuilder.neck` */
-  neck?: NeckSpec
-  /** the corner radius, see `RouteBuilder.corner` */
-  corner?: Length | 'none'
-  /** teardrops at its pads, see `RouteBuilder.teardrops` */
-  teardrops?: boolean | TeardropSpec
+  points: At[]
 }
-/** What `route()` returns: a node to place and a builder; the path is a chain ending in `.Z(b)` or `.X(b)`, or a route path string, default `XZ`. */
+/** What `route()` returns: a node to place and a builder. A chain of commands runs from the first end toward the second, which it reaches with `.Z()`, `.X()` or, when it stops short, an automatic leg. */
 export interface RouteBuilder extends PcbNode {
-  /** track width (mm); default the rules' minTrackWidth */
+  /** the route's start as a route point, `pt:0`, for another route's end or an `at:follow` near */
+  readonly start: RoutePoint
+  /** where the route's last chain call ends, or its end when the chain runs to it */
+  readonly end: RoutePoint
+  /** where the k-th chain call ends, `pt(0)` the start */
+  pt(k: number): RoutePoint
+  /** track width (mm) from here on; before any command it is the route's width, default the class width, else the rules' minTrackWidth */
   width(w: Length): RouteBuilder
-  /** the starting layer; default the layer of `a` when it is a pad, else F.Cu */
+  /** the starting layer; default the layer of the first end when it is a pad, else F.Cu */
   layer(name: string): RouteBuilder
   /** the copper layers the automatic legs may use */
   layers(names: string[]): RouteBuilder
   /** false forbids vias in the automatic legs; an object sets the drill and copper size of every via of the route */
-  vias(v: boolean | { drill?: Length; size?: Length }): RouteBuilder
-  /** autoroute parameters for this route, merged over the board's */
-  rules(params: Partial<AutoRouteParams>): RouteBuilder
+  vias(v: false | { drill?: Length; size?: Length }): RouteBuilder
+  /** autoroute parameters without a method of their own, merged over the board's */
+  rules(params: Omit<Partial<AutoRouteParams>, 'layers' | 'via' | 'priority'>): RouteBuilder
   /** routes with a higher priority run first; default 0 */
   priority(n: number): RouteBuilder
-  /** the net, required when neither end is a pad; a pair takes `.net(P, N)` */
-  net(n: NetLike, nN?: NetLike): RouteBuilder
+  /** the net, required when no end is a pad; null for copper on no net; a pair takes `.net(P, N)` */
+  net(n: Net | null, nN?: Net): RouteBuilder
+  /** `route(NET)`: the pad every other pad of the net joins toward; default its first pad */
+  root(end: RouteEnd): RouteBuilder
   /** narrow the ends near pads where the full width does not fit, for at most `length` mm (default 2); `{ length: 0 }` turns it off */
   neck(spec: NeckSpec): RouteBuilder
   /** teardrops at this route's pads, whatever the board and class say */
   teardrops(on: boolean | TeardropSpec): RouteBuilder
   /** round manual corners with radius `r` on the centre line, shrinking to a chamfer or square where needed; 'none' for square */
   corner(r: Length | 'none'): RouteBuilder
-  /** pin the automatic legs to their result in .pcbjs/routes/<board>.json until the ends or path change */
-  lock(on?: boolean): RouteBuilder
-  /** the automatic leg reaches its end pads itself and never joins other copper of its net, for Kelvin sense and star returns */
+  /** the automatic legs reach their end pads themselves and never join other copper of the net, for Kelvin sense and star returns */
   direct(on?: boolean): RouteBuilder
   /** a loop in this route's net is intended: no DRC `net-loop` for the net */
   loop(on?: boolean): RouteBuilder
+  /** amps the route carries, such as '2A' or '500mA': DRC `current-width` checks each width against the stackup copper per IPC-2152, branches summing toward the root */
+  current(amps: Current): RouteBuilder
+  /** each automatic leg asks `fn` first, see RouteSolver; the router takes a leg it returns null for */
+  solver(fn: RouteSolver): RouteBuilder
+  /** reserved for bus topologies such as fly-by and star */
+  topology(kind: string): RouteBuilder
   /** a pair only: the gap between its two tracks edge to edge; default the class gap, else the track width */
   gap(g: Length): RouteBuilder
   /** a pair only: the allowed length difference, DRC `pair-skew`; default the class skew, else 0.1 mm */
@@ -555,39 +553,50 @@ export interface RouteBuilder extends PcbNode {
   length(spec: Length | LengthSpec): RouteBuilder
   /** join a match group: shorter routes are tuned to within the tolerance of the longest, DRC `length-match`; default the class tolerance */
   match(group: string, tolerance?: Length): RouteBuilder
-  /** a manual track to x, y, `L x y`; lengths are mm numbers or strings with units */
+  /** a manual track to x, y, or to a waypoint; lengths are mm numbers or strings with units */
   L(x: Length, y: Length): RouteBuilder
-  /** a manual track by dx, dy from the cursor, `l dx dy` */
+  L(p: Waypoint): RouteBuilder
+  /** a manual track by dx, dy from the cursor */
   l(dx: Length, dy: Length): RouteBuilder
-  /** a manual track to x, `H x` */
+  /** a manual track to x */
   H(x: Length): RouteBuilder
-  /** a manual track by dx, `h dx` */
+  /** a manual track by dx */
   h(dx: Length): RouteBuilder
-  /** a manual track to y, `V y` */
+  /** a manual track to y */
   V(y: Length): RouteBuilder
-  /** a manual track by dy, `v dy` */
+  /** a manual track by dy */
   v(dy: Length): RouteBuilder
-  /** a via at the cursor, the route continues on `layer`, `@layer` */
-  via(layer: string): RouteBuilder
+  /** a manual arc to x, y turning through `angle`, degrees or '1.2rad', counter-clockwise on screen when positive */
+  A(x: Length, y: Length, angle: Rotation): RouteBuilder
+  /** a manual arc by dx, dy from the cursor, see `A` */
+  a(dx: Length, dy: Length, angle: Rotation): RouteBuilder
+  /** a via at the cursor, the route continues on `layer`; `drill` and `size` override the route's via for this one */
+  via(layer: string, opts?: ChainViaOptions): RouteBuilder
   /** a pair only: a crossover at the cursor, a via pair where P and N swap sides as the pair continues on `layer` */
   cross(layer: string): RouteBuilder
-  /** a straight track to the target; the last `.Z` or `.X` ends the route, an earlier one is a waypoint */
-  Z(target: RouteTarget): RouteBuilder
-  /** an automatic leg to the target; the last `.Z` or `.X` ends the route, an earlier one is a waypoint */
-  X(target: RouteTarget): RouteBuilder
+  /** with a waypoint, an automatic leg to it; without, an automatic leg to the route's end, which finishes the chain */
+  X(p?: Waypoint): RouteBuilder
+  /** a straight manual track to the route's end, which finishes the chain */
+  Z(): RouteBuilder
+  /** fork here: each sub-chain `b(end)` starts at this point and runs to its own end, with its own width and vias */
+  branch(...fns: ((b: (end: RouteEnd) => Branch) => Branch)[]): RouteBuilder
 }
-export interface ViaProps {
-  net?: NetLike
-  at: At
+/** A sub-chain of `.branch()`: the chain commands, `.width()` and `.branch()`, from the fork to its end. */
+export type Branch = Pick<RouteBuilder, 'width' | 'current' | 'L' | 'l' | 'H' | 'h' | 'V' | 'v' | 'A' | 'a' | 'via' | 'X' | 'Z'> & {
+  branch(...fns: ((b: (end: RouteEnd) => Branch) => Branch)[]): Branch
+}
+/** The options of a chain's `.via(layer, opts)`: this via's drill and copper size, default the route's via. */
+export type ChainViaOptions = Pick<ViaOptions, 'drill' | 'size'>
+/** The options of `via(net, at, opts)`: the default via of the rules when no sizes are given. */
+export interface ViaOptions {
   drill?: Length
   size?: Length
   layers?: [string, string]
 }
-/** A hard keepout: closed areas of `d` on the named copper layers, default all, that the named kinds of copper may not enter. */
-export interface KeepoutProps {
-  layer?: string
-  layers?: string[] | 'all'
-  d: string
+/** The options of `keepout(area, opts)`: each kind of copper is kept out unless set false. */
+export interface KeepoutOptions {
+  /** the copper layers it holds on, default every one */
+  layers?: string[]
   /** no tracks inside (default true) */
   tracks?: boolean
   /** no vias inside (default true) */
@@ -595,23 +604,20 @@ export interface KeepoutProps {
   /** no pour fill inside (default true) */
   pours?: boolean
   /** nets whose copper may enter anyway, in DRC, pours and the router */
-  except?: NetLike[]
+  except?: Net[]
 }
-export interface ZoneProps {
-  net?: NetLike
-  layer: string
-  d: string
+/** The options of `pour(net, layer, area, opts)`. */
+export interface PourOptions {
   clearance?: Length
   priority?: number
   minWidth?: Length
   /** how same-net pads join the fill: 'thermal' spokes (default), 'solid', or 'none'; vias are always solid */
   connect?: ThermalConnection
-  /** fill pieces that touch no pad, via or track of the net: removed by default, see IslandMode */
+  /** fill pieces that touch no pad, via or track of the net: removed by default, see IslandMode; a pour on no net keeps them all */
   islands?: IslandMode
 }
-/** Stitching vias on a `pitch` lattice wherever every listed layer has the net's fill under the via; the pours refill after. */
-export interface StitchProps {
-  net: NetLike
+/** The options of `stitch(net, opts)`: vias on a `pitch` lattice wherever every listed layer has the net's fill under the via; the pours refill after. */
+export interface StitchOptions {
   /** lattice pitch (mm), default 4; a via or through-hole pad of the net within it suppresses a point */
   pitch?: Length
   /** layers that must have the net's fill at the via, default all; the vias go through every layer */
@@ -634,7 +640,7 @@ export interface PathProps {
   d: string
   width?: Length
   fill?: boolean
-  net?: NetLike
+  net?: Net
 }
 export interface LineProps {
   layer: string
@@ -664,17 +670,19 @@ export interface RectProps {
 }
 /** Text in a stroke font or an outline font: `size` is the cap height, `thickness` the stroke, `width` the glyph width (default `size`). */
 export interface TextProps {
+  /** persisted editing pitch, independent of coordinate units */
+  grid?: import('./grid.js').PlacementGrid
   layer: string
   at?: At
   size?: Length
   thickness?: Length
   width?: Length
   anchor?: 'start' | 'middle' | 'end'
-  /** "hershey" (default), "newstroke", a name of `fonts`, or `{ file, weight? }` relative to this file */
-  font?: string | FontSpec
+  /** "hershey" (default), "newstroke", or a name of the board's `fonts` */
+  font?: string
   /** outline fonts on silk: grow ink thinner than silkMinWidth instead of the silk-width warning */
   thicken?: boolean
-  net?: NetLike
+  net?: Net
   children?: string | number | (string | number)[]
 }
 
@@ -684,15 +692,12 @@ export interface IntrinsicElements {
   footprint: FootprintProps
   pad: PadProps
   track: TrackProps
-  via: ViaProps
-  zone: ZoneProps
-  keepout: KeepoutProps
-  stitch: StitchProps
   path: PathProps
   line: LineProps
   circle: CircleProps
   rect: RectProps
   text: TextProps
+  mate: MateProps
 }
 
 /** A net as a value. Made by `nets()`, `bus()` or `local()`; two nets with the same name and scope are the same net. */
@@ -725,8 +730,6 @@ export interface PartRules {
 export interface NoConnect {
   readonly $$: 'nc'
 }
-/** What a net prop takes: a Net, or a net name as a string, the escape hatch. */
-export type NetLike = string | Net
 /** What a pin connects to. */
 export type Connection = Net | NoConnect
 /** A handle on a pin, `D1.A`, or a pad, `J1[3]`; as a route end, the pad nearest the other end. */
@@ -744,28 +747,82 @@ export interface PinRef {
 export interface PadRef<D extends string = string> extends PinRef {
   readonly pad: D
 }
-/** The props of a placed part, `<R1 at="12 5" />`. */
+/** The props of a placed part, `<R1 at="12 5" />`; a slot of `at` written `auto` is chosen by the placer, see placement.md. */
 export interface PlaceProps {
+  /** persisted editing pitch, independent of coordinate units */
+  grid?: import('./grid.js').PlacementGrid
+  /** "x y rot" in the frame of the enclosing groups; `auto` for all three, or for one slot, "10mm auto 90deg" */
   at?: At
   side?: Side
-  fields?: Record<string, string>
-  bom?: boolean
-  pos?: boolean
-  /** do not populate this placement: out of the BOM and the placement file, still in the DRC */
-  dnp?: boolean
-  description?: string
-  height?: Length
-  model?: ModelSpec
+  /** where the search over the auto slots starts, "x y rot" in the frame of `at` */
+  'at:initial'?: At
+  /** a cost the placer adds for the pose x, y, rot in the frame of `at`, or null to forbid it */
+  'at:cost'?: PlaceCost
+  /** a pose for the auto slots, or null to leave them to the placer; wins over at:cost and may call it */
+  'at:solver'?: PlaceSolver
+  /** placed beside the copper of a route after routing, its own connections routed after it */
+  'at:follow'?: FollowSpec
+  /** a named point at the part's origin, which another board's reference mates with */
+  name?: string
   /** pad number or name -> how that pad joins a pour, over the footprint's, such as `{ EP: 'solid' }` */
   thermal?: Record<string, PadThermal>
-  /** false draws no silk ref for this part */
-  ref?: false
   /** where the silk ref goes, "x y rot" in the footprint's frame, or false for none; by default above the courtyard */
-  refAt?: At | false
-  /** rule overrides for every pad of this placement, merged key by key over the part's `.rules()`; see PartRules */
-  rules?: PartRules
+  'ref:at'?: At | false
   children?: Child
 }
+/** A part's pose in the frame its `at` is written in: mm and degrees. */
+export interface PlacePose {
+  x: number
+  y: number
+  r: number
+}
+/** A part as the placer sees it, board mm: its origin, rotation, side and courtyard box. */
+export interface PlacedPart {
+  x: number
+  y: number
+  r: number
+  side: Side
+  box: { x: number; y: number; w: number; h: number }
+}
+/** The board while it is placed: every part with a place so far. */
+export interface PlaceLayout {
+  /** a part by ref or as the part, null while it has no place */
+  part(ref: string | PartBase<any, any>): PlacedPart | null
+  /** the closed outline rings, board mm */
+  readonly outline: [number, number][][]
+}
+/** `at:cost`: the placer adds what it returns for the pose, and never takes a pose it returns null for. */
+export type PlaceCost = (layout: PlaceLayout, x: number, y: number, r: number) => number | null
+/** What `at:solver` is asked to place. */
+export interface PlaceRequest {
+  ref: string
+  /** the slots `at` fixes, null where it says auto; a fixed slot wins over the pose returned */
+  fixed: [number | null, number | null, number | null]
+  /** `at:initial`, when given */
+  initial?: PlacePose
+  /** the part's `at:cost` on this layout, when it has one */
+  cost?: (x: number, y: number, r: number) => number | null
+}
+/** `at:solver`: a pose, or null for the placer to choose. */
+export type PlaceSolver = (layout: PlaceLayout, part: PlaceRequest) => PlacePose | null
+/** `at:follow`: beside the routed copper of `route`, at its point nearest `near`, on its `side` seen from the route's start, `distance` from its centre line. */
+export interface FollowSpec {
+  /** a bound route, or its id such as 'route:3' */
+  route: RouteBuilder | string
+  /** a pin or pad handle, a part, a route point such as `vccTrunk.end`, or a position "x y"; default the middle of the route */
+  near?: PinRef | PartBase<any, any> | RoutePoint | At
+  /** default the side with more room */
+  side?: 'left' | 'right'
+  /** from the centre line to the part's origin; default clear of the track by the clearance */
+  distance?: Length
+}
+/** The props of `<mate name at side />`: a named point another board's reference mates with. */
+export interface MateProps {
+  name: string
+  at?: At
+  side?: Side
+}
+
 /** The props of a part inside `<Schematic>` or `<Sheet>`, `<R1 at="10 6" flip />`: its symbol, in grid units. */
 export interface SymPlaceProps {
   at: SchAt
@@ -791,17 +848,17 @@ export interface SourcingSpec {
   [field: string]: string | undefined
 }
 
-/** What a footprint factory takes besides the value: BOM fields and footprint props every placement gets. */
+/** What a footprint factory takes after the value, `R0603('330', { dnp: true })`. */
 export interface PartOptions {
-  value?: string | number
-  fields?: Record<string, string>
-  /** sourcing keys, merged over `fields`: `{ MPN: 'RC0603FR-07330RL', 'MPN:US': 'ERJ-3EKF3300V' }` */
-  source?: SourcingSpec
+  /** the ref of a part no binding names, such as one made in a loop: `LED0603('red', { ref: `D${i + 1}` })` */
+  ref?: string
+  /** include in the BOM (default true) */
   bom?: boolean
+  /** include in the placement file (default true) */
   pos?: boolean
   /** do not populate the part: out of the BOM and the placement file, still on the board and in the DRC */
   dnp?: boolean
-  description?: string
+  /** body height for the 3D view */
   height?: Length
   model?: ModelSpec
 }
@@ -809,12 +866,9 @@ export interface PartOptions {
 export interface PartBase<P extends string, D extends string = never> {
   (props: PartProps): PcbNode
   readonly $$: 'part'
-  /** nets in the footprint's pin order, or an object keyed by pin name or pad number; returns the same part */
-  connect(...nets: Connection[]): Part<P, D>
-  connect(pins: { [K in P | number]?: Connection }): Part<P, D>
-  /** pin an explicit ref such as "Q9"; every other part is numbered by the registry */
-  ref(name: string): Part<P, D>
-  /** sourcing keys, merged over earlier ones, later calls win */
+  /** a Net or NC per pin by name, `{ A: LED, K: GND }`; returns the same part */
+  connect(pins: { [K in P]?: Connection }): Part<P, D>
+  /** sourcing keys and BOM fields, merged over earlier ones, later calls win */
   source(spec: SourcingSpec): Part<P, D>
   /** rule overrides for every pad, merged key by key over earlier calls */
   rules(r: PartRules): Part<P, D>
@@ -822,9 +876,8 @@ export interface PartBase<P extends string, D extends string = never> {
   readonly prefix: string
   /** the declared pin names, in order */
   readonly pins: readonly string[]
-  pin(name: P | number): PinRef
-  /** one pad by number or name, checked at compile time; for a pad name that is also a pin name */
-  pad<K extends D | (string & {}) | number>(name: K): PadRef<K extends number ? `${K}` : K & string>
+  /** the footprint's named points, `U1.points.center`, from `defineFootprint(render, { points })` */
+  readonly points: Readonly<Record<string, import('./grid.js').FootprintPoint>>
 }
 /** A part: pins are keys, `D1.A`, and so are pads that are not pins, `J1['B6']`; a number is a pad number, never a pin position. */
 export type Part<P extends string = string, D extends string = never> = PartBase<P, D> & PinKeys<P> & PadKeys<P, D> & NumberKeys<P, D>
@@ -846,10 +899,10 @@ export type NumberKeys<P extends string, D extends string> = 0 extends 1 & P
       : {}
 /** Pin metadata a footprint component declares: names in pin order, or a function of the footprint's props. */
 export type PinList = readonly string[] | ((props: any) => readonly string[])
-/** A footprint component with its schematic metadata: `R0603('330')` makes a part, `<R0603 ref="R1" />` renders. */
+/** A footprint with its schematic metadata: `R0603('330')` makes a part. `Props` are the props its footprint renders with. */
 export interface FootprintFactory<P extends string = string, Props = FootprintProps, D extends string = never> {
-  (props: Props): PcbNode
-  (value?: string | number | PartOptions, source?: SourcingSpec): Part<P, D>
+  (value?: string | number, options?: PartOptions): Part<P, D>
+  (options: PartOptions): Part<P, D>
   readonly pins: PinList
   /** pad numbers or names left unconnected on purpose */
   readonly nc?: PinList

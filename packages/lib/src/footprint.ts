@@ -1,18 +1,19 @@
 import { h } from '@pcbjs/core/jsx-runtime'
-import type { FootprintFactory, FootprintProps, ModelSpec, PadProps, PadShape, PadType, PcbNode, ThermalConnection } from '@pcbjs/core/types'
-import { defineFootprint, SchematicError } from '@pcbjs/core/schematic'
+import type { FootprintFactory, FootprintProps, ModelSpec, PadProps, PadShape, PadType, PcbNode, ThermalConnection } from '@pcbjs/core/internal/types'
+import { defineFootprint } from '@pcbjs/core/internal/footprint'
+import { SchematicError } from '@pcbjs/core/internal/nets'
 
 /** SMD pad centred at (x, y), w by h, roundrect by default. */
 export function smd(num: string | number, x: number, y: number, w: number, h_: number, extra: Partial<PadProps> = {}): PcbNode {
-  return h('pad', { num, at: [x, y], size: [w, h_], shape: 'roundrect', ...extra })
+  return h('pad', { num, at: `${x} ${y}`, size: [w, h_], shape: 'roundrect', ...extra })
 }
 /** Through-hole pad centred at (x, y): copper diameter and drill. */
 export function tht(num: string | number, x: number, y: number, dia: number, drill: number, extra: Partial<PadProps> = {}): PcbNode {
-  return h('pad', { num, at: [x, y], size: dia, drill, shape: 'circle', ...extra })
+  return h('pad', { num, at: `${x} ${y}`, size: dia, drill, shape: 'circle', ...extra })
 }
 /** Non-plated hole. */
 export function npth(x: number, y: number, drill: number): PcbNode {
-  return h('pad', { num: '', at: [x, y], size: drill, drill, type: 'npth', shape: 'circle' })
+  return h('pad', { num: '', at: `${x} ${y}`, size: drill, drill, type: 'npth', shape: 'circle' })
 }
 
 /** Courtyard rectangle w by h centred at (cx, cy), the origin by default; `courtyard(w, h, layer)` still works. */
@@ -140,7 +141,7 @@ export function padNode(p: PadDef): PcbNode {
   return h('pad', {
     num: p.num,
     ...(p.name && p.name !== p.num ? { name: p.name } : {}),
-    at: [p.x, p.y],
+    at: `${p.x} ${p.y}`,
     size: p.shape === 'circle' && p.w === p.h ? p.w : [p.w, p.h],
     shape: p.shape ?? (plated ? 'circle' : 'roundrect'),
     ...(p.drill !== undefined ? { drill: p.drill } : {}),
@@ -225,14 +226,21 @@ export function silkOutline(w: number, h_: number, o: SilkOutlineOptions = {}): 
 /** The generated model, or the props' one; a STEP model without a fallback falls back to the generated one. */
 export function withGenerated(generated: ModelSpec, props: { model?: ModelSpec }): { model?: ModelSpec } {
   if (!('model' in props)) return { model: generated }
-  const m = props.model as (ModelSpec & { step?: unknown; file?: unknown; fallback?: unknown }) | undefined
-  const step = !!m && typeof m === 'object' && (m.kind === 'step' || (m.kind === undefined && (typeof m.step === 'string' || typeof m.file === 'string')))
-  return {
-    model:
-      step && !m!.fallback && generated.kind !== 'step' && (generated as { step?: unknown }).step === undefined && (generated as { file?: unknown }).file === undefined
-        ? ({ ...m, fallback: generated } as ModelSpec)
-        : m,
-  }
+  const m = props.model
+  return { model: m && m.kind === undefined && !m.fallback && generated.kind !== undefined ? { ...m, fallback: generated } : m }
+}
+
+type Sized = Extract<ModelSpec, { kind: 'chip' | 'led' }>
+type OmitEach<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
+type Unsized = OmitEach<Sized, 'body' | 'height'>
+/** A footprint definition's model: a chip or LED body takes its size and height from the definition's `body` and `height`. */
+export type ModelDef = Exclude<ModelSpec, Sized> | Unsized
+
+/** The definition's model with a chip or LED body sized from the definition. */
+function sizedModel(def: FootprintDef): ModelSpec {
+  const m = def.model
+  if (m.kind !== 'chip' && m.kind !== 'led') return m as ModelSpec
+  return { ...m, body: [def.body.w, def.body.h], height: def.height } as Sized
 }
 
 export interface FootprintDef {
@@ -248,7 +256,7 @@ export interface FootprintDef {
   body: Box
   /** body height above the board for the 3D view */
   height: number
-  model: ModelSpec
+  model: ModelDef
   /** courtyards; default the union of pads and body grown by 0.25 */
   courtyard?: Box[]
   /** round courtyard by diameter, for holes and pads, instead of a rectangle */
@@ -271,13 +279,11 @@ export interface FootprintDef {
 /** Renames pins: a list gives the default pins new names in order; a record maps a pad number or a default pin name to a new name. */
 export type PinNames<N extends string = string> = readonly N[] | Readonly<Record<string, N>>
 
-/** The pin names of a generated footprint, for its part's keys: the family's own and any `pinNames` gave, NC aside. */
-export type PinsOf<D extends string, N extends string> = D | Exclude<N, 'NC' | ''>
+/** The pin names of a footprint, for its part's keys: the family's own, pad numbers when untyped, and any `withPins` gave, NC aside. */
+export type PinsOf<D extends string, N extends string> = (string extends D ? `${number}` : D) | Exclude<N, 'NC' | ''>
 
-/** Options every generated footprint takes. */
-export interface GeneratorOptions<N extends string = string> {
-  /** Pin names in order, or a record by pad number or default pin name; pads named NC are no pin. */
-  pinNames?: PinNames<N>
+/** Options every generated footprint takes; `withPins` renames its pins. */
+export interface GeneratorOptions<_N extends string = string> {
   /** the ref prefix, default the family's */
   prefix?: string
   /** the default value */
@@ -290,7 +296,8 @@ export interface GeneratorOptions<N extends string = string> {
 export type SilkMode = 'full' | 'open' | 'none'
 const SILK_MODES: readonly SilkMode[] = ['full', 'open', 'none']
 
-const GEN = Symbol.for('pcbjs.lib.generated')
+// a footprint factory that withPins can rename carries the function that does it, under this key
+const RENAME = Symbol.for('pcbjs.footprint.rename')
 
 // pads named NC are left unconnected on purpose: no pin, listed in the footprint's `nc`
 const isPin = (p: PadDef) => p.name !== '' && p.name !== 'NC'
@@ -382,16 +389,16 @@ function children(def: FootprintDef, pads: PadDef[], silk: SilkMode = def.mouth 
 export type LibFootprint<P extends string = string, D extends string = never> = FootprintFactory<P, FootprintProps, D> & { readonly nc: readonly string[] }
 type Generated<P extends string, D extends string = never> = LibFootprint<P, D>
 
-/** A dual-mode footprint factory from a definition: `F('value')` makes a part, `<F ref="U1" at="…" />` renders. */
-export function makeFootprint<P extends string = string, D extends string = never>(def: FootprintDef, opts: GeneratorOptions = {}): Generated<P, D> {
-  const pn = opts.pinNames
-  if (pn !== undefined && (pn === null || typeof pn !== 'object'))
-    throw new TypeError(`${def.name}: pinNames must be a list of names in pin order or an object keyed by pad number or pin, got ${JSON.stringify(pn)}`)
+/** A footprint factory from a definition: `F('value')` makes a part. */
+export function makeFootprint<P extends string = string, D extends string = never>(def: FootprintDef, opts: GeneratorOptions = {}, pinNames?: PinNames): Generated<P, D> {
+  if ('pinNames' in opts) throw new TypeError(`${def.name}: rename pins with withPins(footprint, names), not a pinNames option`)
+  if (pinNames !== undefined && (pinNames === null || typeof pinNames !== 'object'))
+    throw new TypeError(`${def.name}: pin names must be a list of names in pin order or an object keyed by pad number or pin, got ${JSON.stringify(pinNames)}`)
   if (opts.prefix !== undefined && typeof opts.prefix !== 'string') throw new TypeError(`${def.name}: prefix must be letters such as 'U', got ${JSON.stringify(opts.prefix)}`)
   if (opts.value !== undefined && typeof opts.value !== 'string') throw new TypeError(`${def.name}: value must be a string, got ${JSON.stringify(opts.value)}`)
   if (opts.silk !== undefined && !SILK_MODES.includes(opts.silk))
     throw new TypeError(`${def.name}: silk must be ${SILK_MODES.map(m => `'${m}'`).join(', ')}, got ${JSON.stringify(opts.silk)}`)
-  const pads = renamed(def, opts.pinNames)
+  const pads = renamed(def, pinNames)
   // each default pin in order becomes the new names of its pads, so a rename can split a pin as well as merge two
   const order = def.pins ?? defaultPins(def.pads)
   const pinList = [...new Set([...order, 'NC'].flatMap(n => pads.filter((_, i) => def.pads[i].name === n).map(p => p.name)))].filter(n => n !== 'NC')
@@ -399,6 +406,7 @@ export function makeFootprint<P extends string = string, D extends string = neve
   const nc = pads.filter(p => p.name === 'NC').map(p => p.num)
   const value = opts.value ?? def.value
   const kids = children(def, pads, opts.silk)
+  const model = sizedModel(def)
   // a footprint drawn with other silk than its family's default is another footprint, as KiCad's NoSilkScreen variants are
   const id = opts.silk === 'none' ? `${def.id}_NoSilkScreen` : opts.silk === 'full' && def.mouth ? `${def.id}_SilkFull` : def.id
   const render = function Footprint(props: FootprintProps): PcbNode {
@@ -409,31 +417,32 @@ export function makeFootprint<P extends string = string, D extends string = neve
         id,
         value,
         height: def.height,
-        model: def.model,
+        model,
         ...(def.bom === false ? { bom: false } : {}),
         ...(def.pos === false ? { pos: false } : {}),
         ...(def.description ? { description: def.description } : {}),
         ...rest,
-        ...withGenerated(def.model, rest),
+        ...withGenerated(model, rest),
       },
       ...kids,
       more,
     )
   }
-  const f = defineFootprint<P>(render, { pins: pinList as P[], nc, prefix: opts.prefix ?? def.prefix, id, name: def.name }) as unknown as Generated<P, D>
-  Object.defineProperty(f, GEN, { value: { def, opts } })
+  Object.defineProperty(render, 'name', { value: def.name })
+  const f = defineFootprint<P>(render, { pins: pinList as P[], nc, prefix: opts.prefix ?? def.prefix }) as unknown as Generated<P, D>
+  Object.defineProperty(f, RENAME, { value: (names: PinNames, more: GeneratorOptions) => makeFootprint(def, { ...opts, ...more }, names) })
   return f
 }
 
-/** A generated footprint with its pins renamed: `withPins(Crystal3225, { 2: 'GND1', 4: 'GND2' })`. */
+/** A footprint factory with its pins renamed, a generated or a KiCad one: `withPins(Crystal3225, { 2: 'GND1', 4: 'GND2' })`. */
 export function withPins<P extends string, const N extends string, D extends string = never>(
   factory: FootprintFactory<P, FootprintProps, D>,
   pinNames: PinNames<N>,
-  opts: Omit<GeneratorOptions, 'pinNames'> = {},
+  opts: GeneratorOptions = {},
 ): LibFootprint<PinsOf<P, N>, D> {
-  const g = (factory as any)[GEN] as { def: FootprintDef; opts: GeneratorOptions } | undefined
-  if (!g) throw new SchematicError(`withPins: ${(factory as any).name ?? 'this footprint'} is not a generated @pcbjs/lib footprint`)
-  return makeFootprint<PinsOf<P, N>, D>(g.def, { ...g.opts, ...opts, pinNames })
+  const rename = (factory as any)[RENAME] as ((names: PinNames, opts: GeneratorOptions) => LibFootprint<PinsOf<P, N>, D>) | undefined
+  if (!rename) throw new SchematicError(`withPins: ${(factory as any).name ?? 'this footprint'} is neither a generated @pcbjs/lib footprint nor a kicadFootprint()`)
+  return rename(pinNames, opts)
 }
 
 /** A number rounded to 0.0001 mm, so generated coordinates print cleanly and KiCad's 1.1375 stays 1.1375. */

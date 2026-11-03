@@ -1,9 +1,8 @@
 import type { UserConfig as ViteUserConfig } from 'vite'
 import type { RepoLink } from './site-data.js'
-import type { FontSpec } from './types.js'
 
-/** Where the project source is hosted. A string is the repository URL; ref, dir and kind are then found from git and the host. */
-export type RepoOption = string | { url: string; ref?: string; dir?: string; kind?: RepoLink['kind'] }
+/** Where the project source is hosted: the repository URL, and ref, dir and kind, each found from git and the host when left out. */
+export type RepoOption = { url: string; ref?: string; dir?: string; kind?: RepoLink['kind'] }
 
 export interface UserConfig {
   /** board entries relative to this config, globs allowed; entries on the command line win for that run */
@@ -18,12 +17,24 @@ export interface UserConfig {
   vite?: ViteUserConfig
   /** the repository the built site links source ranges to; leave out for no links */
   repo?: RepoOption
-  /** how the viewer follows a click on an item to its source */
-  editor?: EditorOptions
   /** KiCad libraries for kicadFootprint() of @pcbjs/kicad and pcbjs import, see kicad.md */
   kicad?: KicadOptions
-  /** outline fonts for `<text font>` by name, files relative to this config; a board's `fonts` win */
-  fonts?: Record<string, string | FontSpec>
+  /** compiler plugins, before those of each board's `<PCB plugins>`, see plugins.md */
+  plugins?: import('./plugin.js').PcbPlugin[]
+  /** the session `pcbjs dev` starts, see session.md */
+  session?: SessionOptions
+  /** what `pcbjs build --lib` publishes, see library.md */
+  lib?: LibConfig
+}
+
+export interface LibConfig {
+  /** the package's module entries, such as { '.': './index.ts', './buck': './buck.tsx' }; every board of `entries` ships beside them */
+  exports: Record<string, string>
+}
+
+export interface SessionOptions {
+  /** who may edit through the session: 'localhost' (default) the user's socket and loopback, 'all' also LAN clients with the session token, 'none' nobody */
+  edit?: 'localhost' | 'all' | 'none'
 }
 
 export interface KicadOptions {
@@ -31,11 +42,6 @@ export interface KicadOptions {
   footprints?: string[]
   /** the folder ${KICAD10_3DMODEL_DIR} and its older names stand for, default the installed KiCad's 3dmodels */
   models?: string
-}
-
-export interface EditorOptions {
-  /** 'click' (default): a click opens the source, shift+click the definition; 'meta-click': cmd or ctrl+click opens it */
-  follow?: 'click' | 'meta-click'
 }
 
 export function defineConfig(c: UserConfig): UserConfig {

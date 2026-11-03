@@ -30,7 +30,7 @@ type Copper = Extract<StackupLayer, { type: 'copper' }>
 export function traceModel(stackup: Stackup, layer: string): TraceModel {
   if (!stackup || !Array.isArray(stackup.layers)) throw new Error('impedance: the stackup needs a layers array')
   const L = stackup.layers
-  const name = canonical(layer)
+  const name = String(layer)
   const idx = L.findIndex(l => l.type === 'copper' && l.name === name)
   if (idx < 0)
     throw new Error(
@@ -63,14 +63,6 @@ export function traceModel(stackup: Stackup, layer: string): TraceModel {
   }
   const s = (up ?? down)!
   return { kind: 'microstrip', layer: name, t, h: s.h, er: s.er, planes: [s.plane] }
-}
-
-function canonical(layer: string): string {
-  const low = String(layer).toLowerCase()
-  const alias: Record<string, string> = { top: 'F.Cu', bottom: 'B.Cu', 'f.cu': 'F.Cu', 'b.cu': 'B.Cu' }
-  if (alias[low]) return alias[low]
-  const m = /^in(\d+)\.cu$/.exec(low)
-  return m ? `In${m[1]}.Cu` : layer
 }
 
 // ---- microstrip, Hammerstad and Jensen ----

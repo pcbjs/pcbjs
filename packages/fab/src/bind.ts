@@ -1,24 +1,17 @@
 // Resolution order: base, global defaults, preset, props; the preset reaches <board> as props so a default never overrides it.
 import { h } from '@pcbjs/core/jsx-runtime'
-import { cloneData, deepFreeze, mergeRules } from '@pcbjs/core/rules'
-import { mergeAutoroute } from '@pcbjs/core/board-spec'
-import { mergeClasses } from '@pcbjs/core/netclass'
-import { paletteName, type BoundPCB, type PresetBoardProps, type PresetInput, type PresetSpec } from '@pcbjs/core/preset'
+import { cloneData, deepFreeze, mergeRules } from '@pcbjs/core/internal/rules'
+import { mergeAutoroute } from '@pcbjs/core/internal/board-spec'
+import { mergeClasses } from '@pcbjs/core/internal/netclass'
+import { paletteName, type BoundPCB, type PresetBoardProps, type PresetInput, type PresetSpec } from '@pcbjs/core/internal/preset'
 import type { Finish, NetClass, PcbNode, Rules, Stackup } from '@pcbjs/core'
 
 // the preset types and the brand check live in @pcbjs/core, which variants() needs
-export { isBoundPCB, paletteName, type BoundPCB, type PresetBoardProps, type PresetInput, type PresetSpec } from '@pcbjs/core/preset'
+export { isBoundPCB, paletteName, type BoundPCB, type PresetBoardProps, type PresetInput, type PresetSpec } from '@pcbjs/core/internal/preset'
 
 function recolor(s: Stackup, mask?: string, silk?: string, finish?: Finish): Stackup {
   if (mask === undefined && silk === undefined && finish === undefined) return s
-  const out: Stackup = {
-    ...s,
-    layers: s.layers.map(l => {
-      if (mask !== undefined && l.type === 'mask') return { ...l, color: mask }
-      if (silk !== undefined && l.type === 'silk') return { ...l, color: silk }
-      return l
-    }),
-  }
+  const out: Stackup = { ...s }
   if (mask !== undefined) out.maskColor = mask
   if (silk !== undefined) out.silkColor = silk
   if (finish !== undefined) out.finish = finish

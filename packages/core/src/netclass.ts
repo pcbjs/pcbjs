@@ -26,7 +26,7 @@ export interface ResolvedNetClass {
   /** neck-down at the pads, mm */
   neck?: { width?: number; length?: number }
   /** the corner radius of manual commands, mm, or 'none' */
-  corner?: { radius?: number | 'none' }
+  corner?: number | 'none'
   /** false for none, else fields over the board's, {} for the board's own */
   teardrops?: false | TeardropLevel
   /** loops in the nets' copper are intended */
@@ -105,27 +105,17 @@ export function checkNeck(v: unknown, at: string): { width?: number; length?: nu
   return out
 }
 
-/** Check a corner spec `{ radius? }`: a positive length or 'none'. Throws a plain Error naming `at`. */
-export function checkCorner(v: unknown, at: string): { radius?: number | 'none' } {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error(`${at}: corner must be an object { radius? }`)
-  const out: { radius?: number | 'none' } = {}
-  for (const [k, x] of Object.entries(v)) {
-    if (x === undefined) continue
-    if (k !== 'radius') throw new Error(`${at}: corner has an unknown field ${JSON.stringify(k)}, it takes radius`)
-    if (x === 'none') {
-      out.radius = 'none'
-      continue
-    }
-    let n: number
-    try {
-      n = mm(x as Length)
-    } catch (e) {
-      throw new Error(`${at}: corner radius: ${(e as Error).message}`)
-    }
-    if (!(Number.isFinite(n) && n > 0)) throw new Error(`${at}: corner radius must be a positive length or 'none', got ${JSON.stringify(x)}`)
-    out.radius = n
+/** Check a corner radius: a positive length or 'none'. Throws a plain Error naming `at`. */
+export function checkCorner(v: unknown, at: string): number | 'none' {
+  if (v === 'none') return 'none'
+  let n = NaN
+  try {
+    n = mm(v as Length)
+  } catch (e) {
+    throw new Error(`${at}: corner: ${(e as Error).message}`)
   }
-  return out
+  if (!(Number.isFinite(n) && n > 0)) throw new Error(`${at}: corner must be a positive length or 'none', got ${JSON.stringify(v)}`)
+  return n
 }
 
 /** Class tables merged lowest first: by class name, then field by field; `via` merges its keys, `autoroute` like the board's. */
@@ -138,7 +128,7 @@ export function mergeClasses(...levels: (Record<string, NetClass> | null | undef
       const prev: Record<string, any> = { ...(out[name] ?? {}) }
       for (const [k, v] of Object.entries(c)) {
         if (v === undefined) continue
-        if (k === 'via' || k === 'neck' || k === 'corner') prev[k] = { ...(prev[k] ?? {}), ...(v as object) }
+        if (k === 'via' || k === 'neck') prev[k] = { ...(prev[k] ?? {}), ...(v as object) }
         else if (k === 'autoroute') prev.autoroute = mergeAutoroute(prev.autoroute ?? {}, v as object)
         else if (k === 'layers') prev.layers = [...(v as string[])]
         else if (k === 'clearance') prev.clearance = mergeClearance(prev.clearance, v as number | object)
@@ -179,6 +169,65 @@ export function resolveClasses(t: Record<string, NetClass>): Record<string, Reso
     if (c.autoroute && Object.keys(c.autoroute).length) r.autoroute = { ...c.autoroute }
     if (c.loops) r.loops = true
     out[name] = r
+  }
+  return out
+}
+
+/** The keys of PartRules, the rule overrides of a part. */
+export const PART_RULE_KEYS = ['clearance', 'edgeClearance', 'holeClearance', 'trackWidth', 'thermal'] as const
+export type PartRuleKey = (typeof PART_RULE_KEYS)[number]
+/** Rule overrides in mm: `clearance` a length or one per kind of the other item, `thermal` the spoke angle, the rest lengths. */
+export type RuleSet<K extends string> = { [P in K]?: P extends 'clearance' ? number | KindClearanceMM : P extends 'thermal' ? { angle?: 90 | 45 } : number }
+
+/** Rule overrides of a lower level merged with an upper one's, key by key; two clearance objects merge kind by kind. */
+export function mergeRuleSets<K extends string>(lower: RuleSet<K>, upper: RuleSet<K> | undefined): RuleSet<K> {
+  const out: Record<string, unknown> = { ...lower }
+  for (const [k, v] of Object.entries(upper ?? {})) {
+    if (v === undefined) continue
+    out[k] =
+      k === 'clearance' ? mergeClearance(out[k] as number | object | undefined, v as number | object) : k === 'thermal' ? { ...((out[k] as object) ?? {}), ...(v as object) } : v
+  }
+  return out as RuleSet<K>
+}
+
+/** Rule overrides checked and in mm: keys among `keys`, non-negative lengths, a positive track width; throws naming `where`. */
+export function ruleOverrides<K extends string>(v: unknown, keys: readonly K[], where: string, self = true): RuleSet<K> {
+  if (!v || typeof v !== 'object' || Array.isArray(v))
+    throw new Error(`${where} must be an object such as { clearance: 0.2 }, got ${v === null ? 'null' : Array.isArray(v) ? 'an array' : JSON.stringify(v)}`)
+  const out: Record<string, unknown> = {}
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+    if (k === '__src' || x === undefined) continue
+    if (!(keys as readonly string[]).includes(k)) throw new Error(`${where}: unknown rule ${JSON.stringify(k)}; it takes ${keys.join(', ')}`)
+    if (k === 'clearance') {
+      out[k] = clearanceValue(x, where, self)
+      continue
+    }
+    if (k === 'thermal') {
+      out[k] = thermalRule(x, where)
+      continue
+    }
+    let n: number
+    try {
+      n = mm(x as Length)
+    } catch (e) {
+      throw new Error(`${where}: ${k}: ${(e as Error).message}`)
+    }
+    if (!(Number.isFinite(n) && (k === 'trackWidth' ? n > 0 : n >= 0)))
+      throw new Error(`${where}: ${k} must be a ${k === 'trackWidth' ? 'positive' : 'non-negative'} length, got ${JSON.stringify(x)}`)
+    out[k] = n
+  }
+  return out as RuleSet<K>
+}
+
+/** A part's thermal rule, `{ angle: 45 }`. */
+function thermalRule(x: unknown, where: string): { angle?: 90 | 45 } {
+  if (!x || typeof x !== 'object' || Array.isArray(x)) throw new Error(`${where}: thermal must be an object such as { angle: 45 }, got ${JSON.stringify(x)}`)
+  const out: { angle?: 90 | 45 } = {}
+  for (const [k, a] of Object.entries(x)) {
+    if (a === undefined) continue
+    if (k !== 'angle') throw new Error(`${where}: thermal has an unknown field ${JSON.stringify(k)}; it takes angle`)
+    if (a !== 90 && a !== 45) throw new Error(`${where}: thermal angle must be 90 or 45, got ${JSON.stringify(a)}`)
+    out.angle = a
   }
   return out
 }

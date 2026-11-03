@@ -11,7 +11,7 @@ export type BoardSpec = Partial<Omit<BoardProps, 'name' | 'children'>>
 /** A resolved board spec: what the compiler uses where props and defaults leave a key out. */
 export interface ResolvedBoardSpec {
   title?: string
-  revision: string
+  rev: string
   copper: 2 | 4 | 6 | 8
   thickness: number
   stackup: Stackup
@@ -56,10 +56,8 @@ export function checkAutoroute(v: unknown, where: string): Partial<AutoRoutePara
   if (o.maxDetour !== undefined) {
     const m = o.maxDetour,
       ok = (x: unknown) => x === undefined || (typeof x === 'number' && Number.isFinite(x) && x >= 0)
-    if (
-      !(typeof m === 'number' ? ok(m) : m && typeof m === 'object' && !Array.isArray(m) && Object.keys(m).every(k => k === 'ratio' || k === 'floor') && ok(m.ratio) && ok(m.floor))
-    )
-      bad('maxDetour', 'a ratio, 0 or more, or an object { ratio?, floor? } of numbers, 0 or more')
+    if (!(m && typeof m === 'object' && !Array.isArray(m) && Object.keys(m).every(k => k === 'ratio' || k === 'floor') && ok(m.ratio) && ok(m.floor)))
+      bad('maxDetour', 'an object { ratio?, floor? } of numbers, 0 or more, such as { ratio: 2 }')
   }
   if (o.bend !== undefined && o.bend !== '45' && o.bend !== '90') bad('bend', "'45' or '90'")
   if (o.layers !== undefined && !(Array.isArray(o.layers) && o.layers.length && o.layers.every((l: unknown) => typeof l === 'string')))
@@ -99,7 +97,7 @@ export function mergeAutoroute<T extends object>(base: T, ...levels: (object | n
 }
 
 /** boolean rules absent from BASE: false unless set */
-const FLAG_KEYS = new Set(['strictNets', 'requireSourcing'])
+const FLAG_KEYS = new Set(['requireSourcing'])
 const RULE_KEYS = new Set([...Object.keys(BASE), ...FLAG_KEYS, 'thermal', 'islands', 'edge', 'maskWeb', 'maskWebByColor'])
 const FINISHES = new Set(['HASL', 'LeadFreeHASL', 'ENIG', 'ImmersionSilver', 'ImmersionTin', 'OSP', 'HardGold'])
 const r4 = (v: number) => Math.round(v * 1e4) / 1e4
@@ -278,14 +276,27 @@ function checkFabNotes(v: unknown, where: string): string[] {
 
 const has = (o: BoardSpec, k: keyof BoardSpec) => o[k] !== undefined && o[k] !== null
 
-/** Resolve levels over the base, lowest first; the highest level giving `copper` or `stackup` decides the layers, and a `thickness` must agree. */
+// board props that are not props, with what to write
+const NOT_PROPS: Record<string, string> = {
+  revision: 'the revision is rev, such as rev="A"',
+  copper: 'the layers come from the stackup, such as stackup={fourLayer()} from @pcbjs/lib/stackups',
+  thickness: 'the thickness comes from the stackup, such as stackup={twoLayer({ thickness: 1.2 })} from @pcbjs/lib/stackups',
+}
+
+/** Throws for a board prop that has another form. */
+export function checkBoardKeys(spec: object, where: string): void {
+  for (const k of Object.keys(spec)) if (k in NOT_PROPS && (spec as any)[k] !== undefined) throw new Error(`${where}: no ${k} prop; ${NOT_PROPS[k]}`)
+}
+
+/** Resolve levels over the base, lowest first; the highest level giving a `stackup` decides the layers. */
 export function resolveBoardSpec(levels: BoardSpec[], levelNames?: string[]): ResolvedBoardSpec {
   const names = levelNames ?? (levels.length === 1 ? ['default'] : levels.map((_, i) => (i === levels.length - 1 ? '<PCB>' : 'default')))
+  levels.forEach((l, i) => checkBoardKeys(l, names[i]))
   const rules = resolveRules(mergeRules(BASE, ...levels.map((l, i) => checkRules(l.rules, names[i]))))
   const autoroute = mergeAutoroute(BASE_AUTOROUTE, ...levels.map((l, i) => checkAutoroute(l.autoroute, names[i])))
   const classes = resolveClasses(mergeClasses(...levels.map((l, i) => checkClasses(l.classes, names[i]))))
   let title: string | undefined,
-    revision = '',
+    rev = '',
     sourcing: string[] = [],
     cpl: ResolvedBoardSpec['cpl']
   const fabNotes: string[] = []
@@ -298,44 +309,26 @@ export function resolveBoardSpec(levels: BoardSpec[], levelNames?: string[]): Re
       if (o !== undefined) cpl = { origin: o }
     }
     if (has(l, 'title')) title = String(l.title)
-    if (has(l, 'revision')) revision = String(l.revision)
+    if (has(l, 'rev')) rev = String(l.rev)
     if (has(l, 'sourcing')) sourcing = checkSourcing(l.sourcing, names[i])
   })
   let top = -1
   levels.forEach((l, i) => {
-    if (has(l, 'copper') || has(l, 'stackup')) top = i
+    if (has(l, 'stackup')) top = i
   })
-  let thickAt = -1,
-    thick: number | undefined
-  levels.forEach((l, i) => {
-    if (has(l, 'thickness')) {
-      thickAt = i
-      thick = mm(l.thickness as any)
-    }
-  })
-  if (thick !== undefined && !(thick > 0)) throw new Error(`thickness must be positive, got ${thick}`)
-  const lv = top >= 0 ? levels[top] : {}
-  let copper: number, stackup: Stackup, thickness: number
-  if (has(lv, 'stackup')) {
-    const where = `${names[top]} stackup`
+  let copper = 2,
+    stackup = defaultStackup(2)
+  if (top >= 0) {
     try {
-      copper = validateStackup(lv.stackup!)
+      copper = validateStackup(levels[top].stackup!)
     } catch (e) {
-      throw new Error(`${where}: ${(e as Error).message}`)
+      throw new Error(`${names[top]} stackup: ${(e as Error).message}`)
     }
-    if (has(lv, 'copper') && Number(lv.copper) !== copper) throw new Error(`${names[top]}: copper={${lv.copper}} disagrees with the stackup, which has ${copper} copper layers`)
-    stackup = structuredClone(lv.stackup!)
-    thickness = stackupThickness(stackup)
-    if (thick !== undefined && thickAt >= top && Math.abs(thick - thickness) > 0.005)
-      throw new Error(`${names[thickAt]}: thickness ${thick} mm disagrees with the stackup, which is ${thickness} mm`)
-  } else {
-    copper = has(lv, 'copper') ? Number(lv.copper) : 2
-    if (![2, 4, 6, 8].includes(copper)) throw new Error(`${names[top] ?? '<PCB>'}: copper must be 2, 4, 6 or 8, got ${JSON.stringify(lv.copper)}`)
-    thickness = thick ?? 1.6
-    stackup = defaultStackup(copper, thickness)
+    stackup = structuredClone(levels[top].stackup!)
   }
+  const thickness = stackupThickness(stackup)
   const teardrops = resolveTeardrops(levels.map((l, i) => (has(l, 'teardrops') ? checkTeardrops(l.teardrops, names[i]) : undefined)))
-  const out: ResolvedBoardSpec = { revision, copper: copper as 2 | 4 | 6 | 8, thickness, stackup, rules, sourcing, autoroute, classes, fabNotes, teardrops }
+  const out: ResolvedBoardSpec = { rev, copper: copper as 2 | 4 | 6 | 8, thickness, stackup, rules, sourcing, autoroute, classes, fabNotes, teardrops }
   if (title !== undefined) out.title = title
   if (cpl) out.cpl = cpl
   return out

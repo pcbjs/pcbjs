@@ -1,8 +1,11 @@
 // What the viewer receives: per-layer SVG markup and metadata; @pcbjs/export builds it.
-import type { Board, DrcMarker, Footprint, Pt, Ratsnest, RoutingReport } from './model.js'
+import type { Board, Footprint, Pt, Ratsnest, RoutingReport } from './model.js'
 import type { ModelSpec, Rules, Src, Stackup, StepModelSpec } from './types.js'
+import type { Finding } from './finding.js'
 
 export interface SiteFootprint {
+  /** library-preview reference label; ref remains the stable source/selection identity */
+  displayRef?: string
   ref: string
   value: string
   id: string
@@ -15,10 +18,11 @@ export interface SiteFootprint {
   fields: Record<string, string>
   description?: string
   /** the placement: the outermost call that placed the footprint, as `Footprint.src` */
-  src?: { file: string; line: number; col: number; endLine?: number; endCol?: number; abs: string }
+  src?: SiteSrc
   /** the innermost call site with a range, normally the `<footprint>` element; absent when it is the placement */
-  def?: { file: string; line: number; col: number; endLine: number; endCol: number; abs: string }
-  pads: { num: string; name: string; net?: string; at: [number, number] }[]
+  def?: SiteSrc
+  /** `uid` the pad item's, see SiteItem */
+  pads: { num: string; name: string; net?: string; at: [number, number]; uid?: string }[]
   /** the 3D body box in board mm: centre, size along the footprint's x and y, rotation in degrees */
   body: { x: number; y: number; w: number; h: number; rot: number }
   /** the extent of the footprint's pads and graphics in board mm, top-left corner and size */
@@ -29,6 +33,8 @@ export interface SiteFootprint {
   model?: Exclude<ModelSpec, StepModelSpec>
   /** a STEP model: the file relative to the root, its mesh hash and the KiCad transform with defaults filled in */
   step?: SiteStep
+  /** the mesh hash of the generated `model`, at `/__pcbjs/model/<mesh>` in dev and `models/<mesh>.bin` built, placed by the body */
+  mesh?: string
 }
 /** A footprint's model as the viewer gets it; the mesh is at `/__pcbjs/model/<mesh>` in dev and `models/<mesh>.bin` built. */
 export interface SiteStep {
@@ -52,7 +58,7 @@ export interface StepTransform {
 export interface SiteData {
   name: string
   title: string
-  revision: string
+  rev: string
   copper: number
   thickness: number
   rules: Rules
@@ -68,12 +74,13 @@ export interface SiteData {
   drills: { x: number; y: number; d: number; len?: number; a?: number }[]
   nets: string[]
   footprints: SiteFootprint[]
-  drc: SiteMarker[]
-  /** ERC findings; `at` is the first placed pin of the net or part, or [0, 0] */
-  erc: SiteMarker[]
+  drc: SiteFinding[]
+  erc: SiteFinding[]
   /** the netlist as declared */
   schematic: Schematic
   ratsnest: Ratsnest[]
+  /** the netlist's own ratsnest, pad to pad, drawn until the checks give the routed one */
+  airwires?: Ratsnest[]
   unconnected: number
   stats: Board['stats']
   bom: { refs: string[]; value: string; footprint: string; qty: number; fields: Record<string, string>; sourcing: Sourcing }[]
@@ -85,14 +92,14 @@ export interface SiteData {
   dev: boolean
   /** source ranges per file, when the source-range transform ran */
   sources?: SourceIndex
-  /** per-item geometry the 3D view builds one mesh each from */
+  /** one row per board item: what selection, highlight, the assist and the tools read; its geometry is in `shapes` */
   items?: SiteItem[]
+  /** each item's rings, what the 3D view and the hit tests draw from */
+  shapes?: SiteShapes
   /** set for a board compiled for several fab targets; `fab` and `svgUrl` are per target */
   variant?: VariantInfo
   /** repository link for a built site, from the `repo` config */
   repo?: RepoLink
-  /** `follow`: 'click' when a plain click opens the source, 'meta-click' when cmd+click does */
-  editor?: { follow: 'click' | 'meta-click' }
   /** the IDE preview of a file no board imports; never built */
   transient?: boolean
   /** hard keepouts in board mm */
@@ -105,12 +112,31 @@ export interface SiteData {
   timings?: { route: number; zones: number; connectivity: number; drc: number; erc: number }
   /** other entries' boards shown as mechanical references, see references.md */
   references?: import('./reference.js').SiteReference[]
+  /** each part with an auto slot as this compile placed it, see placement.md */
+  placed?: import('./model.js').AutoPlaced[]
   /** the last compile failed: the data is the previous one, `staleError` says why */
   stale?: boolean
   staleError?: string
   /** dev: compiled from the editor's unsaved text; `skipped` counts the spans its repair left out */
   draft?: { skipped: number }
+  /** a live rebuild's layers: the uids of the last compile's copper drawn until the stage that remakes it ends */
+  carried?: string[]
+  /** the board's grids, sources relative to the root, see grids.md */
+  grids?: (Omit<import('./model.js').GridRecord, 'src' | 'attach'> & { src?: SiteSrc; attach?: SiteSrc })[]
+  /** what the tools may change on each part, group and route, see editing.md */
+  edit?: SiteEditNode[]
 }
+
+/** A source position relative to the root, 1-based, with its range when it has one; a client resolves the file against the project root. */
+export interface SiteSrc {
+  file: string
+  line: number
+  col: number
+  endLine?: number
+  endCol?: number
+}
+/** An edit node as the viewer gets it, sources relative to the root. */
+export type SiteEditNode = Omit<import('./model.js').EditNode, 'src' | 'steps'> & { src: { at?: SiteSrc; chain?: SiteSrc }; steps?: { op: string; layer?: string; angle?: number; src?: SiteSrc }[] }
 
 /** One route as the viewer reports it: `length` in mm, of the longer track for a pair; `skew` longer minus shorter; `nets` every net of a pair's group, both sides of a series part; `call` where a helper was called; `path` the instance whose layout made it. */
 export interface RouteInfo {
@@ -122,9 +148,11 @@ export interface RouteInfo {
   target?: { min: number; max: number } | null
   group?: string
   skew?: number
-  src?: Src
-  call?: Src
+  src?: SiteSrc
+  call?: SiteSrc
   path?: string
+  /** `pt:0` the start, `pt:k` where the k-th chain call ends, board mm */
+  pts?: [number, number][]
 }
 
 /** A hard keepout as the site carries it; `src` is relative to the root. */
@@ -135,20 +163,20 @@ export interface SiteKeepout {
   vias: boolean
   pours: boolean
   ref?: string
-  src?: { file: string; line: number; col: number }
+  src?: SiteSrc
 }
 
-/** A DRC or ERC marker: `src` of the first involved item, relative to the root; `path` the instance paths of its parts, such as `CH2/R`. */
-export type SiteMarker = DrcMarker & { src?: { file: string; line: number; col: number }; path?: string[] }
+/** A finding as the site carries it: the shape of `check --json`, with `path` the instance paths of its parts, such as `CH2/R`. */
+export type SiteFinding = Finding & { path?: string[] }
 
 /** One source range of the design that produced items; 1-based, end inclusive. */
 export interface SourceRange {
   start: [number, number]
   end: [number, number]
-  /** ids of the items (data-id in the layer SVG) it produced, directly or through components */
-  ids: number[]
-  /** the ids it reaches only as a call site around the code that drew them, such as a layout's element; absent when none */
-  outer?: number[]
+  /** the uids of the items it produced, directly or through components, sorted */
+  uids: string[]
+  /** the uids it reaches only as a call site around the code that drew them, such as a layout's element; absent when none */
+  outer?: string[]
   refs: string[]
   /** the command text, such as "H 9", when the range is one command of a path string; it nests in the element's range */
   seg?: string
@@ -184,12 +212,13 @@ export interface SchematicPin {
 }
 export interface SchematicPart {
   ref: string
+  displayRef?: string
   value: string
   footprint: string
   prefix: string
   pins: SchematicPin[]
   placed: boolean
-  src?: { file: string; line: number; col: number }
+  src?: SiteSrc
   /** owning instance path, outermost first, [] at the board level */
   path: string[]
   /** the key in its circuit, "R1" for Buck1.R1; the ref at the board level */
@@ -199,24 +228,14 @@ export interface SchematicPart {
 }
 export interface SchematicNet {
   name: string
+  displayName?: string
   class?: string
   local: boolean
   pins: string[] /* "R1.2" */
   path?: string[] /* owning circuit instance of a private net */
   export?: { name: string; module?: string }
 }
-export interface SchematicCircuit {
-  /** outermost first */
-  path: string[]
-  name: string
-  circuit: string
-  /** the layout that placed it, if any */
-  layout?: string
-  /** refs of its own parts, child instances excluded */
-  parts: string[]
-  children: string[]
-  placed: boolean
-}
+export type SchematicCircuit = import('./model.js').BoardSchematicCircuit
 export interface Schematic {
   parts: SchematicPart[]
   nets: SchematicNet[]
@@ -239,23 +258,50 @@ export interface Sourcing {
   datasheet?: string
 }
 
-/** One board item as polygon rings in board mm, y down; holes are rings inside outers. */
+/** One board item as the views index it, its geometry in `SiteData.shapes`; board mm, y down. */
 export interface SiteItem {
+  /** its place in this facet, what the SVG's `data-id` and the shapes name; never compared across facets */
   id: number
+  /** the item's uid, see Item.uid */
+  uid?: string
+  /** its content, see itemRev in @pcbjs/core/ref: the same uid with another rev changed */
+  rev: string
   kind: 'pad' | 'track' | 'via' | 'zone' | 'graphic' | 'text'
+  generated?: 'reference'
   /** a THT pad or via lists every copper layer it spans */
   layers: string[]
   net?: string
   ref?: string
-  /** the stroked outline, pad shape or zone fill (mm) */
-  rings: [number, number][][]
+  /** a pad's number */
+  pad?: string
+  /** the extent of its rings: x0, y0, x1, y1; absent for an item its holes cut away whole */
+  box?: [number, number, number, number]
   /** drill diameter (mm) */
   drill?: number
   /** track width (mm) */
   width?: number
+  /** the `route:<n>` id of the route call that placed a track or via */
+  route?: string
+  /** the instance whose layout drew a text or graphic of no part, `CH1` */
+  path?: string
   /** a pair track's pair id and role */
   pair?: string
   role?: 'P' | 'N'
-  /** on outer copper, the rings under each side's mask; a side left out is wholly covered */
-  covered?: { F?: [number, number][][]; B?: [number, number][][] }
+}
+
+/** Rings packed flat: entry i holds `n[i]` rings of the item `ids[i]`, ring k has `len[k]` points, `xy` every point's x and y in turn. */
+export interface PackedRings {
+  ids: number[]
+  n: number[]
+  len: number[]
+  xy: number[]
+}
+/** The items' rings in board mm, y down; an item's outers have a positive signed area, its holes a negative one. */
+export interface SiteShapes {
+  /** the stroked outline, pad shape or zone fill of each item */
+  rings: PackedRings
+  /** on outer copper, the rings under each side's mask of the items that have some open; an item left out is wholly covered */
+  covered: { F: PackedRings; B: PackedRings }
+  /** each side's mask openings, by the item that opens them */
+  openings: { F: PackedRings; B: PackedRings }
 }

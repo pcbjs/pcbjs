@@ -1,6 +1,7 @@
 // @pcbjs/fab on its own: every preset module loads, carries its spec and makes a <board> with the preset stackup and rules.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
 import { isNode } from '@pcbjs/core'
 import { FABS, bindPCB, isBoundPCB, paletteName } from '../dist/index.js'
 
@@ -16,16 +17,25 @@ test('fab: every preset in FABS is a bound <PCB> named after its path', async ()
   }
 })
 
-test('fab: bindPCB recolours the stackup from the palette, any case', () => {
-  const Board = bindPCB({ name: 'House 2-Layer', stackup: { layers: [{ type: 'mask', side: 'F', color: 'Green' }] }, rules: { clearance: 0.2 }, colors: { 'Matte Black': '#111' } })
+test('fab: bindPCB recolours the stackup from the palette, a name matched whatever its case, spaces and dashes', () => {
+  const Board = bindPCB({
+    name: 'House 2-Layer',
+    stackup: { layers: [{ type: 'mask', side: 'F' }], maskColor: 'Green' },
+    rules: { clearance: 0.2 },
+    colors: { 'Matte Black': '#111' },
+  })
   assert.equal(Board.preset.fab, 'House')
   assert.equal(paletteName({ 'Matte Black': '#111' }, 'matte-black'), 'Matte Black')
   const node = Board({ name: 'B', color: 'matte black' })
-  assert.equal(node.props.stackup.layers[0].color, 'Matte Black')
+  assert.equal(node.props.stackup.maskColor, 'Matte Black')
+  assert.equal(node.props.stackup.layers[0].color, undefined)
 })
 
 test('fab: a preset spreads back into bindPCB, and the result type checks', async () => {
-  const JLC = (await import('../dist/JLCPCB/2-Layer.js')).default
+  const mod = await import('../dist/JLCPCB/2-Layer.js')
+  // the preset's data is read one way, PCB.preset
+  assert.deepEqual(Object.keys(mod), ['default'])
+  const JLC = mod.default
   const House = bindPCB({ ...JLC.preset, name: 'House 2-Layer', rules: { ...JLC.preset.rules, clearance: 0.2 } })
   assert.deepEqual(House.preset.finishes, JLC.preset.finishes)
   assert.equal(House({ name: 'H', finish: 'ENIG' }).props.rules.clearance, 0.2)
@@ -33,17 +43,18 @@ test('fab: a preset spreads back into bindPCB, and the result type checks', asyn
   const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs')
   const { tmpdir } = await import('node:os')
   const { join } = await import('node:path')
-  const fab = new URL(import.meta.resolve('../dist/index.js')).pathname
-  const jlc = new URL(import.meta.resolve('../dist/JLCPCB/2-Layer.js')).pathname
+  const fab = fileURLToPath(import.meta.resolve('../dist/index.js'))
+  const jlc = fileURLToPath(import.meta.resolve('../dist/JLCPCB/2-Layer.js'))
   const dir = mkdtempSync(join(tmpdir(), 'pcbjs-fab-'))
   const file = join(dir, 'house.ts')
   writeFileSync(
     file,
     [
       `import { bindPCB } from ${JSON.stringify(fab)}`,
-      `import JLC, * as M from ${JSON.stringify(jlc)}`,
+      `import JLC from ${JSON.stringify(jlc)}`,
       `export const A = bindPCB({ ...JLC.preset, name: 'House A' })`,
-      `export const B = bindPCB({ name: 'House B', stackup: M.stackup, rules: M.rules, colors: M.colors, finishes: M.finishes, sourcing: M.sourcing })`,
+      `const P = JLC.preset`,
+      `export const B = bindPCB({ name: 'House B', stackup: P.stackup, rules: P.rules, colors: P.colors, finishes: P.finishes, sourcing: P.sourcing })`,
     ].join('\n') + '\n',
   )
   try {

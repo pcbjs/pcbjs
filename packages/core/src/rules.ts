@@ -45,11 +45,15 @@ export function mergeRules(base: Rules, ...overrides: (Partial<Rules> | null | u
   return out
 }
 
+const colorKey = (c: string) => c.toLowerCase().replace(/[\s_-]+/g, '')
+/** True when two colour names are one colour: case, spaces, `_` and `-` aside, so "Matte Black" is "matte-black". */
+export const sameColor = (a: string, b: string): boolean => colorKey(a) === colorKey(b)
+
 /** The rules with `maskWeb` picked by the mask colour from `maskWebByColor`, and the table dropped. */
 export function withMaskColor<R extends Pick<Rules, 'maskWeb' | 'maskWebByColor'>>(r: R, color: string | undefined): R {
   if (!r.maskWebByColor) return r
   const { maskWebByColor: table, ...out } = r
-  const hit = color === undefined ? undefined : Object.entries(table).find(([c]) => c.toLowerCase() === color.toLowerCase())
+  const hit = color === undefined ? undefined : Object.entries(table).find(([c]) => sameColor(c, color))
   return (hit ? { ...out, maskWeb: hit[1] } : out) as R
 }
 

@@ -14,11 +14,12 @@ export interface SchPin {
   root: Pt
   /** the way the pin points out of the body, on the sheet */
   side: PinSide
-  /** the PCB pad ids of the pin */
-  items: number[]
+  /** the uids of the pin's PCB pads */
+  items: string[]
 }
 export interface SchSymbol {
   ref: string
+  displayRef?: string
   value: string
   /** 'resistor', 'box', 'connector', 'custom' and so on */
   kind: string
@@ -38,12 +39,12 @@ export interface SchSymbol {
   /** where the ref and the value are written, mm, text anchored at its start */
   refAt: Pt
   valueAt: Pt
-  /** placed by the compiler, not by a part element or <Sym> */
+  /** placed by the compiler, not by a part element or <Place> */
   auto: boolean
   /** the circuit instance path of the part, [] at the board level */
   path: string[]
-  /** the PCB pad ids of the part */
-  items: number[]
+  /** the uids of the part's PCB pads */
+  items: string[]
   src?: Src
 }
 export interface SchWire {
@@ -56,6 +57,7 @@ export interface SchWire {
   src?: Src
 }
 export interface SchLabel {
+  displayName?: string
   /** `label:<n>` */
   id: string
   net: string

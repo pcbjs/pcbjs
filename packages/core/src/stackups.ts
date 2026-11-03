@@ -44,18 +44,13 @@ function build(copper: 2 | 4 | 6 | 8, o: StackupOptions = {}): Stackup {
   const core = r4(copper === 2 ? rest : rest / cores)
   if (!(core > 0.05)) throw new Error(`a ${copper}-layer stackup ${total} mm thick leaves no room for the cores (${core} mm each)`)
   const cu = (name: string, t: number, oz: number): StackupLayer => ({ type: 'copper', name: name as any, thickness: t, weight: oz })
-  const layers: StackupLayer[] = [
-    { type: 'silk', side: 'F', color: silkColor },
-    { type: 'paste', side: 'F' },
-    { type: 'mask', side: 'F', thickness: MASK, color: maskColor },
-    cu('F.Cu', outer, o.outerCopper ?? 1),
-  ]
+  const layers: StackupLayer[] = [{ type: 'silk', side: 'F' }, { type: 'paste', side: 'F' }, { type: 'mask', side: 'F', thickness: MASK }, cu('F.Cu', outer, o.outerCopper ?? 1)]
   for (let i = 1; i < copper; i++) {
     const isPrepreg = copper > 2 && i % 2 === 1
     layers.push(isPrepreg ? { type: 'prepreg', thickness: pp, ...diel } : { type: 'core', thickness: core, ...diel })
     layers.push(i === copper - 1 ? cu('B.Cu', outer, o.outerCopper ?? 1) : cu(`In${i}.Cu`, inner, o.innerCopper ?? 0.5))
   }
-  layers.push({ type: 'mask', side: 'B', thickness: MASK, color: maskColor }, { type: 'paste', side: 'B' }, { type: 'silk', side: 'B', color: silkColor })
+  layers.push({ type: 'mask', side: 'B', thickness: MASK }, { type: 'paste', side: 'B' }, { type: 'silk', side: 'B' })
   const s: Stackup = { layers, maskColor, silkColor, thickness: total }
   if (o.finish) s.finish = o.finish
   return s

@@ -5,7 +5,7 @@ import { countModels, modelSource } from '../dist/model-source.js'
 
 test('model source: file, generated, no body and no model', () => {
   assert.equal(modelSource({ file: './x.step' }, 1), 'file')
-  assert.equal(modelSource({ kind: 'chip', part: 'R', size: '0603' }, 0.5), 'generated')
+  assert.equal(modelSource({ kind: 'chip', part: 'R', body: [1.6, 0.8], cap: 0.3, height: 0.5 }, 0.5), 'generated')
   assert.equal(modelSource({ kind: 'ic', w: 5, h: 4, height: 1.5 }, 1.5), 'generated')
   assert.equal(modelSource({ kind: 'box', w: 4, h: 3, height: 2 }, 2), 'missing')
   assert.equal(modelSource(undefined, 1), 'missing')

@@ -1,5 +1,5 @@
 // Colours by the fab order form name; the hex values match the viewer table in packages/viewer/src/stackup.ts.
-import type { Finish } from '@pcbjs/core/types'
+import type { Finish } from '@pcbjs/core/internal/types'
 
 export const HEX = {
   Green: '#1b5e20',

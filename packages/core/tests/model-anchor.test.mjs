@@ -11,19 +11,19 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 test('anchorModel resolves a relative file against the writing file and keeps the path as written', () => {
   const m = anchorModel({ file: './models/a.step', offset: [1, 0, 0] }, '/p/board/lib/parts.tsx')
   assert.equal(m.file, './models/a.step')
-  assert.equal(m.step, '/p/board/lib/models/a.step')
+  assert.equal(m.path, '/p/board/lib/models/a.step')
   assert.deepEqual(m.offset, [1, 0, 0])
   // once anchored it stays, wherever it is passed on
-  assert.equal(anchorModel(m, '/elsewhere/x.tsx').step, '/p/board/lib/models/a.step')
-  // the older name step, an absolute path, a file: URL and a generated model are left as they are
-  assert.equal(anchorModel({ step: '../m/b.wrl' }, '/p/board/pcb.tsx').step, '/p/m/b.wrl')
-  assert.equal(anchorModel({ file: '/abs/c.step' }, '/p/pcb.tsx').step, undefined)
-  assert.equal(anchorModel({ file: 'file:///abs/c.step' }, '/p/pcb.tsx').step, undefined)
+  assert.equal(anchorModel(m, '/elsewhere/x.tsx').path, '/p/board/lib/models/a.step')
+  // an absolute path, a file: URL, a fetched model and a generated model are left as they are
+  assert.equal(anchorModel({ file: '/abs/c.step' }, '/p/pcb.tsx').path, undefined)
+  assert.equal(anchorModel({ file: 'file:///abs/c.step' }, '/p/pcb.tsx').path, undefined)
+  assert.equal(anchorModel({ file: 'kicad:Crystal.3dshapes/X.step' }, '/p/pcb.tsx').path, undefined)
   const box = { kind: 'box', w: 1, h: 1, height: 1 }
   assert.equal(anchorModel(box, '/p/pcb.tsx'), box)
 })
 
 test('a <footprint> element is anchored at the file that wrote it; a part option is tested through the cli in model-paths', () => {
   const el = jsx('footprint', { ref: 'U1', model: { file: './m/x.step' } })
-  assert.equal(el.props.model.step, join(HERE, 'm', 'x.step'))
+  assert.equal(el.props.model.path, join(HERE, 'm', 'x.step'))
 })

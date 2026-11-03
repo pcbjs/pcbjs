@@ -1,8 +1,10 @@
 // Another entry's board as a mechanical reference, never copper; see references.md.
-import type { Length, PcbNode, Src } from './types.js'
-import type { Pt, Ring } from './model.js'
+import type { Length, PcbNode, Side, Src } from './types.js'
+import type { MatePoint, Pt, Ring } from './model.js'
+import type { SiteData, SiteFootprint } from './site-data.js'
 import { h } from './jsx-runtime.js'
-import { callerSite } from './schematic.js'
+import { callerSite, urlPath } from './provenance.js'
+import { platform } from './platform.js'
 
 /** Where the referenced board lies against this one: over its top face, under its bottom face, or in its plane. */
 export type ReferenceStack = 'above' | 'below' | 'coplanar'
@@ -11,9 +13,9 @@ export type ReferenceStack = 'above' | 'below' | 'coplanar'
 export interface ReferenceMate {
   /** a part, such as `J1`, a pin handle, such as `J1[19]`, or a part of a group, such as `PORTS[2].J` */
   local: unknown
-  /** the ref of the mating part on the referenced board */
+  /** the ref of the mating part on the referenced board, or a point it names with `<mate name>` or a placement's `name` */
   remote: string
-  /** the remote pin that mates, also the local pin when `local` is a part; default 1 */
+  /** the remote pin that mates, also the local pin when `local` is a part; default 1; a named point mates at itself */
   pin?: string | number
   /** DRC `reference-net`: `true` wants equal net names across each pin pair, an object or function maps local names to remote ones; off by default */
   nets?: boolean | Record<string, string | string[]> | ((local: string) => string | string[])
@@ -37,8 +39,10 @@ export interface ReferenceShow {
 export interface ReferenceOptions {
   /** one or more mating pairs: the first places the board; a pair without `nets` takes the first pair's */
   mate?: ReferenceMate | ReferenceMate[]
-  /** with `mate`: where the referenced board lies, default 'above' */
-  stack?: ReferenceStack
+  /** with `mate`: the face the referenced board lies on, F over the top or B under the bottom; default the local part's side */
+  side?: Side
+  /** with `mate`: 'coplanar' puts the referenced board in this board's plane, edge to edge */
+  stack?: 'coplanar'
   /** with `mate`: face to face, mm; default the local connector's height, else 8 */
   gap?: Length
   /** without `mate`: its origin in this board's frame, z the height of its bottom face (mm) */
@@ -52,28 +56,15 @@ export interface ReferenceOptions {
   show?: ReferenceShow
 }
 
-/** Node's path module in Node, null in a browser. */
-function nodePath(): typeof import('node:path') | null {
-  const p = (globalThis as any).process
-  if (!p || typeof p.getBuiltinModule !== 'function') return null
-  try {
-    return p.getBuiltinModule('node:path')
-  } catch {
-    return null
-  }
-}
-
-/** Another entry's board as a mechanical reference, placed by `mate` or `at`; the path is relative to the calling file. */
+/** Another entry's board as a mechanical reference, placed by `mate` or `at`; the path is relative to the calling file, or a package's board such as '@acme/power/boards/driver'. */
 export function reference(path: string, opts: ReferenceOptions = {}): PcbNode {
   if (typeof path !== 'string' || !path.trim()) throw new TypeError("reference(path, options) needs the path of another entry, such as '../driver/pcb.tsx'")
   if (opts === null || typeof opts !== 'object') throw new TypeError(`reference(${JSON.stringify(path)}, options): options must be an object`)
-  const site = callerSite(true)
-  const np = nodePath()
+  const site = callerSite()
+  const np = platform().path
   let file = path
-  if (np) {
-    if (path.startsWith('file:')) file = decodeURIComponent(new URL(path).pathname)
-    else if (!np.isAbsolute(path) && site?.file && np.isAbsolute(site.file)) file = np.resolve(np.dirname(site.file), path)
-  }
+  if (path.startsWith('file:')) file = urlPath(path)
+  else if (/^\.\.?([\\/]|$)/.test(path) && site?.file && np.isAbsolute(site.file)) file = np.resolve(np.dirname(site.file), path)
   const node = h('reference', { ...opts, path, file, ...(site?.file ? { from: site.file } : {}) })
   if (site) node.src = site
   return node
@@ -82,19 +73,10 @@ export function reference(path: string, opts: ReferenceOptions = {}): PcbNode {
 /** A column-major 4x4 matrix in the 3D view's frame: x board x, y board -y, z up from the bottom face. */
 export type Mat4 = number[]
 
-/** One part of a referenced board in its own board mm. */
-export interface ReferencedFootprint {
-  ref: string
-  at: Pt
-  rot: number
-  side: 'F' | 'B'
-  /** body height above its face, 0 for a bare hole */
-  height: number
-  /** where the height comes from */
+/** One part of a referenced board in its own board mm, as its board data has it; `heightFrom` says where the height comes from. */
+export type ReferencedFootprint = Pick<SiteFootprint, 'ref' | 'at' | 'rot' | 'side' | 'height' | 'body'> & {
   heightFrom?: HeightSource
-  /** the body as a box: centre, size along the footprint's x and y, rotation */
-  body: { x: number; y: number; w: number; h: number; rot: number }
-  pads: { num: string; name: string; at: Pt; net?: string }[]
+  pads: Omit<SiteFootprint['pads'][number], 'uid'>[]
 }
 
 /** A compiled referenced entry. */
@@ -103,11 +85,13 @@ export interface ReferencedBoard {
   entry: string
   name: string
   title: string
-  revision: string
+  rev: string
   thickness: number
   outline: Ring[]
-  drills: { x: number; y: number; d: number; len?: number; a?: number }[]
+  drills: SiteData['drills']
   footprints: ReferencedFootprint[]
+  /** its named points, from `<mate>` and `name` on a placement */
+  mates?: MatePoint[]
   /** the content hash of its module graph, referenced graphs included; also its mesh name */
   hash: string
   /** set when the mesh of its 3D view was written */
@@ -124,7 +108,8 @@ export interface ReferencedBoard {
 
 /** Compiles a referenced entry in a run of its own; throws an Error with the reason when it cannot. */
 export interface ReferenceResolver {
-  resolve(file: string): ReferencedBoard
+  /** `src`: the reference() call, which a reference cycle names; `from`: its file, absolute, where a package's board resolves from */
+  resolve(file: string, src?: Src, from?: string): ReferencedBoard
 }
 
 /** A mating pair: the local and remote pads in this board's mm. */
@@ -158,7 +143,8 @@ export interface BoardReference {
   outline: Ring[]
   /** the z range of its slab in this board's 3D frame */
   z: [number, number]
-  holes: { at: Pt; d: number }[]
+  /** its drills in this board's mm, a slot with its length and axis turned onto this board */
+  holes: SiteData['drills']
   /** the mating pair; with `nets`, pads carry net names and each local pad the remote name it wants */
   mate?: MatePair
   /** every mating pair, the first one `mate`, when the mate names several */
@@ -193,6 +179,8 @@ export interface SiteReference {
   split?: number
   /** a panel line: the anchor, the stack and the gap */
   anchor: string
+  /** the face it stacks on, F above or B below, so the exploded view moves it with that side's parts; none in this board's plane */
+  side?: 'F' | 'B'
   /** the other board's page in this site, when the site has it */
   page?: string
   /** its outline rings in this board's mm, seen from the top */

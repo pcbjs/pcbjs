@@ -1,11 +1,11 @@
 // Land patterns follow the KiCad 9 library: Connector_USB, Connector_JST, Connector_PinSocket_2.54mm, MountingHole.
 import { h } from '@pcbjs/core/jsx-runtime'
-import type { ModelSpec, Part } from '@pcbjs/core/types'
+import type { ModelSpec } from '@pcbjs/core/internal/types'
 import { makeFootprint, padGridDefs, padRowDefs, r4, silkOutline, type FootprintDef, type GeneratorOptions, type LibFootprint, type PadDef, type PinsOf } from './footprint.js'
-import { connectorCall, memoised, mmArg, oneOf, optsArg, padArgs, show, type ConnectorOptions, type HoleOptions } from './gen.js'
+import { memoised, mmArg, oneOf, optsArg, padArgs, show, type HoleOptions } from './gen.js'
 import { fetched, kicad3d, outline } from './models.js'
 
-export type { ConnectorOptions, HoleOptions } from './gen.js'
+export type { HoleOptions } from './gen.js'
 
 const NONE: ModelSpec = { kind: 'none' }
 type Num = `${number}`
@@ -40,13 +40,14 @@ const USB6: [string, string, number, number][] = [
 
 type USBType = 'power6' | 'full16'
 
-function usbFootprint<const T extends USBType = 'full16', const N extends string = never>(
+/** A USB-C receptacle: "full16" the HRO TYPE-C-31-M-12 (LCSC C165948), "power6" the HRO TYPE-C-31-M-17 (LCSC C283540). */
+export function USBC<const T extends USBType = 'full16', const N extends string = never>(
   type: T = 'full16' as T,
   opts: GeneratorOptions<N> = {},
 ): LibFootprint<PinsOf<USBPins<T>, N>, USBPads<T>> {
   oneOf('USBC', 'the type', type, ['power6', 'full16'] as const)
   optsArg('USBC', opts, [], 'the options')
-  return memoised('USBC', [type, opts.pinNames ?? null, opts.prefix ?? null, opts.value ?? null, opts.silk ?? null], () => {
+  return memoised('USBC', [type, opts.prefix ?? null, opts.value ?? null, opts.silk ?? null], () => {
     const full = type === 'full16'
     const row = full ? USB16 : USB6
     const y = full ? -4.045 : -3.18,
@@ -92,35 +93,13 @@ function usbFootprint<const T extends USBType = 'full16', const N extends string
   }) as any
 }
 
-/** A USB-C receptacle part: "full16" the HRO TYPE-C-31-M-12 (LCSC C165948), "power6" the HRO TYPE-C-31-M-17 (LCSC C283540). */
-export interface USBCGenerator {
-  <const T extends USBType = 'full16', const N extends string = never>(type?: T, opts?: string | number | ConnectorOptions<N>): Part<PinsOf<USBPins<T>, N>, USBPads<T>>
-  <const N extends string = never>(opts: ConnectorOptions<N>): Part<PinsOf<USBPins<'full16'>, N>, USBPads<'full16'>>
-  /** the footprint factory: `USBC.footprint('power6')('TYPE-C-31-M-17')` makes a part, `<J ref="J1" at="…" />` places one */
-  footprint<const T extends USBType = 'full16', const N extends string = never>(type?: T, opts?: GeneratorOptions<N>): LibFootprint<PinsOf<USBPins<T>, N>, USBPads<T>>
-}
-export const USBC: USBCGenerator = Object.assign(
-  function USBC(type?: unknown, opts?: unknown) {
-    if (type !== null && typeof type === 'object') {
-      opts = type
-      type = undefined
-    }
-    if (type !== undefined && type !== 'power6' && type !== 'full16')
-      throw new TypeError(`USBC: the type must be "power6", "full16", got ${show(type)}; the value goes after it, USBC('full16', 'TYPE-C-31-M-12')`)
-    const { gen, part } = connectorCall('USBC', opts, [], 'the second argument')
-    return call(usbFootprint(type as USBType | undefined, gen), part)
-  },
-  { footprint: usbFootprint },
-) as any
-
-const call = (f: unknown, part: unknown) => (part === undefined ? (f as () => unknown)() : (f as (p: unknown) => unknown)(part))
-
 /** Drill and pad options of the JST and header families: `drill` in mm, `pad` a diameter or [w, h] in footprint axes. */
 export type JSTOptions = HoleOptions
 
 type JSTEntry = 'top' | 'side'
 
-function phFootprint<const N extends string = never>(
+/** JST PH, 2.0 mm pitch, through-hole: "top" the vertical B<n>B-PH-K, "side" the right-angle S<n>B-PH-K. */
+export function JST_PH<const N extends string = never>(
   pins: number,
   entry: JSTEntry | (JSTOptions & GeneratorOptions<N>) = 'top',
   opts: JSTOptions & GeneratorOptions<N> = {},
@@ -135,7 +114,7 @@ function phFootprint<const N extends string = never>(
   const { drill, pad, ...gen } = opts
   // JST PH: 0.75 mm holes in 1.2 x 1.75 mm oval pads, the KiCad library's land pattern for JST's 0.7 mm recommended hole
   const hole = padArgs('JST_PH', drill, pad, 0.75, [1.2, 1.75])
-  return memoised('JST_PH', [pins, entry, hole.drill, hole.size, gen.pinNames ?? null, gen.prefix ?? null, gen.value ?? null, gen.silk ?? null], () => {
+  return memoised('JST_PH', [pins, entry, hole.drill, hole.size, gen.prefix ?? null, gen.value ?? null, gen.silk ?? null], () => {
     const pads = padRowDefs(pins, 2.0, { size: hole.size, drill: hole.drill, shape: 'oval', firstShape: 'roundrect' })
     const w = (pins - 1) * 2 + 3.9
     const top = entry === 'top'
@@ -165,32 +144,14 @@ function phFootprint<const N extends string = never>(
   }) as any
 }
 
-/** JST PH, 2.0 mm pitch, through-hole part: "top" the vertical B<n>B-PH-K, "side" the right-angle S<n>B-PH-K. */
-export interface JSTPHGenerator {
-  <const N extends string = never>(pins: number, entry?: JSTEntry, opts?: string | number | ConnectorOptions<N, JSTOptions>): Part<PinsOf<Num, N>>
-  <const N extends string = never>(pins: number, opts: string | number | ConnectorOptions<N, JSTOptions>): Part<PinsOf<Num, N>>
-  footprint<const N extends string = never>(pins: number, entry?: JSTEntry, opts?: JSTOptions & GeneratorOptions<N>): LibFootprint<PinsOf<Num, N>>
-}
-export const JST_PH: JSTPHGenerator = Object.assign(
-  function JST_PH(pins: number, entry?: unknown, opts?: unknown) {
-    // the entry may be left out before the value or options: JST_PH(2, { drill: 0.8 })
-    if (opts === undefined && entry !== null && (typeof entry === 'object' || typeof entry === 'number')) {
-      opts = entry
-      entry = undefined
-    }
-    const { gen, part } = connectorCall('JST_PH', opts, ['drill', 'pad'], 'the options')
-    return call(phFootprint(pins, (entry ?? 'top') as JSTEntry, gen), part)
-  },
-  { footprint: phFootprint },
-) as any
-
-function xhFootprint<const N extends string = never>(pins: number, opts: JSTOptions & GeneratorOptions<N> = {}): LibFootprint<PinsOf<Num, N>> {
+/** JST XH, 2.5 mm pitch, vertical through-hole B<n>B-XH-A. */
+export function JST_XH<const N extends string = never>(pins: number, opts: JSTOptions & GeneratorOptions<N> = {}): LibFootprint<PinsOf<Num, N>> {
   countOf('JST_XH', pins, 2, 16)
   optsArg('JST_XH', opts, ['drill', 'pad'], 'the options')
   const { drill, pad, ...gen } = opts
   // JST XH: 0.95 mm holes in 1.7 x 1.95 mm oval pads, the KiCad library's land pattern for JST's 0.9 mm recommended hole
   const hole = padArgs('JST_XH', drill, pad, 0.95, [1.7, 1.95])
-  return memoised('JST_XH', [pins, hole.drill, hole.size, gen.pinNames ?? null, gen.prefix ?? null, gen.value ?? null, gen.silk ?? null], () => {
+  return memoised('JST_XH', [pins, hole.drill, hole.size, gen.prefix ?? null, gen.value ?? null, gen.silk ?? null], () => {
     const pads = padRowDefs(pins, 2.5, { size: hole.size, drill: hole.drill, shape: 'oval', firstShape: 'roundrect' })
     const w = (pins - 1) * 2.5 + 4.9
     const body = { cx: 0, cy: 0.525, w, h: 5.75 }
@@ -216,31 +177,19 @@ function xhFootprint<const N extends string = never>(pins: number, opts: JSTOpti
   }) as any
 }
 
-/** JST XH, 2.5 mm pitch, vertical through-hole B<n>B-XH-A part. */
-export interface JSTXHGenerator {
-  <const N extends string = never>(pins: number, opts?: string | number | ConnectorOptions<N, JSTOptions>): Part<PinsOf<Num, N>>
-  footprint<const N extends string = never>(pins: number, opts?: JSTOptions & GeneratorOptions<N>): LibFootprint<PinsOf<Num, N>>
-}
-export const JST_XH: JSTXHGenerator = Object.assign(
-  function JST_XH(pins: number, opts?: unknown) {
-    const { gen, part } = connectorCall('JST_XH', opts, ['drill', 'pad'], 'the second argument')
-    return call(xhFootprint(pins, gen), part)
-  },
-  { footprint: xhFootprint },
-) as any
-
 export interface PinSocketOptions extends HoleOptions {
   rows?: 1 | 2
 }
 
-function socketFootprint<const N extends string = never>(pins: number, opts: PinSocketOptions & GeneratorOptions<N> = {}): LibFootprint<PinsOf<Num, N>> {
+/** A female 2.54 mm pin socket; `pins` counts one row, so a 2 x 20 socket is `PinSocket(20, { rows: 2 })`. */
+export function PinSocket<const N extends string = never>(pins: number, opts: PinSocketOptions & GeneratorOptions<N> = {}): LibFootprint<PinsOf<Num, N>> {
   countOf('PinSocket', pins, 1, 40)
   optsArg('PinSocket', opts, ['rows', 'drill', 'pad'], 'the options')
   const { rows = 1, drill, pad, ...gen } = opts
   oneOf('PinSocket', 'rows', rows, [1, 2] as const)
   // 1.7 mm pads on a 1.0 mm drill, as KiCad's Connector_PinSocket_2.54mm
   const hole = padArgs('PinSocket', drill, pad, 1.0, [1.7, 1.7])
-  return memoised('PinSocket', [pins, rows, hole.drill, hole.size, gen.pinNames ?? null, gen.prefix ?? null, gen.value ?? null, gen.silk ?? null], () => {
+  return memoised('PinSocket', [pins, rows, hole.drill, hole.size, gen.prefix ?? null, gen.value ?? null, gen.silk ?? null], () => {
     const pads = padGridDefs(rows, pins, 2.54, {
       size: hole.size,
       drill: hole.drill,
@@ -272,19 +221,6 @@ function socketModel(rows: number, pins: number, box: ReturnType<typeof outline>
   const path = `Connector_PinSocket_2.54mm.3dshapes/PinSocket_${rows}x${String(pins).padStart(2, '0')}_P2.54mm_Vertical.step`
   return rows < 2 ? kicad3d(path, box) : kicad3d(path, box, [0, r4(-(pins - 1) * 2.54), 0], [0, 0, 180])
 }
-
-/** A female 2.54 mm pin socket part; `pins` counts one row, so a 2 x 20 socket is `PinSocket(20, { rows: 2 })`. */
-export interface PinSocketGenerator {
-  <const N extends string = never>(pins: number, opts?: string | number | ConnectorOptions<N, PinSocketOptions>): Part<PinsOf<Num, N>>
-  footprint<const N extends string = never>(pins: number, opts?: PinSocketOptions & GeneratorOptions<N>): LibFootprint<PinsOf<Num, N>>
-}
-export const PinSocket: PinSocketGenerator = Object.assign(
-  function PinSocket(pins: number, opts?: unknown) {
-    const { gen, part } = connectorCall('PinSocket', opts, ['rows', 'drill', 'pad'], 'the second argument')
-    return call(socketFootprint(pins, gen), part)
-  },
-  { footprint: socketFootprint },
-) as any
 
 /** A round SMD test pad of diameter d on F.Cu, pin 1, out of the BOM and the placement file. */
 export function TestPad<const N extends string = never>(d = 1.5, opts: GeneratorOptions<N> = {}): LibFootprint<PinsOf<Num, N>> {
@@ -360,18 +296,37 @@ export function PogoPad<const N extends string = never>(d = 1.5, opts: PogoOptio
   }) as any
 }
 
-/** A mounting hole of drill d, non-plated, or with a plated pin 1 pad of diameter `pad`, `true` for twice the drill. */
-export function MountingHole(d = 3.2, pad?: number | boolean): LibFootprint<Num> {
+/** A mounting hole of drill d, non-plated, or with a copper ring of diameter `pad`, `true` for twice the drill, plated unless `plated: false`; a plated ring is pin 1, on no net until `.connect({ 1: GND })`, an unplated one is no pin. */
+export function MountingHole(d = 3.2, opts: { pad?: number | boolean; plated?: boolean } = {}): LibFootprint<Num> {
   positive('MountingHole', d)
-  if (pad !== undefined && typeof pad !== 'boolean') mmArg('MountingHole', 'pad, the second argument,', pad, 'true for a pad twice the drill, or the pad diameter in mm')
+  if (opts === null || typeof opts !== 'object' || Array.isArray(opts)) throw new TypeError(`MountingHole: the options must be an object such as { pad: true }, got ${show(opts)}`)
+  for (const k of Object.keys(opts)) if (k !== 'pad' && k !== 'plated') throw new TypeError(`MountingHole: unknown option ${JSON.stringify(k)}; it takes pad and plated`)
+  const pad = opts.pad
+  if (pad !== undefined && typeof pad !== 'boolean') mmArg('MountingHole', 'pad', pad, 'true for a pad twice the drill, or the pad diameter in mm')
   const p = pad === true ? r4(2 * d) : typeof pad === 'number' ? pad : 0
   if (p && p < d + 0.4) throw new RangeError(`MountingHole: a ${p} mm pad around a ${d} mm hole leaves less than a 0.2 mm ring`)
-  return memoised('MountingHole', [d, p], () => {
+  if (opts.plated !== undefined && typeof opts.plated !== 'boolean') throw new TypeError(`MountingHole: plated must be true or false, got ${show(opts.plated)}`)
+  if (opts.plated && !p) throw new RangeError('MountingHole: a plated hole needs its copper ring, { pad: true } or a diameter')
+  const plated = opts.plated ?? !!p
+  return memoised('MountingHole', [d, p, plated], () => {
     const screw = d >= 3.0 && d <= 3.4 ? 'M3' : d >= 2.1 && d <= 2.4 ? 'M2' : d >= 2.5 && d <= 2.8 ? 'M2.5' : d >= 4.1 && d <= 4.5 ? 'M4' : ''
+    // an unplated hole with a ring has the ring on both outer layers, as KiCad's _Pad_TopBottom
     const pads: PadDef[] = p
-      ? [{ num: '1', name: '1', x: 0, y: 0, w: p, h: p, shape: 'circle', drill: d }]
+      ? [
+          {
+            num: '1',
+            name: plated ? '1' : '',
+            x: 0,
+            y: 0,
+            w: p,
+            h: p,
+            shape: 'circle',
+            drill: d,
+            ...(plated ? {} : { type: 'npth' as const, layers: ['F.Cu', 'B.Cu', 'F.Mask', 'B.Mask'] }),
+          },
+        ]
       : [{ num: '', name: '', x: 0, y: 0, w: d, h: d, shape: 'circle', drill: d, type: 'npth' }]
-    const label = `MountingHole_${d}mm${screw ? `_${screw}` : ''}${p ? '_Pad' : ''}`
+    const label = `MountingHole_${d}mm${screw ? `_${screw}` : ''}${p ? (plated ? '_Pad' : '_Pad_TopBottom') : ''}`
     return makeFootprint({
       id: `pcbjs:${label}`,
       name: 'MountingHole',

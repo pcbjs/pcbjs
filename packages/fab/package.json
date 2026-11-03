@@ -18,9 +18,57 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "default": "./dist/*.js"
+    "./AdvancedPCB/2-Layer": {
+      "types": "./dist/AdvancedPCB/2-Layer.d.ts",
+      "default": "./dist/AdvancedPCB/2-Layer.js"
+    },
+    "./AdvancedPCB/4-Layer": {
+      "types": "./dist/AdvancedPCB/4-Layer.d.ts",
+      "default": "./dist/AdvancedPCB/4-Layer.js"
+    },
+    "./Eurocircuits/2-Layer": {
+      "types": "./dist/Eurocircuits/2-Layer.d.ts",
+      "default": "./dist/Eurocircuits/2-Layer.js"
+    },
+    "./Eurocircuits/4-Layer": {
+      "types": "./dist/Eurocircuits/4-Layer.d.ts",
+      "default": "./dist/Eurocircuits/4-Layer.js"
+    },
+    "./JLCPCB/2-Layer": {
+      "types": "./dist/JLCPCB/2-Layer.d.ts",
+      "default": "./dist/JLCPCB/2-Layer.js"
+    },
+    "./JLCPCB/4-Layer-3313": {
+      "types": "./dist/JLCPCB/4-Layer-3313.d.ts",
+      "default": "./dist/JLCPCB/4-Layer-3313.js"
+    },
+    "./JLCPCB/4-Layer": {
+      "types": "./dist/JLCPCB/4-Layer.d.ts",
+      "default": "./dist/JLCPCB/4-Layer.js"
+    },
+    "./JLCPCB/6-Layer": {
+      "types": "./dist/JLCPCB/6-Layer.d.ts",
+      "default": "./dist/JLCPCB/6-Layer.js"
+    },
+    "./JLCPCB/8-Layer": {
+      "types": "./dist/JLCPCB/8-Layer.d.ts",
+      "default": "./dist/JLCPCB/8-Layer.js"
+    },
+    "./OSHPark/2-Layer": {
+      "types": "./dist/OSHPark/2-Layer.d.ts",
+      "default": "./dist/OSHPark/2-Layer.js"
+    },
+    "./OSHPark/4-Layer": {
+      "types": "./dist/OSHPark/4-Layer.d.ts",
+      "default": "./dist/OSHPark/4-Layer.js"
+    },
+    "./PCBWay/2-Layer": {
+      "types": "./dist/PCBWay/2-Layer.d.ts",
+      "default": "./dist/PCBWay/2-Layer.js"
+    },
+    "./PCBWay/4-Layer": {
+      "types": "./dist/PCBWay/4-Layer.d.ts",
+      "default": "./dist/PCBWay/4-Layer.js"
     },
     "./package.json": "./package.json"
   },
@@ -31,7 +79,7 @@
   "scripts": {
     "build": "tsc -b",
     "watch": "tsc -b --watch",
-    "test": "node --test \"tests/**/*.test.mjs\"",
+    "test": "node --import ../../scripts/test-watchdog.mjs --test \"tests/**/*.test.mjs\"",
     "prepack": "node ../../scripts/pack-files.mjs pre",
     "postpack": "node ../../scripts/pack-files.mjs post"
   },

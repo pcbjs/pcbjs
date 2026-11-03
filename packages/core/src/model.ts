@@ -1,7 +1,8 @@
 // The compiled board: every item in absolute board coordinates (mm, y down).
-import type { IslandMode, ResolvedRules, Rules, Src, PadShape, PadType, ThermalConnection, AutoRouteParams, Pos, ModelSpec, Stackup, ResolvedPos } from './types.js'
+import type { IslandMode, ResolvedRules, Rules, Src, PadShape, PadType, ThermalConnection, AutoRouteParams, RouteEnd, ModelSpec, Stackup, ResolvedPos } from './types.js'
 import { BASE } from './rules.js'
 import type { ResolvedNetClass } from './netclass.js'
+import type { Quantity, RuleProvenance, TemplateArgs, Witness } from './finding.js'
 
 export type { ResolvedNetClass }
 
@@ -30,7 +31,10 @@ export interface LayerDef {
 
 /** `src` made the item; `chain` lists the enclosing call sites, components, groups and footprint, outermost first. */
 interface ItemBase {
+  /** the item's index within one compile, for the algorithms and the rows of one facet; only its uid crosses between facets */
   id: number
+  /** `item:<12 hex>`, from its kind, the call or route or part that made it and its ordinal there, `~2` on for twins; a move keeps it; set when the stage that adds it ends */
+  uid?: string
   layer: string
   net?: string
   ref?: string
@@ -133,6 +137,8 @@ export interface Graphic extends ItemBase {
 }
 /** Laid out text in board mm: stroke font polylines `thickness` wide, or an outline font's `polys` with `thickness` 0; `at` is the block's vertical centre. */
 export interface Text extends ItemBase {
+  /** The compiler-generated reference label of a footprint. */
+  generated?: 'reference'
   kind: 'text'
   at: Pt
   rot: number
@@ -151,6 +157,8 @@ export interface Text extends ItemBase {
 export type Item = Track | Via | Pad | Zone | Graphic | Text
 
 export interface Footprint {
+  /** library-preview reference label; ref remains the stable source/selection identity */
+  displayRef?: string
   ref: string
   value: string
   id: string
@@ -181,26 +189,49 @@ export interface Net {
   name: string
 }
 
-/** One command of a route path, coordinates in the frame of the enclosing group, layers resolved. */
+/** One command of a route chain, coordinates in the frame of the enclosing group, layers resolved, lengths in mm. */
 export type RouteStep = (
   | { op: 'L' | 'X'; x: number; y: number; rel: boolean }
   | { op: 'H'; x: number; rel: boolean }
   | { op: 'V'; y: number; rel: boolean }
-  /** a via, and with `cross` a crossover of a pair, where P and N swap sides as they change layer */
-  | { op: 'U'; layer: string; cross?: boolean }
+  /** an arc to x, y turning through `angle` degrees, counter-clockwise on screen when positive */
+  | { op: 'A'; x: number; y: number; angle: number; rel: boolean }
+  /** a via, and with `cross` a crossover of a pair, where P and N swap sides as they change layer; `drill` and `size` in mm over the route's via */
+  | { op: 'U'; layer: string; cross?: boolean; drill?: number; size?: number }
+  /** the track width from here on */
+  | { op: 'W'; width: number }
+  /** the fork of branch `id`, a job of its own that starts here */
+  | { op: 'B'; id: number }
   | { op: 'Z' | 'XZ' }
 ) & {
-  /** the command's characters in the route path string, start inclusive, end exclusive */
-  at?: [number, number]
-  /** the command's source range when the path literal's position is known */
+  /** the command's source range when known */
   src?: Src
 }
 /** A soft keepout of a job, in board mm: a closed ring, or a position still to resolve; on one layer or on all. */
-export type JobAvoid = { ring: Pt[]; layer?: string } | { pos: Pos }
+export type JobAvoid = { ring: Pt[]; layer?: string } | { pos: RouteEnd }
 /** Per-route autoroute parameters with layer names resolved and lengths in mm; merged over the board's when the job runs. */
 export type JobParams = Omit<Partial<AutoRouteParams>, 'via' | 'avoid'> & { via?: { drill?: number; size?: number }; avoid?: JobAvoid[] }
 
 /** A hard keepout in board mm: counter-clockwise rings on the listed copper layers. */
+/** A named point of a board, the frame another board's reference mates with: `<mate name at side />`, or a placement's `name` at the part's origin. */
+export interface MatePoint {
+  name: string
+  at: Pt
+  rot: number
+  side: 'F' | 'B'
+  /** the part a placement's name sits on */
+  ref?: string
+  src?: Src
+}
+
+/** A part with an auto slot as this compile placed it: `at` in the frame its `at` is written in, what `pcbjs place --write` writes. */
+export interface AutoPlaced {
+  ref: string
+  at: string
+  by: 'placer' | 'solver' | 'follow'
+  src?: Src
+}
+
 export interface Keepout {
   layers: string[]
   outline: Ring[]
@@ -218,16 +249,29 @@ export interface Keepout {
 export interface AutoRouteJob {
   /** the net given, or inferred from the pads when `infer` */
   net?: string
+  /** `.net(null)`: copper on no net, which takes no automatic leg */
+  netless?: boolean
   /** the starting layer given, else the first pad's, else F.Cu */
   layer?: string
-  /** the width given, else the rules' minTrackWidth */
+  /** the width given, else the class width, else the rules' minTrackWidth */
   width?: number
-  /** the two ends, coordinates already in board mm; absent for a whole-net job */
-  from?: Pos
-  to?: Pos
-  /** the route path; absent means XZ */
+  /** the two ends, coordinates already in board mm; `to` absent for drawn copper or a trunk that ends in branches */
+  from?: RouteEnd
+  to?: RouteEnd
+  /** `route(a, NET)`: the end is the copper of this net nearest the last point */
+  toNet?: string
+  /** `route(NET)`: every pad of the net joins a tree from `root`, else from its first pad */
+  whole?: boolean
+  root?: RouteEnd
+  /** a branch: it starts where the step `{ op: 'B', id }` of its trunk is */
+  fork?: number
+  /** a branch or an extra end of a route, whose first job carries its record */
+  sub?: boolean
+  /** the whole route as written, ends, chains and branches, for the leg keys of a route that has more than two ends or a chain */
+  tree?: string
+  /** the chain; absent means XZ */
   steps?: RouteStep[]
-  /** the frame of the route path: the transform of the enclosing groups */
+  /** the frame of the chain: the transform of the enclosing groups */
   m?: Mat
   /** route(a, b): the net comes from the pads */
   infer?: boolean
@@ -236,18 +280,20 @@ export interface AutoRouteJob {
   ref?: string
   src?: Src
   chain?: Src[]
-  /** route(a, b).lock(): the automatic legs are pinned to their stored result */
-  lock?: boolean
+  /** a hold patch: the copper of each automatic leg of the route, in place of routing it, null for a leg it does not hold */
+  hold?: (import('./patch.js').Hold | null)[]
+  /** a reroute patch: the 1-based legs of the route routed again, never taken from the route memo */
+  reroute?: number[]
   /** route(a, b).direct(): the leg reaches its end pads and never joins other copper of its net */
   direct?: boolean
   /** route(a, b).loop(): a loop in the net is intended, no `net-loop` finding */
   loop?: boolean
-  /** the route path as written, part of the lock key */
+  /** the chain as text, part of the hash a hold or reroute patch names */
   path?: string
   /** route(a, b).impedance(ohms): flatten turns it into the width, and for a pair the gap */
   impedance?: number
   /** a pair: the N end and net, `from`, `to` and `net` being P's; the job's width is each track's, the path the centre line */
-  pair?: { fromN: Pos; toN: Pos; net?: string; gap?: number; skew?: number; uncoupled?: number }
+  pair?: { fromN: RouteEnd; toN: RouteEnd; net?: string; gap?: number; skew?: number; uncoupled?: number }
   /** `route:<n>`, counting the route calls of the board from 1 in document order */
   route?: string
   /** route(a, b).length() in mm; the tolerance comes from the class when absent */
@@ -257,7 +303,11 @@ export interface AutoRouteJob {
   /** route(a, b).neck() over the class neck, mm: the narrow width at the pads and the longest neck */
   neck?: { width?: number; length?: number }
   /** route(a, b).corner() over the class corner: the radius in mm on the centre line of the manual corners, or 'none' */
-  corner?: { radius?: number | 'none' }
+  corner?: number | 'none'
+  /** route(a, b).current() in amps on this job's route or branch, checked against the width by DRC `current-width` */
+  current?: number
+  /** route(a, b).solver(fn): asked for each automatic leg before the router, which takes the leg when it returns null */
+  solver?: import('./types.js').RouteSolver
 }
 
 /** One route call of a board, `route:<n>`, as the router and the tuning pass left it. Lengths in mm. */
@@ -280,6 +330,12 @@ export interface RouteRecord {
   skewNote?: string
   /** how far this route's maximum lies below the group's longest: it caps the group */
   caps?: number
+  /** `pt:0` the start, `pt:k` where the k-th chain call ends, board mm */
+  pts?: Pt[]
+  /** the automatic legs in chain order, `leg:1` first, board mm; `copper` is the leg as the router placed it, before tuning, which a hold keeps */
+  legs?: { from: Pt; to: Pt; copper?: import('./patch.js').Hold }[]
+  /** 12 hex of the route request, ends, net, width and layers: what a hold or reroute patch of it names */
+  hash?: string
   src?: Src
   chain?: Src[]
 }
@@ -324,12 +380,14 @@ export interface RouteFailure {
 
 /** What the autorouter did for a board. */
 export interface RoutingReport {
-  /** automatic legs attempted, routed, failed, cached and locked; a leg rerouted after a rip counts once */
+  /** automatic legs attempted, routed, failed, cached and held by a patch; a leg rerouted after a rip counts once */
   legs: number
   routed: number
   failed: number
   cached: number
-  locked: number
+  held: number
+  /** legs a route's `.solver()` laid out; absent when none did */
+  solved?: number
   /** legs taken off the board by negotiation to route again; each time counts */
   ripped: number
   /** the rounds of negotiation, absent when every leg routed in order */
@@ -349,15 +407,22 @@ export interface DrcMarker {
   message: string
   at: Pt
   layer?: string
+  /** the items it concerns by this compile's ids; a route-failed's are the blockers */
   items?: number[]
   /** the source range the finding points at, such as the route call of a `route-failed` */
   src?: Src
-  /** the one net the finding concerns, when it concerns one */
-  net?: string
-  /** the id of the one route the finding concerns, `route:<n>`, when it concerns one */
-  routeId?: string
-  /** route-failed: the leg, its ends and the layers tried; `items` are the blockers */
-  route?: { net?: string; leg: number; legs: number; from: ResolvedPos; to: ResolvedPos; layers: string[] }
+  /** set when the checks end: the exact id, `drc:<rule>:<12 hex>`, and the fingerprint, see docs/findings.md */
+  id?: string
+  fingerprint?: string
+  /** what the finding concerns in the reference grammar: `R201/2`, `net:VCC`, `route:vccTrunk`, `route:3/leg:2`, `pair:1`; its net and its route are here */
+  refs?: string[]
+  measured?: Quantity
+  required?: Quantity
+  witness?: Witness
+  /** the levels that set the required value, the winner first */
+  provenance?: RuleProvenance[]
+  /** the rule's message template reads these beside refs, measured, required and provenance */
+  args?: TemplateArgs
 }
 
 export interface BoardSchematicPin {
@@ -365,9 +430,10 @@ export interface BoardSchematicPin {
   net: string | null
   nc: boolean
 }
-/** One part of the netlist; `src` is where it was declared, or for a plain footprint placed. */
+/** One part of the netlist; `src` is where it was declared. */
 export interface BoardSchematicPart {
   ref: string
+  displayRef?: string
   value: string
   footprint: string
   prefix: string
@@ -389,6 +455,7 @@ export interface SchematicExport {
 /** One net with its placed pins as "REF.PIN"; `path` is the instance owning a private net. */
 export interface BoardSchematicNet {
   name: string
+  displayName?: string
   class?: string
   local: boolean
   pins: string[]
@@ -399,9 +466,17 @@ export interface BoardSchematicNet {
 export interface BoardSchematicCircuit {
   path: string[]
   name: string
-  circuit: string
-  /** the layout that placed it */
+  /** the binding that holds the instance, the handle code writes, `ch2` of `ch2.R01` */
+  binding?: string
+  kind: 'circuit' | 'group'
+  /** its definition: a circuit's `${file}#${circuit}`, a group's `<g>` as `${file}#${line}:${col}` */
+  def: string
+  /** a circuit's name */
+  circuit?: string
+  /** the layout that placed it, `${file}#${name}`; isolation enters it when present, else `def` */
   layout?: string
+  /** the path of the enclosing instance or group, `P1` of `P1/A1` */
+  parent?: string
   /** refs of its own parts, in key order */
   parts: string[]
   /** names of its child instances, in key order */
@@ -426,7 +501,7 @@ export interface Ratsnest {
 export interface Board {
   name: string
   title: string
-  revision: string
+  rev: string
   /** copper layer count, 2 to 8 */
   copper: number
   /** board thickness (mm): the stackup's nominal thickness, or the sum of its layers */
@@ -473,9 +548,76 @@ export interface Board {
   loopNets?: string[]
   /** other entries' boards placed as mechanical references, see references.md; absent when there are none */
   references?: import('./reference.js').BoardReference[]
+  /** the named points another board's reference mates with, from `<mate>` and `name` on a placement; absent when there are none */
+  mates?: MatePoint[]
+  /** where the placer, a solver or the follower pass put each part with an auto slot, see placement.md; absent when there are none */
+  placed?: AutoPlaced[]
   /** compile phase wall times in ms; not enumerable, so it stays out of JSON and deep comparisons */
   timings?: { route: number; zones: number; connectivity: number; drc: number; erc: number }
+  /** the board's grids, attached and listed, see grids.md; absent when there are none */
+  grids?: GridRecord[]
+  /** what each placed part, group and route lets the viewer's tools change, see editing.md; absent when there is nothing */
+  edit?: EditNode[]
+  /** the placement dependency graph; not enumerable, as timings */
+  deps?: import('./plugin.js').DepGraph
+  /** the data plugin stages and hooks returned, by plugin name; absent without plugins */
+  plugins?: Record<string, Record<string, import('./plugin.js').Json>>
 }
 
 /** The rules a board gets when it sets none: the cross-fab `BASE` set from `@pcbjs/lib/rules`. */
 export const DEFAULT_RULES: Readonly<Rules> = BASE
+
+/** A grid as compiled: a point `(x, y)` in its units is at `origin + R(angle) · M(mirror) · (x, y) · pitch` on the board, mm and degrees counter-clockwise on screen. */
+export interface GridRecord {
+  maxLevel?: number
+  name: string
+  pitch: number
+  /** the subdivision factors, outermost first */
+  minor: number[]
+  origin: Pt
+  angle: number
+  /** the frame is on side B, so x runs mirrored */
+  mirror: boolean
+  /** the part whose frame it adopts */
+  frame: string | null
+  /** the defineGrid call */
+  src?: Src
+  /** the element that attaches it, absent for one only listed in `<PCB grids>` */
+  attach?: Src
+  /** the parts and groups placed under it, innermost */
+  used: string[]
+}
+
+/** What the viewer's tools may change on an entity; see editing.md. */
+export type Capability = 'placed' | 'layered' | 'chain' | 'viaEnd'
+/** One editable entity: a part, group or instance with its placement, a text with its element, or a route with its chain. */
+export interface EditNode {
+  ref: string
+  caps: Capability[]
+  /** the element or call that writes each capability's literal */
+  src: { at?: Src; chain?: Src }
+  /** the frame its `at` is written in: board = m · (x, y) with x and y in mm, pitches already applied */
+  m: [number, number, number, number, number, number]
+  /** the grid its `at` is in, innermost */
+  grid: string | null
+  /** persisted placement snapping pitch in mm, independent of coordinate units */
+  snap?: { pitch: number; maxLevel?: number }
+  /** the slots of `at` that are automatic */
+  auto?: ('x' | 'y' | 'rot')[]
+  at?: [number, number, number]
+  /** the origin of a group’s own grid in board mm, used as its rotation centre */
+  pivot?: Pt
+  side?: 'F' | 'B'
+  /** a route: each chain call's op and source in chain order, aligned with its `pts` after `pt:0` */
+  steps?: { op: string; layer?: string; angle?: number; src?: Src }[]
+  /** a part a layout element places: that element and the member path under the innermost frame's instance, `R`, for an own placement among its children */
+  layout?: { src: Src; member: string }
+  /** the definition whose source writes its literal, a circuit record's `def` or `layout`; absent at the board level */
+  def?: string
+  /** the frames of the instances around it, outermost first, each in the one before, so board = frames composed · local; an instance's own frame is its last */
+  frames?: { inst: string; m: [number, number, number, number, number, number] }[]
+  /** an instance whose layout element has no `at`, or one its render does not place with: the code computes where it goes, so it takes no tools */
+  computed?: true
+  /** a part with an own placement among the children of the layout element of this instance, `CH1`: a write to the definition leaves it */
+  owned?: string
+}

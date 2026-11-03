@@ -29,7 +29,7 @@ export function WS2812B<const N extends string = never>(size: '2020' | '5050' = 
         pins: ['DIN', 'DOUT', 'VDD', 'GND'],
         body: { cx: 0, cy: 0, w: b, h: b },
         height,
-        model: { kind: 'led', size },
+        model: { kind: 'led', window: small ? 1.5 : 4.2, lead: small ? [0.35, 0.55] : [0.6, 1.0] },
       },
       opts as GeneratorOptions,
     )

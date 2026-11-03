@@ -2,11 +2,12 @@
 // boxes written by hand in tests/fixtures, and the dispatch of modelToMesh.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 import { modelFormat, formatOfName, formatOfContent, modelToMesh, gltfToMesh, wrlToMesh, bounds, meshToBinary, meshFromBinary } from '../dist/index.js'
 
-const fx = name => new URL(`./fixtures/${name}`, import.meta.url).pathname
+const fx = name => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url))
 const bytes = name => new Uint8Array(readFileSync(fx(name)))
 const near = (a, b, tol, msg) => a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < tol, `${msg ?? ''} got ${a}, want ${b}`))
 

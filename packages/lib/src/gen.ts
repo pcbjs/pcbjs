@@ -1,6 +1,4 @@
 // Generators are memoised so `source(SOT23(5), …)` finds the parts that `SOT23(5)` made elsewhere.
-import type { PartOptions } from '@pcbjs/core/types'
-import type { PinNames } from './footprint.js'
 
 const memo = new Map<string, unknown>()
 
@@ -35,8 +33,9 @@ export function intArg(gen: string, what: string, v: unknown, min: number, max =
 
 export function optsArg(gen: string, v: unknown, known: readonly string[], position = 'the options'): void {
   if (v === undefined) return
-  if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new TypeError(`${gen}: ${position} must be an object such as { pinNames: [...] }, got ${show(v)}`)
-  const all = [...known, 'pinNames', 'prefix', 'value', 'silk']
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new TypeError(`${gen}: ${position} must be an object such as { prefix: 'J' }, got ${show(v)}`)
+  if ('pinNames' in v) throw new TypeError(`${gen}: rename pins with withPins(footprint, names), not a pinNames option`)
+  const all = [...known, 'prefix', 'value', 'silk']
   for (const k of Object.keys(v)) if (!all.includes(k)) throw new TypeError(`${gen}: unknown option ${JSON.stringify(k)}; it takes ${all.join(', ')}`)
 }
 
@@ -48,39 +47,6 @@ export function show(v: unknown): string {
   } catch {
     return String(v)
   }
-}
-
-/** The options a connector call takes besides its value: the family's own, the generator's and the part's. */
-export type ConnectorOptions<N extends string = string, G = {}> = G &
-  PartOptions & {
-    /** pin names, as the generators' `pinNames`: a list in pin order or a record keyed by pad number or pin */
-    pinNames?: PinNames<N>
-    /** the ref prefix, default the family's */
-    prefix?: string
-    /** the silk: 'full', 'open' without the mating side, or 'none'; see GeneratorOptions */
-    silk?: 'full' | 'open' | 'none'
-  }
-
-const PART_OPTION_KEYS = ['value', 'fields', 'source', 'bom', 'pos', 'description', 'height', 'model']
-
-export function connectorCall(
-  gen: string,
-  arg: unknown,
-  known: readonly string[],
-  position: string,
-): { gen: Record<string, any>; part: string | number | Record<string, unknown> | undefined } {
-  if (arg === undefined || arg === null) return { gen: {}, part: undefined }
-  if (typeof arg === 'string' || typeof arg === 'number') return { gen: {}, part: arg }
-  if (typeof arg !== 'object' || Array.isArray(arg)) throw new TypeError(`${gen}: ${position} must be the value, such as 'B4B-XH-A', or an options object, got ${show(arg)}`)
-  const g: Record<string, unknown> = {},
-    p: Record<string, unknown> = {}
-  const genKeys = [...known, 'pinNames', 'prefix', 'silk']
-  for (const [k, v] of Object.entries(arg)) {
-    if (genKeys.includes(k)) g[k] = v
-    else if (PART_OPTION_KEYS.includes(k)) p[k] = v
-    else throw new TypeError(`${gen}: unknown option ${JSON.stringify(k)}; it takes ${[...genKeys, ...PART_OPTION_KEYS].join(', ')}`)
-  }
-  return { gen: g, part: Object.keys(p).length ? p : undefined }
 }
 
 export interface HoleOptions {

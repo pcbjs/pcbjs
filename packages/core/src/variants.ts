@@ -4,10 +4,10 @@ import { cloneData, deepFreeze } from './rules.js'
 import { isBoundPCB, paletteName, type BoundPCB, type PresetBoardProps } from './preset.js'
 import type { BoardProps, Finish, PcbNode, Rules, Stackup } from './types.js'
 
-/** A target as a plain object; `board` is a partial board spec, such as `{ thickness: 1.2 }`. */
+/** A target as a plain object; `board` is the rest of a board spec, such as `{ stackup: twoLayer({ thickness: 1.2 }) }`. */
 export interface VariantObject {
   name?: string
-  board?: Partial<Omit<BoardProps, 'name' | 'children'>>
+  board?: Partial<Omit<BoardProps, 'name' | 'children' | 'rules' | 'fabNotes' | 'fonts'>>
   rules?: Partial<Rules>
   /** mask colour of this target, overridden by the element's `color` */
   color?: string
@@ -87,12 +87,13 @@ function resolveTarget(t: VariantTarget, i: number): Target {
   const spec: VariantSpec = { name: t.name ?? `Target ${i + 1}` }
   if (t.fab !== undefined) spec.fab = t.fab
   if (t.board) {
-    const { stackup, rules, ...board } = t.board as any
+    for (const k of ['rules', 'fabNotes', 'fonts'])
+      if (k in t.board) throw new TypeError(`variants: target ${i + 1} has board.${k}; ${k === 'fonts' ? 'fonts are declared on <PCB fonts>' : `give ${k} on the target itself`}`)
+    const { stackup, ...board } = t.board as any
     if (stackup) spec.stackup = structuredClone(stackup)
-    if (rules) spec.rules = { ...rules }
     if (Object.keys(board).length) spec.board = cloneData(board)
   }
-  if (t.rules) spec.rules = { ...(spec.rules ?? {}), ...t.rules }
+  if (t.rules) spec.rules = { ...t.rules }
   if (t.color !== undefined) spec.color = t.color
   if (t.silk !== undefined) spec.silk = t.silk
   if (t.finish !== undefined) spec.finish = t.finish
@@ -155,14 +156,7 @@ export function variantSlug(name: string): string {
 /** The stackup with its mask and legend colours and finish replaced. */
 export function recolor(s: Stackup, mask?: string, silk?: string, finish?: Finish): Stackup {
   if (mask === undefined && silk === undefined && finish === undefined) return s
-  const out: Stackup = {
-    ...s,
-    layers: s.layers.map(l => {
-      if (mask !== undefined && l.type === 'mask') return { ...l, color: mask }
-      if (silk !== undefined && l.type === 'silk') return { ...l, color: silk }
-      return l
-    }),
-  }
+  const out: Stackup = { ...s }
   if (mask !== undefined) out.maskColor = mask
   if (silk !== undefined) out.silkColor = silk
   if (finish !== undefined) out.finish = finish

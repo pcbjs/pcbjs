@@ -1,5 +1,5 @@
 // Land patterns follow the KiCad 9 library, Crystal.
-import type { StepModelSpec } from '@pcbjs/core/types'
+import type { StepModelSpec } from '@pcbjs/core/internal/types'
 import { makeFootprint, type FootprintDef, type PadDef } from './footprint.js'
 import { fetched, kicad3d, outline } from './models.js'
 

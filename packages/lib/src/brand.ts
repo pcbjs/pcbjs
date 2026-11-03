@@ -1,7 +1,8 @@
 import { h } from '@pcbjs/core/jsx-runtime'
-import type { At, Length, PcbNode, Rotation } from '@pcbjs/core/types'
-import { boardRules, SchematicError } from '@pcbjs/core/schematic'
-import { at as parseAt, deg, mm } from '@pcbjs/core/units'
+import type { At, Length, PcbNode, Rotation } from '@pcbjs/core/internal/types'
+import { boardRules } from '@pcbjs/core/internal/realm'
+import { SchematicError } from '@pcbjs/core/internal/nets'
+import { at as parseAt, deg, mm } from '@pcbjs/core/internal/units'
 import { JS, JS_WIDTH, MARK, MARK_BOX, MARK_THIN, PCB, WORD_BOX } from './brand-data.js'
 
 export interface BrandProps {
@@ -16,7 +17,7 @@ export interface BrandProps {
   only?: 'mark' | 'wordmark'
 }
 
-// BASE_RULES.silkMinWidth, for a Brand rendered outside a compile
+// BASE.silkMinWidth, for a Brand rendered outside a compile
 const SILK_MIN = 0.15
 
 type Box = readonly number[]
@@ -68,7 +69,7 @@ export function Brand(props: BrandProps): PcbNode {
   const fill = [...(only === 'wordmark' ? [] : MARK), ...(only === 'mark' ? [] : PCB)]
   return h(
     'g',
-    { at: [x, y, r + deg(props.rot)], ...(back ? { side: 'B' } : {}) },
+    { at: `${x} ${y} ${r + deg(props.rot)}`, ...(back ? { side: 'B' } : {}) },
     h('path', { layer: l, fill: true, d: path(fill, k, box) }),
     only === 'mark' ? null : h('path', { layer: l, width: JS_WIDTH * k, d: path(JS, k, box) }),
   )

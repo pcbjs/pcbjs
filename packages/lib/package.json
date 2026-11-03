@@ -18,20 +18,41 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "default": "./dist/*.js"
+    "./rules": {
+      "types": "./dist/rules.d.ts",
+      "default": "./dist/rules.js"
+    },
+    "./stackups": {
+      "types": "./dist/stackups.d.ts",
+      "default": "./dist/stackups.js"
+    },
+    "./impedance": {
+      "types": "./dist/impedance.d.ts",
+      "default": "./dist/impedance.js"
+    },
+    "./internal/headers": {
+      "types": "./dist/headers.d.ts",
+      "default": "./dist/headers.js"
+    },
+    "./internal/passives": {
+      "types": "./dist/passives.d.ts",
+      "default": "./dist/passives.js"
+    },
+    "./internal/values": {
+      "types": "./dist/values.d.ts",
+      "default": "./dist/values.js"
     },
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "!dist/*.tsbuildinfo"
+    "!dist/*.tsbuildinfo",
+    "LICENSES.md"
   ],
   "scripts": {
     "build": "tsc -b",
     "watch": "tsc -b --watch",
-    "test": "node --test \"tests/**/*.test.mjs\"",
+    "test": "node --import ../../scripts/test-env.mjs --import ../../scripts/test-watchdog.mjs --test \"tests/**/*.test.mjs\"",
     "prepack": "node ../../scripts/pack-files.mjs pre",
     "postpack": "node ../../scripts/pack-files.mjs post"
   },

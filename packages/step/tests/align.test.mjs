@@ -2,6 +2,7 @@
 // upside down, the unit guess and the courtyard check, each against an answer known by construction.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
 import { existsSync } from 'node:fs'
 import { alignModel, guessUnit, placementIssue, footprintRect } from '../dist/index.js'
 import { apply, modelMatrix } from '../dist/place.js'
@@ -143,7 +144,7 @@ test("KiCad's own JK0654219NL model fits KiCad's own land pattern with no transf
   ]
   const pads = P.map(([x, y, drill, w]) => ({ x, y, w, h: w, drill }))
   const { modelToMesh } = await import('../dist/index.js')
-  const file = new URL('../../../examples/eth-phy/models/RJ45_Pulse_JK0654219NL_Horizontal.step', import.meta.url).pathname
+  const file = fileURLToPath(new URL('../../../examples/eth-phy/models/RJ45_Pulse_JK0654219NL_Horizontal.step', import.meta.url))
   const r = alignModel(await modelToMesh(file), { pads })
   assert.deepEqual(r.transform.rotate, [0, 0, 0])
   assert.ok(Math.hypot(r.transform.offset[0], r.transform.offset[1], r.transform.offset[2]) < 0.05, `offset ${r.transform.offset}`)
@@ -152,7 +153,7 @@ test("KiCad's own JK0654219NL model fits KiCad's own land pattern with no transf
 })
 
 // The review reproductions, on the files the example boards carry: each fit against what KiCad or the maker meant.
-const EX = new URL('../../../examples/', import.meta.url).pathname
+const EX = fileURLToPath(new URL('../../../examples/', import.meta.url))
 const pads = list => list.map(([x, y, w, h, drill]) => ({ x, y, w, h, ...(drill ? { drill } : {}) }))
 const moved = (m, [dx, dy, dz]) => ({
   meshes: m.meshes.map(me => {

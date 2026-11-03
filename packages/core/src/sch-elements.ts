@@ -1,14 +1,14 @@
 // The schematic picture as JSX: <Schematic> and its children are plain nodes, compiled with the board they are passed to.
 import { isNode, jsx } from './jsx-runtime.js'
-import { callerSite } from './schematic.js'
-import type { Child, Net, PcbNode, PinRef, Src, SymPlaceProps } from './types.js'
+import { callerSite } from './provenance.js'
+import type { Child, Net, PcbNode, PinRef, Src } from './types.js'
 
-/** A position in grid units, `"x y"` or `[x, y]`; a string token with a unit, `"5.08mm"`, is converted to grid units. */
-export type SchAt = string | readonly [number | string, number | string]
+/** A position in grid units, `"x y"`. */
+export type SchAt = string
 
 export interface SchematicProps {
-  /** grid pitch in mm, default 2.54 */
-  grid?: number | string
+  /** the grid, a pitch in mm or a `defineGrid` grid; default 100 mil */
+  grid?: number | import('./grid.js').Grid
   /** a fixed paper with a frame and title block: 'A4' to 'A0', landscape, the next size up when it does not fit, or `{ w, h }` in mm; default none, the page fits the drawing */
   sheet?: 'A4' | 'A3' | 'A2' | 'A1' | 'A0' | { w: number | string; h: number | string }
   /** a net with more pins than this gets labels instead of wires, default 6 */
@@ -19,10 +19,6 @@ export interface SchematicProps {
   route?: boolean
   title?: string
   children?: Child
-}
-/** The long form of a part element inside `<Schematic>`: `<Sym part={R1} at="4 6" />` is `<R1 at="4 6" />`. */
-export interface SymProps extends SymPlaceProps {
-  part: unknown
 }
 export interface LabelProps {
   net: Net
@@ -38,6 +34,8 @@ export interface SheetProps {
   name?: string
   group: unknown
   at?: SchAt
+  /** positions inside are in this grid's units, its pitch a whole multiple of the schematic's */
+  grid?: import('./grid.js').Grid
   children?: Child
 }
 export interface TextProps {
@@ -51,13 +49,9 @@ const node = (type: string, props: Record<string, any>): PcbNode => {
   return jsx(type, { ...rest, ...(children !== undefined ? { children } : {}) })
 }
 
-/** The root of a schematic: `const sch = <Schematic>…</Schematic>`, then `<PCB schematic={sch}>`. */
+/** The root of a schematic drawing, the `drawing` export of a schematic module: `export const drawing = <Schematic>…</Schematic>`. */
 export function Schematic(props: SchematicProps): PcbNode {
   return node('sch', props)
-}
-/** Places a part's symbol, as the part element `<R1 at="4 6" />` does inside `<Schematic>`. */
-export function Sym(props: SymProps): PcbNode {
-  return node('sch-sym', props)
 }
 /** A net label: pins and wire ends at its point join the net by name. */
 export function Label(props: LabelProps): PcbNode {
@@ -67,7 +61,7 @@ export function Label(props: LabelProps): PcbNode {
 export function Power(props: PowerProps): PcbNode {
   return node('sch-power', props)
 }
-/** Boxes the symbols of a group() or circuit() instance; children are placed relative to `at`. */
+/** Boxes the symbols of a circuit instance; children are placed relative to `at`. */
 export function Sheet(props: SheetProps): PcbNode {
   return node('sch-sheet', props)
 }
@@ -76,25 +70,18 @@ export function Text(props: TextProps): PcbNode {
   return node('sch-text', props)
 }
 
-/** The object form of `<Schematic>`. */
-export function schematic(props: SchematicProps = {}): PcbNode {
-  return Schematic(props)
-}
-
 /** A schematic module as a namespace, `import * as sch from './board.sch'`: its parts, nets and maybe its drawing. */
 export type SchematicModule = Readonly<Record<string, unknown>>
 
-/** A `<Schematic>` element or `schematic({ … })`, as opposed to a schematic module. */
+/** A `<Schematic>` element. */
 export function isSchematicDrawing(v: unknown): v is PcbNode {
   return isNode(v) && (v.type === 'sch' || v.type === Schematic)
 }
 
-/** The drawing a `<PCB schematic>` value names: itself, else its `drawing` or `default` export, else any export that is one. */
-export function schematicDrawing(v: PcbNode | SchematicModule | null | undefined): PcbNode | undefined {
-  if (v === null || v === undefined) return undefined
-  if (isNode(v)) return v
-  for (const k of ['drawing', 'default']) if (isNode(v[k])) return v[k] as PcbNode
-  return Object.values(v).find(isSchematicDrawing)
+/** The drawing of a schematic module: its `drawing` export. */
+export function schematicDrawing(v: SchematicModule | null | undefined): PcbNode | undefined {
+  const d = v?.drawing
+  return isNode(d) ? d : undefined
 }
 
 /** One step of a hand wire, grid units. */

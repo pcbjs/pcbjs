@@ -19,13 +19,12 @@ const FACTORIES = {
   LED0603: [lib.LED0603],
   LED0805: [lib.LED0805],
   LED1206: [lib.LED1206],
-  LED: [lib.LED('0402', 'red')],
-  PinHeader: [lib.PinHeader.footprint ? lib.PinHeader.footprint(4) : lib.PinHeader],
+  PinHeader: [lib.PinHeader(4)],
   SOT23: [lib.SOT23(3), lib.SOT23(5), lib.SOT23(6)],
   SOT223: [lib.SOT223],
   SOIC: [lib.SOIC(8), lib.SOIC(16, 'W')],
   TSSOP: [lib.TSSOP(20)],
-  QFN: [lib.QFN(32, 5, 0.5, 3.1)],
+  QFN: [lib.QFN(32, 5, 0.5, { ep: 3.1 })],
   LQFP: [lib.LQFP(48, 7, 0.5)],
   WS2812B: [lib.WS2812B('2020'), lib.WS2812B('5050')],
   CR2032Holder: [lib.CR2032Holder],
@@ -39,13 +38,13 @@ const FACTORIES = {
   Crystal49S: [lib.Crystal49S],
   ESP32C3Mini1: [lib.ESP32C3Mini1],
   ESP32C3Mini1Footprint: [lib.ESP32C3Mini1Footprint({ antennaKeepout: false })],
-  USBC: [lib.USBC.footprint('full16'), lib.USBC.footprint('power6')],
-  JST_PH: [lib.JST_PH.footprint(2), lib.JST_PH.footprint(16), lib.JST_PH.footprint(4, 'side')],
-  JST_XH: [lib.JST_XH.footprint(2), lib.JST_XH.footprint(16)],
-  PinSocket: [lib.PinSocket.footprint(1), lib.PinSocket.footprint(40), lib.PinSocket.footprint(3, { rows: 2 })],
+  USBC: [lib.USBC('full16'), lib.USBC('power6')],
+  JST_PH: [lib.JST_PH(2), lib.JST_PH(16), lib.JST_PH(4, 'side')],
+  JST_XH: [lib.JST_XH(2), lib.JST_XH(16)],
+  PinSocket: [lib.PinSocket(1), lib.PinSocket(40), lib.PinSocket(3, { rows: 2 })],
   TestPad: [lib.TestPad()],
   PogoPad: [lib.PogoPad(1.5, { cols: 3, rows: 2 })],
-  MountingHole: [lib.MountingHole(), lib.MountingHole(3.2, true)],
+  MountingHole: [lib.MountingHole(), lib.MountingHole(3.2, { pad: true }), lib.MountingHole(3.2, { pad: 6, plated: false })],
 }
 
 const GENERATED = new Set(['chip', 'led', 'header', 'sot23', 'ic'])
@@ -64,8 +63,8 @@ test('the table lists every footprint factory and generator of the library', () 
 
 test('every footprint has a model file, a generated body, no body or a reason, never a bare box', () => {
   const all = Object.values(FACTORIES).flat()
-  const kids = all.map((F, i) => h(F, { ref: `X${i + 1}`, at: `${10 + (i % 10) * 25} ${10 + Math.floor(i / 10) * 25}` }))
-  const b = compileBoard(h(PCB, { name: 'models' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 260, h: 160 }), ...kids), { routeCache: false })
+  const kids = all.map((F, i) => h(F({ ref: `X${i + 1}` }), { at: `${10 + (i % 10) * 25} ${10 + Math.floor(i / 10) * 25}` }))
+  const b = compileBoard(h(PCB, { name: 'models' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 260, h: 160 }), ...kids), { cache: false })
   assert.equal(b.footprints.length, all.length)
   for (const fp of b.footprints) {
     const m = fp.model

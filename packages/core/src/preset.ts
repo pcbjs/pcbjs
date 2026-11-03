@@ -1,4 +1,5 @@
 // bindPCB, which makes the bound component, is in @pcbjs/fab.
+import { sameColor } from './rules.js'
 import type { AutoRouteParams, BoardProps, CplOptions, Finish, NetClass, PcbNode, Rules, Stackup } from './types.js'
 
 /** What a fab preset is made of. `colors` and `silkColors` map a colour name to a hex value for the 3D view. */
@@ -54,12 +55,9 @@ export interface BoundPCB {
   readonly preset: PresetSpec
 }
 
-const key = (c: string) => c.toLowerCase().replace(/[\s_-]+/g, '')
-
 /** The palette's own spelling of `c`, such as "Matte Black" for "matte-black", or `c` itself when the palette lacks it. */
 export function paletteName(palette: Record<string, string>, c: string): string {
-  const k = key(c)
-  return Object.keys(palette).find(n => key(n) === k) ?? c
+  return Object.keys(palette).find(n => sameColor(n, c)) ?? c
 }
 
 /** True for a component made by bindPCB, which carries its preset spec. */

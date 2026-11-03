@@ -1,14 +1,18 @@
 // TrueType and OpenType text as filled polygons in mm: opentype.js reads the file, Clipper unions the contours.
-import opentype from 'opentype.js'
+import * as ot from 'opentype.js'
 import ClipperLib from 'clipper-lib'
 import type { Poly, Ring } from './model.js'
 import type { TextAnchor } from './text.js'
 import type { FontSpec } from './types.js'
+import { platform } from './platform.js'
+
+// Node loads the CommonJS build, its exports on default; a bundler the ES build, its exports named
+const opentype: typeof ot = Reflect.get(ot, 'default') ?? ot
 
 export type { FontSpec }
 
 /** A font as `fonts` maps it: a file path, or a FontSpec. */
-export type FontEntry = string | FontSpec
+export type FontEntry = FontSpec
 
 /** A parsed outline font, cached per file and weight. */
 export interface OutlineFont {
@@ -53,33 +57,22 @@ export interface OutlineText {
   missing: string[]
 }
 
-function nodeFs(): typeof import('node:fs') | null {
-  const p = (globalThis as any).process
-  if (!p || typeof p.getBuiltinModule !== 'function') return null
-  try {
-    return p.getBuiltinModule('node:fs')
-  } catch {
-    return null
-  }
-}
-
 // parsed fonts by path, mtime and weight, shared by every copy of this module
 const CACHE: Map<string, OutlineFont> = ((globalThis as any)[Symbol.for('pcbjs.fonts.cache')] ??= new Map())
+/** Every font file asked for since the compiler last cleared it, so the cache index lists them with the module graph. */
+export const FONT_FILES: Set<string> = ((globalThis as any)[Symbol.for('pcbjs.fonts.read')] ??= new Set())
 
 /** Read and parse an outline font. Throws a plain Error naming the file when it is missing or not a font. */
 export function loadOutlineFont(path: string, weight?: number): OutlineFont {
-  const fs = nodeFs()
-  if (!fs) throw new Error(`outline fonts are read in Node only, not ${path}`)
-  let stat: import('node:fs').Stats
-  try {
-    stat = fs.statSync(path)
-  } catch {
-    throw new Error(`font file not found: ${path}`)
-  }
-  const key = `${path}\0${stat.mtimeMs}\0${weight ?? ''}`
+  const p = platform()
+  FONT_FILES.add(path)
+  const stat = p.stat(path)
+  if (!stat) throw new Error(`font file not found: ${path}`)
+  const key = `${path}\0${stat.mtime}\0${weight ?? ''}`
   const hit = CACHE.get(key)
   if (hit) return hit
-  const buf = fs.readFileSync(path)
+  const buf = p.read(path)
+  if (!buf) throw new Error(`font file not found: ${path}`)
   let font: any
   try {
     font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength))
@@ -368,14 +361,4 @@ function kerning(font: any, a: any, b: any): number {
   } catch {
     return 0
   }
-}
-
-const CONFIG = Symbol.for('pcbjs.fonts.config')
-/** Register the `fonts` of pcb.config.ts, paths relative to `root`, the folder of the config. The cli calls it. */
-export function setFontConfig(root: string, fonts: Record<string, FontEntry> | undefined): void {
-  ;(globalThis as any)[CONFIG] = { root, fonts: fonts ?? {} }
-}
-/** The fonts of pcb.config.ts with the folder they are relative to. */
-export function configFonts(): { root: string; fonts: Record<string, FontEntry> } {
-  return (globalThis as any)[CONFIG] ?? { root: '', fonts: {} }
 }
