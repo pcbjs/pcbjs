@@ -15,3 +15,12 @@ export function draftHint<D extends Diag>(d: D, hint: number, unnecessary: numbe
   d.tags = [...new Set([...(d.tags ?? []), unnecessary])]
   return d
 }
+
+/** The draft holding the session's compile, as `session/state` carries it. */
+export interface Hold {
+  file: string
+  line: number
+}
+
+/** The status bar while a draft holds the compile, null when none does. */
+export const holdStatus = (h: Hold | null | undefined): string | null => (h ? `pcbjs: holding, ${h.file}:${h.line} has an error` : null)

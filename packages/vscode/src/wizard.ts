@@ -1,7 +1,7 @@
 // pcbjs: New board wizard: name, layers, fab, outline and size, each prefilled so Enter takes the default, Back and Escape on every step.
 
 import * as vscode from 'vscode'
-import { defaultProjectDir, pickFolder, projectDirError, projectPrompt, scaffold, type SetupHost } from './setup'
+import { creator, defaultProjectDir, pickFolder, projectDirError, projectPrompt, scaffold, type SetupHost } from './setup'
 
 /** The presets of @pcbjs/fab, as `FABS` in packages/fab/src/index.ts lists them. */
 export const FABS = [
@@ -176,7 +176,10 @@ export async function askBoard(parent: string): Promise<Answers | undefined> {
 export async function newBoardWizard(h: SetupHost): Promise<string | undefined> {
   const parent = await pickFolder('Create the board in which folder?', 'Create here')
   if (!parent) return undefined
+  // the version check comes before the questions, as the walkthrough's install step sits above the wizard's
+  const pcbjs = await creator(h, parent, TITLE)
+  if (!pcbjs) return undefined
   const a = await askBoard(parent)
   if (!a) return undefined
-  return scaffold(h, parent, a.name, createFlags(a))
+  return scaffold(h, pcbjs, parent, a.name, createFlags(a))
 }

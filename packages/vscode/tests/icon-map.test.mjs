@@ -21,7 +21,7 @@ test('entries: the literals of the config list, comments ignored, globs kept', (
 test('fixed: config names, the entry and schematic suffixes, lib/ before them, the fab folder', () => {
   const a = m.fixedAssociations()
   assert.equal(a.fileNames['pcb.config.ts'], 'config')
-  assert.equal(a.fileNames['pcbjs.config.mjs'], 'config')
+  assert.equal(a.fileNames['pcbjs.config.mjs'], undefined)
   assert.equal(a.fileNames['pcb.tsx'], 'entry')
   assert.deepEqual(Object.entries(a.fileExtensions), [
     ['lib/ts', 'footprint'],

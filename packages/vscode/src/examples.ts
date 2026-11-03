@@ -44,5 +44,5 @@ export async function newFromExample(h: SetupHost): Promise<string | undefined> 
     validateInput: v => projectDirError(parent, v),
   })
   if (name === undefined) return undefined
-  return scaffold(h, parent, name.trim(), ['--example', picked.label])
+  return scaffold(h, pcbjsRunner([parent, ...roots()], h.nodePath(), h.env), parent, name.trim(), ['--example', picked.label])
 }

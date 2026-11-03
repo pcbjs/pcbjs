@@ -5,7 +5,7 @@ import * as path from 'node:path'
 export const ICONS = ['entry', 'config', 'schematic', 'footprint', 'fab', 'preview'] as const
 export type Icon = (typeof ICONS)[number]
 
-export const CONFIG_NAMES = ['pcb', 'pcbjs'].flatMap(b => ['ts', 'mts', 'js', 'mjs'].map(x => `${b}.config.${x}`))
+export const CONFIG_NAMES = ['ts', 'mts', 'js', 'mjs'].map(x => `pcb.config.${x}`)
 
 const SCHEMATIC = /\.sch\.tsx?$/
 

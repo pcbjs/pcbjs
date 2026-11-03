@@ -6,6 +6,9 @@ import * as path from 'node:path'
 import { createRequire } from 'node:module'
 import { spawn as nodeSpawn } from 'node:child_process'
 import { findBinary, findGlobal, launcher, type SpawnFn } from './server'
+import { pickVersion } from './install'
+import { recommendExtension, recommendInDevcontainers } from './recommend'
+import type { FetchFn } from './version'
 
 export interface SetupHost {
   output(line: string): void
@@ -17,6 +20,9 @@ export interface SetupHost {
   opened(dir: string, file: string): Promise<void>
   spawn?: SpawnFn
   env?: NodeJS.ProcessEnv
+  /** the train version the extension was packaged against, the offline fallback of the install flow */
+  packaged?: string
+  fetch?: FetchFn
 }
 
 export interface Runner {
@@ -51,15 +57,23 @@ export function nodeTool(node: string, tool: 'npm' | 'npx', args: string[], exis
   return { command: path.isAbsolute(node) && exists(beside) ? beside : name, args, shell: win }
 }
 
-/** The pcbjs installed in the first of the dirs or above it, else a global one, else the latest from npm through npx. */
-export function pcbjsRunner(dirs: string[], node: string, env: NodeJS.ProcessEnv = process.env, exists: (p: string) => boolean = fs.existsSync): Runner {
+/** The pcbjs installed in the first of the dirs or above it, else a global one; undefined for none. */
+export function localRunner(dirs: string[], node: string, env: NodeJS.ProcessEnv = process.env, exists: (p: string) => boolean = fs.existsSync): Runner | undefined {
   for (const d of dirs) {
     const bin = findBinary(d, exists)
     if (bin) return launcher(bin, node)
   }
   const global = findGlobal(env, exists)
-  if (global) return launcher(global, node)
-  return nodeTool(node, 'npx', ['--yes', '--package', '@pcbjs/pcbjs', 'pcbjs'], exists)
+  return global ? launcher(global, node) : undefined
+}
+
+/** `pcbjs` of @pcbjs/pcbjs at the version or tag from npm through npx. */
+export const npxRunner = (node: string, spec = 'latest', exists: (p: string) => boolean = fs.existsSync): Runner =>
+  nodeTool(node, 'npx', ['--yes', '--package', spec === 'latest' ? '@pcbjs/pcbjs' : `@pcbjs/pcbjs@${spec}`, 'pcbjs'], exists)
+
+/** The local pcbjs, else the latest from npm through npx. */
+export function pcbjsRunner(dirs: string[], node: string, env: NodeJS.ProcessEnv = process.env, exists: (p: string) => boolean = fs.existsSync): Runner {
+  return localRunner(dirs, node, env, exists) ?? npxRunner(node, 'latest', exists)
 }
 
 export function kicadProject(pro: string, exists: (p: string) => boolean = fs.existsSync): KicadProject {
@@ -244,9 +258,19 @@ function pickOne<T extends vscode.QuickPickItem>(items: T[], placeholder: string
 
 export const projectPrompt = (parent: string) => `The project folder, relative to ${parent}; . for that folder itself when it is empty. Its name is the board's name.`
 
+/** The pcbjs a new project is created with: the installed one, else the version the install flow picks; undefined on Escape. */
+export async function creator(h: SetupHost, parent: string, title: string): Promise<Runner | undefined> {
+  const local = localRunner([parent, ...roots()], h.nodePath(), h.env)
+  if (local) return local
+  const r = await pickVersion({ packaged: h.packaged ?? 'latest', fetch: h.fetch }, title, 'Create with')
+  return r && npxRunner(h.nodePath(), r.version)
+}
+
 export async function createProject(h: SetupHost): Promise<string | undefined> {
   const parent = await pickFolder('Create the pcbjs project in which folder?', 'Create here')
   if (!parent) return undefined
+  const pcbjs = await creator(h, parent, 'pcbjs: Create project in workspace')
+  if (!pcbjs) return undefined
   const name = await vscode.window.showInputBox({
     title: 'pcbjs: Create project in workspace',
     prompt: projectPrompt(parent),
@@ -254,14 +278,15 @@ export async function createProject(h: SetupHost): Promise<string | undefined> {
     validateInput: v => projectDirError(parent, v),
   })
   if (name === undefined) return undefined
-  return scaffold(h, parent, name.trim(), [])
+  return scaffold(h, pcbjs, parent, name.trim(), [])
 }
 
-/** pcbjs create with the flags, its packages installed, then the board file and the preview. */
-export async function scaffold(h: SetupHost, parent: string, name: string, flags: string[]): Promise<string | undefined> {
+/** pcbjs create with the flags, the extension recommended in the workspace folder too, its packages installed, then the board file and the preview. */
+export async function scaffold(h: SetupHost, pcbjs: Runner, parent: string, name: string, flags: string[]): Promise<string | undefined> {
   const dir = path.resolve(parent, name)
-  const pcbjs = pcbjsRunner([parent, ...roots()], h.nodePath(), h.env)
   if (!(await step(`creating ${path.basename(dir)}`, pcbjs, ['create', name, ...flags], parent, h))) return undefined
+  const folder = roots().find(r => dir === r || dir.startsWith(r + path.sep)) ?? parent
+  for (const l of [...recommendExtension(folder), ...recommendInDevcontainers(folder)]) h.output(`pcbjs: ${l}`)
   if (!(await ensureInstalled(dir, h))) return undefined
   await h.opened(dir, path.join(dir, 'pcb.tsx'))
   return dir

@@ -25,7 +25,8 @@ mkdirSync(out, { recursive: true })
 const { files: _files, exports: _exports, scripts: _scripts, devDependencies: _dev, ...manifestPkg } = pkg
 rmSync(stage, { recursive: true, force: true })
 mkdirSync(join(stage, 'dist'), { recursive: true })
-writeFileSync(join(stage, 'package.json'), JSON.stringify({ ...manifestPkg, name: EXTENSION, version }, null, 2) + '\n')
+// `pcbjs.train` keeps the npm version for the install flow, whose offline fallback it is
+writeFileSync(join(stage, 'package.json'), JSON.stringify({ ...manifestPkg, name: EXTENSION, version, pcbjs: { train: pkg.version } }, null, 2) + '\n')
 for (const f of ['README.md', '.vscodeignore', 'dist/extension.js']) copyFileSync(join(here, f), join(stage, f))
 if (!existsSync(join(here, 'assets/icon-theme/pcbjs.json'))) throw new Error('assets/icon-theme is missing: run node scripts/icon-theme.mjs')
 cpSync(join(here, 'assets'), join(stage, 'assets'), { recursive: true })

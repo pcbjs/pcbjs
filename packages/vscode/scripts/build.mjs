@@ -3,6 +3,7 @@
 // Then copies the brand icons into assets/.
 import { build } from 'esbuild'
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -24,16 +25,22 @@ const common = {
 await build({ ...common, entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js' })
 for (const name of [
   'setup',
+  'dev-suite',
   'examples',
   'wizard',
-  'bridge',
-  'host',
+  'link',
+  'merge3',
+  'merge',
+  'agents',
+  'send',
+  'worktrees',
   'server',
   'sync',
   'protocol',
   'lsp-client',
   'hover',
   'icon-map',
+  'icons',
   'drafts',
   'views',
   'tree-data',
@@ -41,8 +48,32 @@ for (const name of [
   'reveal',
   'sidebar',
   'auto-icons',
+  'fab',
+  'fab-panel',
+  'version',
+  'install',
+  'recommend',
+  'phase',
+  'owner',
+  'status',
+  'segments-ui',
+  'pad-hints',
+  'wiring',
+  'finding-column',
 ]) {
   await build({ ...common, minify: false, entryPoints: [`src/${name}.ts`], outfile: `dist/${name}.cjs` })
+}
+
+// the keybindings come from the key map table the views read, so the editor and the viewer agree
+const ui = dirname(createRequire(import.meta.url).resolve('@pcbjs/ui/package.json'))
+await build({ ...common, minify: false, entryPoints: [join(ui, 'src/keys.ts')], outfile: 'dist/keys.cjs' })
+const { vscodeKeybindings } = await import(join(here, 'dist/keys.cjs')).then(m => m.default ?? m)
+const manifest = join(here, 'package.json')
+const pkg = JSON.parse(readFileSync(manifest, 'utf8'))
+const keys = vscodeKeybindings()
+if (JSON.stringify(pkg.contributes.keybindings) !== JSON.stringify(keys)) {
+  pkg.contributes.keybindings = keys
+  writeFileSync(manifest, JSON.stringify(pkg, null, 2) + '\n')
 }
 
 const { ICONS, vsiconsName } = await import(join(here, 'dist/icon-map.cjs')).then(m => m.default ?? m)

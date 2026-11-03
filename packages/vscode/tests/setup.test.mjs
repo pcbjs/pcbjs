@@ -150,19 +150,21 @@ test('create: several folders ask which; no folder opens a dialog, runs npx and 
 
   const empty = dir()
   reset([])
-  answers(['open', [vscode.Uri.file(empty)]], ['input', o => o.value])
+  let version
+  answers(['open', [vscode.Uri.file(empty)]], ['quickPick', o => ((version = o.items[0]), 'active')], ['input', o => o.value])
   const two = spawner(c => {
     if (c.args.includes('create')) touch(path.join(empty, 'pcb.tsx'))
     else touch(path.join(c.cwd, BIN))
   })
-  const h = host(two.spawn)
+  const h = Object.assign(host(two.spawn), { packaged: '0.1.0', fetch: async () => ({ ok: true, json: async () => ({ latest: '0.1.2', beta: '0.2.0-beta.1' }) }) })
   assert.equal(await createProject(h), empty)
+  assert.equal(version.label, '$(cloud-download) Create with @pcbjs/pcbjs 0.1.2', 'no pcbjs installed: the version to create with first')
   assert.equal(calls('open')[0].canSelectFolders, true)
   assert.equal(calls('input')[0].value, '.', 'an empty folder takes the project itself')
   assert.deepEqual(
     two.runs.map(r => [path.basename(r.command), ...r.args]),
     [
-      ['npx', '--yes', '--package', '@pcbjs/pcbjs', 'pcbjs', 'create', '.'],
+      ['npx', '--yes', '--package', '@pcbjs/pcbjs@0.1.2', 'pcbjs', 'create', '.'],
       ['npm', 'install'],
     ],
   )

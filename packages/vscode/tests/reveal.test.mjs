@@ -14,7 +14,27 @@ const files = g => g.tabs.map(t => t.input.uri?.fsPath ?? 'pane')
 
 beforeEach(() => {
   layout.calls = []
+  layout.shows = []
   layout.orientation = 0
+})
+
+test('successive source navigation replaces temporary tabs while preserving pinned and edited documents', async () => {
+  const code = group('/work/demo/pinned.ts'), pane = group('pane')
+  setGroups([code, pane], 1)
+  await reveal(doc, sel, deps(undefined), false)
+  assert.equal(code.activeTab.isPreview, true)
+  const next = { uri: vscode.Uri.file('/work/demo/next.ts') }
+  await reveal(next, sel, deps(undefined), false)
+  assert.deepEqual(files(code), ['/work/demo/pinned.ts', '/work/demo/next.ts'])
+  assert.equal(code.activeTab.isPreview, true)
+  await reveal({ uri: vscode.Uri.file('/work/demo/pinned.ts') }, sel, deps(undefined), false)
+  assert.equal(code.activeTab.isPreview, false, 'a user-pinned tab stays pinned')
+  await reveal({ ...doc, isDirty: true }, sel, deps(undefined), false)
+  assert.equal(code.activeTab.isPreview, false, 'an edited source stays open')
+  await reveal(next, sel, deps(undefined), false)
+  assert.ok(files(code).includes(FILE))
+  assert.ok(layout.shows.every(opts => opts.preview === true), 'navigation requests native temporary mode')
+  assert.equal(tabGroups.activeTabGroup, pane)
 })
 
 test('another group takes the file, preferring the one that shows it, then the last used', async () => {
@@ -33,10 +53,60 @@ test('another group takes the file, preferring the one that shows it, then the l
   assert.equal((await reveal(doc, sel, deps(undefined, 2))).viewColumn, 2)
 })
 
-test('a group whose visible tab is another pane is not a target', async () => {
+test('a new source tab prefers an ordinary editor group over another preview group', async () => {
   const code = group('/work/demo/a.ts')
   setGroups([code, group('pane'), group('pane')], 1)
   assert.equal((await reveal(doc, sel, deps(undefined, 2))).viewColumn, 1)
+})
+
+test('an inactive preview group can open a new source tab before creating a split', async () => {
+  const other = group('pane'), clicked = group('pane')
+  setGroups([other, clicked], 1)
+  const ed = await reveal(doc, sel, deps(undefined), false)
+  assert.equal(ed.viewColumn, 1)
+  assert.deepEqual(layout.calls, [['show', 1, true]])
+  assert.deepEqual(files(clicked), ['pane'])
+  assert.equal(tabGroups.activeTabGroup, clicked)
+})
+
+test('reuse a hidden source tab behind another preview before opening in an ordinary source group', async () => {
+  const code = group('/work/demo/notes.ts')
+  const existing = group(FILE, 'pane')
+  const clicked = group('pane')
+  setGroups([code, existing, clicked], 2)
+  const tab = existing.tabs[0]
+  const ed = await reveal(doc, sel, deps(undefined, 1), false)
+  assert.equal(ed.viewColumn, 2)
+  assert.equal(existing.activeTab, tab, 'the existing tab is activated')
+  assert.deepEqual(layout.calls, [['show', 2, true]], 'no new group or source tab migration')
+  assert.deepEqual(files(code), ['/work/demo/notes.ts'])
+  assert.deepEqual(files(existing), [FILE, 'pane'])
+  assert.equal(tabGroups.activeTabGroup, clicked, 'the clicked preview retains focus')
+  assert.deepEqual(files(clicked), ['pane'])
+})
+
+test('an existing source tab is reused without closing another user-opened copy behind the active preview', async () => {
+  const existing = group(FILE, '/work/demo/other.ts')
+  const clicked = group(FILE, 'pane')
+  setGroups([existing, clicked], 1)
+  const tab = existing.tabs[0]
+  const ed = await reveal(doc, sel, deps(undefined), false)
+  assert.equal(ed.viewColumn, 1)
+  assert.equal(existing.activeTab, tab)
+  assert.deepEqual(layout.calls, [['show', 1, true]])
+  assert.deepEqual(files(clicked), [FILE, 'pane'])
+})
+
+test('without an active preview, a source tab behind an inactive preview remains eligible', async () => {
+  const existing = group(FILE, 'pane')
+  const code = group('/work/demo/other.ts')
+  setGroups([existing, code], 1)
+  const tab = existing.tabs[0]
+  const ed = await reveal(doc, sel, deps(undefined, 2))
+  assert.equal(ed.viewColumn, 1)
+  assert.equal(existing.activeTab, tab)
+  assert.deepEqual(layout.calls, [['show', 1, false]])
+  assert.deepEqual(files(existing), [FILE, 'pane'])
 })
 
 test('the only group, wider than tall: a new group to the left', async () => {

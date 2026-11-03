@@ -1,0 +1,1098 @@
+{
+  "version": 1,
+  "scope": "VS Code contributions and editor operation families",
+  "note": "Completeness is inventory coverage, not runtime acceptance. Coverage references are assertions to inspect; no blanket verification claim.",
+  "operations": [
+    {
+      "id": "X01",
+      "title": "Activity Bar pcbjs, Boards/Findings/Nets/BOM/Agents views",
+      "preconditions": "Workspace; click icon, expand/collapse, keyboard navigation",
+      "result": "Native views, data for selected owning session",
+      "writes": "none",
+      "cancelUndo": "Collapse/reselect",
+      "unavailable": "Boards welcome without project; findings empty message",
+      "missingAcceptance": "S manifest/sidebar; T sidebar; V keyboard, focus, screen reader, moved views",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "partial-tests-host-acceptance-pending",
+      "sources": [
+        "packages/vscode/src/sidebar.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/sidebar.test.mjs"
+      ]
+    },
+    {
+      "id": "X02",
+      "title": "`preview`",
+      "preconditions": "Project; palette",
+      "result": "Toggle earliest pane of last view, or start/open",
+      "writes": "none",
+      "cancelUndo": "Repeat closes",
+      "unavailable": "need() project warning; boot failure pane",
+      "missingAcceptance": "T panels; V duplicate-pane close identity",
+      "commands": [
+        "pcbjs.preview"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/preview.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/panels.test.mjs"
+      ]
+    },
+    {
+      "id": "X03",
+      "title": "`open2D/open3D/openSchematic`",
+      "preconditions": "Project or board row; invoke",
+      "result": "Reuse/reveal earliest pane of view",
+      "writes": "none",
+      "cancelUndo": "Close tab",
+      "unavailable": "Startup status/error",
+      "missingAcceptance": "S preview.open; T panels; docs ambiguity F4",
+      "commands": [
+        "pcbjs.open2D",
+        "pcbjs.open3D",
+        "pcbjs.openSchematic",
+        "pcbjs.openChecks"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/preview.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/panels.test.mjs"
+      ]
+    },
+    {
+      "id": "X04",
+      "title": "`open2DBeside/open3DBeside/openSchematicBeside`",
+      "preconditions": "Project; editor title or Cmd/Ctrl+Alt+2/3/S",
+      "result": "Reuse existing pane or open beside",
+      "writes": "none",
+      "cancelUndo": "Close tab",
+      "unavailable": "Same startup status",
+      "missingAcceptance": "T panels/keys; V real group placement",
+      "commands": [
+        "pcbjs.open2DBeside",
+        "pcbjs.open3DBeside",
+        "pcbjs.openSchematicBeside",
+        "pcbjs.openChecksBeside"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/preview.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/panels.test.mjs"
+      ]
+    },
+    {
+      "id": "X05",
+      "title": "`open2DNew/open3DNew/openSchematicNew`",
+      "preconditions": "Same; Alt title alternative or Shift shortcut",
+      "result": "Always another numbered pane",
+      "writes": "none",
+      "cancelUndo": "Close new tab",
+      "unavailable": "Same startup status",
+      "missingAcceptance": "T panels/keys; V host Alt action",
+      "commands": [
+        "pcbjs.open2DNew",
+        "pcbjs.open3DNew",
+        "pcbjs.openSchematicNew",
+        "pcbjs.openChecksNew"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/preview.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/panels.test.mjs"
+      ]
+    },
+    {
+      "id": "X06",
+      "title": "`openAllViews`",
+      "preconditions": "Project; focused pane or code",
+      "result": "Other views beside focused pane, or all three",
+      "writes": "none",
+      "cancelUndo": "Close tabs",
+      "unavailable": "Startup feedback",
+      "missingAcceptance": "T panels; V repeated invocation across split groups",
+      "commands": [
+        "pcbjs.openAllViews"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/preview.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/panels.test.mjs"
+      ]
+    },
+    {
+      "id": "X07",
+      "title": "`pickView` and status click",
+      "preconditions": "Project/status; choose view/all/new",
+      "result": "Native picker, corresponding X04-X06",
+      "writes": "none",
+      "cancelUndo": "Escape no action",
+      "unavailable": "need() warning if absent",
+      "missingAcceptance": "S extension; T status; V picker cancel/no startup",
+      "commands": [
+        "pcbjs.pickView"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/extension.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/keys.test.mjs"
+      ]
+    },
+    {
+      "id": "X08",
+      "title": "`preview.reload`",
+      "preconditions": "Pane/session; title action",
+      "result": "Reload active pane, else panes; reconnect if needed",
+      "writes": "none",
+      "cancelUndo": "No rollback required",
+      "unavailable": "Boot status/error",
+      "missingAcceptance": "T panels/start; V retains board/target/isolation",
+      "commands": [
+        "pcbjs.preview.reload"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/preview.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/panels.test.mjs"
+      ]
+    },
+    {
+      "id": "X09",
+      "title": "restored preview tab",
+      "preconditions": "Saved state; reopen window",
+      "result": "Restored view resumes against attached session",
+      "writes": "none",
+      "cancelUndo": "Close tab",
+      "unavailable": "Waiting/error pane",
+      "missingAcceptance": "S serializer/savedView; T panels; V two-session restoration",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "partial-tests-host-acceptance-pending",
+      "sources": [
+        "packages/vscode/src/preview.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/panels.test.mjs"
+      ]
+    },
+    {
+      "id": "X10",
+      "title": "design-file focus and `followFocus`",
+      "preconditions": "Attached document; setting true",
+      "result": "Owning project/board follows module graph; shared file preserves compatible shown board",
+      "writes": "none",
+      "cancelUndo": "Setting off/reselect",
+      "unavailable": "Unpreviewable file preserves view",
+      "missingAcceptance": "T owner/workspace/panels; V deepest root, duplicate names, untitled/non-design focus",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/owner.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/owner.test.mjs"
+      ]
+    },
+    {
+      "id": "X11",
+      "title": "Boards board row",
+      "preconditions": "Originating row live; click/Enter",
+      "result": "Every pane switches, entry opens at PCB",
+      "writes": "none, bound row session",
+      "cancelUndo": "Navigate back",
+      "unavailable": "Stale row currently silently ignored",
+      "missingAcceptance": "T board-jump deferred ownership, panels/sidebar; V host focus preservation",
+      "commands": [
+        "pcbjs.sidebar.open"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/tree-data.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/board-jump.test.mjs"
+      ]
+    },
+    {
+      "id": "X12",
+      "title": "Boards config expansion",
+      "preconditions": "Originating scope; expand/click",
+      "result": "Config rows use workspace-relative folder labels without a config filename. Expanding a config resolves all declared entries in a project-scoped read query and lists their boards directly, without source-file rows or preview navigation. Git untracked entries are excluded.",
+      "writes": "none",
+      "cancelUndo": "Collapse/reselect",
+      "unavailable": "Closed link ignored; compile timeout yields no entries",
+      "missingAcceptance": "T board-jump; V explicit timeout/stale-row reason",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/tree-data.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/board-jump.test.mjs"
+      ]
+    },
+    {
+      "id": "X13",
+      "title": "board row inline 2D/3D/schematic",
+      "preconditions": "Board row live; icon/Alt",
+      "result": "Opens selected view for that board",
+      "writes": "none",
+      "cancelUndo": "Close/reselect",
+      "unavailable": "Stale link returns",
+      "missingAcceptance": "T panels/sidebar; V focus switch during opening",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/preview.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/panels.test.mjs"
+      ]
+    },
+    {
+      "id": "X14",
+      "title": "part/ref row",
+      "preconditions": "Compiled row; click/Enter",
+      "result": "Select ref in preview and reveal placement when source exists",
+      "writes": "none",
+      "cancelUndo": "Select other/clear",
+      "unavailable": "No source should keep selection, explain absent jump",
+      "missingAcceptance": "T sidebar/reveal; V instance leaf and schematic provenance",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/tree-data.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/sidebar.test.mjs"
+      ]
+    },
+    {
+      "id": "X15",
+      "title": "finding row/ref child",
+      "preconditions": "Finding id/fingerprint and origin; click",
+      "result": "Canonical finding focus opens or reuses the persistent DRC/ERC viewer; first opening prefers visible board source, non-preview group, inactive preview, then new split. Active preview keeps focus. Shared selection, previous/next and expanded list navigate without remounting; icon-only Copy as Markdown copies structured details. Source blur and cleared finding keep the viewer open; closing the final checks pane clears finding focus.",
+      "writes": "none",
+      "cancelUndo": "Recompile carries fingerprint; closing temporary editor clears canonical focus",
+      "unavailable": "Missing source can still frame",
+      "missingAcceptance": "T sidebar/zone-select; V changed finding across board/target switch",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/tree-data.ts",
+        "packages/vscode/src/preview.ts",
+        "packages/vscode/src/finding-column.ts",
+        "packages/ui/src/ChecksView.vue"
+      ],
+      "tests": [
+        "packages/vscode/tests/panels.test.mjs",
+        "packages/vscode/tests/finding-editor.test.mjs",
+        "packages/vscode/tests/installed-host/suite.cjs"
+      ]
+    },
+    {
+      "id": "X16",
+      "title": "net row",
+      "preconditions": "Board net; click again",
+      "result": "Pin/unpin net in panes",
+      "writes": "none",
+      "cancelUndo": "Repeat toggles",
+      "unavailable": "Stale row ignored",
+      "missingAcceptance": "S openAction; T sidebar; V same net name in distinct boards/projects",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/tree-data.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/sidebar.test.mjs"
+      ]
+    },
+    {
+      "id": "X17",
+      "title": "BOM row",
+      "preconditions": "BOM line; click",
+      "result": "Reveal first part placement",
+      "writes": "none",
+      "cancelUndo": "Navigate back",
+      "unavailable": "Missing part/source must be explained",
+      "missingAcceptance": "S tree-data; T sidebar; V multi-instance BOM",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/tree-data.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/sidebar.test.mjs"
+      ]
+    },
+    {
+      "id": "X18",
+      "title": "viewer board/target selection",
+      "preconditions": "Connected pane; choose",
+      "result": "Sidebar represents first target; entity rows explicitly reset target before selection",
+      "writes": "none",
+      "cancelUndo": "Reselect",
+      "unavailable": "Non-first target explicitly read-only",
+      "missingAcceptance": "T board-jump, session target guards; V divergent variants plus sidebar findings provenance F3",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/sidebar.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/sidebar.test.mjs"
+      ]
+    },
+    {
+      "id": "X19",
+      "title": "`start`, `stop`, `restart`",
+      "preconditions": "Project; palette",
+      "result": "Attach, detach, detach/attach window connections",
+      "writes": "none",
+      "cancelUndo": "Attach again",
+      "unavailable": "Status/boot errors",
+      "missingAcceptance": "T start/server/status; V detach leaves external client/session live",
+      "commands": [
+        "pcbjs.start",
+        "pcbjs.stop",
+        "pcbjs.restart"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/server.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/server.test.mjs"
+      ]
+    },
+    {
+      "id": "X20",
+      "title": "`restartServer`",
+      "preconditions": "Project; invoke",
+      "result": "Restart session with progress, panes retained",
+      "writes": "none; shared process operation",
+      "cancelUndo": "No undo",
+      "unavailable": "Failure phase/log",
+      "missingAcceptance": "T server/status; V precise served projects named, other client reconnect",
+      "commands": [
+        "pcbjs.restartServer"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/server.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/server.test.mjs"
+      ]
+    },
+    {
+      "id": "X21",
+      "title": "`restartClean`",
+      "preconditions": "Project; Cmd/Ctrl+Shift+R in pane",
+      "result": "Restart and delete caches under all served roots, reload panes",
+      "writes": "Generated caches only",
+      "cancelUndo": "Rebuild, no cache undo",
+      "unavailable": "Warning + Show output on nonzero",
+      "missingAcceptance": "T server/keys; V dirty editor untouched and exact roots shown",
+      "commands": [
+        "pcbjs.restartClean"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/server.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/server.test.mjs"
+      ]
+    },
+    {
+      "id": "X22",
+      "title": "lost socket, reconnect, failed session",
+      "preconditions": "Live link disappears",
+      "result": "Growing retry/progress, failure details and restart",
+      "writes": "none",
+      "cancelUndo": "Detach stops window retry",
+      "unavailable": "Failed pane last log lines, status/log action",
+      "missingAcceptance": "T server/start/negotiation/status; V physical host loss and stale hover/tool cleanup",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "partial-tests-host-acceptance-pending",
+      "sources": [
+        "packages/vscode/src/server.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/negotiation.test.mjs"
+      ]
+    },
+    {
+      "id": "X23",
+      "title": "`openInBrowser`",
+      "preconditions": "Project; invoke",
+      "result": "Starts/attaches then opens server URL externally",
+      "writes": "none",
+      "cancelUndo": "Close browser",
+      "unavailable": "Startup errors",
+      "missingAcceptance": "S opens s.url, not selected board URL; V expected board/project preservation must be decided",
+      "commands": [
+        "pcbjs.openInBrowser"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "partial-tests-host-acceptance-pending",
+      "sources": [
+        "packages/vscode/src/extension.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/keys.test.mjs"
+      ]
+    },
+    {
+      "id": "X24",
+      "title": "`showOutput/openSessionLog`",
+      "preconditions": "Channel or session; invoke",
+      "result": "Output/log opens",
+      "writes": "none",
+      "cancelUndo": "Close panel/tab",
+      "unavailable": "Missing log info message",
+      "missingAcceptance": "T status; V correct selected-session log",
+      "commands": [
+        "pcbjs.showOutput",
+        "pcbjs.openSessionLog"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/extension.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/keys.test.mjs"
+      ]
+    },
+    {
+      "id": "X25",
+      "title": "`toggleCursorSync`",
+      "preconditions": "Global setting; invoke",
+      "result": "Toggle setting, status confirmation; highlights follow setting",
+      "writes": "Global config, not design",
+      "cancelUndo": "Toggle again",
+      "unavailable": "No design needed",
+      "missingAcceptance": "S extension global ConfigurationTarget; T status/keys; V workspace-vs-global intent",
+      "commands": [
+        "pcbjs.toggleCursorSync"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/extension.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/keys.test.mjs"
+      ]
+    },
+    {
+      "id": "X26",
+      "title": "settings autoStart/followFocus/nodePath/editorAutoSave",
+      "preconditions": "Settings input",
+      "result": "Start policy, focus following, runtime, edit-save policy",
+      "writes": "Config scope; nodePath machine-overridable",
+      "cancelUndo": "Restore setting",
+      "unavailable": "Bad Node message + Open settings",
+      "missingAcceptance": "T start/version/drafts; V setting scope and live refresh",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "partial-tests-host-acceptance-pending",
+      "sources": [
+        "packages/vscode/src/status.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/status.test.mjs"
+      ]
+    },
+    {
+      "id": "X27",
+      "title": "status version/holding/failed/older/not installed",
+      "preconditions": "Phase and active file folder",
+      "result": "Contextual text, tooltip, action: pick/log/restart/install",
+      "writes": "none until invoked action",
+      "cancelUndo": "Underlying operation",
+      "unavailable": "Warning/error tone, explanatory tooltip",
+      "missingAcceptance": "T status/version; docs click mismatch F4",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/status.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/status.test.mjs"
+      ]
+    },
+    {
+      "id": "X28",
+      "title": "`walkthrough` and welcome links",
+      "preconditions": "No project or manual invocation",
+      "result": "Native checklist/setup actions",
+      "writes": "none until action",
+      "cancelUndo": "Close/cancel",
+      "unavailable": "Setup errors below",
+      "missingAcceptance": "S manifest; T setup; V cancellation must not falsely imply completed setup",
+      "commands": [
+        "pcbjs.walkthrough"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "partial-tests-host-acceptance-pending",
+      "sources": [
+        "packages/vscode/src/extension.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/keys.test.mjs"
+      ]
+    },
+    {
+      "id": "X29",
+      "title": "`install`",
+      "preconditions": "Workspace folder; version/dist-tags choice",
+      "result": "Exact version pick then npm terminal",
+      "writes": "package.json/lock/node_modules of chosen project",
+      "cancelUndo": "Escape before terminal; terminal cancellation is partial install",
+      "unavailable": "No-folder warning, offline packaged-version fallback",
+      "missingAcceptance": "T version; V exact executed version equals shown version, failure recovery",
+      "commands": [
+        "pcbjs.install"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/install.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/version.test.mjs"
+      ]
+    },
+    {
+      "id": "X30",
+      "title": "`createProject`",
+      "preconditions": "Folder/name/version input",
+      "result": "New project, dependencies, recommendations, source and preview",
+      "writes": "Chosen destination, no overwrite of nonempty dir",
+      "cancelUndo": "Escape before execution; generated files remain after later failure",
+      "unavailable": "Native validation, last error + Show output",
+      "missingAcceptance": "T setup; V cancellation at every stage and partial install",
+      "commands": [
+        "pcbjs.createProject"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/setup.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/setup.test.mjs"
+      ]
+    },
+    {
+      "id": "X31",
+      "title": "`newBoardWizard`",
+      "preconditions": "Folder, layers, fab, dimensions, outline",
+      "result": "Prefilled native multi-step choices, created project",
+      "writes": "Chosen destination",
+      "cancelUndo": "Escape before create; no transactional deletion promised",
+      "unavailable": "Input validation/setup errors",
+      "missingAcceptance": "S wizard; T setup; V each cancel/default and generated values",
+      "commands": [
+        "pcbjs.newBoardWizard"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "partial-tests-host-acceptance-pending",
+      "sources": [
+        "packages/vscode/src/wizard.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/setup.test.mjs"
+      ]
+    },
+    {
+      "id": "X32",
+      "title": "`newFromExample`",
+      "preconditions": "Example and destination",
+      "result": "Own copied project with preview",
+      "writes": "Destination, never bundled example",
+      "cancelUndo": "Cancel picks; creation is filesystem operation",
+      "unavailable": "Setup error/output",
+      "missingAcceptance": "S examples; T setup; V all examples and overwrite refusal",
+      "commands": [
+        "pcbjs.newFromExample"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "partial-tests-host-acceptance-pending",
+      "sources": [
+        "packages/vscode/src/examples.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/setup.test.mjs"
+      ]
+    },
+    {
+      "id": "X33",
+      "title": "`convertKicad`",
+      "preconditions": "Project picker/file dialog/destination",
+      "result": "Conversion in sibling project, opens source/preview",
+      "writes": "Chosen output; original KiCad preserved",
+      "cancelUndo": "Cancel before execute",
+      "unavailable": "Missing matching board explained, CLI failure/output",
+      "missingAcceptance": "T setup; V cancel/invalid/failed conversion leaves no misleading success",
+      "commands": [
+        "pcbjs.convertKicad"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/setup.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/setup.test.mjs"
+      ]
+    },
+    {
+      "id": "X34",
+      "title": "`installSkills`",
+      "preconditions": "Selected project; fallback runner choice",
+      "result": "Runs installer, output shown",
+      "writes": "Project skills/recommendation files per CLI",
+      "cancelUndo": "Cancel picker",
+      "unavailable": "Missing runner/dependency recovery",
+      "missingAcceptance": "T setup; V installed location and no unrelated root writes",
+      "commands": [
+        "pcbjs.installSkills"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/setup.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/setup.test.mjs"
+      ]
+    },
+    {
+      "id": "X35",
+      "title": "`check`",
+      "preconditions": "Project picker; invoke",
+      "result": "Check result in output",
+      "writes": "No design write; generated typecheck cache may change",
+      "cancelUndo": "CLI cancellation contract unspecified",
+      "unavailable": "Failed command + output",
+      "missingAcceptance": "T setup; V unsaved editor versus disk result explicitly identifiable",
+      "commands": [
+        "pcbjs.check"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/setup.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/setup.test.mjs"
+      ]
+    },
+    {
+      "id": "X36",
+      "title": "`icons.associate/icons.revoke`, automatic association",
+      "preconditions": "Supported icon theme; invoke/config change",
+      "result": "pcbjs file associations appear/disappear",
+      "writes": "VS Code config in supported scopes",
+      "cancelUndo": "Revoke/restoration",
+      "unavailable": "Information message",
+      "missingAcceptance": "T auto-icons/icon-map; V prior user association preservation",
+      "commands": [
+        "pcbjs.icons.associate",
+        "pcbjs.icons.revoke"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/auto-icons.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/auto-icons.test.mjs"
+      ]
+    },
+    {
+      "id": "X37",
+      "title": "hover preview / token colors",
+      "preconditions": "Owned design, cursor hover",
+      "result": "SVG image first then text; unit tokens",
+      "writes": "none",
+      "cancelUndo": "Dismiss/move pointer",
+      "unavailable": "No applicable hover gives none",
+      "missingAcceptance": "T hover/icon-map; V theme/high contrast/keyboard hover/failed renderer",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/hover.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/hover.test.mjs"
+      ]
+    },
+    {
+      "id": "X38",
+      "title": "CodeLens, completion, diagnostics, source highlight",
+      "preconditions": "Owned LSP document and capability",
+      "result": "Native lenses/completions/findings; entity focus throughout its syntactic block, including coordinate strings",
+      "writes": "Lens command only writes if its explicit action does",
+      "cancelUndo": "Dismiss completion; source edit undo",
+      "unavailable": "LSP timeout currently output; unavailable Edit value explains",
+      "missingAcceptance": "T lsp-client/hover/drafts; V inventory of actual LSP lens titles and host completion resolve/close",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "partial-tests-host-acceptance-pending",
+      "sources": [
+        "packages/vscode/src/language.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/lsp-client.test.mjs"
+      ]
+    },
+    {
+      "id": "X39",
+      "title": "`editValue` and code action",
+      "preconditions": "Editable segment at cursor; choose presentation or typed validated value",
+      "result": "Native QuickPick/InputBox; accept applies once, Escape cancels; one non-typed choice applies immediately",
+      "writes": "Versioned session apply to originating doc; editorAutoSave default true",
+      "cancelUndo": "Escape no edit; one-presentation case applies immediately; editor undo after apply",
+      "unavailable": "No session/no segment information",
+      "missingAcceptance": "Real installed VS Code focus/accessibility and cancellation",
+      "commands": [
+        "pcbjs.editValue"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/segments-ui.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/segments-ui.test.mjs"
+      ]
+    },
+    {
+      "id": "X40",
+      "title": "draft typing/save/hold",
+      "preconditions": "Owned unsaved document",
+      "result": "Draft board/skipped-span hint or last-good stale board; held block status",
+      "writes": "User buffer; save writes disk",
+      "cancelUndo": "Native editor undo",
+      "unavailable": "Draft/hold status",
+      "missingAcceptance": "T drafts/lsp-client; V broken edit, cursor leave, save, reconnect",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/drafts.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/drafts.test.mjs"
+      ]
+    },
+    {
+      "id": "X41",
+      "title": "source selection and pane click/Alt-click",
+      "preconditions": "Originating pane and entity",
+      "result": "Selection/chip + complete view-specific source expression selection; coordinate-string caret retains entity; Alt definition",
+      "writes": "none",
+      "cancelUndo": "Clear/selection/navigation",
+      "unavailable": "Read-only/computed/no placement reason",
+      "missingAcceptance": "T reveal/preview-undo/board-jump and edit-path jumps; V real VS Code focus and side-B/isolation",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/reveal.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/preview-undo.test.mjs"
+      ]
+    },
+    {
+      "id": "X42",
+      "title": "pane gestures/tools/assist",
+      "preconditions": "Writable first-target session and supported literal",
+      "result": "Local preview then accepted compiled pose, written file confirmation",
+      "writes": "session/edit begin/update/commit through versioned editor apply",
+      "cancelUndo": "Escape cancel no write; editor undo",
+      "unavailable": "Computed/shared/outdated/read-only reason",
+      "missingAcceptance": "T edit-path suites and target guards; V pointer gestures through installed extension",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/wiring.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/lsp-client.test.mjs"
+      ]
+    },
+    {
+      "id": "X43",
+      "title": "pane Cmd/Ctrl+Z, Shift redo",
+      "preconditions": "Preview owns a board entry or remembered source files",
+      "result": "Native chronological undo or redo in one source document named by the pane; status names that document",
+      "writes": "Editor document undo stack",
+      "cancelUndo": "Redo",
+      "unavailable": "Multiple distinct documents refused before any undo; use individual source editors",
+      "missingAcceptance": "Real installed VS Code native pane undo and keyboard forwarding",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/preview.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/preview-undo.test.mjs"
+      ]
+    },
+    {
+      "id": "X44",
+      "title": "unclaimed pane keyboard chords",
+      "preconditions": "iframe focus; Cmd/Ctrl+P/Shift+P/S etc",
+      "result": "Host command without board action; text-field native edits retained",
+      "writes": "Only host command's normal effect",
+      "cancelUndo": "Native host behavior",
+      "unavailable": "No swallowed chord",
+      "missingAcceptance": "T preview-keys + UI keys; 26 browser checks historical; V installed host accelerators",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "partial-tests-host-acceptance-pending",
+      "sources": [
+        "packages/vscode/src/preview.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/preview-keys.test.mjs"
+      ]
+    },
+    {
+      "id": "X45",
+      "title": "fabrication open/status",
+      "preconditions": "Session/projects; invoke `fab`",
+      "result": "Cards per board/target, ORDERABLE/BLOCKED/STALE, problems",
+      "writes": "none during check",
+      "cancelUndo": "Close panel",
+      "unavailable": "Check failure text",
+      "missingAcceptance": "T fab; V keyboard/ARIA, no-project and reconnect",
+      "commands": [
+        "pcbjs.fab"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/fab-panel.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/fab.test.mjs"
+      ]
+    },
+    {
+      "id": "X46",
+      "title": "fab Build/Reveal zip/Open folder/Copy sha",
+      "preconditions": "Valid retained card/button",
+      "result": "Build refresh, reveal artifact/folder, copied confirmation",
+      "writes": "Build generated artifacts in card.root",
+      "cancelUndo": "No undo; cancel build unspecified",
+      "unavailable": "Missing zip/sha unavailable; build errors output",
+      "missingAcceptance": "T fab; V card stale during asynchronous refresh",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/fab-panel.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/fab.test.mjs"
+      ]
+    },
+    {
+      "id": "X47",
+      "title": "fab blockers: finding/findings/SCM/open/save/rev/build",
+      "preconditions": "Card blocker action",
+      "result": "Fabrication finding preserves captured root/session/board/target; disconnected owner refuses with refresh instruction",
+      "writes": "Save existing buffer; rev WorkspaceEdit then save; build artifacts",
+      "cancelUndo": "Navigation reversible; rev editor undo, saved state must be visible",
+      "unavailable": "Missing PCB warning",
+      "missingAcceptance": "T fab; F2 origin omitted on finding; V focus change between gather/action",
+      "commands": [],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/fab-panel.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/action-owner.test.mjs"
+      ]
+    },
+    {
+      "id": "X48",
+      "title": "`sendToAgent`, plan Reply, `agent.stopAndTell`",
+      "preconditions": "Live agents; viewer/tree/editor selection; agent/comment picker",
+      "result": "Sent, Read by, Returned; selection metadata attached",
+      "writes": "Message only, agent's future edits separate",
+      "cancelUndo": "Escape before send; delivery no undo",
+      "unavailable": "Disabled no-agent context and returned notice",
+      "missingAcceptance": "T send/agents; V stale origin selection after session focus change",
+      "commands": [
+        "pcbjs.sendToAgent",
+        "pcbjs.agent.stopAndTell"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/send.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/send.test.mjs"
+      ]
+    },
+    {
+      "id": "X49",
+      "title": "worktree row/file, `worktree.openDiff/openBoard/detach`",
+      "preconditions": "Worktree node; click/icon",
+      "result": "Native diff, attach/show banner, or detach",
+      "writes": "none in design; connection state",
+      "cancelUndo": "Detach/reattach",
+      "unavailable": "Warning on detach failure",
+      "missingAcceptance": "T workspace/sidebar; V branch ownership and dirty buffer retained",
+      "commands": [
+        "pcbjs.worktree.openDiff",
+        "pcbjs.worktree.openBoard",
+        "pcbjs.worktree.detach"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "partial-tests-host-acceptance-pending",
+      "sources": [
+        "packages/vscode/src/worktrees.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/workspace.test.mjs"
+      ]
+    },
+    {
+      "id": "X50",
+      "title": "`worktree.merge`",
+      "preconditions": "Branch worktree; explicit modal Merge",
+      "result": "git merge into main tree, failure/output on conflict",
+      "writes": "Main checkout git/files",
+      "cancelUndo": "Cancel modal; git recovery, no automatic undo",
+      "unavailable": "Detached HEAD warning, merge error/output",
+      "missingAcceptance": "S extension 269-280; V actual conflict acceptance in scratch repository",
+      "commands": [
+        "pcbjs.worktree.merge"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "partial-tests-host-acceptance-pending",
+      "sources": [
+        "packages/vscode/src/worktrees.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/workspace.test.mjs"
+      ]
+    },
+    {
+      "id": "X51",
+      "title": "Preview UI development inspector",
+      "preconditions": "Development environment and focused preview editor",
+      "result": "Toggle, enable or disable the local inspector in that pane; retain its setting through iframe reload",
+      "writes": "none; Copy UI report writes clipboard only",
+      "cancelUndo": "Close inspector or Disable command; no source history",
+      "unavailable": "Commands hidden outside development mode; no active preview yields a message",
+      "missingAcceptance": "Full installed-host command-palette acceptance remains separate from focused bridge/browser tests",
+      "commands": [
+        "pcbjs.devtools.toggle",
+        "pcbjs.devtools.enable",
+        "pcbjs.devtools.disable"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "source-and-focused-tests",
+      "sources": [
+        "packages/vscode/src/extension.ts",
+        "packages/vscode/src/preview.ts",
+        "packages/ui/src/DevToolsOverlay.vue"
+      ],
+      "tests": [
+        "packages/vscode/tests/panels.test.mjs",
+        "packages/ui/tests/devtools.test.mjs"
+      ]
+    },
+    {
+      "id": "X52",
+      "title": "Purge Reload Dev Suite (dev)",
+      "preconditions": "Development mode; one pcbjs source checkout; save all source edits",
+      "result": "Disconnect, stop checkout sessions, clean-build core/UI, clear project/model caches, package and install local extension, reload window",
+      "writes": "Generated build outputs, project/model caches and installed development extension; saves source edits",
+      "cancelUndo": "Failed save cancels before teardown; no undo for generated caches; first failed step stops subsequent steps and can be retried",
+      "unavailable": "Hidden outside development mode; rejects missing or ambiguous source checkout",
+      "missingAcceptance": "Headless orchestration and transport tests; owner-window destructive end-to-end purge intentionally not run",
+      "commands": [
+        "pcbjs.dev.purgeReload"
+      ],
+      "support": "supported-with-boundaries",
+      "coverage": "headless-tests-host-install-verified",
+      "sources": [
+        "packages/vscode/src/dev-suite.ts",
+        "packages/vscode/src/extension.ts"
+      ],
+      "tests": [
+        "packages/vscode/tests/dev-suite.test.mjs",
+        "packages/vscode/tests/lifecycle.test.mjs"
+      ]
+    }
+  ],
+  "dynamicLenses": {
+    "source": "packages/lsp/src/lenses.ts",
+    "families": [
+      "routeLenses",
+      "instanceLenses",
+      "findingLenses"
+    ],
+    "commandIds": [
+      ""
+    ],
+    "behavior": "Informational lenses with titles and empty command IDs; no executable lens action",
+    "tests": [
+      "packages/lsp/tests/facts.test.mjs"
+    ]
+  }
+}

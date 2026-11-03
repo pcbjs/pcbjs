@@ -1,6 +1,7 @@
 // A fake of the vscode API the panels and the sidebar use, installed as the module `vscode` for require.
 import Module from 'node:module'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { readFileSync, writeFileSync } from 'node:fs'
 
 class EventEmitter {
   listeners = new Set()
@@ -16,14 +17,15 @@ class EventEmitter {
   }
 }
 
-const uri = s => ({ scheme: new URL(s).protocol.slice(0, -1), fsPath: s.startsWith('file:') ? decodeURIComponent(new URL(s).pathname) : '', toString: () => s })
+const uri = s => ({ scheme: new URL(s).protocol.slice(0, -1), fsPath: s.startsWith('file:') ? fileURLToPath(s) : '', toString: () => s })
 
 /** Every panel created, with what was posted to it. */
 export const panels = []
 
 const BESIDE = -2
+export const tabEvents = new EventEmitter()
 /** The focused editor group; a test sets it to put the cursor in the code or in a pane. */
-export const tabGroups = { activeTabGroup: { viewColumn: 1 }, all: [], close: async tab => closeTab(tab) }
+export const tabGroups = { activeTabGroup: { viewColumn: 1 }, all: [], close: async tab => closeTab(tab), onDidChangeTabs: tabEvents.event }
 
 class TabInputText {
   constructor(uri) {
@@ -37,7 +39,7 @@ class TabInputWebview {
 }
 
 /** The editor layout behind tabGroups.all: groups in grid order, each with its tabs; every call the fake answers is logged. */
-export const layout = { orientation: 0, calls: [] }
+export const layout = { orientation: 0, calls: [], shows: [] }
 
 const renumber = () => tabGroups.all.forEach((g, i) => (g.viewColumn = i + 1))
 
@@ -49,7 +51,7 @@ export function group(...tabs) {
 }
 
 function addTab(g, input) {
-  const tab = { input, group: g }
+  const tab = { input, group: g, isPreview: false }
   g.tabs.push(tab)
   g.activeTab = tab
   return tab
@@ -67,6 +69,7 @@ function closeTab(tab) {
   const g = tab.group
   g.tabs = g.tabs.filter(t => t !== tab)
   if (g.activeTab === tab) g.activeTab = g.tabs.at(-1)
+  tabEvents.fire({ closed: [tab], opened: [], changed: [] })
   return true
 }
 
@@ -77,10 +80,18 @@ function newGroup(before) {
   tabGroups.activeTabGroup = g
 }
 
-async function showTextDocument(doc, opts) {
+async function showTextDocument(doc, opts = {}) {
+  if (!doc.uri) doc = await openTextDocument(doc)
   layout.calls.push(['show', opts.viewColumn, opts.preserveFocus])
-  const g = tabGroups.all.find(x => x.viewColumn === opts.viewColumn)
-  const tab = g.tabs.find(t => t.input.uri?.toString() === doc.uri.toString()) ?? addTab(g, new TabInputText(doc.uri))
+  layout.shows.push({ uri: doc.uri.toString(), ...opts })
+  const g = tabGroups.all.find(x => x.viewColumn === (opts.viewColumn ?? tabGroups.activeTabGroup.viewColumn))
+  if (!g) return { document: doc, viewColumn: opts.viewColumn, selection: opts.selection }
+  let tab = g.tabs.find(t => t.input.uri?.toString() === doc.uri.toString())
+  if (!tab) {
+    if (opts.preview && !doc.isDirty) g.tabs = g.tabs.filter(t => !t.isPreview)
+    tab = addTab(g, new TabInputText(doc.uri))
+    tab.isPreview = !!opts.preview && !doc.isDirty
+  } else if (opts.preview === false || doc.isDirty) tab.isPreview = false
   g.activeTab = tab
   if (!opts.preserveFocus) tabGroups.activeTabGroup = g
   return {
@@ -94,8 +105,140 @@ async function showTextDocument(doc, opts) {
   }
 }
 
-async function executeCommand(id) {
+class Position {
+  constructor(line, character) {
+    this.line = line
+    this.character = character
+  }
+}
+
+const before = (a, b) => a.line < b.line || (a.line === b.line && a.character <= b.character)
+
+class Range {
+  constructor(a, b, c, d) {
+    ;[this.start, this.end] = typeof a === 'number' ? [new Position(a, b), new Position(c, d)] : [a, b]
+  }
+}
+
+class Selection extends Range {
+  constructor(anchor, active) {
+    super(...(before(anchor, active) ? [anchor, active] : [active, anchor]))
+    this.anchor = anchor
+    this.active = active
+  }
+}
+
+class WorkspaceEdit {
+  edits = []
+  replace(uri, range, newText) {
+    this.edits.push({ uri, range, newText })
+  }
+}
+
+const docEvents = { open: new EventEmitter(), save: new EventEmitter(), change: new EventEmitter(), close: new EventEmitter() }
+
+/** An open document: its text, dirty until saved or reverted to the file. */
+export class FakeDoc {
+  constructor(file, text, dirty = false) {
+    this.uri = vscode.Uri.file(file)
+    this.text = text
+    this.isDirty = dirty
+  }
+  getText() {
+    return this.text
+  }
+  offsetAt(p) {
+    const lines = this.text.split('\n')
+    if (p.line >= lines.length) return this.text.length
+    return lines.slice(0, p.line).reduce((n, l) => n + l.length + 1, 0) + Math.min(p.character, lines[p.line].length)
+  }
+  validatePosition(p) {
+    return this.positionAt(this.offsetAt(p))
+  }
+  positionAt(o) {
+    const head = this.text.slice(0, o).split('\n')
+    return new Position(head.length - 1, head[head.length - 1].length)
+  }
+  /** written to its file, clean */
+  async save() {
+    writeFileSync(this.uri.fsPath, this.text)
+    this.isDirty = false
+    docEvents.save.fire(this)
+    return true
+  }
+  /** a keystroke: the text changes and the buffer is dirty */
+  type(text) {
+    this.text = text
+    this.isDirty = true
+    docEvents.change.fire({ document: this })
+  }
+}
+
+/** The documents open in the fake editor, the editors showing them, every command run with its arguments. */
+export const docs = []
+export const editors = []
+export const commands = []
+export const commandHandlers = new Map()
+export const linkProviders = new Map()
+
+export function openDoc(file, text, opts = {}) {
+  const doc = new FakeDoc(file, text, opts.dirty)
+  docs.push(doc)
+  docEvents.open.fire(doc)
+  const editor = { document: doc, selections: opts.selections ?? [new Selection(new Position(0, 0), new Position(0, 0))], viewColumn: 1 }
+  if (opts.visible !== false) editors.push(editor)
+  return { doc, editor }
+}
+
+/** The open document of the file, else one read from disk and opened. */
+async function openTextDocument(u) {
+  const open = docs.find(d => d.uri.toString() === u.toString())
+  if (open) return open
+  const provider = contentProviders[u.scheme]
+  const doc = new FakeDoc(u.fsPath || '/virtual.json', provider ? await provider.provideTextDocumentContent(u) : readFileSync(u.fsPath, 'utf8'))
+  if (provider) doc.uri = u
+  docs.push(doc)
+  docEvents.open.fire(doc)
+  return doc
+}
+
+async function applyEdit(edit) {
+  for (const doc of docs) {
+    const mine = edit.edits.filter(e => e.uri.toString() === doc.uri.toString())
+    if (!mine.length) continue
+    history.done.push({ doc, text: doc.text })
+    history.undone.length = 0
+    for (const e of [...mine].sort((a, b) => doc.offsetAt(b.range.start) - doc.offsetAt(a.range.start)))
+      doc.text = doc.text.slice(0, doc.offsetAt(e.range.start)) + e.newText + doc.text.slice(doc.offsetAt(e.range.end))
+    doc.isDirty = true
+    docEvents.change.fire({ document: doc })
+  }
+  return true
+}
+
+/** Each applyEdit's document and its text before, which `undo` and `redo` take back and forth. */
+const history = { done: [], undone: [] }
+
+async function executeCommand(id, ...args) {
+  if (commandHandlers.has(id)) return commandHandlers.get(id)(...args)
   layout.calls.push([id])
+  commands.push([id, ...args])
+  if (id === 'undo' || id === 'redo') {
+    const step = (id === 'undo' ? history.done : history.undone).pop()
+    if (step) {
+      ;(id === 'undo' ? history.undone : history.done).push({ doc: step.doc, text: step.doc.text })
+      step.doc.text = step.text
+      docEvents.change.fire({ document: step.doc })
+    }
+  }
+  if (id === 'workbench.action.files.revert') {
+    const doc = docs.find(d => d.uri.toString() === args[0]?.toString())
+    if (doc) {
+      doc.text = readFileSync(doc.uri.fsPath, 'utf8')
+      doc.isDirty = false
+      docEvents.change.fire({ document: doc })
+    }
+  }
   if (id === 'vscode.getEditorLayout') return { orientation: layout.orientation, groups: tabGroups.all.map(() => ({})) }
   if (id === 'workbench.action.newGroupLeft') newGroup(true)
   if (id === 'workbench.action.newGroupAbove') newGroup(true)
@@ -116,7 +259,7 @@ function createWebviewPanel(viewType, title, show, options) {
     disposed: false,
     posted: [],
     iconPath: undefined,
-    webview: { html: '', options: {}, postMessage: async m => (panel.posted.push(m), true), onDidReceiveMessage: received.event },
+    webview: { html: '', options: {}, postMessage: async m => (panel.posted.push(m), true), onDidReceiveMessage: received.event, receive: m => received.fire(m) },
     reveal(column, preserveFocus) {
       panel.revealed++
       if (!preserveFocus) panel.focus()
@@ -215,11 +358,28 @@ function createInputBox() {
   return box
 }
 
+/** The providers of virtual documents by scheme, as the merge editor reads them. */
+export const contentProviders = {}
+
+/** Every terminal created, with the text sent to it. */
+export const terminals = []
+
 const workspace = {
+  openTextDocument,
   get workspaceFolders() {
     return ui.folders.map((f, index) => ({ uri: vscode.Uri.file(f), name: f.split('/').pop(), index }))
   },
   findFiles: async (glob, exclude) => (ui.calls.push({ kind: 'findFiles', glob, exclude }), ui.files.map(f => vscode.Uri.file(f))),
+  get textDocuments() {
+    return docs
+  },
+  onDidOpenTextDocument: docEvents.open.event,
+  onDidSaveTextDocument: docEvents.save.event,
+  onDidChangeTextDocument: docEvents.change.event,
+  onDidCloseTextDocument: docEvents.close.event,
+  registerTextDocumentContentProvider: (scheme, provider) => ((contentProviders[scheme] = provider), { dispose: () => delete contentProviders[scheme] }),
+  applyEdit,
+  getConfiguration: () => ({ get: (_key, fallback) => ui.autoSave ?? fallback }),
   asRelativePath: p => {
     const root = ui.folders.find(f => p.startsWith(`${f}/`))
     return root ? p.slice(root.length + 1) : p
@@ -227,19 +387,23 @@ const workspace = {
 }
 
 export const vscode = {
+  languages: {
+    registerCodeActionsProvider: () => ({ dispose() {} }),
+    registerDocumentLinkProvider: (selector, provider) => (linkProviders.set(selector.scheme, provider), { dispose: () => linkProviders.delete(selector.scheme) }),
+  },
+  DocumentLink: class { constructor(range, target) { this.range = range; this.target = target } },
+  CodeActionKind: { Empty: '' },
   EventEmitter,
-  Uri: { parse: uri, file: p => uri(pathToFileURL(p).toString()), joinPath: (u, ...p) => uri(`${u}/${p.join('/')}`) },
-  ViewColumn: { One: 1, Beside: BESIDE },
+  Uri: { parse: uri, from: parts => ({ ...parts, toString: () => `${parts.scheme}:${parts.path}?${encodeURIComponent(parts.query)}` }), file: p => uri(pathToFileURL(p).toString()), joinPath: (u, ...p) => uri(`${u}/${p.join('/')}`) },
+  ViewColumn: { Active: -1, One: 1, Beside: BESIDE },
   TabInputText,
   TabInputWebview,
   TextEditorRevealType: { InCenter: 2 },
   QuickInputButtons,
-  Selection: class {
-    constructor(start, end) {
-      this.start = start
-      this.end = end
-    }
-  },
+  Position,
+  Range,
+  Selection,
+  WorkspaceEdit,
   ThemeColor: class {
     constructor(id) {
       this.id = id
@@ -265,9 +429,23 @@ export const vscode = {
     createWebviewPanel,
     tabGroups,
     showTextDocument,
-    createTreeView: (id, opts) => ({ id, ...opts, description: undefined, dispose() {} }),
+    createTreeView: (id, opts) => ({ id, ...opts, description: undefined, dispose() {}, onDidChangeSelection() {}, onDidExpandElement() {}, onDidCollapseElement() {} }),
+    createTextEditorDecorationType: () => ({ dispose() {} }),
+    onDidChangeVisibleTextEditors: new EventEmitter().event,
+    get visibleTextEditors() {
+      return editors
+    },
+    get activeTextEditor() {
+      return editors[0]
+    },
+    setStatusBarMessage: text => (ui.calls.push({ kind: 'status', text }), { dispose() {} }),
     createQuickPick,
     createInputBox,
+    createTerminal: opts => {
+      const t = { ...opts, sent: [], shown: 0, show: () => t.shown++, sendText: text => t.sent.push(text) }
+      terminals.push(t)
+      return t
+    },
     showQuickPick: async (items, opts) => answer('pick', { items, ...opts }),
     showInputBox: async opts => answer('input', opts),
     showOpenDialog: async opts => answer('open', opts),
@@ -283,7 +461,7 @@ export const vscode = {
   workspace,
   ProgressLocation: { Notification: 15 },
   env: { asExternalUri: async u => u, clipboard: { writeText: async t => ui.clipboard.push(t) } },
-  commands: { executeCommand },
+  commands: { executeCommand, registerCommand: (id, handler) => (commandHandlers.set(id, handler), { dispose: () => commandHandlers.delete(id) }) },
 }
 
 const load = Module._load

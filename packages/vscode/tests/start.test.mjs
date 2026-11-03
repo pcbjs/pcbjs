@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { FakeChild } from './fake.mjs'
 import { ui } from './vscode.mjs'
 
@@ -71,7 +72,7 @@ test('walkthrough: one Get started entry, featured for pcbjs projects, every ste
   assert.ok(w.featuredFor.includes('**/pcb.config.{ts,mts,js,mjs}'))
   assert.deepEqual(
     w.steps.map(s => s.id),
-    ['create', 'example', 'preview', 'check', 'edit', 'kicad', 'skills'],
+    ['install', 'create', 'example', 'preview', 'check', 'edit', 'kicad', 'skills'],
   )
   const contributed = new Set(pkg.contributes.commands.map(c => c.command))
   const src = readdirSync(path.join(pkgDir, 'src'))
@@ -93,6 +94,9 @@ test('walkthrough: one Get started entry, featured for pcbjs projects, every ste
     }
   }
   for (const id of ['pcbjs.newFromExample', 'pcbjs.newBoardWizard', 'pcbjs.check', 'pcbjs.walkthrough']) assert.ok(contributed.has(id) && src.includes(`'${id}'`), id)
+  // the live check above the questionnaire: checked by the context the status bar sets once @pcbjs/pcbjs is installed
+  assert.deepEqual(w.steps[0].completionEvents, ['onContext:pcbjs.installed'])
+  assert.match(src, /'setContext', 'pcbjs\.installed'/)
 })
 
 test('example picker: the CLI list with a line each, a folder named after the example, then create --example and the preview', async () => {
@@ -192,8 +196,47 @@ test('wizard: Back keeps the answers, a new layer count picks its JLCPCB preset,
   assert.ok(!existsSync(path.join(r, 'board-2')))
 })
 
+test('wizard: without pcbjs installed the version comes first, create runs from npm at it, and the workspace folder recommends the extension', async () => {
+  const r = path.join(tmp, `w${n++}`)
+  mkdirSync(path.join(r, '.devcontainer'), { recursive: true })
+  writeFileSync(path.join(r, '.devcontainer', 'devcontainer.json'), '{ "image": "node:22" }')
+  reset([r])
+  const seen = []
+  answers(
+    ['quickPick', o => (seen.push(o.items.map(i => i.label)), 'active')],
+    ['inputBox', 'accept'],
+    ['quickPick', 'active'],
+    ['quickPick', 'active'],
+    ['quickPick', 'active'],
+    ['inputBox', 'accept'],
+  )
+  const runs = []
+  const spawn = (command, args, options) => {
+    const child = new FakeChild()
+    runs.push({ command: path.basename(command), args, cwd: options.cwd })
+    setImmediate(() => {
+      if (args.includes('create')) touch(path.join(options.cwd, args[args.indexOf('create') + 1], 'pcb.tsx'))
+      else touch(path.join(options.cwd, BIN))
+      child.exit(0)
+    })
+    return child
+  }
+  const h = Object.assign(host(spawn), { packaged: '0.0.1-beta.1', fetch: async () => ({ ok: true, json: async () => ({ latest: '0.0.0', beta: '0.0.1-beta.3' }) }) })
+  assert.equal(await newBoardWizard(h), path.join(r, 'board'))
+  assert.deepEqual(
+    seen[0],
+    ['$(cloud-download) Create with @pcbjs/pcbjs 0.0.1-beta.3', '$(pass-filled) Include the beta and next dist-tags'],
+    'a pre-release build has the checkbox on',
+  )
+  assert.deepEqual(runs[0].args.slice(0, 5), ['--yes', '--package', '@pcbjs/pcbjs@0.0.1-beta.3', 'pcbjs', 'create'])
+  assert.deepEqual(runs[1], { command: 'npm', args: ['install'], cwd: path.join(r, 'board') })
+  assert.deepEqual(JSON.parse(readFileSync(path.join(r, '.vscode', 'extensions.json'), 'utf8')), { recommendations: ['pcbjs.vscode-pcbjs'] })
+  assert.deepEqual(JSON.parse(readFileSync(path.join(r, '.devcontainer', 'devcontainer.json'), 'utf8')).customizations, { vscode: { extensions: ['pcbjs.vscode-pcbjs'] } })
+  assert.ok(h.lines.includes('pcbjs: recommended pcbjs.vscode-pcbjs in .vscode/extensions.json'))
+})
+
 test('wizard: the presets are those of @pcbjs/fab, every layer count has a JLCPCB default, sizes the template fits', async () => {
-  const fab = await import(path.resolve(pkgDir, '../fab/dist/index.js'))
+  const fab = await import(pathToFileURL(path.resolve(pkgDir, '../fab/dist/index.js')).href)
   assert.deepEqual(FABS, [...fab.FABS])
   for (const l of LAYERS) assert.ok(fabsFor(l).includes(`JLCPCB/${l}-Layer`), String(l))
   assert.equal(sizeError('50 x 40', false), undefined)

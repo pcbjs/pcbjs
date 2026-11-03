@@ -1,7 +1,8 @@
 // The server computes every edit and checks every typed value, so a new kind needs no change here.
 
 import * as vscode from 'vscode'
-import { widgetOf, type PcbjsSession, type Presentation, type Segment } from './lsp-client'
+import type { Presentation, Segment } from '@pcbjs/core/protocol'
+import { type PcbjsSession } from './lsp-client'
 
 export class SegmentsUi implements vscode.Disposable {
   private readonly cache = new Map<string, { version: number; segments: Segment[] }>()
@@ -94,10 +95,10 @@ export class SegmentsUi implements vscode.Disposable {
     }
     const seg = await session.segmentAt(doc.uri.toString(), { line: at.line, character: at.character }).catch(() => undefined)
     if (!seg) {
-      void vscode.window.showInformationMessage('pcbjs: put the cursor on a value pcbjs can edit, such as an at, a layer, a width or a route path.')
+      void vscode.window.showInformationMessage('pcbjs: put the cursor on a value pcbjs can edit, such as an at, a layer, a width or a route chain command.')
       return
     }
-    const widget = widgetOf(seg)
+    const widget = seg.widget
     const pos0 = { line: seg.range.start.line, character: seg.range.start.character }
     // a choice of one, such as a side: no menu
     if (!widget.typed && seg.presentations.length === 1) return void this.apply(doc, session, seg.presentations[0])
@@ -125,8 +126,12 @@ export class SegmentsUi implements vscode.Disposable {
       },
     })
     if (value === undefined) return
-    if (!last || last.error) last = await session.typed(doc.uri.toString(), pos0, value).catch(() => undefined)
-    const p = last?.presentations[0]
+    last = await session.typed(doc.uri.toString(), pos0, value).catch(() => undefined)
+    if (!last || last.error) {
+      void vscode.window.showInformationMessage(`pcbjs: ${last?.error ?? 'the server did not answer; no value was changed'}`)
+      return
+    }
+    const p = last.presentations[0]
     if (p) await this.apply(doc, session, p)
   }
 

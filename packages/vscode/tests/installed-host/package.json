@@ -1,0 +1,9 @@
+{
+  "name": "pcbjs-installed-host-driver",
+  "publisher": "pcbjs-test",
+  "version": "0.0.0",
+  "engines": { "vscode": "^1.90.0" },
+  "main": "./extension.cjs",
+  "activationEvents": ["onStartupFinished"],
+  "extensionDependencies": ["pcbjs.vscode-pcbjs"]
+}

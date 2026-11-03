@@ -1,65 +1,17 @@
-// The hosted IDE protocol, without vscode. docs/ide-bridge.md describes it; anything not named here is ignored.
+// The session protocol as the extension speaks it, without vscode. docs/ide-bridge.md describes it; anything not named here is ignored.
 
 import * as path from 'node:path'
+import { MAJOR, PROTOCOL, compat, type Events, type Hello, type IdeBoardsMsg, type Ready, type Sends, type ViewName } from '@pcbjs/core/protocol'
 
-/** Additive: a newer server keeps answering this one. */
-export const PROTOCOL = 2
-/** A server with a higher major needs a newer extension. */
-export const MAJOR = 1
-/** What this extension handles: the events it takes, `lsp` for a language client, `widget` for data-driven segment editors. */
-export const CAPABILITIES = ['ready', 'boards', 'scopes', 'scope', 'select', 'log', 'lsp', 'widget'] as const
+/** What this extension handles: the events it takes and `lsp` for a language client. */
+export const CAPABILITIES = ['ready', 'boards', 'scopes', 'scope', 'log', 'lsp', 'finding'] as const
 
 export interface Envelope {
   event: string
   data: any
 }
 
-export interface Hello {
-  name: string
-  version: string
-  protocol: number
-  major: number
-  capabilities: string[]
-}
-
 export const hello = (name: string, version: string): Hello => ({ name, version, protocol: PROTOCOL, major: MAJOR, capabilities: [...CAPABILITIES] })
-
-export interface ReadyInfo {
-  port: number
-  host: string
-  urls: string[]
-  root: string
-  pid: number
-  version: string
-  /** a workspace server's folders, `root` first */
-  folders?: string[]
-  /** absent before protocol 2 */
-  protocol?: number
-  major?: number
-  capabilities?: string[]
-}
-
-// Only the fields the extension reads; the server sends more.
-
-export interface BoardsInfo {
-  boards: { name: string; title: string; entry: string; status?: string; targets?: string[] }[]
-  /** the directory entries are relative to */
-  root?: string
-}
-
-export interface ScopeInfo {
-  scope: string
-  root: string
-  route: string
-  /** null before the server listens */
-  url: string | null
-}
-
-export interface ScopesInfo {
-  scopes: { root: string; slug?: string; name?: string; route?: string; status?: string; displayed?: boolean }[]
-  displayed?: string
-  single?: boolean
-}
 
 /** 1-based, `endCol` inclusive. */
 export interface SelectRequest {
@@ -70,36 +22,26 @@ export interface SelectRequest {
   endCol: number
 }
 
-export interface LogEvent {
-  level: string
-  text: string
-}
-
 export const EVENTS = {
   ready: 'pcbjs:ide:ready',
   boards: 'pcbjs:ide:boards',
   scopes: 'pcbjs:ide:scopes',
   scope: 'pcbjs:ide:scope',
-  select: 'pcbjs:ide:select',
   log: 'pcbjs:ide:log',
   hello: 'pcbjs:ide:hello',
-  cursor: 'pcbjs:ide:cursor',
-  focus: 'pcbjs:ide:focus',
-  close: 'pcbjs:ide:close',
   bye: 'pcbjs:ide:bye',
-} as const
+} as const satisfies Record<string, keyof Events | keyof Sends>
 
-/** The server's protocol major, 1 for a server from before protocol 2. */
-export const majorOf = (info: { major?: unknown }): number => (Number.isInteger(info.major) ? (info.major as number) : 1)
+/** Whether the server offers a capability. */
+export const offers = (info: Pick<Ready, 'capabilities'>, cap: string): boolean => info.capabilities.includes(cap)
 
-/** Whether the server offers a capability; a server from before protocol 2 lists none and offers all of protocol 1. */
-export const offers = (info: { capabilities?: unknown }, cap: string): boolean => !Array.isArray(info.capabilities) || info.capabilities.includes(cap)
-
-/** The notice for a server too new for this extension, undefined when it is not. */
-export function tooNew(info: { major?: unknown; version?: unknown; root?: unknown }): string | undefined {
-  const major = majorOf(info)
-  if (major <= MAJOR) return undefined
-  return `pcbjs ${String(info.version ?? '')} in ${String(info.root ?? 'this project')} speaks IDE protocol ${major}, this extension ${MAJOR}. Run \`pcbjs ide install\` in the project to install the extension that matches it.`
+/** The notice for a session this extension cannot use: one of a newer major needs a newer extension, an older one misses methods and frames the extension sends, so it is restarted rather than half used. */
+export function mismatch(info: Pick<Ready, 'protocol' | 'major' | 'version' | 'root'>): string | undefined {
+  const c = compat(info)
+  if (c === 'same' || c === 'newer') return undefined
+  if (c === 'incompatible' && info.major > MAJOR)
+    return `pcbjs ${info.version} in ${info.root} speaks IDE protocol ${info.major}, this extension ${MAJOR}. Run \`pcbjs ide install\` in the project to install the extension that matches it.`
+  return `session ${info.version} in ${info.root} is older than the extension, restart it: pcbjs session stop, then pcbjs dev.`
 }
 
 export function encode(event: string, data?: unknown): string {
@@ -149,11 +91,11 @@ export function validSelect(d: any): d is SelectRequest {
   return !!d && typeof d.file === 'string' && [d.line, d.col, d.endLine, d.endCol].every(n => Number.isInteger(n) && n >= 1)
 }
 
-export function validReady(d: any): d is ReadyInfo {
-  return !!d && typeof d.root === 'string' && Number.isInteger(d.port) && d.port > 0
+export function validReady(d: any): d is Ready {
+  return !!d && typeof d.root === 'string' && Number.isInteger(d.port) && d.port > 0 && Number.isInteger(d.protocol) && Number.isInteger(d.major) && Array.isArray(d.capabilities)
 }
 
-export function validBoards(d: any): d is BoardsInfo {
+export function validBoards(d: any): d is IdeBoardsMsg {
   return !!d && Array.isArray(d.boards)
 }
 
@@ -170,7 +112,7 @@ export function samePath(a: string, b: string): boolean {
 }
 
 /** The first loopback URL, else the first URL, else host and port. */
-export function devUrl(info: ReadyInfo): string {
+export function devUrl(info: Ready): string {
   const urls = Array.isArray(info.urls) ? info.urls.filter(u => typeof u === 'string') : []
   const loop = urls.find(u => /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])[:/]/.test(u))
   if (loop ?? urls[0]) return (loop ?? urls[0]) as string
@@ -180,6 +122,12 @@ export function devUrl(info: ReadyInfo): string {
   return `http://${host}:${info.port}/`
 }
 
+/** The path, query and hash of a page, which a pane keeps and resolves against the session it shows when it paints. */
+export function pathOf(page: string): string {
+  const u = new URL(page, 'http://localhost/')
+  return u.pathname + u.search + u.hash
+}
+
 export type ThemeName = 'dark' | 'light' | 'hc'
 
 /** vscode.ColorThemeKind: 1 Light, 2 Dark, 3 HighContrast, 4 HighContrastLight. */
@@ -187,10 +135,8 @@ export function themeName(kind: number): ThemeName {
   return kind === 1 ? 'light' : kind === 3 || kind === 4 ? 'hc' : 'dark'
 }
 
-export type ViewKind = '2d' | '3d' | 'sch'
-
 /** With a view: that view, and `panel=0` since the sidebar shows findings, nets and BOM. */
-export function viewerUrl(url: string, theme: ThemeName, view?: ViewKind): string {
+export function viewerUrl(url: string, theme: ThemeName, view?: ViewName): string {
   const u = new URL(url)
   u.searchParams.set('ide', '1')
   u.searchParams.set('theme', theme)
