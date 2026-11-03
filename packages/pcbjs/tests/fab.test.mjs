@@ -1,14 +1,17 @@
 'use strict'
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { h, defineDefaultRules, defineDefaultBoard, resetDefaults, isBoundPCB as isBoundRoot } from '@pcbjs/core'
+import * as core from '@pcbjs/core'
+import { h, defineDefaultBoard, resetDefaults, route } from '@pcbjs/core'
 import { bindPCB as bindRoot } from '@pcbjs/fab'
 import { compileBoard } from '@pcbjs/compile'
-import { FABS, bindPCB, isBoundPCB } from '@pcbjs/fab/index'
-import { JLCPCB, OSHPARK, BASE, resolveRules, withMaskColor } from '@pcbjs/lib/rules'
-import { JLCPCB_2L, JLCPCB_4L_7628, OSHPARK_2L } from '@pcbjs/lib/stackups'
+import { FABS, bindPCB, isBoundPCB } from '@pcbjs/fab'
+import { JLCPCB, OSHPARK, BASE } from '@pcbjs/lib/rules'
+import { resolveRules, withMaskColor } from '@pcbjs/core/internal/rules'
+import { JLCPCB_2L, JLCPCB_4L_7628, OSHPARK_2L, fourLayer } from '@pcbjs/lib/stackups'
 import PCB2, * as jlc2 from '@pcbjs/fab/JLCPCB/2-Layer'
 import PCB8 from '@pcbjs/fab/JLCPCB/8-Layer'
+import { fp, handle } from './parts.mjs'
 
 const outline = () => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 })
 const board = (C, props = {}) => compileBoard(h(C, { name: 'F', ...props }, outline()))
@@ -22,14 +25,14 @@ test('fab: every preset in FABS loads and default-exports a bound component', as
     const m = await import(`@pcbjs/fab/${p}`)
     assert.equal(typeof m.default, 'function', p)
     assert.ok(isBoundPCB(m.default), p)
-    assert.ok(m.stackup && m.rules && m.colors, p)
-    assert.equal(m.default.preset.name, m.name, p)
+    assert.deepEqual(Object.keys(m), ['default'], `${p}: the preset data is read from PCB.preset`)
     assert.ok(Object.isFrozen(m.default.preset), p)
     const b = board(m.default)
-    assert.equal(b.rules.clearance, m.rules.clearance, p)
+    assert.equal(b.rules.clearance, m.default.preset.rules.clearance, p)
   }
   assert.equal(bindRoot, bindPCB)
-  assert.equal(isBoundRoot, isBoundPCB)
+  // one import path: the preset helpers live in @pcbjs/fab, the base rules in @pcbjs/lib/rules
+  for (const gone of ['isBoundPCB', 'BASE_RULES', 'mergeRules', 'defineDefaultRules']) assert.equal(core[gone], undefined, gone)
   assert.equal(
     isBoundPCB(() => null),
     false,
@@ -40,13 +43,12 @@ test('fab: the preset spec reads back from the JLCPCB 2-Layer module', () => {
   assert.equal(PCB2.preset.name, 'JLCPCB 2-Layer')
   assert.equal(PCB2.preset.fab, 'JLCPCB')
   assert.equal(PCB2.preset.rules.clearance, JLCPCB.clearance)
-  assert.equal(jlc2.rules.clearance, JLCPCB.clearance)
-  assert.equal(jlc2.name, 'JLCPCB 2-Layer')
+  assert.deepEqual(Object.keys(jlc2), ['default'])
 })
 
 test('fab: JLCPCB 2-Layer compiles with JLCPCB rules and a black mask', () => {
-  const b = board(PCB2, { color: 'black', revision: 'B' })
-  assert.equal(b.revision, 'B')
+  const b = board(PCB2, { color: 'black', rev: 'B' })
+  assert.equal(b.rev, 'B')
   assert.equal(b.copper, 2)
   assert.deepEqual(b.rules, withMaskColor(resolveRules(JLCPCB), 'Black'))
   assert.equal(b.stackup.maskColor, 'Black')
@@ -71,21 +73,20 @@ test('fab: element rules win over the preset, key by key', () => {
 })
 
 test('fab: global defaults sit below the preset', () => {
-  defineDefaultRules({ clearance: 0.25, minTrackWidth: 0.3 })
-  defineDefaultBoard({ copper: 4, revision: 'D' })
+  defineDefaultBoard({ stackup: fourLayer(), rev: 'D', rules: { clearance: 0.25, minTrackWidth: 0.3 } })
   const b = board(PCB2)
   assert.equal(b.rules.clearance, JLCPCB.clearance)
   assert.equal(b.rules.minTrackWidth, JLCPCB.minTrackWidth)
   assert.equal(b.copper, 2)
-  assert.equal(b.revision, 'D', 'a default the preset leaves out still applies')
+  assert.equal(b.rev, 'D', 'a default the preset leaves out still applies')
   assert.equal(board(PCB2, { rules: { clearance: 0.2 } }).rules.clearance, 0.2)
 })
 
-test('fab: an explicit stackup replaces the preset one, a disagreeing copper is an error', () => {
+test('fab: an explicit stackup replaces the preset one; copper is no prop', () => {
   const b = board(PCB2, { stackup: JLCPCB_4L_7628, color: 'red' })
   assert.equal(b.copper, 4)
   assert.equal(b.stackup.maskColor, 'Red')
-  assert.throws(() => board(PCB2, { copper: 4 }), /copper=\{4\} disagrees with the stackup/)
+  assert.throws(() => board(PCB2, { copper: 4 }), /no copper prop; the layers come from the stackup, such as stackup=\{fourLayer\(\)\}/)
 })
 
 test('fab: the 8-layer preset yields In1 to In6', () => {
@@ -105,7 +106,7 @@ test('fab: bindPCB makes a custom fab', () => {
 })
 
 test('fab: fabNotes from the defaults, the preset, a variant target and <PCB> print under Notes in that order, each once', async () => {
-  const { buildFab } = await import('@pcbjs/export/fab')
+  const { buildFab } = await import('@pcbjs/export/internal/fab')
   const { compileBoards } = await import('@pcbjs/compile')
   const { variants } = await import('@pcbjs/core')
   const DATE = '2026-01-01T00:00:00Z'
@@ -126,7 +127,7 @@ test('fab: fabNotes from the defaults, the preset, a variant target and <PCB> pr
 })
 
 test('fab: README-fab names each font the text uses with its provenance', async () => {
-  const { buildFab } = await import('@pcbjs/export/fab')
+  const { buildFab } = await import('@pcbjs/export/internal/fab')
   const DATE = '2026-01-01T00:00:00Z'
   const text = (props, s) => h('text', { layer: 'F.SilkS', at: '5 5', size: 1, ...props }, s)
   const readme = kids => buildFab(compileBoard(h(PCB2, { name: 'T', silkRefs: false }, outline(), ...kids)), DATE).readme
@@ -142,9 +143,9 @@ test('fab: README-fab names each font the text uses with its provenance', async 
 })
 
 test('fab: teardrops are regions of the copper Gerbers and pass the Gerber self check', async () => {
-  const { buildFab } = await import('@pcbjs/export/fab')
+  const { buildFab } = await import('@pcbjs/export/internal/fab')
   const { route } = await import('@pcbjs/core')
-  const tht = (ref, x) => h('footprint', { ref, at: [x, 5], nets: { 1: 'A' } }, h('pad', { num: 1, size: 1.7, drill: 1, type: 'tht' }))
+  const tht = (ref, x) => fp({ ref, at: `${x} 5`, nets: { 1: 'A' } }, h('pad', { num: 1, size: 1.7, drill: 1, type: 'tht' }))
   const make = teardrops =>
     compileBoard(
       h(
@@ -153,9 +154,9 @@ test('fab: teardrops are regions of the copper Gerbers and pass the Gerber self 
         h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 10 }),
         tht('J1', 4),
         tht('J2', 16),
-        route('J1.1', 'J2.1', 'Z').width(0.3),
+        route(handle('J1.1'), handle('J2.1')).width(0.3).Z(),
       ),
-      { routeCache: false },
+      { cache: false },
     )
   const fab = buildFab(make({ pads: 'tht' }), '2026-01-01T00:00:00Z', { check: true })
   assert.match(fab.readme, /STATUS: ORDERABLE/)
@@ -166,7 +167,7 @@ test('fab: teardrops are regions of the copper Gerbers and pass the Gerber self 
 })
 
 test('fab: the mask colour picks the JLCPCB mask web, maskWeb on the board overrides it, README-fab prints both', async () => {
-  const { buildFab } = await import('@pcbjs/export/fab')
+  const { buildFab } = await import('@pcbjs/export/internal/fab')
   const { compileBoards } = await import('@pcbjs/compile')
   const { variants } = await import('@pcbjs/core')
   assert.equal(board(PCB2).rules.maskWeb, 0.1)

@@ -1,21 +1,22 @@
 // Jig: a 60 x 45 mm bed of nails for the controller. The controller lies face up on it, its test pads on the pogo pins, its M3 holes on locating pins.
 // Frame: millimetres, origin at the top-left corner of the outline, x right, y down, the same frame as the controller seen from its top.
 import PCB from '@pcbjs/fab/JLCPCB/2-Layer'
-import { pour, via, reference } from '@pcbjs/core'
+import { pour, via, reference, Place } from '@pcbjs/core'
 import { Brand, MountingHole, roundedRect, rect } from '@pcbjs/lib'
 import { W, H, HOLES, TEST_PADS } from '../lib/mech'
 import { chain } from '../lib/wire'
 import * as sch from './jig.sch'
 
-const Locator = MountingHole(3.2)
+// the locating holes, made in a loop, so each takes its ref from the loop
+const HOLE_PARTS = HOLES.map((_, i) => MountingHole(3.2)({ ref: `H${i + 1}` }))
 const SIG = 0.25,
   PWR = 0.5
 
 export default (
-  <PCB name="jig" title="Motor stack controller jig" revision="0.1.0" schematic={sch} color="red">
+  <PCB name="jig" title="Motor stack controller jig" rev="0.1.0" schematic={sch} color="red">
     <path layer="Edge.Cuts" d={roundedRect(W, H, 2)} />
     {HOLES.map(([x, y], i) => (
-      <Locator ref={`H${i + 1}`} at={`${x} ${y}`} />
+      <Place part={HOLE_PARTS[i]} at={`${x} ${y}`} />
     ))}
 
     {/* pogo pins under the controller's test pads */}

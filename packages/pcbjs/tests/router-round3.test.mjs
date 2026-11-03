@@ -9,15 +9,16 @@ import { join } from 'node:path'
 import { h } from '@pcbjs/core/jsx-runtime'
 import PCB, { route, resetDefaults } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
-import { clearRouteCache, hash } from '@pcbjs/compile/route-cache'
+import { clearRouteCache, hash } from '@pcbjs/compile/internal/route-cache'
+import { fp, handle } from './parts.mjs'
 
 afterEach(() => resetDefaults())
 
 const edge = (w = 30, hh = 20) => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w, h: hh })
-const smd = (ref, x, y, net, size = 1) => h('footprint', { ref, at: [x, y], nets: { 1: net } }, h('pad', { num: 1, size, type: 'smd' }))
+const smd = (ref, x, y, net, size = 1) => fp({ ref, at: `${x} ${y}`, nets: { 1: net } }, h('pad', { num: 1, size, type: 'smd' }))
 /** Two smd pads `d` mm apart side by side, pad 1 on `a` at -x, pad 2 on `b` at +x. */
 const two = (ref, x, y, a, b, d = 0.5, size = [0.3, 1]) =>
-  h('footprint', { ref, at: [x, y], nets: { 1: a, 2: b } }, h('pad', { num: 1, at: [-d / 2, 0], size, type: 'smd' }), h('pad', { num: 2, at: [d / 2, 0], size, type: 'smd' }))
+  fp({ ref, at: `${x} ${y}`, nets: { 1: a, 2: b } }, h('pad', { num: 1, at: `${-d / 2} 0`, size, type: 'smd' }), h('pad', { num: 2, at: `${d / 2} 0`, size, type: 'smd' }))
 const tracks = (b, net) => b.items.filter(i => i.kind === 'track' && (net === undefined || i.net === net))
 const copper = b => b.items.filter(i => i.kind === 'track' || i.kind === 'via').map(i => [i.kind, i.net, i.layer, i.pts ?? i.at])
 const errors = b => b.drc.filter(d => d.severity === 'error').map(d => `${d.rule}: ${d.message}`)
@@ -47,15 +48,15 @@ test('cache: two stored legs that cross, each with a matching obstacle hash, are
         smd('A2', 27, 10, 'A'),
         smd('B1', 15, 3, 'B'),
         smd('B2', 15, 17, 'B'),
-        route('A1.1', 'A2.1').width(0.25).layers(['F.Cu']),
-        route('B1.1', 'B2.1').width(0.25),
+        route(handle('A1.1'), handle('A2.1')).width(0.25).layers(['F.Cu']),
+        route(handle('B1.1'), handle('B2.1')).width(0.25),
       )
-    const opts = { routeCache: { dir } }
+    const opts = { cache: { dir } }
     const cold = compileBoard(mk(), opts)
     assert.deepEqual(errors(cold), [])
     // a cache as a run that went wrong left it: B straight across A on F.Cu, and both obstacle hashes over an empty box far away,
     // so the hash check alone passes both
-    const file = join(dir, 'Bad.json'),
+    const file = join(dir, 'route', 'Bad.json'),
       data = JSON.parse(readFileSync(file, 'utf8'))
     const legs = data.groups[''].legs,
       far = [1000, 1000, 1001, 1001],
@@ -96,12 +97,15 @@ test('cache: a cold and a warm compile give the same items, and the warm one tak
         two('J2', 10, 17, 'DP', 'DN', 2),
         smd('C1', 3, 6, 'C'),
         smd('C2', 27, 6, 'C'),
-        route(['J1.1', 'J1.2']).X(['J2.1', 'J2.2']).width(0.2).gap(0.2).priority(2),
-        route('C1.1', 'C2.1').width(0.25).priority(-1),
+        route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+          .width(0.2)
+          .gap(0.2)
+          .priority(2),
+        route(handle('C1.1'), handle('C2.1')).width(0.25).priority(-1),
       )
-    const cold = compileBoard(mk(), { routeCache: { dir } })
+    const cold = compileBoard(mk(), { cache: { dir } })
     clearRouteCache()
-    const warm = compileBoard(mk(), { routeCache: { dir } })
+    const warm = compileBoard(mk(), { cache: { dir } })
     assert.equal(warm.routing.cached, warm.routing.legs)
     assert.deepEqual(warm.items, cold.items)
   }))
@@ -110,8 +114,8 @@ test('cache: a cold and a warm compile give the same items, and the warm one tak
 
 test('priority: a route of higher priority added over a cached route of lower priority routes through it, and the lower one moves, as in a cold compile', () =>
   withDir(dir => {
-    const base = [smd('L1', 3, 10, 'L'), smd('L2', 27, 10, 'L'), route('L1.1', 'L2.1').width(0.25).priority(-1)]
-    const opts = { routeCache: { dir } }
+    const base = [smd('L1', 3, 10, 'L'), smd('L2', 27, 10, 'L'), route(handle('L1.1'), handle('L2.1')).width(0.25).priority(-1)]
+    const opts = { cache: { dir } }
     const first = compileBoard(h(PCB, { name: 'Pri' }, edge(), ...base), opts)
     assert.deepEqual(
       tracks(first, 'L').map(t => t.pts),
@@ -122,7 +126,7 @@ test('priority: a route of higher priority added over a cached route of lower pr
         ],
       ],
     )
-    const added = () => h(PCB, { name: 'Pri' }, edge(), ...base, smd('H1', 15, 3, 'H'), smd('H2', 15, 17, 'H'), route('H1.1', 'H2.1').width(0.25).priority(1))
+    const added = () => h(PCB, { name: 'Pri' }, edge(), ...base, smd('H1', 15, 3, 'H'), smd('H2', 15, 17, 'H'), route(handle('H1.1'), handle('H2.1')).width(0.25).priority(1))
     const warm = compileBoard(added(), opts)
     assert.deepEqual(
       tracks(warm, 'H').map(t => t.pts),
@@ -135,7 +139,7 @@ test('priority: a route of higher priority added over a cached route of lower pr
       'H runs straight through where L was',
     )
     assert.deepEqual(errors(warm), [])
-    const cold = compileBoard(added(), { routeCache: false })
+    const cold = compileBoard(added(), { cache: false })
     assert.deepEqual(copper(warm), copper(cold))
   }))
 
@@ -151,10 +155,19 @@ test('priority: in negotiation the legs of higher priority keep their straight p
       const n = 'BCD'[i]
       return [smd(`${n}1`, x, 1.6, n), smd(`${n}2`, x, 8.4, n)]
     }),
-    ...['B', 'C', 'D'].map(n => route(`${n}1.1`, `${n}2.1`).width(0.25).layers(['F.Cu'])),
-    ...['A', 'E'].map(n => route(`${n}1.1`, `${n}2.1`).width(0.25).layers(['F.Cu']).priority(1)),
+    ...['B', 'C', 'D'].map(n =>
+      route(handle(`${n}1.1`), handle(`${n}2.1`))
+        .width(0.25)
+        .layers(['F.Cu']),
+    ),
+    ...['A', 'E'].map(n =>
+      route(handle(`${n}1.1`), handle(`${n}2.1`))
+        .width(0.25)
+        .layers(['F.Cu'])
+        .priority(1),
+    ),
   ]
-  const b = compileBoard(h(PCB, { name: 'Tangle' }, edge(20, 10), ...kids), { routeCache: false })
+  const b = compileBoard(h(PCB, { name: 'Tangle' }, edge(20, 10), ...kids), { cache: false })
   for (const n of ['A', 'E']) assert.equal(tracks(b, n).length, 1, `${n} is placed`)
   assert.deepEqual(
     tracks(b, 'A')[0].pts,
@@ -189,10 +202,13 @@ test("pair reservation: a route of lower priority keeps clear of a pair's wide f
       two('J2', 10, 17, 'DP', 'DN', 2),
       smd('C1', 3, 4.1, 'C', 0.6),
       smd('C2', 27, 4.1, 'C', 0.6),
-      route(['J1.1', 'J1.2']).X(['J2.1', 'J2.2']).width(0.2).gap(0.2).priority(2),
-      route('C1.1', 'C2.1').width(0.2).priority(-1),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.2)
+        .gap(0.2)
+        .priority(2),
+      route(handle('C1.1'), handle('C2.1')).width(0.2).priority(-1),
     ),
-    { routeCache: false },
+    { cache: false },
   )
   assert.deepEqual(errors(b), [])
   assert.equal(b.unconnected, 0)
@@ -200,10 +216,25 @@ test("pair reservation: a route of lower priority keeps clear of a pair's wide f
 
 // ---- 4. handedness and the crossover ----
 
-const mirrored = chain => h(PCB, { name: 'X' }, edge(), two('J1', 10, 3, 'DP', 'DN'), two('J2', 10, 17, 'DN', 'DP'), chain.width(0.2).gap(0.2))
+const mirrored = chain =>
+  h(
+    PCB,
+    { name: 'X' },
+    edge(),
+    two('J1', 10, 3, 'DP', 'DN'),
+    two('J2', 10, 17, 'DN', 'DP'),
+    chain(
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.2'), handle('J2.1')])
+        .width(0.2)
+        .gap(0.2),
+    ),
+  )
 
 test('pair handedness: ends the wrong way round for an automatic path are a route-failed before any routing', () => {
-  const b = compileBoard(mirrored(route(['J1.1', 'J1.2']).V(8).X('10 12').Z(['J2.2', 'J2.1'])), { routeCache: false })
+  const b = compileBoard(
+    mirrored(r => r.V(8).X('10 12').Z()),
+    { cache: false },
+  )
   const [f] = findings(b, 'route-failed')
   assert.match(f.message, /the pair would have to cross itself: P leaves its start pad on the right .* swap P and N at a via pair with \.cross\(layer\)/)
   assert.equal(b.routing.legs, 1)
@@ -212,29 +243,25 @@ test('pair handedness: ends the wrong way round for an automatic path are a rout
 })
 
 test('pair crossover: .cross(layer) swaps P and N at a via pair, and the pair joins mirrored ends cleanly', () => {
-  for (const chain of [
-    route(['J1.1', 'J1.2']).V(7).cross('B.Cu').V(11).via('F.Cu').Z(['J2.2', 'J2.1']),
-    route(['J1.1', 'J1.2']).V(7).cross('B.Cu').X(['J2.2', 'J2.1']).layers(['F.Cu', 'B.Cu']),
-  ]) {
-    const b = compileBoard(mirrored(chain), { routeCache: false })
+  for (const chain of [r => r.V(7).cross('B.Cu').V(11).via('F.Cu').Z(), r => r.layers(['F.Cu', 'B.Cu']).V(7).cross('B.Cu')]) {
+    const b = compileBoard(mirrored(chain), { cache: false })
     assert.deepEqual(errors(b), [])
     assert.equal(b.unconnected, 0)
     // DP leaves on the right of travel, x 9.75, and arrives on the left of it at J2, x 10.25
     const dp = tracks(b, 'DP').flatMap(t => t.pts)
     assert.ok(dp.some(p => Math.abs(p[0] - 9.75) < 1e-6) && dp.some(p => Math.abs(p[0] - 10.25) < 1e-6))
   }
-  assert.throws(() => route('J1.1').cross('B.Cu'), { name: 'TypeError', message: /cross\(\) is for a differential pair/ })
+  assert.throws(() => route(handle('J1.1'), handle('J2.1')).cross('B.Cu'), { name: 'TypeError', message: /cross\(\) is for a differential pair/ })
 })
 
 // ---- 5. tuning floors ----
 
 test('tuning floors: a pair short of its length by less than the smallest pair meander, and a skew below the smallest bump, say so', () => {
   const pads = (ref, y) =>
-    h(
-      'footprint',
-      { ref, at: [15, y], nets: { 1: 'DP', 2: 'DN' } },
-      h('pad', { num: 1, at: [-0.16, 0], size: [0.17, 0.5], type: 'smd' }),
-      h('pad', { num: 2, at: [0.16, 0], size: [0.17, 0.5], type: 'smd' }),
+    fp(
+      { ref, at: `15 ${y}`, nets: { 1: 'DP', 2: 'DN' } },
+      h('pad', { num: 1, at: '-0.16 0', size: [0.17, 0.5], type: 'smd' }),
+      h('pad', { num: 2, at: '0.16 0', size: [0.17, 0.5], type: 'smd' }),
     )
   const b = compileBoard(
     h(
@@ -243,9 +270,14 @@ test('tuning floors: a pair short of its length by less than the smallest pair m
       edge(30, 30),
       pads('J1', 3),
       pads('J2', 27),
-      route(['J1.1', 'J1.2']).Z(['J2.1', 'J2.2']).width(0.17).gap(0.15).skew(1).length({ target: 24.3, tolerance: 0.05 }),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.17)
+        .gap(0.15)
+        .skew(1)
+        .length({ target: 24.3, tolerance: 0.05 })
+        .Z(),
     ),
-    { routeCache: false },
+    { cache: false },
   )
   const [f] = findings(b, 'length')
   assert.match(f.message, /0\.30 mm missing, below the smallest pair meander of 0\.39 mm, 2 pi - 4 times the larger of the width and half the pitch/)
@@ -264,9 +296,12 @@ test('pair clearance: between the tracks and vias of one pair the gap governs, n
       edge(),
       two('J1', 10, 3, DP, DN, 0.8),
       two('J2', 10, 17, DP, DN, 0.8),
-      route(['J1.1', 'J1.2']).V(8).via('B.Cu').X(['J2.1', 'J2.2']).layers(['F.Cu', 'B.Cu']),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .layers(['F.Cu', 'B.Cu'])
+        .V(8)
+        .via('B.Cu'),
     ),
-    { routeCache: false },
+    { cache: false },
   )
   assert.deepEqual(errors(b), [])
   assert.equal(b.unconnected, 0)

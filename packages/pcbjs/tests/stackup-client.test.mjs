@@ -1,11 +1,12 @@
-// The viewer's stackup panel and 3D colours, imported straight from the client TypeScript, and the stackup in the site data.
+// The viewer's stackup panel, from @pcbjs/ui, the 3D colours of @pcbjs/export, and the stackup in the site data.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import PCB, { h } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
-import { siteData } from '@pcbjs/export/site-data'
+import { siteData } from '@pcbjs/export/internal/site-data'
 import { JLCPCB_4L_7628, fourLayer } from '@pcbjs/lib/stackups'
-import { cssColor, sideColors, stackupRows } from '@pcbjs/viewer/src/stackup.ts'
+import { cssColor, sideColors } from '@pcbjs/export/internal/scene/colors'
+import { stackupRows } from '@pcbjs/ui'
 
 const site = props =>
   siteData(compileBoard(h(PCB, { name: 'S', ...props }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 }))), {
@@ -21,7 +22,7 @@ const site = props =>
 
 test('site data carries the stackup, generated or given', () => {
   assert.deepEqual(site({ stackup: JLCPCB_4L_7628 }).stackup, JLCPCB_4L_7628)
-  assert.equal(site({ copper: 2 }).stackup.layers.filter(l => l.type === 'copper').length, 2)
+  assert.equal(site({}).stackup.layers.filter(l => l.type === 'copper').length, 2)
 })
 
 test('stackupRows lists every layer top to bottom with thickness and material or weight', () => {

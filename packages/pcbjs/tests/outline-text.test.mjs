@@ -1,4 +1,4 @@
-// Outline fonts end to end: a project with a font in pcb.config.ts and one given by file on the <text>, through check --fab
+// Outline fonts end to end: a project with fonts named on <PCB fonts>, through check --fab
 // and build, the Gerber self check passing, the legend written as regions and the site drawing filled glyphs.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
@@ -26,23 +26,17 @@ before(() => {
   mkdirSync(join(root, 'fonts'))
   mkdirSync(join(root, 'boards'))
   copyFileSync(FONT, join(root, 'fonts', 'RobotoSlab.ttf'))
-  writeFileSync(
-    join(root, 'pcb.config.ts'),
-    [
-      "import { defineConfig } from '@pcbjs/core'",
-      "export default defineConfig({ entries: ['boards/label.tsx'], fonts: { slab: { file: './fonts/RobotoSlab.ttf', weight: 700 } } })",
-    ].join('\n') + '\n',
-  )
+  writeFileSync(join(root, 'pcb.config.ts'), ["import { defineConfig } from '@pcbjs/core'", "export default defineConfig({ entries: ['boards/label.tsx'] })"].join('\n') + '\n')
   writeFileSync(
     join(root, 'boards', 'label.tsx'),
     [
       "import PCB from '@pcbjs/core'",
       'export default (',
-      '  <PCB name="Label" revision="1">',
+      '  <PCB name="Label" rev="1" fonts={{ slab: { file: \'../fonts/RobotoSlab.ttf\', weight: 700 }, thin: { file: \'../fonts/RobotoSlab.ttf\', weight: 100 } }}>',
       '    <rect layer="Edge.Cuts" x={0} y={0} w={40} h={16} />',
       '    <text layer="F.SilkS" at="20 4" size={2} font="slab">© 2025 Outline</text>',
-      '    <text layer="B.SilkS" at="20 9" size={1.4} font={{ file: \'../fonts/RobotoSlab.ttf\', weight: 700 }}>BACK</text>',
-      '    <text layer="F.SilkS" at="20 13" size={1.2} font={{ file: \'../fonts/RobotoSlab.ttf\', weight: 100 }} thicken>thin</text>',
+      '    <text layer="B.SilkS" at="20 9" size={1.4} font="slab">BACK</text>',
+      '    <text layer="F.SilkS" at="20 13" size={1.2} font="thin" thicken>thin</text>',
       '    <text layer="F.Cu" at="6 13" size={1.5} font="slab">CU</text>',
       '  </PCB>',
       ')',

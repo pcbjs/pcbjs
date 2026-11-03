@@ -2,8 +2,10 @@
 // real source-range transform, and the viewer resolves cursors against them as it does for an editor.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { transformSourceRanges } from '@pcbjs/cli/source-ranges'
-import { resolveCursor } from '@pcbjs/viewer/src/source.ts'
+import { transformSourceRanges } from '@pcbjs/cli/internal/source-ranges'
+import { resolveCursor } from '@pcbjs/ui'
+// the transform's text hashes, which tests/source-ranges.test.mjs checks, left out of the literals compared here
+const plain = s => s.replace(/, hash: "[0-9a-f]{12}"/g, '')
 
 const code = `import { route } from '@pcbjs/core'
 export default () => (
@@ -18,12 +20,12 @@ export default () => (
   </PCB>
 )
 `
-// every range the transform wrote, named by the text it starts with, one id each
-const out = transformSourceRanges(code, '/p/main.tsx', 'main.tsx').code
+// every range the transform wrote, named by the text it starts with, one uid each
+const out = plain(transformSourceRanges(code, '/p/main.tsx', 'main.tsx').code)
 const ranges = [...out.matchAll(/\{ file: "main\.tsx", line: (\d+), col: (\d+), endLine: (\d+), endCol: (\d+)(?:, fn: \{[^}]*\})? \}/g)].map((m, i) => ({
   start: [+m[1], +m[2]],
   end: [+m[3], +m[4]],
-  ids: [i],
+  uids: [`item:${i}`],
   refs: [],
 }))
 const lines = code.split('\n')

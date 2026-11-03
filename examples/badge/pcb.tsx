@@ -2,9 +2,8 @@
 // Frame: millimetres, origin at the top-left corner of the 40 mm circle's bounding box, x right, y down; the circle's centre is at 20 20.
 import PCB from '@pcbjs/fab/OSHPark/2-Layer' // OSH Park: purple ENIG is the only mask colour the preset offers
 import { nets, route, pour, keepout, NC, type PcbNode } from '@pcbjs/core'
-import { Brand, R0603, C0603, LED0603, slot, circle, npth } from '@pcbjs/lib'
-import { strokeText } from '@pcbjs/lib/fonts'
-import { SOIC8, CR2032, Tact, Slide, Pogo } from './lib/parts'
+import { Brand, R0603, C0603, LED0603, slot, circle, strokeText } from '@pcbjs/lib'
+import { SOIC8, CR2032, Tact, Slide, Pogo, Hole } from './lib/parts'
 
 // Geometry: the circle is cut flat at y = FLAT, 3 mm above its bottom, so the badge stands on a table.
 const CX = 20,
@@ -26,7 +25,7 @@ function arcText(str: string, r: number, from: number, size: number, layer = 'F.
     const [x, y] = polar(r, deg)
     if (ch !== ' ')
       out.push(
-        <text layer={layer} at={[x, y, -deg - 90]} size={size}>
+        <text layer={layer} at={`${x} ${y} ${-deg - 90}`} size={size}>
           {ch}
         </text>,
       )
@@ -39,12 +38,12 @@ function arcText(str: string, r: number, from: number, size: number, layer = 'F.
 const { VBAT, VCC, GND, RST, BTN, P0, P1, P2, L0, L1, L2 } = nets()
 
 // Parts
-const U1 = SOIC8('ATtiny85', { MPN: 'ATTINY85-20SU' }).connect(RST, BTN, NC, GND, P0, P1, P2, VCC)
-const C1 = C0603('100n', { MPN: 'CL10B104KB8NNNC' }).connect(VCC, GND)
-const R1 = R0603('100', { MPN: 'RC0603FR-07100RL' }).connect(P0, L0)
-const R2 = R0603('100', { MPN: 'RC0603FR-07100RL' }).connect(P1, L1)
-const R3 = R0603('100', { MPN: 'RC0603FR-07100RL' }).connect(P2, L2)
-const R4 = R0603('10k', { MPN: 'RC0603FR-0710KL' }).connect(VCC, RST)
+const U1 = SOIC8('ATtiny85').source({ MPN: 'ATTINY85-20SU' }).connect({ 1: RST, 2: BTN, 3: NC, 4: GND, 5: P0, 6: P1, 7: P2, 8: VCC })
+const C1 = C0603('100n').source({ MPN: 'CL10B104KB8NNNC' }).connect({ 1: VCC, 2: GND })
+const R1 = R0603('100').source({ MPN: 'RC0603FR-07100RL' }).connect({ 1: P0, 2: L0 })
+const R2 = R0603('100').source({ MPN: 'RC0603FR-07100RL' }).connect({ 1: P1, 2: L1 })
+const R3 = R0603('100').source({ MPN: 'RC0603FR-07100RL' }).connect({ 1: P2, 2: L2 })
+const R4 = R0603('10k').source({ MPN: 'RC0603FR-0710KL' }).connect({ 1: VCC, 2: RST })
 // charlieplex pairs, anode first: each line pair carries two LEDs in opposite directions
 const PAIRS = [
   [L0, L1],
@@ -54,23 +53,26 @@ const PAIRS = [
   [L2, L0],
   [L0, L2],
 ] as const
-const LEDS = PAIRS.map(([a, k]) => LED0603('red', { MPN: 'LTST-C190KRKT' }).connect({ A: a, K: k }))
-const SW1 = Tact('BOOT', { MPN: 'PTS810SJM250SMTRLFS' }).connect(BTN, BTN, GND, GND)
-const SW2 = Slide('ON', { MPN: 'JS102011SAQN' }).connect(VBAT, VCC, NC)
-const BT1 = CR2032('CR2032', { MPN: '3034' }).connect(VBAT, GND)
-const J1 = Pogo('ISP').connect(P1, VCC, P2, P0, RST, GND)
+const LEDS = PAIRS.map(([a, k], i) =>
+  LED0603('red', { ref: `D${i + 1}` })
+    .source({ MPN: 'LTST-C190KRKT' })
+    .connect({ A: a, K: k }),
+)
+const SW1 = Tact('BOOT').source({ MPN: 'PTS810SJM250SMTRLFS' }).connect({ 1: BTN, 2: BTN, 3: GND, 4: GND })
+const SW2 = Slide('ON').source({ MPN: 'JS102011SAQN' }).connect({ 1: VBAT, 2: VCC, 3: NC })
+const BT1 = CR2032('CR2032').source({ MPN: '3034' }).connect({ '+': VBAT, '-': GND })
+const J1 = Pogo('ISP').connect({ 1: P1, 2: VCC, 3: P2, 4: P0, 5: RST, 6: GND })
+// two M3 holes, cutouts with no copper
+const H1 = Hole()
+const H2 = Hole()
 
 export default (
-  <PCB name="Badge" revision="A" color="purple" autoroute={{ layers: ['F.Cu', 'B.Cu'] }}>
+  <PCB name="Badge" rev="A" color="purple" autoroute={{ layers: ['F.Cu', 'B.Cu'] }}>
     {/* outline: 40 mm circle cut flat at the bottom, plus the lanyard slot and two M3 holes as cutouts */}
     <path layer="Edge.Cuts" d={OUTLINE} />
     <path layer="Edge.Cuts" d={slot(16, 4.2, 24, 4.2, 2.2)} />
-    <footprint ref="H1" at="9 26" bom={false} pos={false} height={0} model={{ kind: 'box', w: 0, h: 0, height: 0 }}>
-      {npth(0, 0, 3.2)}
-    </footprint>
-    <footprint ref="H2" at="31 26" bom={false} pos={false} height={0} model={{ kind: 'box', w: 0, h: 0, height: 0 }}>
-      {npth(0, 0, 3.2)}
-    </footprint>
+    <H1 at="9 26" />
+    <H2 at="31 26" />
 
     {/* MCU and its support parts in the middle of the front */}
     <U1 at="20 18" />
@@ -84,7 +86,7 @@ export default (
     {LEDS.map((D, i) => {
       const deg = i * 60
       const [x, y] = polar(15, deg)
-      return <D at={[x, y, -deg - 90]} />
+      return <D at={`${x} ${y} ${-deg - 90}`} />
     })}
 
     {/* controls: the button below the MCU, the power switch on the left */}
@@ -95,9 +97,9 @@ export default (
     <J1 at="20 32.5" />
 
     {/* back: the coin cell, centred under the MCU; side B mirrors its + tab to the left */}
-    <BT1 at={[CX, CY]} side="B" />
+    <BT1 at={`${CX} ${CY}`} side="B" />
     {/* no routed tracks on the back across the cell's - contact; vias and the GND pour may reach it */}
-    {keepout('B.Cu', circle(8, CX, CY), { vias: false, pours: false })}
+    {keepout(circle(8, CX, CY), { layers: ['B.Cu'], vias: false, pours: false })}
 
     {/* routes: power and ground drops first, then every signal net to the autorouter */}
     {route(BT1['+'], SW2[1]).width(0.4)}
@@ -105,11 +107,9 @@ export default (
     {route(C1[2], '25.8 11.8 B.Cu').width(0.3)}
     {route(SW1[3], '16.4 28.4 B.Cu').width(0.3)}
     {route(SW1[4], '23.6 28.4 B.Cu').width(0.3)}
-    {route(J1[6], '24.6 34.6 B.Cu', 'L 24.6 34 @B.Cu Z').width(0.3)}
-    <track layer="F.Cu" width={0.3} net={VCC} />
-    {[RST, BTN, P0, P1, P2, L0, L1, L2].map(n => (
-      <track layer="F.Cu" width={0.2} net={n} />
-    ))}
+    {route(J1[6], '24.6 34.6 B.Cu').width(0.3).L(24.6, 34).via('B.Cu').Z()}
+    {route(VCC).width(0.3)}
+    {[RST, BTN, P0, P1, P2, L0, L1, L2].map(n => route(n).width(0.2))}
     {/* laid out for a solid pour: the dense pads would starve thermal reliefs */}
     {pour(GND, 'B.Cu', OUTLINE, { connect: 'solid' })}
 

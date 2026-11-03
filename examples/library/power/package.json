@@ -1,0 +1,18 @@
+{
+  "name": "@pcbjs-examples/power",
+  "version": "0.1.0",
+  "description": "A 3.3 V regulator as a pcbjs library: the part, its circuit and layout, and the PowerModule board",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pcbjs build --lib",
+    "check": "pcbjs check"
+  },
+  "devDependencies": {
+    "@pcbjs/pcbjs": "0.0.1-beta.1",
+    "@pcbjs/core": "0.0.1-beta.0",
+    "@pcbjs/fab": "0.0.1-beta.0",
+    "@pcbjs/lib": "0.0.1-beta.0"
+  }
+}

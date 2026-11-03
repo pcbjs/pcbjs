@@ -15,26 +15,31 @@ const { GND, VBUS, V3V3, CC1, CC2, LED5, LED3 } = nets()
 
 // Parts
 const J1 = USBC6P().source({ MPN: 'TYPE-C-31-M-17', 'MPN:LCSC': 'C283540' }).connect({ GND, VBUS, CC1, CC2, SH: GND })
-const R1 = R0603('5.1k').source({ MPN: '0603WAF5101T5E', 'MPN:LCSC': 'C23186' }).connect(CC1, GND)
-const R2 = R0603('5.1k').source({ MPN: '0603WAF5101T5E', 'MPN:LCSC': 'C23186' }).connect(CC2, GND)
+const R1 = R0603('5.1k').source({ MPN: '0603WAF5101T5E', 'MPN:LCSC': 'C23186' }).connect({ 1: CC1, 2: GND })
+const R2 = R0603('5.1k').source({ MPN: '0603WAF5101T5E', 'MPN:LCSC': 'C23186' }).connect({ 1: CC2, 2: GND })
 const U1 = SOT23_5('AP2112K-3.3').source({ MPN: 'AP2112K-3.3TRG1', 'MPN:LCSC': 'C51118' }).connect({ VIN: VBUS, GND, EN: VBUS, NC, VOUT: V3V3 })
-const C1 = C0603('1u').source({ MPN: 'CL10A105KB8NNNC', 'MPN:LCSC': 'C15849' }).connect(VBUS, GND)
-const C2 = C0603('1u').source({ MPN: 'CL10A105KB8NNNC', 'MPN:LCSC': 'C15849' }).connect(V3V3, GND)
-const R3 = R0603('1k').source({ MPN: '0603WAF1001T5E', 'MPN:LCSC': 'C21190' }).connect(VBUS, LED5)
+const C1 = C0603('1u').source({ MPN: 'CL10A105KB8NNNC', 'MPN:LCSC': 'C15849' }).connect({ 1: VBUS, 2: GND })
+const C2 = C0603('1u').source({ MPN: 'CL10A105KB8NNNC', 'MPN:LCSC': 'C15849' }).connect({ 1: V3V3, 2: GND })
+const R3 = R0603('1k').source({ MPN: '0603WAF1001T5E', 'MPN:LCSC': 'C21190' }).connect({ 1: VBUS, 2: LED5 })
 const D1 = LED0603('red').source({ MPN: 'KT-0603R', 'MPN:LCSC': 'C2286' }).connect({ A: LED5, K: GND })
-const R4 = R0603('1k').source({ MPN: '0603WAF1001T5E', 'MPN:LCSC': 'C21190' }).connect(V3V3, LED3)
+const R4 = R0603('1k').source({ MPN: '0603WAF1001T5E', 'MPN:LCSC': 'C21190' }).connect({ 1: V3V3, 2: LED3 })
 const D2 = LED0603('green').source({ MPN: 'KT-0603G', 'MPN:LCSC': 'C72043' }).connect({ A: LED3, K: GND })
-const J2 = PinHeader(4).source({ MPN: 'PZ254V-11-04P', 'MPN:LCSC': 'C492403' }).connect(V3V3, GND, NC, NC)
+const J2 = PinHeader(4)().source({ MPN: 'PZ254V-11-04P', 'MPN:LCSC': 'C492403' }).connect({ 1: V3V3, 2: GND, 3: NC, 4: NC })
+// M2 mounting holes, one per corner
+const H1 = MountingHole()
+const H2 = MountingHole()
+const H3 = MountingHole()
+const H4 = MountingHole()
 
 export default (
-  <PCB name="usbc-led" revision="0.1.0">
+  <PCB name="usbc-led" rev="0.1.0">
     {/* outline: 25 x 20 mm, 1 mm corners */}
     <path layer="Edge.Cuts" d={roundedRect(W, H, 1)} />
     {/* mounting holes, M2, one per corner */}
-    <MountingHole ref="H1" at="2.5 2.5" />
-    <MountingHole ref="H2" at="22.5 2.5" />
-    <MountingHole ref="H3" at="2.5 17.5" />
-    <MountingHole ref="H4" at="22.5 17.5" />
+    <H1 at="2.5 2.5" />
+    <H2 at="22.5 2.5" />
+    <H3 at="2.5 17.5" />
+    <H4 at="22.5 17.5" />
     {/* power in: USB-C on the top edge, CC pull-downs just below its pads */}
     <J1 at="12.5 3.65" />
     {/* GND and VBUS sit 0.15 mm apart at each end of the row, too close for a mask dam: one gang opening per pair */}
@@ -54,8 +59,8 @@ export default (
     {/* breakout: 1 3V3, 2 GND, 3 and 4 spare */}
     <J2 at="21.5 6" />
     {/* routes: VBUS by hand from the USB-C pad down to the LDO input, the rest autorouted */}
-    {route(J1.VBUS, C1[1], 'V 8.8 H 9 Z').width(0.4)}
-    {route('J1.A9', 'J1.B4', 'V 8.8 @B.Cu H 14 @F.Cu Z').width(0.4)}
+    {route(J1.VBUS, C1[1]).width(0.4).V(8.8).H(9).Z()}
+    {route(J1['A9'], J1['B4']).width(0.4).V(8.8).via('B.Cu').H(14).via('F.Cu').Z()}
     {route(U1.VIN, C1[1]).width(0.4)}
     {route(U1.VIN, U1.EN).width(0.25).direct()} {/* pin to pin, so the GND pin between them keeps its pour */}
     {route(J1.VBUS, R3[1]).width(0.3)}

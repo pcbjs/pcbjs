@@ -2,7 +2,7 @@
 // B.Cu, GND on In1.Cu, 3V3 on In2.Cu. The schematic is sdram.sch.ts, the passives' part numbers sdram.sourcing.ts.
 // Frame: millimetres, origin at the top-left corner of the outline, x right, y down. USB-C on the top edge.
 import PCB from '@pcbjs/fab/JLCPCB/4-Layer'
-import { route, pour, via } from '@pcbjs/core'
+import { route, pour, via, type RouteBuilder } from '@pcbjs/core'
 import { Brand, MountingHole, rect, roundedRect } from '@pcbjs/lib'
 import { TSOP54 } from './lib/parts'
 import { JLCPCB_4L_7628 } from '@pcbjs/lib/stackups'
@@ -59,14 +59,29 @@ function mcuDecoupling() {
     const tv = vss ? pinSide(vss)[1] : t
     const tp = vss ? t - 0.3 * Math.sign(tv - t) : t
     out.push(<C at={`${at(s, t, (R_VDD + R_GND) / 2)} ${capRot[s]}deg`} side="B" />)
-    out.push(route(U1.pad(String(pin)), at(s, tp, R_VDD), `L ${at(s, t, R_VDD + 0.3)} Z`).width(STUB), via(V3V3, at(s, tp, R_VDD)))
+    out.push(
+      route(U1[pin], at(s, tp, R_VDD))
+        .width(STUB)
+        .L(at(s, t, R_VDD + 0.3))
+        .Z(),
+      via(V3V3, at(s, tp, R_VDD)),
+    )
     if (vss) {
       const tg = t + 0.45 * Math.sign(tv - t) // on the edge of the capacitor's ground pad
-      out.push(route(U1.pad(String(vss)), at(s, tg, R_GND), 'Z').width(STUB), via(GND, at(s, tg, R_GND)))
+      out.push(
+        route(U1[vss], at(s, tg, R_GND))
+          .width(STUB)
+          .Z(),
+        via(GND, at(s, tg, R_GND)),
+      )
     } else out.push(via(GND, at(s, t, R_GND)))
   })
-  out.push(route(U1.pad('32'), at('L', 7.0, R_VDD), 'Z').width(STUB))
-  out.push(route(U1.pad('143'), U1.pad('144'), 'Z').width(STUB)) // PDR_ON high: the internal reset on
+  out.push(
+    route(U1[32], at('L', 7.0, R_VDD))
+      .width(STUB)
+      .Z(),
+  )
+  out.push(route(U1[143], U1[144]).width(STUB).Z()) // PDR_ON high: the internal reset on
   // VCAP1 and VCAP2: in, then diagonal to a 2.2 uF on the back
   for (const [pin, t, C, net] of [
     [71, 7.4, C_VCAP1, VCAP1],
@@ -76,7 +91,15 @@ function mcuDecoupling() {
     const [x0, y0] = at(s, t0, 9.5).split(' ').map(Number),
       [x1, y1] = at(s, t, 8.65).split(' ').map(Number)
     out.push(<C at={`${at(s, t, 8.65 - 0.48)} ${capRot[s]}deg`} side="B" />)
-    out.push(route(U1.pad(String(pin)), at(s, t, 8.65), `L ${x0} ${y0} L ${x1} ${y1} Z`).width(STUB), via(net, at(s, t, 8.65)), via(GND, at(s, t, 8.65 - 0.96)))
+    out.push(
+      route(U1[pin], at(s, t, 8.65))
+        .width(STUB)
+        .L(x0, y0)
+        .L(x1, y1)
+        .Z(),
+      via(net, at(s, t, 8.65)),
+      via(GND, at(s, t, 8.65 - 0.96)),
+    )
   }
   return out
 }
@@ -106,11 +129,22 @@ function ramDecoupling() {
     const sx = pin <= 27 ? -1 : 1,
       C = C_RAM[i]
     out.push(<C at={`${sx * (3.85 - 0.825)} ${y} ${sx < 0 ? 180 : 0}deg`} side="B" />)
-    out.push(route(U2.pad(String(pin)), `${sx * 3.85} ${y}`, 'Z').width(STUB), via(V3V3, `${sx * 3.85} ${y}`), via(GND, `${sx * (3.85 - 1.65)} ${y}`))
+    out.push(
+      route(U2[pin], `${sx * 3.85} ${y}`)
+        .width(STUB)
+        .Z(),
+      via(V3V3, `${sx * 3.85} ${y}`),
+      via(GND, `${sx * (3.85 - 1.65)} ${y}`),
+    )
   })
   for (const [pin, y] of RAM_VSS) {
     const sx = pin <= 27 ? -1 : 1
-    out.push(route(U2.pad(String(pin)), `${sx * 3.85} ${y}`, 'Z').width(STUB), via(GND, `${sx * 3.85} ${y}`))
+    out.push(
+      route(U2[pin], `${sx * 3.85} ${y}`)
+        .width(STUB)
+        .Z(),
+      via(GND, `${sx * 3.85} ${y}`),
+    )
   }
   return out
 }
@@ -153,11 +187,15 @@ const ramPad = (name: string) => {
 // every bus line enters its pad straight from outside the package, through a waypoint 2.7 mm out from the pad row
 const approach = (name: string) => {
   const p = ramPad(name)
-  return `X ${p.x.toFixed(2)} ${p.top ? 16.0 : 32.0} XZ`
+  return `${p.x.toFixed(2)} ${p.top ? 16.0 : 32.0}` as const
 }
 // lines too short for their group: a waypoint first, into free board where the tuner has room; WE and A3 into the bottom right corner, A7, A8, A9, A11 into the top right one
-const DETOUR: Record<string, string> = { RAS: 'X 50 38 ', CS: 'X 47 39 ', WE: 'X 50 41 ', A3: 'X 45 42 ', A9: 'X 50 6 ', A7: 'X 53 12 ', A11: 'X 47 10 ', A8: 'X 52 9 ' }
-const busPath = (name: string) => (DETOUR[name] ?? '') + approach(name)
+const DETOUR: Record<string, `${number} ${number}`> = { RAS: '50 38', CS: '47 39', WE: '50 41', A3: '45 42', A9: '50 6', A7: '53 12', A11: '47 10', A8: '52 9' }
+// automatic legs through the detour, when there is one, and the approach, then to the pad
+const bus = (name: string, r: RouteBuilder) => {
+  const d = DETOUR[name]
+  return (d ? r.X(d) : r).X(approach(name))
+}
 
 // the SDRAM clock length in mm: longer than every data line, so data settles before the clock edge arrives
 const CLK_LEN = 62
@@ -167,7 +205,7 @@ const SKEW_MM = 10
 
 const SMALL = { drill: 0.2, size: 0.45 }
 // a short stub from a pad to a via into a plane
-const toVia = (pad: any, net: any, x: number, y: number, w = 0.3) => [route(pad, `${x} ${y}`, 'Z').width(w), via(net, `${x} ${y}`)]
+const toVia = (pad: any, net: any, x: number, y: number, w = 0.3) => [route(pad, `${x} ${y}`).width(w).Z(), via(net, `${x} ${y}`)]
 
 // JLC04161H-3313: the preset's 7628 prepreg is 0.21 mm, which puts a 50 ohm microstrip at 0.37 mm, too wide to leave a
 // 0.5 mm LQFP pad between two neighbours. JLCPCB's 3313 stackup has 0.0994 mm prepreg and gives 0.17 mm. Source: the
@@ -177,12 +215,13 @@ const JLC_3313 = {
   layers: JLCPCB_4L_7628.layers.map(l => (l.type === 'prepreg' ? { ...l, material: '3313', thickness: 0.0994, er: 4.1 } : l.type === 'core' ? { ...l, thickness: 1.265 } : l)),
 }
 
-const Hole = MountingHole(2.2)
+const H1 = MountingHole(2.2)()
+const H2 = MountingHole(2.2)()
 
 export default (
   <PCB
     name="sdram"
-    revision="0.1.0"
+    rev="0.1.0"
     schematic={sch}
     stackup={JLC_3313}
     classes={{ sdram: { impedance: 50, autoroute: { tune: { amplitude: 5, spacing: 0.25 } } }, usb: { gap: 0.15, skew: 0.1, uncoupled: 6 } }}
@@ -201,19 +240,19 @@ export default (
     <g at="16 24 90deg">{mcuDecoupling()}</g>
 
     {/* the SDRAM turned so its pin rows face up and down: the bus flows right from the MCU and splits above and below it */}
-    <U2 at="42 24 90deg" />
+    <U2 at="42 18 90deg" />
     <g at="42 24 90deg">{ramDecoupling()}</g>
 
     <Y1 at="19 39" />
     <C_X1 at="15.1 39.85 180deg" />
     <C_X2 at="22.6 38.15" />
     <SW1 at="7 40" />
-    <C_RST at="12 40 90deg" />
+    <C_RST at="12 40 90deg" ref:at="0 -3.2 0" />
     <J2 at="2 27" />
     <R_BOOT at="2.5 35.5 -90deg" />
 
     {/* USB-C: the pair from the B6 and B7 contacts, which sit P left and N right like PA12 and PA11, at 90 ohm */}
-    {route([J1.pad('B6'), J1.pad('B7')], [U1.PA12, U1.PA11]).impedance(90)}
+    {route([J1['B6'], J1['B7']], [U1.PA12, U1.PA11]).impedance(90)}
     {/* the A6 and A7 contacts join their nets on B.Cu under the receptacle */}
     {(
       [
@@ -222,9 +261,9 @@ export default (
         ['A7', USB_DN, 9.25, 5.4],
         ['B7', USB_DN, 10.25, 5.4],
       ] as const
-    ).map(([pad, net, x, y]) => [route(J1.pad(pad), `${x} ${y}`, 'Z').width(0.2), via(net, `${x} ${y}`, SMALL)])}
-    {route('8.75 6.2 B.Cu', '9.75 6.2 B.Cu', 'Z').net(USB_DP).width(0.2)}
-    {route('9.25 5.4 B.Cu', '10.25 5.4 B.Cu', 'Z').net(USB_DN).width(0.2)}
+    ).map(([pad, net, x, y]) => [route(J1[pad], `${x} ${y}`).width(0.2).Z(), via(net, `${x} ${y}`, SMALL)])}
+    {route('8.75 6.2 B.Cu', '9.75 6.2 B.Cu').width(0.2).net(USB_DP).Z()}
+    {route('9.25 5.4 B.Cu', '10.25 5.4 B.Cu').width(0.2).net(USB_DN).Z()}
     {(
       [
         ['B1', GND, 6.25],
@@ -232,52 +271,56 @@ export default (
         ['A4', VBUS, 11.95],
         ['A1', GND, 12.75],
       ] as const
-    ).map(([pad, net, x]) => [route(J1.pad(pad), `${x} 8.75`, 'Z').width(0.3), via(net, `${x} 8.75`, SMALL)])}
-    {route('7.05 8.75 B.Cu', '11.95 8.75 B.Cu', 'Z').net(VBUS).width(0.4)}
+    ).map(([pad, net, x]) => [route(J1[pad], `${x} 8.75`).width(0.3).Z(), via(net, `${x} 8.75`, SMALL)])}
+    {route('7.05 8.75 B.Cu', '11.95 8.75 B.Cu').width(0.4).net(VBUS).Z()}
     {route(J1.CC1, R_CC1[1]).width(0.2)}
     {route(J1.CC2, R_CC2[1]).width(0.2)}
     {toVia(R_CC1[2], GND, 15.6, 2.9)}
     {toVia(R_CC2[2], GND, 3.4, 2.9)}
 
     {/* the LDO: VBUS in, 3V3 out through the tab to the In2.Cu plane */}
-    {route(J1.pad('A4'), U3.VIN).width(0.4)}
+    {route(J1['A4'], U3.VIN).width(0.4)}
     {route(C_IN[1], U3.VIN).width(0.4)}
     {route(C_IN[2], U3.GND).width(0.4)}
     {toVia(U3.GND, GND, 24, 2.7, 0.4)}
-    {route(C_OUT[1], U3.pad('4')).width(0.5)}
+    {route(C_OUT[1], U3[4]).width(0.5)}
     {toVia(C_OUT[2], GND, 31.6, 2.6, 0.4)}
-    {toVia(U3.pad('4'), V3V3, 28.15, 8.2, 0.5)}
-    {route(U3.pad('2'), U3.pad('4'), 'Z').width(0.5)}
+    {toVia(U3[4], V3V3, 28.15, 8.2, 0.5)}
+    {route(U3[2], U3[4]).width(0.5).Z()}
 
     {/* the 25 MHz crystal under PH0 and PH1 */}
     {route(U1.PH0, Y1.X1).width(0.2)}
     {route(U1.PH1, Y1.X2).width(0.2)}
-    {route(Y1.X1, C_X1[1], 'Z').width(0.2)}
-    {route(Y1.X2, C_X2[1], 'Z').width(0.2)}
-    {toVia(Y1.pad('4'), GND, 16.6, 37.4)}
-    {toVia(Y1.pad('2'), GND, 21.5, 40.9)}
+    {route(Y1.X1, C_X1[1]).width(0.2).Z()}
+    {route(Y1.X2, C_X2[1]).width(0.2).Z()}
+    {toVia(Y1[4], GND, 16.6, 37.4)}
+    {toVia(Y1[2], GND, 21.5, 40.9)}
     {toVia(C_X1[2], GND, 14.28, 41.4)}
     {toVia(C_X2[2], GND, 23.43, 39.6)}
 
     {/* reset and boot */}
-    {route(SW1.pad('1'), SW1.pad('2'), 'Z').width(0.3)}
-    {route(U1.NRST, SW1.pad('2')).width(0.2)}
-    {route(C_RST[1], SW1.pad('2')).width(0.2)}
+    {route(SW1[1], SW1[2]).width(0.3).Z()}
+    {route(U1.NRST, SW1[2]).width(0.2)}
+    {route(C_RST[1], SW1[2]).width(0.2)}
     {toVia(C_RST[2], GND, 12, 37.8)}
-    {toVia(SW1.pad('3'), GND, 4, 43.3)}
-    {toVia(SW1.pad('4'), GND, 10, 43.3)}
+    {toVia(SW1[3], GND, 4, 43.3)}
+    {toVia(SW1[4], GND, 10, 43.3)}
     {route(U1.BOOT0, J2[2]).width(0.2)}
     {route(J2[2], R_BOOT[1]).width(0.2)}
     {toVia(R_BOOT[2], GND, 2.5, 37.6)}
 
     {/* the SDRAM bus, all in the sdram class at 50 ohm, meanders up to 5 mm high; see examples/README.md for why DATA does not close */}
-    {DATA.map(([m, r]) => route(pin(U1, m), pin(U2, r), busPath(r)).match('DATA', SKEW_MM).length({ max: CLK_LEN }))}
-    {ADDR.map(([m, r]) => route(pin(U1, m), pin(U2, r), busPath(r)).match('ADDR', SKEW_MM))}
+    {DATA.map(([m, r]) =>
+      bus(r, route(pin(U1, m), pin(U2, r)))
+        .match('DATA', SKEW_MM)
+        .length({ max: CLK_LEN }),
+    )}
+    {ADDR.map(([m, r]) => bus(r, route(pin(U1, m), pin(U2, r))).match('ADDR', SKEW_MM))}
     {/* the clock routes first and is tuned to CLK_LEN; every data line must stay under it */}
-    {route(U1.PG8, U2.CLK, approach('CLK')).priority(3).length(CLK_LEN)}
+    {route(U1.PG8, U2.CLK).priority(3).X(approach('CLK')).length(CLK_LEN)}
 
-    <Hole ref="H1" at="52 3" />
-    <Hole ref="H2" at="52 42" />
+    <H1 at="52 3" />
+    <H2 at="52 42" />
 
     {pour(GND, 'In1.Cu', rect(W, H))}
     {pour(V3V3, 'In2.Cu', rect(W, H))}

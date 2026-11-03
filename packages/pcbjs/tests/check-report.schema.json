@@ -1,0 +1,43 @@
+{
+  "report": {
+    "schema": "string",
+    "command": "string",
+    "result": "string",
+    "exit": "number",
+    "ms": "number",
+    "versions": "object",
+    "boards": "array",
+    "diagnostics": "array",
+    "typecheck": "object",
+    "cache": "object"
+  },
+  "board": {
+    "name": "string",
+    "target": "null",
+    "entry": "string",
+    "status": "string",
+    "snapshot": "string",
+    "stats": "object",
+    "stages": "array",
+    "findings": "array",
+    "fab": "null"
+  },
+  "stage": { "name": "string", "ms": "number", "hit": "boolean" },
+  "finding": {
+    "id": "string",
+    "fingerprint": "string",
+    "kind": "string",
+    "severity": "string",
+    "rule": "string",
+    "board": "string",
+    "at": "array",
+    "refs": "array",
+    "items": "array",
+    "src": "array",
+    "message": "string"
+  },
+  "source": { "file": "string", "start": "array", "end": "array", "role": "string" },
+  "diagnostic": { "kind": "string", "code": "string", "severity": "string", "message": "string", "entry": "string" },
+  "typecheck": { "status": "string", "errors": "number", "cached": "boolean", "ms": "number" },
+  "cache": { "stages": "number", "hits": "number" }
+}

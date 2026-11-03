@@ -2,8 +2,8 @@
 import { test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import PCB, { h, resetDefaults } from '@pcbjs/core'
-import { twoLayer, fourLayer } from '@pcbjs/lib'
-import { copperWeightRule, COPPER_WEIGHT_RULES } from '@pcbjs/core/rules'
+import { twoLayer, fourLayer } from '@pcbjs/lib/stackups'
+import { copperWeightRule, COPPER_WEIGHT_RULES } from '@pcbjs/core/internal/rules'
 import { compileBoard } from '@pcbjs/compile'
 
 afterEach(() => resetDefaults())

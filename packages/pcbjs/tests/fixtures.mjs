@@ -1,8 +1,9 @@
 // Small boards built with h(), no JSX.
-import PCB, { h } from '@pcbjs/core'
-import { PinHeader } from '@pcbjs/lib/headers'
-import { R0603 } from '@pcbjs/lib/passives'
+import PCB, { h, route } from '@pcbjs/core'
+import { PinHeader } from '@pcbjs/lib/internal/headers'
+import { R0603 } from '@pcbjs/lib/internal/passives'
 import { compileBoard } from '@pcbjs/compile'
+import { netOf, place } from './parts.mjs'
 
 export const outline = () => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 })
 
@@ -15,9 +16,9 @@ export function baseBoard(extra = []) {
     PCB,
     { name: 'Test' },
     outline(),
-    h(PinHeader, { ref: 'J1', pins: 2, at: '2 2', 'net:1': 'A', 'net:2': 'B' }),
-    h(PinHeader, { ref: 'J2', pins: 2, at: '7 2', 'net:1': 'A', 'net:2': 'B' }),
-    h('track', { net: 'A', layer: 'F.Cu', width: 0.3, d: 'M2 2 L7 2' }),
+    place(PinHeader(2), { ref: 'J1', at: '2 2', 'net:1': 'A', 'net:2': 'B' }),
+    place(PinHeader(2), { ref: 'J2', at: '7 2', 'net:1': 'A', 'net:2': 'B' }),
+    route('2 2').net(netOf('A')).width(0.3).L(7, 2),
     ...extra,
   )
 }
@@ -30,10 +31,10 @@ export function bomBoard() {
       PCB,
       { name: 'Bom' },
       outline(),
-      h(PinHeader, { ref: 'J1', pins: 2, at: '2 2' }),
-      h(R0603, { ref: 'R2', at: '7 7', value: '10k' }),
-      h(R0603, { ref: 'R1', at: '7 5', value: '10k' }),
-      h(R0603, { ref: 'R3', at: '4 8', value: '1k' }),
+      place(PinHeader(2), { ref: 'J1', at: '2 2' }),
+      place(R0603, { ref: 'R2', at: '7 7', value: '10k' }),
+      place(R0603, { ref: 'R1', at: '7 5', value: '10k' }),
+      place(R0603, { ref: 'R3', at: '4 8', value: '1k' }),
     ),
   )
 }

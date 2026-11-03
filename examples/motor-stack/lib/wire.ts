@@ -2,5 +2,5 @@
 import { route, type RouteEnd } from '@pcbjs/core'
 
 export function chain(width: number, ...ends: RouteEnd[]) {
-  return ends.slice(1).map((b, i) => route(ends[i]).X(b).width(width))
+  return ends.slice(1).map((b, i) => route(ends[i], b).width(width))
 }

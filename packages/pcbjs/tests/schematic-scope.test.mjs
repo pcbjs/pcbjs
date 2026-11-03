@@ -8,11 +8,11 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import ts from 'typescript'
-import PCB, { h, nets, Schematic, Sym } from '@pcbjs/core'
+import PCB, { h, nets, Schematic, Place, bindRef } from '@pcbjs/core'
 import { R0603 } from '@pcbjs/lib'
 import { compileBoard } from '@pcbjs/compile'
-import { scopeHost, sourcePosition } from '@pcbjs/compile/scope'
-import { BoardIndex, refsText } from '@pcbjs/export/findings'
+import { scopeHost, sourcePosition } from '@pcbjs/compile/internal/scope'
+import { BoardIndex } from '@pcbjs/export/internal/findings'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..', '..', '..')
@@ -21,43 +21,42 @@ const edge = () => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 30, h: 20 })
 
 function module() {
   const { VCC, GND } = nets()
-  const R1 = R0603('1k').ref('R1').connect(VCC, GND)
-  const Rpull = R0603('10k').connect(VCC, GND)
+  const R1 = bindRef(R0603('1k').connect({ 1: VCC, 2: GND }), 'R1')
+  const Rpull = bindRef(R0603('10k').connect({ 1: VCC, 2: GND }), 'Rpull')
   return { VCC, GND, R1, Rpull }
 }
 const place = m => [edge(), h(m.R1, { at: '5 5' }), h(m.Rpull, { at: '10 5' })]
 const auto = b => b.schematic.drawing.symbols.find(s => s.ref === 'R1').auto
 
-test('schematic namespace: the drawing is `drawing`, then `default`, then any export that is one, else drawn by the compiler', () => {
+test('schematic namespace: the drawing is the `drawing` export, else drawn by the compiler; a drawing passed alone is an error', () => {
   const m = module()
-  const sheet = () => h(Schematic, {}, h(Sym, { part: m.R1, at: '4 7' }))
+  const sheet = () => h(Schematic, {}, h(Place, { part: m.R1, at: '4 7' }))
   const other = h(Schematic, { title: 'other' })
   assert.equal(auto(compileBoard(h(PCB, { name: 'A', schematic: { ...m } }, ...place(m)))), true)
   assert.equal(auto(compileBoard(h(PCB, { name: 'B', schematic: { ...m, drawing: sheet(), default: other } }, ...place(m)))), false)
-  assert.equal(auto(compileBoard(h(PCB, { name: 'C', schematic: { ...m, default: sheet(), sheet: other } }, ...place(m)))), false)
-  assert.equal(auto(compileBoard(h(PCB, { name: 'D', schematic: { ...m, sheet: sheet() } }, ...place(m)))), false)
-  assert.equal(auto(compileBoard(h(PCB, { name: 'E', schematic: sheet() }, ...place(m)))), false, 'a drawing instance as before')
+  assert.equal(auto(compileBoard(h(PCB, { name: 'C', schematic: { ...m, default: sheet(), sheet: other } }, ...place(m)))), true, 'only the drawing export')
+  assert.equal(auto(compileBoard(h(PCB, { name: 'D', schematic: { ...m, sheet: sheet() } }, ...place(m)))), true)
+  assert.throws(() => compileBoard(h(PCB, { name: 'E', schematic: sheet() }, ...place(m))), /schematic takes the schematic module as a namespace/)
 })
 
-test('schematic namespace: parts and nets carry their export, and findings name a part by it where it differs from the ref', () => {
+test('schematic namespace: parts and nets carry their export, and a part is named by its binding alone', () => {
   const m = module()
   const b = compileBoard(h(PCB, { name: 'N', schematic: m }, ...place(m)))
   const part = r => b.schematic.parts.find(p => p.ref === r)
   assert.equal(part('R1').export.name, 'R1')
-  assert.equal(part('R2').export.name, 'Rpull')
-  assert.equal(part('R2').export.module, fileURLToPath(import.meta.url))
+  assert.equal(part('Rpull').export.name, 'Rpull')
+  assert.equal(part('Rpull').export.module, fileURLToPath(import.meta.url))
   assert.equal(b.schematic.nets.find(n => n.name === 'VCC').export.name, 'VCC')
-  const ix = new BoardIndex(b)
-  assert.equal(refsText(['R1', 'R2'].map(r => ix.refOf(r))), 'R1, R2 (Rpull)')
+  assert.equal(new BoardIndex(b).paths.size, 0, 'a part at the board level has no tree path beside its ref')
   const plain = compileBoard(h(PCB, { name: 'P' }, ...place(module())))
-  assert.equal(plain.schematic.parts.find(p => p.ref === 'R2').export, undefined, 'parts imported by name have no export')
+  assert.equal(plain.schematic.parts.find(p => p.ref === 'Rpull').export, undefined, 'parts imported by name have no export')
 })
 
 const SCH = `import { nets } from '@pcbjs/core'
 import { R0603, LED0603 } from '@pcbjs/lib'
 export const { VCC, GND } = nets()
-export const R1 = R0603('330').connect(VCC, GND)
-export const Rpull = R0603('10k').connect(VCC, GND)
+export const R1 = R0603('330').connect({ 1: VCC, 2: GND })
+export const Rpull = R0603('10k').connect({ 1: VCC, 2: GND })
 export const D1 = LED0603('red').connect({ A: VCC, K: GND })
 `
 const TSCONFIG = {
@@ -86,7 +85,7 @@ function project(files) {
 }
 const run = (dir, ...args) => spawnSync(process.execPath, [cli, ...args], { cwd: dir, encoding: 'utf8' })
 
-test('schematic scope: a bare-form board compiles through the CLI, and findings and inspect use the export name', () => {
+test('schematic scope: a bare-form board compiles through the CLI, and findings and inspect use the binding name', () => {
   const dir = project({
     'pcb.tsx': `import PCB from '@pcbjs/core'
 import * as sch from './board.sch'
@@ -102,10 +101,10 @@ export default <PCB name="Scope" schematic={sch}>
     const c = run(dir, 'check')
     assert.doesNotMatch(c.stdout + c.stderr, /compile error/)
     assert.match(c.stdout, /Scope {2}pcb\.tsx {2}3 footprints/)
-    assert.match(c.stdout, /R1, R2 \(Rpull\) {2}pcb\.tsx:5:3/)
+    assert.match(c.stdout, /net:VCC, R1\/1, Rpull\/1 {2}pcb\.tsx:5:3/)
     assert.match(c.stdout, /typecheck {2}ok/)
     const i = run(dir, 'inspect', 'Rpull')
-    assert.match(i.stdout, /^R2 \(Rpull\) {2}10k/m)
+    assert.match(i.stdout, /^Rpull {2}10k/m)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

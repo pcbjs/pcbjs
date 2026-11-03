@@ -5,8 +5,8 @@ import { route, pour, via } from '@pcbjs/core'
 import { Brand, roundedRect } from '@pcbjs/lib'
 import * as sch from './esp32-sensor.sch'
 import './esp32-sensor.sourcing'
-import { LdoRow } from './lib/ldo.layout'
-import { Bme280Block } from './lib/bme280.layout'
+import { layout as LdoRow } from './lib/ldo'
+import { layout as Bme280Block } from './lib/bme280'
 
 const W = 40,
   H = 30
@@ -16,9 +16,9 @@ const POUR = `M 0 0 H 23 V 6.6 H ${W} V ${H} H 0 Z`
 export default (
   <PCB
     name="esp32-sensor"
-    revision="0.1.0"
+    rev="0.1.0"
     schematic={sch}
-    rules={{ strictNets: true, requireSourcing: true }}
+    rules={{ requireSourcing: true }}
     // both layers for every automatic leg, and the router kept out of the antenna corner
     autoroute={{ layers: ['F.Cu', 'B.Cu'], avoid: [{ x: 23, y: 0, w: 17, h: 6.6 }] }}
   >
@@ -53,10 +53,10 @@ export default (
     <Bme280Block g={SENS} at="35 26" />
 
     {/* power, by hand: VBUS straight up the left to the LDO, 3V3 along y = 10.6 to the module's decoupling and pin 3 */}
-    {route('J1.A4', LDO.CIN[1], 'Z').width(0.4)}
-    {route(LDO.COUT[1], C2[1], 'V 10.6 H 22.125 Z').width(0.4)}
-    {route(C1[1], C2[1], 'Z').width(0.4)}
-    {route(C2[1], U1['3V3'], 'Z').width(0.4)}
+    {route(J1['A4'], LDO.C1[1]).width(0.4).Z()}
+    {route(LDO.C2[1], C2[1]).width(0.4).V(10.6).H(22.125).Z()}
+    {route(C1[1], C2[1]).width(0.4).Z()}
+    {route(C2[1], U1['3V3']).width(0.4).Z()}
 
     {/* GND: vias in the module's centre pads into the back pour */}
     {[
@@ -65,29 +65,29 @@ export default (
       [29.2, 12.8],
       [30.8, 12.8],
       [27.6, 9.6],
-    ].map(([x, y]) => via(GND, [x, y]))}
+    ].map(([x, y]) => via(GND, `${x} ${y}`))}
     {/* stitching vias for three F.Cu GND pieces the tracks fence off: under U2, beside SW1.3, below U1.14 */}
     {[
       [8.5, 17],
       [9.82, 14.9],
       [26, 18.55],
-    ].map(([x, y]) => via(GND, [x, y], { drill: 0.2, size: 0.45 }))}
+    ].map(([x, y]) => via(GND, `${x} ${y}`, { drill: 0.2, size: 0.45 }))}
 
     {/* USB data: DN joined under the pad row, DP joined across the ESD, through the ESD, round the module to IO18 and IO19 */}
-    {route('J1.B7', 'J1.A7', 'V 23.65 H 8.25 Z').width(0.2)}
-    {route(U2[3], U2[4], 'Z').width(0.2)}
-    {route(U2[1], U2[6], 'Z').width(0.2)}
-    {route('J1.A6', U2[3]).width(0.2)}
-    {route('J1.B6', U2[4]).width(0.2)}
-    {route('J1.A7', U2[1]).width(0.2)}
+    {route(J1['B7'], J1['A7']).width(0.2).V(23.65).H(8.25).Z()}
+    {route(U2[3], U2[4]).width(0.2).Z()}
+    {route(U2[1], U2[6]).width(0.2).Z()}
+    {route(J1['A6'], U2[3]).width(0.2)}
+    {route(J1['B6'], U2[4]).width(0.2)}
+    {route(J1['A7'], U2[1]).width(0.2)}
     {route(U2[4], U1.IO19).width(0.2)}
     {route(U2[6], U1.IO18).width(0.2)}
-    {route('J1.A5', R1[1]).width(0.2)}
-    {route('J1.B5', R2[1]).width(0.2)}
+    {route(J1['A5'], R1[1]).width(0.2)}
+    {route(J1['B5'], R2[1]).width(0.2)}
 
     {/* the second VBUS pad and the ESD's VBUS pin, routed after the data pair so they cannot wall it off */}
-    {route('J1.B4', U2[5]).width(0.3)}
-    {route(U2[5], LDO.CIN[1]).width(0.3)}
+    {route(J1['B4'], U2[5]).width(0.3)}
+    {route(U2[5], LDO.C1[1]).width(0.3)}
 
     {/* 3V3 to the rest, autorouted */}
     {route(C2[1], R3[1]).width(0.3)}
@@ -104,15 +104,15 @@ export default (
     {route(U1.IO9, SW2.A).width(0.2)}
     {route(SW2.A, J2[6]).width(0.2)}
     {/* each switch has two pads per side, joined inside the part but not on the board */}
-    {route('SW1.1', 'SW1.2', 'Z').width(0.2)}
-    {route('SW2.1', 'SW2.2', 'Z').width(0.2)}
+    {route(SW1[1], SW1[2]).width(0.2).Z()}
+    {route(SW2[1], SW2[2]).width(0.2).Z()}
     {route(U1.IO8, R4[2]).width(0.2)}
     {route(R4[2], D1.K).width(0.2)}
     {/* the header ends are given on B.Cu: a route reaching a through-hole pad from the back otherwise drops a via into its hole */}
     {route(U1.TXD0, '8.58 2.5 B.Cu').width(0.2)}
     {route(U1.RXD0, '11.12 2.5 B.Cu').width(0.2)}
-    {route(U1.IO4, SENS.RSDA[2]).width(0.2)}
-    {route(U1.IO5, SENS.RSCL[2]).width(0.2)}
+    {route(U1.IO4, SENS.R1[2]).width(0.2)}
+    {route(U1.IO5, SENS.R2[2]).width(0.2)}
 
     {/* pours */}
     {/* laid out for solid pours: the module's ground pads and the dense parts would starve thermal reliefs */}

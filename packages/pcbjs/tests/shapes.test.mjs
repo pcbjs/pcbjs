@@ -3,10 +3,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { rect, roundedRect, circle, slot } from '@pcbjs/lib'
 import { compileBoard } from '@pcbjs/compile'
-import { parsePath } from '@pcbjs/compile/path'
-import { gerberLayer } from '@pcbjs/export/gerber'
+import { parsePath } from '@pcbjs/compile/internal/path'
+import { gerberLayer } from '@pcbjs/export/internal/gerber'
 import { PCB, h } from './fixtures.mjs'
 import { near } from './helpers.mjs'
+import { pour } from '@pcbjs/core'
+import { netOf } from './parts.mjs'
 
 const box = pts => {
   const xs = pts.map(p => p[0]),
@@ -74,9 +76,7 @@ test('shapes: slot runs between two centres with round ends, at any angle', () =
 })
 
 test('shapes: a pour from rect fills inside the outline', () => {
-  const b = compileBoard(
-    h(PCB, { name: 'Pour' }, h('path', { layer: 'Edge.Cuts', d: roundedRect(20, 10, 1) }), h('zone', { layer: 'B.Cu', net: 'GND', d: rect(20, 10), islands: 'keep' })),
-  )
+  const b = compileBoard(h(PCB, { name: 'Pour' }, h('path', { layer: 'Edge.Cuts', d: roundedRect(20, 10, 1) }), pour(netOf('GND'), 'B.Cu', rect(20, 10), { islands: 'keep' })))
   const zone = b.items.find(i => i.kind === 'zone')
   assert.ok(zone.fill.length > 0)
   nearBox(box(zone.outline[0]), [0, 0, 20, 10])

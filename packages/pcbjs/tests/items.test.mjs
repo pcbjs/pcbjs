@@ -1,23 +1,31 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { siteData } from '@pcbjs/export/site-data'
+import { siteData } from '@pcbjs/export/internal/site-data'
+import { shapeOf } from '@pcbjs/core/site-shapes'
+import { route, via, pour } from '@pcbjs/core'
 import { compileBoard, h, PCB, PinHeader, outline } from './fixtures.mjs'
+import { fourLayer as fourLayerStackup } from '@pcbjs/lib/stackups'
+import { netOf, place } from './parts.mjs'
 
-const site = board => siteData(board, { root: '/', fabUrl: '', fabName: '', fabFiles: [], fabStatus: 'ok', svgUrl: '', dev: false, bom: [] })
+/** The board data with each item row's rings from the shapes facet beside it. */
+const site = board => {
+  const s = siteData(board, { root: '/', fabUrl: '', fabName: '', fabFiles: [], fabStatus: 'ok', svgUrl: '', dev: false, bom: [] })
+  return { ...s, items: s.items.map(i => ({ ...i, rings: shapeOf(s, i.id) })) }
+}
 
 const fourLayer = () =>
   compileBoard(
     h(
       PCB,
-      { name: 'Items', copper: 4 },
+      { name: 'Items', stackup: fourLayerStackup() },
       outline(),
-      h(PinHeader, { ref: 'J1', pins: 2, at: '2 2', 'net:1': 'A', 'net:2': 'B' }),
-      h(PinHeader, { ref: 'J2', pins: 2, at: '7 2', 'net:1': 'A', 'net:2': 'B' }),
-      h('track', { net: 'A', layer: 'F.Cu', width: 0.3, d: 'M2 2 L7 2' }),
-      h('via', { net: 'B', at: '5 6' }),
+      place(PinHeader(2), { ref: 'J1', at: '2 2', 'net:1': 'A', 'net:2': 'B' }),
+      place(PinHeader(2), { ref: 'J2', at: '7 2', 'net:1': 'A', 'net:2': 'B' }),
+      route('2 2').net(netOf('A')).width(0.3).L(7, 2),
+      via(netOf('B'), '5 6'),
       h('text', { layer: 'F.SilkS', at: '5 8', size: 1 }, 'HI'),
       h('rect', { layer: 'F.SilkS', x: 1, y: 7, w: 2, h: 2 }),
-      h('zone', { net: 'B', layer: 'B.Cu', d: 'M0 5 H10 V10 H0 Z' }),
+      pour(netOf('B'), 'B.Cu', 'M0 5 H10 V10 H0 Z'),
     ),
   )
 

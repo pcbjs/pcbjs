@@ -1,12 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h } from '@pcbjs/core'
+import PCB, { h, route, via } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
 import { BASE } from '@pcbjs/lib/rules'
+import { fp as part, netOf } from './parts.mjs'
 
 const outline = () => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 20 })
 const board = (...kids) => compileBoard(h(PCB, { name: 'D' }, outline(), ...kids))
-const fp = (ref, at, ...kids) => h('footprint', { ref, at }, ...kids)
+const fp = (ref, at, ...kids) => part({ ref, at }, ...kids)
 const marks = (b, rule) => b.drc.filter(d => d.rule === rule)
 const only = (b, rule, n = 1) => {
   const m = marks(b, rule)
@@ -16,8 +17,8 @@ const only = (b, rule, n = 1) => {
 
 test('drc rules: a clean board with vias, a plated pad, a hole and silk has no markers', () => {
   const b = board(
-    h('via', { at: '5 5' }),
-    h('via', { at: '5 10' }),
+    via(null, '5 5'),
+    via(null, '5 10'),
     fp('J1', '12 5', h('pad', { num: 1, size: 1.7, drill: 1.0 })),
     fp('H1', '12 12', h('pad', { num: '', size: 2.2, drill: 2.2, type: 'npth' })),
     fp('R1', '5 15', h('pad', { num: 1, at: '-0.8 0', size: [0.9, 1.0] }), h('line', { layer: 'F.SilkS', x1: -0.2, y1: 0.75, x2: 0.2, y2: 0.75 })),
@@ -29,7 +30,7 @@ test('drc rules: a clean board with vias, a plated pad, a hole and silk has no m
 })
 
 test('drc rules: via-drill and via-size', () => {
-  const b = board(h('via', { at: '5 5', drill: 0.2, size: 0.5 }))
+  const b = board(via(null, '5 5', { drill: 0.2, size: 0.5 }))
   const [d] = only(b, 'via-drill')
   assert.equal(d.severity, 'error')
   assert.match(d.message, /^via has a 0.2 mm drill, minimum via drill 0.3 mm$/)
@@ -38,11 +39,58 @@ test('drc rules: via-drill and via-size', () => {
 })
 
 test('drc rules: annular-ring on a via and on a plated pad', () => {
-  const v = board(h('via', { at: '5 5', drill: 0.4, size: 0.65 }))
+  const v = board(via(null, '5 5', { drill: 0.4, size: 0.65 }))
   assert.match(only(v, 'annular-ring')[0].message, /^via has a 0.125 mm annular ring \(0.65 mm copper, 0.4 mm drill\), minimum 0.15 mm$/)
   // an oval pad 2.4 x 1.3 around a 1.0 drill: the ring is measured on the smaller side
   const p = board(fp('J1', '10 10', h('pad', { num: 1, shape: 'oval', size: [2.4, 1.3], drill: 1.0 })))
-  assert.match(only(p, 'annular-ring')[0].message, /^pad J1.1 has a 0.15 mm annular ring \(1.3 mm copper, 1 mm drill\), minimum 0.2 mm for plated pads$/)
+  assert.match(only(p, 'annular-ring')[0].message, /^pad J1\/1 has a 0.15 mm annular ring \(1.3 mm copper, 1 mm drill\), minimum 0.2 mm for plated pads$/)
+})
+
+test('drc rules: plated slots keep the minimum ring along the whole hole in either orientation and on either side', () => {
+  const cases = [
+    { shape: 'oval', size: [3, 2], drill: [1, 1.8], ring: 0.1 },
+    { shape: 'oval', size: [2, 3], drill: [1.8, 1], ring: 0.1 },
+    { shape: 'oval', size: [3, 2], drill: [1, 2.4], ring: -0.2 },
+    { shape: 'circle', size: [3, 2], drill: [2.4, 1], ring: -0.2 },
+    { shape: 'oval', size: [3, 2], drill: [2.6, 1.6], ring: 0.2 },
+    { shape: 'oval', size: [2, 3], drill: [1.6, 2.6], ring: 0.2 },
+    { shape: 'circle', size: [2, 2], drill: [1.6, 0.8], ring: 0.2 },
+    { shape: 'rect', size: [3, 2], drill: [2.7, 1.2], ring: 0.15 },
+    { shape: 'rect', size: [3, 2], drill: [2.6, 1.6], ring: 0.2 },
+    { shape: 'roundrect', size: [3, 2], drill: [2.6, 1.6], ring: 0.2 },
+  ]
+  for (const side of ['F', 'B'])
+    for (const rot of [0, 37, 90])
+      for (const { ring, ...pad } of cases) {
+        const b = board(part({ ref: 'J1', at: `10 10 ${rot}`, side }, h('pad', { num: 1, ...pad })))
+        const found = marks(b, 'annular-ring')
+        const name = JSON.stringify({ side, rot, ...pad })
+        assert.equal(found.length, ring < 0.2 ? 1 : 0, name)
+        if (found.length) {
+          assert.ok(Math.abs(found[0].measured.value - ring) < 1e-6, name)
+          assert.equal(found[0].required.value, 0.2)
+          assert.equal(found[0].severity, 'error')
+        }
+      }
+})
+
+test('drc rules: custom plated pads use their copper boundary, including offsets and concavities', () => {
+  const cases = [
+    { drill: 1.4, points: [[-0.8, -1], [1.2, -1], [1.2, 1], [-0.8, 1]], ring: 0.1 },
+    { drill: 1, points: [[0.2, -1], [2, -1], [2, 1], [0.2, 1]], ring: -0.5 },
+    { drill: [2.4, 0.4], points: [[-2, -1], [2, -1], [2, 1], [0.2, 1], [0.2, -0.25], [-0.2, -0.25], [-0.2, 1], [-2, 1]], ring: -0.2 },
+    { drill: 1.4, points: [[-0.9, -1], [1.2, -1], [1.2, 1], [-0.9, 1]], ring: 0.2 },
+  ]
+  for (const side of ['F', 'B'])
+    for (const rot of [0, 37, 90])
+      for (const { ring, ...pad } of cases) {
+        const b = board(part({ ref: 'J1', at: `10 10 ${rot}`, side }, h('pad', { num: 1, shape: 'custom', size: [4, 4], ...pad })))
+        const found = marks(b, 'annular-ring')
+        const name = JSON.stringify({ side, rot, ...pad })
+        assert.equal(found.length, ring < 0.2 ? 1 : 0, name)
+        if (found.length) assert.ok(Math.abs(found[0].measured.value - ring) < 1e-6, name)
+      }
+  only(board(fp('H1', '10 10', h('pad', { num: '', size: [3, 2], drill: [1, 2.4], type: 'npth' }))), 'annular-ring', 0)
 })
 
 test('drc rules: drill below minDrill on a pad', () => {
@@ -52,19 +100,19 @@ test('drc rules: drill below minDrill on a pad', () => {
 
 test('drc rules: hole-to-hole counts every drill, plated or not', () => {
   // via hole edge at 5.15, NPTH edge at 5.55: 0.4 mm apart
-  const b = board(h('via', { at: '5 5' }), fp('H1', '6.05 5', h('pad', { num: '', size: 1.0, drill: 1.0, type: 'npth' })))
+  const b = board(via(null, '5 5'), fp('H1', '6.05 5', h('pad', { num: '', size: 1.0, drill: 1.0, type: 'npth' })))
   const [m] = only(b, 'hole-to-hole')
   assert.match(m.message, /^holes of via and unplated hole of H1 at \(6.05, 5\) are 0.4 mm apart edge to edge, minimum 0.5 mm$/)
   assert.equal(m.severity, 'error')
   // a 2.0 x 0.8 slot reaches x = 11.0 along its length; turned 90 degrees it reaches 10.4
-  const slot = rot => board(fp('J1', `10 10 ${rot}`, h('pad', { num: 1, shape: 'oval', size: [2.6, 1.4], drill: [2.0, 0.8] })), h('via', { at: '11.6 10' }))
+  const slot = rot => board(fp('J1', `10 10 ${rot}`, h('pad', { num: 1, shape: 'oval', size: [2.6, 1.4], drill: [2.0, 0.8] })), via(null, '11.6 10'))
   assert.match(only(slot(0), 'hole-to-hole')[0].message, /are 0.45 mm apart/)
   only(slot(90), 'hole-to-hole', 0)
 })
 
 test('drc rules: hole-to-copper flags other-net and no-net copper, not the same net', () => {
   // a GND track 0.2 mm from the hole edge of a SIG via passes the copper clearance but not the hole clearance
-  const mk = net => board(h('via', { at: '5 5', net: 'SIG', drill: 0.3, size: 0.45 }), h('track', { net, layer: 'F.Cu', width: 0.2, d: 'M 5.45 3 V 7' }))
+  const mk = net => board(via(netOf('SIG'), '5 5', { drill: 0.3, size: 0.45 }), route('5.45 3').net(netOf(net)).width(0.2).V(7))
   const b = mk('GND')
   const m = marks(b, 'hole-to-copper')
   assert.ok(m.length >= 1, JSON.stringify(b.drc.map(d => d.message)))
@@ -72,11 +120,11 @@ test('drc rules: hole-to-copper flags other-net and no-net copper, not the same 
   assert.equal(marks(mk('SIG'), 'hole-to-copper').length, 0, 'same net is fine')
   // copper over the hole itself has no gap to measure
   assert.match(
-    only(board(h('via', { at: '5 5', net: 'SIG', drill: 0.3, size: 0.45 }), h('track', { net: 'GND', layer: 'B.Cu', width: 0.2, d: 'M 3 5 H 7' })), 'hole-to-copper')[0].message,
+    only(board(via(netOf('SIG'), '5 5', { drill: 0.3, size: 0.45 }), route('3 5').net(netOf('GND')).layer('B.Cu').width(0.2).H(7)), 'hole-to-copper')[0].message,
     /^track GND \(GND\) covers the hole of via SIG/,
   )
   // an NPTH has no net: copper of any net near it is flagged
-  const n = board(fp('H1', '10 10', h('pad', { num: '', size: 1.0, drill: 1.0, type: 'npth' })), h('track', { net: 'A', layer: 'B.Cu', width: 0.2, d: 'M 10.65 8 V 12' }))
+  const n = board(fp('H1', '10 10', h('pad', { num: '', size: 1.0, drill: 1.0, type: 'npth' })), route('10.65 8').net(netOf('A')).layer('B.Cu').width(0.2).V(12))
   assert.match(only(n, 'hole-to-copper')[0].message, /is 0.05 mm from unplated hole of H1 at \(10, 10\) \(no net\) on B.Cu, closer than 0.3 mm/)
 })
 
@@ -91,7 +139,7 @@ test('drc rules: silk-over-pad warns when silk runs into a mask opening of the s
   const mk = (side, y) => board(fp('R1', '10 10', h('pad', { num: 1, size: [1, 1], layers: [`${side}.Cu`] }), h('line', { layer: 'F.SilkS', x1: -1, y1: y, x2: 1, y2: y })))
   const [m] = only(mk('F', 0.5), 'silk-over-pad')
   assert.equal(m.severity, 'warning')
-  assert.match(m.message, /^silk of R1 on F.SilkS runs into the mask opening of pad R1.1; the fab clips it$/)
+  assert.match(m.message, /^silk of R1 on F.SilkS runs into the mask opening of pad R1\/1; the fab clips it$/)
   only(mk('B', 0.5), 'silk-over-pad', 0) // the pad is on the other side
   // the opening is the pad grown by maskExpansion: silk 0.03 mm off the copper is still inside it
   only(mk('F', 0.5 + 0.075 + 0.03), 'silk-over-pad', 1)

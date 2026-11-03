@@ -1,12 +1,15 @@
-import { test } from 'node:test'
+import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { compileBoard, CompileError } from '@pcbjs/compile'
-import { offset, overlaps, polysToRings } from '@pcbjs/compile/geom'
+import { offset, overlaps, polysToRings } from '@pcbjs/compile/internal/geom'
 import { baseBoard, compiledBase, outline, PCB, h, PinHeader } from './fixtures.mjs'
 import { near, nearPt } from './helpers.mjs'
 import { jsxDEV } from '@pcbjs/core/jsx-dev-runtime'
-import { flatten } from '@pcbjs/compile/flatten'
-import { route, pour, via } from '@pcbjs/core'
+import { flatten } from '@pcbjs/compile/internal/flatten'
+import { nets, route, pour, via, bindRef, defineFootprint } from '@pcbjs/core'
+import { N, fp, fresh, handle, netOf, place } from './parts.mjs'
+
+beforeEach(fresh)
 
 const pads = (board, ref) => board.items.filter(i => i.kind === 'pad' && (ref === undefined || i.ref === ref))
 const padOf = (board, ref, num) => pads(board, ref).find(p => p.num === String(num))
@@ -44,7 +47,7 @@ test('compile: the Edge.Cuts rect becomes one outline ring and sets the bbox', (
 })
 
 test('compile: a pad in a group at (5,5) rotated 90 lands at (5,4)', () => {
-  const b = compileBoard(h(PCB, { name: 'G' }, outline(), h('g', { at: '5 5 90deg' }, h('pad', { num: 1, at: [1, 0], size: [0.6, 0.4], net: 'C' }))))
+  const b = compileBoard(h(PCB, { name: 'G' }, outline(), h('g', { at: '5 5 90deg' }, h('pad', { num: 1, at: '1 0', size: [0.6, 0.4] }))))
   const [p] = pads(b)
   nearPt(p.at, [5, 4], 1e-12)
   near(p.rot, 90, 1e-9)
@@ -57,7 +60,7 @@ test('compile: a footprint on side B puts smd pads on B.Cu and mirrors x', () =>
       PCB,
       { name: 'Back' },
       outline(),
-      h('footprint', { ref: 'U1', at: '5 5', side: 'B' }, h('pad', { num: 1, at: [1, 0.5], size: [0.6, 0.4] }), h('rect', { layer: 'F.SilkS', x: -1, y: -1, w: 2, h: 2 })),
+      fp({ ref: 'U1', at: '5 5', side: 'B' }, h('pad', { num: 1, at: '1 0.5', size: [0.6, 0.4] }), h('rect', { layer: 'F.SilkS', x: -1, y: -1, w: 2, h: 2 })),
     ),
   )
   assert.equal(b.footprints[0].side, 'B')
@@ -95,9 +98,9 @@ test('compile: a B.Cu zone on net A fills, keeps clear of the B pad, and connect
       PCB,
       { name: 'Zone' },
       outline(),
-      h(PinHeader, { ref: 'J1', pins: 2, at: '2 2', 'net:1': 'A', 'net:2': 'B' }),
-      h(PinHeader, { ref: 'J2', pins: 2, at: '7 2', 'net:1': 'A', 'net:2': 'B' }),
-      h('zone', { net: 'A', layer: 'B.Cu', d: 'M0 0 H10 V10 H0 Z' }),
+      place(PinHeader(2), { ref: 'J1', at: '2 2', 'net:1': 'A', 'net:2': 'B' }),
+      place(PinHeader(2), { ref: 'J2', at: '7 2', 'net:1': 'A', 'net:2': 'B' }),
+      pour(netOf('A'), 'B.Cu', 'M0 0 H10 V10 H0 Z'),
     ),
   )
   const z = b.items.find(i => i.kind === 'zone')
@@ -118,26 +121,23 @@ test('compile: a B.Cu zone on net A fills, keeps clear of the B pad, and connect
 
 test('compile: CompileError for a duplicate ref', () => {
   assert.throws(
-    () => compileBoard(h(PCB, { name: 'Dup' }, outline(), h(PinHeader, { ref: 'J1', pins: 2, at: '2 2' }), h(PinHeader, { ref: 'J1', pins: 2, at: '7 2' }))),
-    err => err instanceof CompileError && /duplicate ref J1/.test(err.message),
+    () => compileBoard(h(PCB, { name: 'Dup' }, outline(), place(PinHeader(2), { ref: 'J1', at: '2 2' }), place(PinHeader(2), { ref: 'J1', at: '7 2' }))),
+    err => err instanceof CompileError && /two parts are named J1/.test(err.message),
   )
 })
 
-test('compile: CompileError for net:9 naming a pad that does not exist', () => {
-  assert.throws(
-    () => compileBoard(h(PCB, { name: 'Bad' }, outline(), h(PinHeader, { ref: 'J1', pins: 2, at: '2 2', 'net:9': 'X' }))),
-    err => err instanceof CompileError && /J1: no pad named "9"/.test(err.message),
-  )
+test('compile: connect naming a pin that does not exist is a SchematicError at the call', () => {
+  assert.throws(() => PinHeader(2)().connect({ 9: N.X }), /PinHeader\(\)\.connect: no pin "9"/)
 })
 
-test('compile: net:padN maps to pad number N, next to net:N and nets={{...}}', () => {
+test('compile: pads take the nets their pins connect to, by pin name', () => {
   const b = compileBoard(
     h(
       PCB,
       { name: 'Alias' },
       outline(),
-      h(PinHeader, { ref: 'J1', pins: 2, at: '2 2', 'net:pad1': 'A', 'net:pad2': 'B' }),
-      h(PinHeader, { ref: 'J2', pins: 2, at: '7 2', 'net:pad1': 'A', nets: { 2: 'B' } }),
+      place(PinHeader(2), { ref: 'J1', at: '2 2', 'net:pad1': 'A', 'net:pad2': 'B' }),
+      place(PinHeader(2), { ref: 'J2', at: '7 2', 'net:pad1': 'A', nets: { 2: 'B' } }),
     ),
   )
   assert.equal(padOf(b, 'J1', 1).net, 'A')
@@ -152,17 +152,18 @@ test('compile: a pad literally named padN keeps priority over the net:padN alias
       PCB,
       { name: 'Literal' },
       outline(),
-      h('footprint', { ref: 'U1', at: '5 5', 'net:pad1': 'X' }, h('pad', { num: 1, at: [0, 0], size: 0.6 }), h('pad', { num: 2, name: 'pad1', at: [1, 0], size: 0.6 })),
+      fp({ ref: 'U1', at: '5 5', 'net:pad1': 'X' }, h('pad', { num: 1, at: '0 0', size: 0.6 }), h('pad', { num: 2, name: 'pad1', at: '1 0', size: 0.6 })),
     ),
   )
   assert.equal(padOf(b, 'U1', 1).net, undefined)
   assert.equal(padOf(b, 'U1', 2).net, 'X')
 })
 
-test('compile: CompileError for net:pad9 on a 2-pin part names both spellings', () => {
+test('compile: net:* on a placement is a CompileError; the part connects its pins', () => {
+  const J1 = bindRef(PinHeader(2)().connect({ 1: N.A, 2: N.B }), 'J1')
   assert.throws(
-    () => compileBoard(h(PCB, { name: 'Bad' }, outline(), h(PinHeader, { ref: 'J1', pins: 2, at: '2 2', 'net:pad9': 'X' }))),
-    err => err instanceof CompileError && /J1: no pad numbered 9 or named "pad9"/.test(err.message),
+    () => compileBoard(h(PCB, { name: 'Bad' }, outline(), h(J1, { at: '2 2', 'net:pad9': 'X' }))),
+    err => err instanceof CompileError && /a placement takes at, side, ref:at and thermal, not net:pad9/.test(err.message),
   )
 })
 
@@ -180,98 +181,95 @@ test('compile: baseBoard is deterministic', () => {
 
 test('compile: a footprint records where the design placed its component, not the <footprint> inside it', () => {
   const at = (file, line) => ({ fileName: file, lineNumber: line, columnNumber: 5 })
-  const Part = props =>
-    jsxDEV('footprint', { ...props, children: jsxDEV('pad', { num: 1, size: [1, 1] }, undefined, false, at('lib/Part.tsx', 8)) }, undefined, false, at('lib/Part.tsx', 7))
-  const Group = () => jsxDEV(Part, { ref: 'U1', at: '5 5' }, undefined, false, at('lib/Group.tsx', 3))
+  const Part = defineFootprint(
+    props => jsxDEV('footprint', { ...props, children: jsxDEV('pad', { num: 1, size: [1, 1] }, undefined, false, at('lib/Part.tsx', 8)) }, undefined, false, at('lib/Part.tsx', 7)),
+    { pins: ['1'], prefix: 'U' },
+  )
+  const U1 = Part({ ref: 'U1' })
+  const Group = () => jsxDEV(U1, { at: '5 5' }, undefined, false, at('lib/Group.tsx', 3))
   const b = compileBoard(h(PCB, { name: 'S' }, outline(), jsxDEV(Group, {}, undefined, false, at('main.tsx', 12))))
   assert.deepEqual(b.footprints[0].src, { file: 'main.tsx', line: 12, col: 5 })
   assert.deepEqual(pads(b, 'U1')[0].src, { file: 'lib/Part.tsx', line: 8, col: 5 })
 })
 
 // ---- autorouting jobs: flatten() records them, it does not route ----
-const flattenWith = track => flatten(baseBoard([h('track', track)]))
+// the base board's drawn route is the first job
+const flattenWith = r => flatten(baseBoard([r]))
+const lastJob = flat => flat.autoRoutes.at(-1)
 
-test('flatten: a track with an AutoRoute d becomes one job from start to end with no algorithm of its own', () => {
-  const spec = { start: 'J1.1', end: 'J2.1' }
-  const flat = flattenWith({ net: 'A', layer: 'F.Cu', width: '0.25mm', d: spec, layers: ['F.Cu', 'B.Cu'], via: { drill: '0.3mm', size: 0.6 } })
-  assert.equal(flat.autoRoutes.length, 1)
-  const job = flat.autoRoutes[0]
-  assert.equal(job.from, 'J1.1', 'REF.PAD positions stay as written')
-  assert.equal(job.to, 'J2.1')
+test('flatten: a route between two ends becomes one job from start to end with no algorithm of its own', () => {
+  const flat = flattenWith(route(handle('J1.1'), handle('J2.1')).net(netOf('A')).layer('F.Cu').width('0.25mm').layers(['F.Cu', 'B.Cu']).vias({ drill: '0.3mm', size: 0.6 }))
+  assert.equal(flat.autoRoutes.length, 2)
+  const job = lastJob(flat)
+  assert.equal(job.from.pin, '1', 'a pin handle with one pad stays as written')
+  assert.equal(job.to.pin, '1')
   assert.equal(job.params.algorithm, undefined)
   assert.equal(job.net, 'A')
   assert.equal(job.layer, 'F.Cu')
   assert.equal(job.width, 0.25)
   assert.deepEqual(job.params.layers, ['F.Cu', 'B.Cu'])
   assert.deepEqual(job.params.via, { drill: 0.3, size: 0.6 })
-  assert.equal(flat.items.filter(i => i.kind === 'track').length, 1, 'only the explicit base track is an item')
+  assert.equal(flat.items.filter(i => i.kind === 'track').length, 0, 'every route is a job, placed when routing')
 })
 
-test('flatten: a track with a function d becomes a whole-net job with that algorithm', () => {
+test('flatten: route(NET) becomes a whole-net job with the algorithm of .rules()', () => {
+  const { B } = nets()
   const fn = () => ({ tracks: [], vias: [] })
-  const flat = flattenWith({ net: 'B', layer: 'B.Cu', width: 0.3, d: fn })
-  assert.equal(flat.autoRoutes.length, 1)
-  assert.equal(flat.autoRoutes[0].params.algorithm, fn)
-  assert.equal(flat.autoRoutes[0].from, undefined)
-  assert.equal(flat.autoRoutes[0].layer, 'B.Cu')
+  const job = lastJob(flattenWith(route(B).layer('B.Cu').width(0.3).rules({ algorithm: fn })))
+  assert.equal(job.whole, true)
+  assert.equal(job.params.algorithm, fn)
+  assert.equal(job.from, undefined)
+  assert.equal(job.layer, 'B.Cu')
+  assert.equal(job.net, 'B')
 })
 
-test('flatten: a track without d but with a net becomes a whole-net job with the default algorithm', () => {
-  const flat = flattenWith({ net: 'B', layer: 'F.Cu', width: 0.3 })
-  assert.equal(flat.autoRoutes.length, 1)
-  assert.equal(flat.autoRoutes[0].from, undefined)
-  assert.equal(flat.autoRoutes[0].params.algorithm, undefined)
-  assert.equal(flat.autoRoutes[0].net, 'B')
-})
-
-test('flatten: a track without d and without a net is a CompileError', () => {
-  assert.throws(
-    () => flattenWith({ layer: 'F.Cu', width: 0.3 }),
-    e => e instanceof CompileError && /without d needs a net/.test(e.message),
+test('flatten: <track points> stays the raw polyline and makes no job; without points it is no element', () => {
+  const flat = flattenWith(
+    h('track', {
+      net: N.B,
+      layer: 'F.Cu',
+      width: 0.3,
+      points: [
+        [2, 4.54],
+        [7, 4.54],
+      ],
+    }),
   )
+  assert.equal(flat.autoRoutes.length, 1)
+  assert.equal(flat.items.filter(i => i.kind === 'track').length, 1)
+  assert.throws(() => h('track', { net: 'B', layer: 'F.Cu', width: 0.3, d: 'M 0 0 H 1' }), /<track> takes points/)
 })
 
-test('flatten: explicit d strings and points stay tracks and make no jobs', () => {
-  const flat = flattenWith({
-    net: 'B',
-    layer: 'F.Cu',
-    width: 0.3,
-    points: [
-      [2, 4.54],
-      [7, 4.54],
-    ],
-  })
-  assert.equal(flat.autoRoutes.length, 0)
-  assert.equal(flat.items.filter(i => i.kind === 'track').length, 2)
-})
-
-test('helpers: route, pour and via take one props object and return the intrinsic node', () => {
-  const tp = { net: 'A', layer: 'F.Cu', width: 0.3, d: { start: 'J1.1', end: 'J2.1' } }
-  const zp = { net: 'GND', layer: 'B.Cu', d: 'M0 0 H10 V10 H0 Z', priority: 1 }
-  const vp = { net: 'A', at: '5mm 5mm', drill: 0.3, size: 0.6 }
-  const t = route(tp),
-    z = pour(zp),
-    v = via(vp)
+test('helpers: route, pour and via take their arguments in place, and the props-object forms are gone', () => {
+  const [a, b] = [handle('J1.1'), handle('J2.1')]
+  const t = route(a, b).net(netOf('A')).width(0.3),
+    z = pour(netOf('GND'), 'B.Cu', 'M0 0 H10 V10 H0 Z', { priority: 1 }),
+    v = via(netOf('A'), '5mm 5mm', { drill: 0.3, size: 0.6 })
   assert.equal(t.type, 'track')
-  assert.deepEqual(t.props, tp)
+  assert.ok(t.props.from === a && t.props.ends.length === 1 && t.props.ends[0] === b)
+  assert.deepEqual({ ...t.props, from: undefined, ends: undefined }, { from: undefined, ends: undefined, chain: [], net: N.A, width: 0.3 })
   assert.equal(z.type, 'zone')
-  assert.deepEqual(z.props, zp)
+  assert.deepEqual(z.props, { priority: 1, net: N.GND, layer: 'B.Cu', d: 'M0 0 H10 V10 H0 Z' })
   assert.equal(v.type, 'via')
-  assert.deepEqual(v.props, vp)
+  assert.deepEqual(v.props, { drill: 0.3, size: 0.6, net: N.A, at: '5mm 5mm' })
+  assert.deepEqual(pour(null, 'B.Cu', 'M0 0 H1 V1 Z').props, { layer: 'B.Cu', d: 'M0 0 H1 V1 Z' }, 'null is no net')
+  assert.throws(() => pour({ net: 'GND', layer: 'B.Cu', d: 'M0 0 H1 V1 Z' }), /takes the net first/)
+  assert.throws(() => via({ net: 'A', at: '1 1' }), /takes the net first/)
+  assert.throws(() => flattenWith(route({ net: 'A', layer: 'F.Cu', width: 0.3, d: 'M 0 0 H 1' })), /bad position/)
+  for (const t of ['via', 'zone', 'keepout', 'stitch']) assert.throws(() => h(t, { net: 'A' }), /is no element/)
 })
 
-test('flatten: AutoRoute coordinate positions are in the group frame and come out in board mm', () => {
-  const d = { start: { at: [1, 0] }, end: [0, 2, 'B.Cu'] }
-  const flat = flatten(baseBoard([h('g', { at: '10 10 90deg' }, h('track', { net: 'A', layer: 'F.Cu', width: 0.3, d }))]))
-  const { from, to } = flat.autoRoutes[0]
+test('flatten: coordinate ends are in the group frame and come out in board mm', () => {
+  const flat = flatten(baseBoard([h('g', { at: '10 10 90deg' }, route({ at: '1 0' }, [0, 2, 'B.Cu']).net(netOf('A')).width(0.3))]))
+  const { from, to } = lastJob(flat)
   nearPt(from.at, [10, 9], 1e-12)
   assert.equal(from.layer, undefined)
   nearPt(to.at, [12, 10], 1e-12)
   assert.equal(to.layer, 'B.Cu')
-  const back = flatten(baseBoard([h('g', { side: 'B' }, h('track', { net: 'A', layer: 'F.Cu', width: 0.3, d: { start: 'J1.1', end: { at: '1 1', layer: 'F.Cu' } } }))]))
-  const job = back.autoRoutes[0]
+  const back = flatten(baseBoard([h('g', { side: 'B' }, route(handle('J1.1'), { at: '1 1', layer: 'F.Cu' }).net(netOf('A')).layer('F.Cu').width(0.3))]))
+  const job = lastJob(back)
   assert.equal(job.layer, 'B.Cu')
-  assert.equal(job.from, 'J1.1')
+  assert.equal(job.from.pin, '1')
   assert.equal(job.to.layer, 'B.Cu')
   nearPt(job.to.at, [-1, 1], 1e-12)
 })

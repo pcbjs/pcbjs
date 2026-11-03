@@ -1,7 +1,7 @@
 // Controller: STM32G431 with FDCAN, 60 x 45 mm, two layers. The board to board socket is on the back, mating the driver's header below.
 // Frame: millimetres, origin at the top-left corner of the outline, x right, y down, seen from the top of the stack.
 import PCB from '@pcbjs/fab/JLCPCB/2-Layer'
-import { pour, via, reference } from '@pcbjs/core'
+import { pour, via, reference, Place } from '@pcbjs/core'
 import { Brand, MountingHole, roundedRect, rect } from '@pcbjs/lib'
 import { W, H, HOLES, TEST_PADS } from '../lib/mech'
 import { SOCKET_AT, socketPin, headerPin } from '../lib/header'
@@ -9,15 +9,16 @@ import { V5, nHA, nLA, nHB, nLB, nHC, nLC, ISA, ISB, ISC, VSNS, nFAULT, SD } fro
 import { chain } from '../lib/wire'
 import * as sch from './controller.sch'
 
-const Hole = MountingHole(3.2)
+// made in a loop, so each hole takes its ref from the loop
+const HOLE_PARTS = HOLES.map((_, i) => MountingHole(3.2)({ ref: `H${i + 1}` }))
 const SIG = 0.2,
   PWR = 0.4
 
 export default (
-  <PCB name="controller" title="Motor stack controller" revision="0.1.0" schematic={sch} color="blue">
+  <PCB name="controller" title="Motor stack controller" rev="0.1.0" schematic={sch} color="blue">
     <path layer="Edge.Cuts" d={roundedRect(W, H, 2)} />
     {HOLES.map(([x, y], i) => (
-      <Hole ref={`H${i + 1}`} at={`${x} ${y}`} />
+      <Place part={HOLE_PARTS[i]} at={`${x} ${y}`} />
     ))}
 
     {/* the socket on the back, mating the driver header; the MCU turned so TIM1 faces it */}
@@ -72,12 +73,12 @@ export default (
     {chain(PWR, J1[socketPin(V5)], C_LIN[1], U3.VIN, U3.EN)}
     {chain(PWR, U3.VOUT, C_LOUT[1], C_BULK[1])}
     {chain(PWR, C_LIN[1], C_CVCC[1], U2.VCC)}
-    {chain(0.3, C_BULK[1], C_VDD3[1], U1.pad('24'))}
+    {chain(0.3, C_BULK[1], C_VDD3[1], U1[24])}
     {chain(0.3, C_VDD3[1], C_VDDA[1], U1.VDDA)}
     {chain(0.3, U1.VDDA, U1['VREF+'])}
-    {chain(0.3, C_VDDA[1], U1.pad('48'))}
-    {chain(0.3, U1.pad('48'), C_VDD2[1])}
-    {chain(0.3, C_VDD1[1], U1.pad('36'))}
+    {chain(0.3, C_VDDA[1], U1[48])}
+    {chain(0.3, U1[48], C_VDD2[1])}
+    {chain(0.3, C_VDD1[1], U1[36])}
     {chain(0.3, C_VDD3[1], C_VDD1[1])}
     {chain(0.3, U1.VBAT, C_VDD2[1])}
     {chain(SIG, C_CVIO[1], U2.VIO)}
@@ -142,7 +143,7 @@ export default (
       [36, 30],
     ].map(([x, y]) => via(GND, `${x} ${y}`))}
     {/* F.Cu GND pieces the tracks fence off: VSS pin 35 tied to its decoupling capacitor, the VDDA capacitor to the VDD3 one, a stitching via in each other piece */}
-    {chain(0.3, U1.pad('35'), C_VDD1[2])}
+    {chain(0.3, U1[35], C_VDD1[2])}
     {chain(0.3, C_VDDA[2], C_VDD3[2])}
     {[
       [31.38, 27.11],
@@ -161,7 +162,7 @@ export default (
     </text>
 
     {/* the driver below, its header in the socket: the socket's V5 pin on the header's V5 pin, the socket turned 180deg */}
-    {reference('../driver/pcb.tsx', { mate: { local: J1[socketPin(V5)], remote: 'J1', pin: headerPin(V5), nets: true }, stack: 'below', rotate: 180 })}
+    {reference('../driver/pcb.tsx', { mate: { local: J1[socketPin(V5)], remote: 'J1', pin: headerPin(V5), nets: true }, rotate: 180 })}
     <Brand at="17.35 41" height={6} />
   </PCB>
 )

@@ -26,7 +26,7 @@ function MKDS2Footprint(props: FootprintProps) {
     </footprint>
   )
 }
-export const MKDS2 = defineFootprint(MKDS2Footprint, { pins: ['1', '2'], prefix: 'J', id: 'psu:TerminalBlock_Phoenix_MKDS-1,5-2-5.08' })
+export const MKDS2 = defineFootprint(MKDS2Footprint, { pins: ['1', '2'], prefix: 'J' })
 
 // Littelfuse 560 series TR5 fuse holder, 56000001009, with a TR5 fuse: two pins at 5.08 mm under a round 8.5 mm body.
 function TR5Footprint(props: FootprintProps) {
@@ -42,7 +42,7 @@ function TR5Footprint(props: FootprintProps) {
     </footprint>
   )
 }
-export const TR5 = defineFootprint(TR5Footprint, { pins: ['1', '2'], prefix: 'F', id: 'psu:Fuseholder_TR5_Littelfuse_No560_No460' })
+export const TR5 = defineFootprint(TR5Footprint, { pins: ['1', '2'], prefix: 'F' })
 
 // TO-220-2 standing upright, TO-220AC rectifiers such as MBR1045: cathode on pad 1 and the tab, anode on pad 2. Tab at -y.
 function TO220V2Footprint(props: FootprintProps) {
@@ -65,7 +65,7 @@ function TO220V2Footprint(props: FootprintProps) {
     </footprint>
   )
 }
-export const TO220V2 = defineFootprint(TO220V2Footprint, { pins: ['K', 'A'], prefix: 'D', id: 'psu:TO-220-2_Vertical' })
+export const TO220V2 = defineFootprint(TO220V2Footprint, { pins: ['K', 'A'], prefix: 'D' })
 
 // Radial electrolytic, 8 mm can, 3.5 mm pitch: + on pad 1, - on pad 2. KiCad's pads are 1.6 on 0.8; these are 2.0 on 1.0
 // for hand soldering.
@@ -83,7 +83,7 @@ function CP8Footprint(props: FootprintProps) {
     </footprint>
   )
 }
-export const CP8 = defineFootprint(CP8Footprint, { pins: ['+', '-'], prefix: 'C', id: 'psu:CP_Radial_D8.0mm_P3.50mm' })
+export const CP8 = defineFootprint(CP8Footprint, { pins: ['+', '-'], prefix: 'C' })
 
 // Bourns SRR1260 shielded power inductor, 12.5 x 12.5 mm, 6 mm high, two 2.9 x 5.4 mm pads 9.7 mm apart.
 function SRR1260Footprint(props: FootprintProps) {
@@ -104,7 +104,7 @@ function SRR1260Footprint(props: FootprintProps) {
     </footprint>
   )
 }
-export const SRR1260 = defineFootprint(SRR1260Footprint, { pins: ['1', '2'], prefix: 'L', id: 'psu:L_Bourns_SRR1260' })
+export const SRR1260 = defineFootprint(SRR1260Footprint, { pins: ['1', '2'], prefix: 'L' })
 
 // TI TPS56637RPA, 4.5 to 28 V, 6 A synchronous buck in the 3 x 3 mm VQFN-HR RPA0010A. Pads read from the land pattern
 // example of SLVSEG1A, origin at the package centre: EN, FB, AGND and PG down the left, MODE and NC at the left of the
@@ -139,5 +139,4 @@ export const TPS56637 = defineFootprint(RPA10Footprint, {
   pins: ['EN', 'FB', 'AGND', 'PG', 'SW', 'BOOT', 'VIN', 'PGND', 'MODE'],
   nc: ['NC'],
   prefix: 'U',
-  id: 'psu:TI_VQFN-HR-10_RPA0010A',
 })

@@ -9,27 +9,29 @@ const W = 30,
   H = 15
 
 export default (
-  <PCB name="Quad" revision="0.1.0" schematic={sch} color="black">
+  <PCB name="Quad" rev="0.1.0" schematic={sch} color="black">
     {/* outline: 30 x 15 mm with 1 mm corners */}
     <rect layer="Edge.Cuts" x={0} y={0} w={W} h={H} rx={1} />
 
     {/* the connector, pin 1 VIN, and the divider in a row at the height of the board's middle */}
     <J1 at="3 6.23" />
-    <Divider.R1 at="10 7.5" />
-    <Divider.R2 at="22 7.5" />
+    <g name="Divider" at="16 7.5">
+      <R1 at="-6 0" />
+      <R2 at="6 0" />
+    </g>
 
     {/* VIN on the top: from J1.1 across, then 45 degrees down to R1.1 */}
-    {route(VIN, { width: 0.3, d: 'M 3 6.23 H 7.905 L 9.175 7.5' })}
+    {route('3 6.23').net(VIN).width(0.3).H(7.905).L(9.175, 7.5)}
 
     {/* SIG: down to In1.Cu at a via, across, and up again at the second via; the vias go through every layer */}
-    {route(SIG, { width: 0.25, d: 'M 10.825 7.5 H 12.5' })}
+    {route('10.825 7.5').net(SIG).width(0.25).H(12.5)}
     {via(SIG, '12.5 7.5')}
-    {route(SIG, { layer: 'In1.Cu', width: 0.25, d: 'M 12.5 7.5 H 19.5' })}
+    {route('12.5 7.5').net(SIG).layer('In1.Cu').width(0.25).H(19.5)}
     {via(SIG, '19.5 7.5')}
-    {route(SIG, { width: 0.25, d: 'M 19.5 7.5 H 21.175' })}
+    {route('19.5 7.5').net(SIG).width(0.25).H(21.175)}
 
     {/* GND: R2 drops to the In2.Cu plane through a via; J1.2 reaches it through its plated hole */}
-    {route(GND, { width: 0.3, d: 'M 22.825 7.5 H 24.5' })}
+    {route('22.825 7.5').net(GND).width(0.3).H(24.5)}
     {via(GND, '24.5 7.5')}
     {pour(GND, 'In2.Cu', rect(W, H))}
 

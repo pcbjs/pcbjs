@@ -3,31 +3,44 @@
 import { test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { h } from '@pcbjs/core/jsx-runtime'
-import PCB, { route, nets, resetDefaults } from '@pcbjs/core'
+import PCB, { route, nets, resetDefaults, keepout, patch } from '@pcbjs/core'
+import { holdPatch } from '@pcbjs/compile/internal/patches'
 import { compileBoard, CompileError } from '@pcbjs/compile'
-import { drc } from '@pcbjs/compile/drc'
-import { connectivity } from '@pcbjs/compile/connectivity'
-import { clearRouteCache } from '@pcbjs/compile/route-cache'
-import { pairsOf, coupledGap } from '@pcbjs/compile/pair-info'
-import { inspectBoard } from '@pcbjs/cli/inspect'
-import { pairGeometry, traceWidth, JLCPCB_4L_7628 } from '@pcbjs/lib'
-import { near } from './helpers.mjs'
+import { pairChecks } from '@pcbjs/compile/internal/drc'
+import { clearRouteCache } from '@pcbjs/compile/internal/route-cache'
+import { pairsOf, coupledGap } from '@pcbjs/compile/internal/pair-info'
+import { inspectBoard } from '@pcbjs/cli/internal/inspect'
+import { pairGeometry, traceWidth } from '@pcbjs/lib/impedance'
+import { JLCPCB_4L_7628 } from '@pcbjs/lib/stackups'
+import { near, unfrozen } from './helpers.mjs'
+import { fp, handle, netOf } from './parts.mjs'
+
+/** The pair checks of the DRC on a board as it stands. */
+const pairFindings = b => {
+  const out = []
+  pairChecks(b, out)
+  return out
+}
 
 afterEach(() => resetDefaults())
 
-const opts = { routeCache: false }
+const opts = { cache: false }
 const edge = (w = 30, hh = 20) => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w, h: hh })
 /** Two smd pads 0.5 mm apart side by side, pad 1 on `a` at -x, pad 2 on `b` at +x. */
 const two = (ref, x, y, a, b) =>
-  h(
-    'footprint',
-    { ref, at: [x, y], nets: { 1: a, 2: b } },
-    h('pad', { num: 1, at: [-0.25, 0], size: [0.3, 1], type: 'smd' }),
-    h('pad', { num: 2, at: [0.25, 0], size: [0.3, 1], type: 'smd' }),
+  fp(
+    { ref, at: `${x} ${y}`, nets: { 1: a, 2: b } },
+    h('pad', { num: 1, at: '-0.25 0', size: [0.3, 1], type: 'smd' }),
+    h('pad', { num: 2, at: '0.25 0', size: [0.3, 1], type: 'smd' }),
   )
-const smd = (ref, x, y, net, size = 1) => h('footprint', { ref, at: [x, y], nets: { 1: net } }, h('pad', { num: 1, size, type: 'smd' }))
+const smd = (ref, x, y, net, size = 1) => fp({ ref, at: `${x} ${y}`, nets: { 1: net } }, h('pad', { num: 1, size, type: 'smd' }))
 const board = (props, ...children) => h(PCB, { name: 'Pair', ...props }, edge(), two('J1', 10, 3, 'DP', 'DN'), two('J2', 10, 17, 'DP', 'DN'), ...children)
-const pair = (path, w = 0.2, g = 0.2) => route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], path).width(w).gap(g)
+const pair = (chain = r => r, w = 0.2, g = 0.2) =>
+  chain(
+    route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+      .width(w)
+      .gap(g),
+  )
 const tracks = (b, net) => b.items.filter(i => i.kind === 'track' && (net === undefined || i.net === net))
 const vias = b => b.items.filter(i => i.kind === 'via')
 const findings = (b, rule) => b.drc.filter(d => d.rule === rule)
@@ -43,10 +56,11 @@ const clean = b => {
 // ---- the builder ----
 
 test('pair builder: array ends make a pair route, P first, and the pair methods set its props', () => {
-  const r = route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'V 8 XZ').gap(0.15).skew('0.05mm').impedance(90)
+  const [a, b, c, d] = [handle('J1.1'), handle('J1.2'), handle('J2.1'), handle('J2.2')]
+  const r = route([a, b], [c, d]).gap(0.15).skew('0.05mm').impedance(90).V(8)
   assert.equal(r.props.pair, true)
-  assert.deepEqual(r.props.from, ['J1.1', 'J1.2'])
-  assert.deepEqual(r.props.to, ['J2.1', 'J2.2'])
+  assert.ok(r.props.from.length === 2 && r.props.from[0] === a && r.props.from[1] === b)
+  assert.ok(r.props.ends.length === 1 && r.props.ends[0][0] === c && r.props.ends[0][1] === d)
   assert.equal(r.props.gap, 0.15)
   assert.equal(r.props.skew, '0.05mm')
   assert.equal(r.props.impedance, 90)
@@ -54,44 +68,80 @@ test('pair builder: array ends make a pair route, P first, and the pair methods 
   const t = route([3, 4], ['5mm', '4mm', 'B.Cu'])
   assert.equal(t.props.pair, undefined)
   assert.deepEqual(t.props.from, [3, 4])
-  assert.equal(route('J1.1', 'J2.1').impedance(50).props.impedance, 50)
+  assert.equal(route(handle('J1.1'), handle('J2.1')).impedance(50).props.impedance, 50)
 })
 
 test('pair builder: mixing an array end with a single end, a mixed array and the pair methods on a single route are TypeErrors', () => {
-  assert.throws(() => route(['J1.1', 'J1.2'], 'J2.1'), { name: 'TypeError', message: /a is a pair end \[P, N\] but b is a single end/ })
-  assert.throws(() => route('J1.1', ['J2.1', 'J2.2']), { name: 'TypeError', message: /b is a pair end/ })
-  assert.throws(() => route(['J1.1', 3], ['J2.1', 'J2.2']), { name: 'TypeError', message: /mixes a position and a length/ })
-  assert.throws(() => route('J1.1', 'J2.1').gap(0.2), { name: 'TypeError', message: /gap\(\) is for a differential pair/ })
-  assert.throws(() => route('J1.1', 'J2.1').skew(0.2), { name: 'TypeError', message: /skew\(\) is for a differential pair/ })
-  assert.throws(() => route('J1.1', 'J2.1').impedance(-5), { name: 'TypeError', message: /positive number of ohms/ })
+  assert.throws(() => route([handle('J1.1'), handle('J1.2')], handle('J2.1')), { name: 'TypeError', message: /a is a pair end \[P, N\] but b is a single end/ })
+  assert.throws(() => route(handle('J1.1'), [handle('J2.1'), handle('J2.2')]), { name: 'TypeError', message: /b is a pair end/ })
+  assert.throws(() => route([handle('J1.1'), 3], [handle('J2.1'), handle('J2.2')]), { name: 'TypeError', message: /mixes a position and a length/ })
+  assert.throws(() => route(handle('J1.1'), handle('J2.1')).gap(0.2), { name: 'TypeError', message: /gap\(\) is for a differential pair/ })
+  assert.throws(() => route(handle('J1.1'), handle('J2.1')).skew(0.2), { name: 'TypeError', message: /skew\(\) is for a differential pair/ })
+  assert.throws(() => route(handle('J1.1'), handle('J2.1')).impedance(-5), { name: 'TypeError', message: /positive number of ohms/ })
 })
 
 // ---- flatten ----
 
 test('pair flatten: the nets come from the pads, checked: P pads on one net, N pads on another', () => {
-  const b = compileBoard(board({}, pair('Z')), opts)
+  const b = compileBoard(
+    board(
+      {},
+      pair(r => r.Z()),
+    ),
+    opts,
+  )
   const [p] = b.pairs
   assert.deepEqual(p.nets, ['DP', 'DN'])
   assert.equal(p.id, 'pair:1')
   // P ends on two nets
   assert.throws(
-    () => compileBoard(h(PCB, { name: 'Pair' }, edge(), two('J1', 10, 3, 'DP', 'DN'), two('J2', 10, 17, 'X', 'DN'), pair('Z')), opts),
-    e => e instanceof CompileError && /the P ends J1\.1 and J2\.1 are on two nets, DP and X/.test(e.message),
+    () =>
+      compileBoard(
+        h(
+          PCB,
+          { name: 'Pair' },
+          edge(),
+          two('J1', 10, 3, 'DP', 'DN'),
+          two('J2', 10, 17, 'X', 'DN'),
+          pair(r => r.Z()),
+        ),
+        opts,
+      ),
+    e => e instanceof CompileError && /the P ends J1\/1 and J2\/1 are on two nets, DP and X/.test(e.message),
   )
   // P and N on one net
   assert.throws(
-    () => compileBoard(h(PCB, { name: 'Pair' }, edge(), two('J1', 10, 3, 'D', 'D'), two('J2', 10, 17, 'D', 'D'), pair('Z')), opts),
+    () =>
+      compileBoard(
+        h(
+          PCB,
+          { name: 'Pair' },
+          edge(),
+          two('J1', 10, 3, 'D', 'D'),
+          two('J2', 10, 17, 'D', 'D'),
+          pair(r => r.Z()),
+        ),
+        opts,
+      ),
     e => e instanceof CompileError && /are all on net D; a pair joins two nets/.test(e.message),
   )
   // N ends on no net
   assert.throws(
-    () => compileBoard(h(PCB, { name: 'Pair' }, edge(), two('J1', 10, 3, 'DP', 'DN'), route(['J1.1', '5 5'], ['10 17', '11 17'], 'Z')), opts),
+    () => compileBoard(h(PCB, { name: 'Pair' }, edge(), two('J1', 10, 3, 'DP', 'DN'), route([handle('J1.1'), '5 5'], ['10 17', '11 17']).Z()), opts),
     e => e instanceof CompileError && /neither N end is a pad on a net/.test(e.message),
   )
 })
 
 test('pair flatten: gap from .gap(), else the class, else the width; skew and uncoupled from the class, else 0.1 and 5', () => {
-  const plain = compileBoard(board({}, route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'Z').width(0.25)), opts)
+  const plain = compileBoard(
+    board(
+      {},
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.25)
+        .Z(),
+    ),
+    opts,
+  )
   assert.deepEqual([plain.pairs[0].width, plain.pairs[0].gap, plain.pairs[0].skew, plain.pairs[0].maxUncoupled], [0.25, 0.25, 0.1, 5])
   const { DP, DN } = nets({ DP: { class: 'usb' }, DN: { class: 'usb' } })
   const classed = compileBoard(
@@ -101,7 +151,7 @@ test('pair flatten: gap from .gap(), else the class, else the width; skew and un
       edge(),
       two('J1', 10, 3, DP, DN),
       two('J2', 10, 17, DP, DN),
-      route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'Z'),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')]).Z(),
     ),
     opts,
   )
@@ -114,18 +164,32 @@ test('pair flatten: .impedance() sets width and gap from the stackup, holding an
   const r2 = v => Math.round(v * 100) / 100
   const at = (...r) =>
     compileBoard(h(PCB, { name: 'Pair', stackup: s }, edge(), two('J1', 10, 3, 'DP', 'DN'), two('J2', 10, 17, 'DP', 'DN'), smd('K1', 3, 3, 'S'), smd('K2', 3, 17, 'S'), ...r), opts)
-  const both = at(route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'Z').impedance(90)).pairs[0]
+  const both = at(
+    route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+      .impedance(90)
+      .Z(),
+  ).pairs[0]
   const free = pairGeometry(s, 'F.Cu', 90)
   assert.deepEqual([both.width, both.gap], [r2(free.width), r2(free.gap)])
-  const held = at(route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'Z').impedance(90).gap(0.15)).pairs[0]
+  const held = at(
+    route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+      .impedance(90)
+      .gap(0.15)
+      .Z(),
+  ).pairs[0]
   assert.equal(held.gap, 0.15)
   assert.equal(held.width, r2(pairGeometry(s, 'F.Cu', 90, { gap: 0.15 }).width))
-  const wide = at(route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'Z').impedance(90).width(0.3)).pairs[0]
+  const wide = at(
+    route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+      .impedance(90)
+      .width(0.3)
+      .Z(),
+  ).pairs[0]
   assert.equal(wide.width, 0.3)
   assert.equal(wide.gap, r2(pairGeometry(s, 'F.Cu', 90, { width: 0.3 }).gap))
-  const single = at(route('K1.1', 'K2.1', 'Z').impedance(50))
+  const single = at(route(handle('K1.1'), handle('K2.1')).impedance(50).Z())
   for (const t of tracks(single, 'S')) assert.equal(t.width, r2(traceWidth(s, 'F.Cu', 50)))
-  const given = at(route('K1.1', 'K2.1', 'Z').impedance(50).width(0.4))
+  const given = at(route(handle('K1.1'), handle('K2.1')).impedance(50).width(0.4).Z())
   for (const t of tracks(given, 'S')) assert.equal(t.width, 0.4)
 })
 
@@ -158,7 +222,13 @@ test('pair router: a straight pair is two tracks a pitch apart with the pair id 
 })
 
 test('pair router: @layer in the centre line puts a via pair across the run, one via per net, and the tracks change layer', () => {
-  const b = compileBoard(board({}, pair('V 8 @B.Cu V 12 @F.Cu Z')), opts)
+  const b = compileBoard(
+    board(
+      {},
+      pair(r => r.V(8).via('B.Cu').V(12).via('F.Cu').Z()),
+    ),
+    opts,
+  )
   clean(b)
   const vs = vias(b)
   assert.equal(vs.length, 4)
@@ -215,8 +285,11 @@ test('pair router: rip up moves a single route out of the way of a pair', () => 
       two('J2', 10, 18, 'DP', 'DN'),
       smd('A1', 0.9, 10, 'A'),
       smd('A2', 19.1, 10, 'A'),
-      route('A1.1', 'A2.1').width(0.25).layers(['F.Cu']),
-      route(['J1.1', 'J1.2'], ['J2.1', 'J2.2']).width(0.2).gap(0.2).layers(['F.Cu']),
+      route(handle('A1.1'), handle('A2.1')).width(0.25).layers(['F.Cu']),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.2)
+        .gap(0.2)
+        .layers(['F.Cu']),
     ),
     opts,
   )
@@ -230,7 +303,17 @@ test('pair router: rip up moves a single route out of the way of a pair', () => 
 
 test('pair router: pads mirrored between the ends cannot be joined without crossing, a route-failed at the end found before routing', () => {
   const b = compileBoard(
-    h(PCB, { name: 'Pair' }, edge(), two('J1', 10, 3, 'DP', 'DN'), two('J2', 10, 17, 'DN', 'DP'), route(['J1.1', 'J1.2'], ['J2.2', 'J2.1'], 'Z').width(0.2).gap(0.2)),
+    h(
+      PCB,
+      { name: 'Pair' },
+      edge(),
+      two('J1', 10, 3, 'DP', 'DN'),
+      two('J2', 10, 17, 'DN', 'DP'),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.2'), handle('J2.1')])
+        .width(0.2)
+        .gap(0.2)
+        .Z(),
+    ),
     opts,
   )
   const [f] = findings(b, 'route-failed')
@@ -249,7 +332,10 @@ test('pair router: pads mirrored between the ends cannot be joined without cross
           edge(),
           two('J1', 10, 3, 'DP', 'DN'),
           two('J2', 10, 17, 'DN', 'DP'),
-          route(['J1.1', 'J1.2'], ['J2.2', 'J2.1'], 'Z').width(0.2).gap(0.2),
+          route([handle('J1.1'), handle('J1.2')], [handle('J2.2'), handle('J2.1')])
+            .width(0.2)
+            .gap(0.2)
+            .Z(),
         ),
         opts,
       ),
@@ -257,26 +343,15 @@ test('pair router: pads mirrored between the ends cannot be joined without cross
   )
 })
 
-test('pair router: a locked pair keeps its centre line', async () => {
-  const { mkdtempSync, rmSync } = await import('node:fs')
-  const { tmpdir } = await import('node:os')
-  const { join } = await import('node:path')
-  const dir = mkdtempSync(join(tmpdir(), 'pcbjs-pair-'))
-  try {
-    clearRouteCache()
-    const o = { routeCache: { dir } }
-    const bent = compileBoard(board({}, smd('X1', 10, 10, 'B', 3), pair().lock()), o)
-    clearRouteCache()
-    const kept = compileBoard(board({}, pair().lock()), o)
-    assert.equal(kept.routing.locked, 1)
-    assert.deepEqual(
-      tracks(kept).map(t => t.pts),
-      tracks(bent).map(t => t.pts),
-    )
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-    clearRouteCache()
-  }
+test('pair router: a held pair keeps its centre line', () => {
+  const bent = compileBoard(board({}, smd('X1', 10, 10, 'B', 3), pair()), { cache: false })
+  const p = holdPatch(bent, 'route:1')
+  const kept = compileBoard(board({ patches: [patch(p.ref, p.op, p.hash)] }, pair()), { cache: false })
+  assert.equal(kept.routing.held, 1)
+  assert.deepEqual(
+    tracks(kept).map(t => t.pts),
+    tracks(bent).map(t => t.pts),
+  )
 })
 
 // ---- class clearance in the router ----
@@ -284,7 +359,7 @@ test('pair router: a locked pair keeps its centre line', async () => {
 test('class clearance: the router keeps a class clearance from other copper and DRC stays clean', () => {
   const { A } = nets({ A: { class: 'wide' } })
   const parts = [smd('J1', 3, 5, A), smd('J2', 17, 5, A), smd('X1', 10, 5.6, 'B', 1)]
-  const b = compileBoard(h(PCB, { name: 'Wide', classes: { wide: { clearance: 0.4 } } }, edge(20, 10), ...parts, route('J1.1', 'J2.1').width(0.25)), opts)
+  const b = compileBoard(h(PCB, { name: 'Wide', classes: { wide: { clearance: 0.4 } } }, edge(20, 10), ...parts, route(handle('J1.1'), handle('J2.1')).width(0.25)), opts)
   assert.deepEqual(errors(b), [])
   const x1 = b.items.find(i => i.kind === 'pad' && i.ref === 'X1')
   // the distance from the track's edge to the pad's edge, sampled along the track
@@ -302,7 +377,7 @@ test('class clearance: the router keeps a class clearance from other copper and 
   assert.ok(min >= 0.4 - 1e-6, `the track keeps ${min} mm from X1`)
   // without the class the route runs closer
   const plain = compileBoard(
-    h(PCB, { name: 'Wide' }, edge(20, 10), smd('J1', 3, 5, 'A'), smd('J2', 17, 5, 'A'), smd('X1', 10, 5.6, 'B', 1), route('J1.1', 'J2.1').width(0.25)),
+    h(PCB, { name: 'Wide' }, edge(20, 10), smd('J1', 3, 5, 'A'), smd('J2', 17, 5, 'A'), smd('X1', 10, 5.6, 'B', 1), route(handle('J1.1'), handle('J2.1')).width(0.25)),
     opts,
   )
   assert.notDeepEqual(
@@ -322,14 +397,17 @@ test('pair DRC: pair-skew when one track runs longer, with the source, the nets,
       { name: 'Pair' },
       edge(),
       two('J1', 10, 3, 'DP', 'DN'),
-      h(
-        'footprint',
+      fp(
         { ref: 'J2', at: '20 12 90deg', nets: { 1: 'DP', 2: 'DN' } },
-        h('pad', { num: 1, at: [-0.25, 0], size: [0.3, 1], type: 'smd' }),
-        h('pad', { num: 2, at: [0.25, 0], size: [0.3, 1], type: 'smd' }),
+        h('pad', { num: 1, at: '-0.25 0', size: [0.3, 1], type: 'smd' }),
+        h('pad', { num: 2, at: '0.25 0', size: [0.3, 1], type: 'smd' }),
       ),
-      h('keepout', { layers: 'all', d: 'M 10.4 3.6 H 30 V 11.6 H 10.4 Z' }),
-      route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'V 12 Z').width(0.2).gap(0.2),
+      keepout('M 10.4 3.6 H 30 V 11.6 H 10.4 Z'),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.2)
+        .gap(0.2)
+        .V(12)
+        .Z(),
     ),
     opts,
   )
@@ -348,13 +426,17 @@ test('pair DRC: pair-skew when one track runs longer, with the source, the nets,
       { name: 'Pair' },
       edge(),
       two('J1', 10, 3, 'DP', 'DN'),
-      h(
-        'footprint',
+      fp(
         { ref: 'J2', at: '20 12 90deg', nets: { 1: 'DP', 2: 'DN' } },
-        h('pad', { num: 1, at: [-0.25, 0], size: [0.3, 1], type: 'smd' }),
-        h('pad', { num: 2, at: [0.25, 0], size: [0.3, 1], type: 'smd' }),
+        h('pad', { num: 1, at: '-0.25 0', size: [0.3, 1], type: 'smd' }),
+        h('pad', { num: 2, at: '0.25 0', size: [0.3, 1], type: 'smd' }),
       ),
-      route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'V 12 Z').width(0.2).gap(0.2).skew(0.5),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.2)
+        .gap(0.2)
+        .skew(0.5)
+        .V(12)
+        .Z(),
     ),
     opts,
   )
@@ -370,7 +452,10 @@ test('pair DRC: pair-uncoupled warns above the class limit', () => {
       edge(),
       two('J1', 10, 3, DP, DN),
       two('J2', 10, 17, DP, DN),
-      route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'Z').width(0.2).gap(0.2),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.2)
+        .gap(0.2)
+        .Z(),
     ),
     opts,
   )
@@ -381,17 +466,25 @@ test('pair DRC: pair-uncoupled warns above the class limit', () => {
 })
 
 test('pair DRC: pair-gap when a coupled section is off the pair gap, only with both tracks of a pair id', () => {
-  const b = compileBoard(board({}, pair('Z')), opts)
+  const b = unfrozen(() =>
+    compileBoard(
+      board(
+        {},
+        pair(r => r.Z()),
+      ),
+      opts,
+    ),
+  )
   assert.deepEqual(findings(b, 'pair-gap'), [])
   const N = tracks(b, 'DN')[0]
   N.pts = N.pts.map(([x, y], i) => (i > 1 && i < N.pts.length - 2 ? [x + 0.05, y] : [x, y]))
-  const out = drc(b, connectivity(b))
+  const out = pairFindings(b)
   const [g] = out.filter(d => d.rule === 'pair-gap')
   assert.match(g.message, /the coupled tracks are 0\.25 mm apart edge to edge, the pair gap is 0\.2 mm, allowed off by 0\.01 mm/)
   // one track alone is no pair to check
   b.items = b.items.filter(i => i !== N)
   assert.deepEqual(
-    drc(b, connectivity(b)).filter(d => d.rule.startsWith('pair-')),
+    pairFindings(b).filter(d => d.rule.startsWith('pair-')),
     [],
   )
 })
@@ -399,7 +492,13 @@ test('pair DRC: pair-gap when a coupled section is off the pair gap, only with b
 // ---- inspect ----
 
 test('pair inspect: a net of a pair prints its partner, width, gap and the length of each track', () => {
-  const b = compileBoard(board({}, pair('V 8 @B.Cu V 12 @F.Cu Z')), opts)
+  const b = compileBoard(
+    board(
+      {},
+      pair(r => r.V(8).via('B.Cu').V(12).via('F.Cu').Z()),
+    ),
+    opts,
+  )
   const r = inspectBoard(b, 'main.tsx', '/', 'DN')
   const line = r.text.find(l => l.startsWith('pair '))
   assert.match(
@@ -415,10 +514,9 @@ test('pair inspect: a net of a pair prints its partner, width, gap and the lengt
 
 /** A connector row: pads 0.5 mm apart along y from (x, y0), 1.3 x 0.3 mm, nets in pin order. */
 const row = (ref, x, y0, ns, rot = 0) =>
-  h(
-    'footprint',
-    { ref, at: [x, y0], rot, nets: Object.fromEntries(ns.map((n, i) => [i + 1, n])) },
-    ...ns.map((_, i) => h('pad', { num: i + 1, at: [0, i * 0.5], size: [1.3, 0.3], type: 'smd' })),
+  fp(
+    { ref, at: `${x} ${y0}`, rot, nets: Object.fromEntries(ns.map((n, i) => [i + 1, n])) },
+    ...ns.map((_, i) => h('pad', { num: i + 1, at: `0 ${i * 0.5}`, size: [1.3, 0.3], type: 'smd' })),
   )
 /** Every DRC finding but those of nets left open on purpose and single pads. */
 const real = (b, open = []) =>
@@ -439,8 +537,12 @@ test('pair router: autorouted pairs from 0.5 mm pitch rows with grounds between 
         edge(),
         row('J1', 3.03, 6.07, ns),
         row('J2', x2, 6.07 + dy, ns, 180),
-        route(['J1.2', 'J1.3'], ['J2.2', 'J2.3']).width(0.29).gap(0.29),
-        route(['J1.5', 'J1.6'], ['J2.5', 'J2.6']).width(0.29).gap(0.29),
+        route([handle('J1.2'), handle('J1.3')], [handle('J2.2'), handle('J2.3')])
+          .width(0.29)
+          .gap(0.29),
+        route([handle('J1.5'), handle('J1.6')], [handle('J2.5'), handle('J2.6')])
+          .width(0.29)
+          .gap(0.29),
       ),
       opts,
     )
@@ -471,11 +573,12 @@ test('pair router: a pair between coordinate ends takes both nets with .net(P, N
           [18.4, 10.83],
           [18.4, 11.41],
         ],
-        'X 17.4 10.12 Z',
       )
         .width(0.29)
         .gap(0.29)
-        .net(DP, DN),
+        .net(DP, DN)
+        .X('17.4 10.12')
+        .Z(),
       route(
         [
           [3, 15],
@@ -488,7 +591,7 @@ test('pair router: a pair between coordinate ends takes both nets with .net(P, N
       )
         .width(0.29)
         .gap(0.29)
-        .net('QP', 'QN'),
+        .net(netOf('QP'), netOf('QN')),
     ),
     opts,
   )
@@ -503,10 +606,10 @@ test('pair router: a pair between coordinate ends takes both nets with .net(P, N
     b.drc.filter(d => d.severity === 'error').map(d => `${d.rule}: ${d.message}`),
     [],
   )
-  assert.throws(() => route('J1.1', 'J2.1').net('A', 'B'), { name: 'TypeError', message: /second net for a differential pair only/ })
+  assert.throws(() => route(handle('J1.1'), handle('J2.1')).net(netOf('A'), netOf('B')), { name: 'TypeError', message: /second net for a differential pair only/ })
   // with pads the N net must agree
   assert.throws(
-    () => compileBoard(board({}, pair('Z').net('DP', 'X')), opts),
+    () => compileBoard(board({}, pair(r => r.Z()).net(netOf('DP'), netOf('X'))), opts),
     e => e instanceof CompileError && /given the N net X, but its N ends are on DN/.test(e.message),
   )
 })
@@ -514,10 +617,9 @@ test('pair router: a pair between coordinate ends takes both nets with .net(P, N
 test('pair router: the end stub into staggered rows leaves in the first free direction, not into the next pins', () => {
   // a magjack like the eth-phy board's: pins 1.02 mm apart in y, odd pins at x 6, even pins at x 7.78
   const sig = ['CT', 'AP', 'AN', 'BP', 'BN', 'CT2']
-  const jack = h(
-    'footprint',
-    { ref: 'J1', at: [2, 4], nets: Object.fromEntries(sig.map((n, i) => [i + 1, n])) },
-    ...sig.map((_, i) => h('pad', { num: i + 1, at: [i % 2 ? 7.78 : 6, i * 1.02], size: [1.3, 1.3], shape: 'circle', type: 'thru', drill: 0.9 })),
+  const jack = fp(
+    { ref: 'J1', at: '2 4', nets: Object.fromEntries(sig.map((n, i) => [i + 1, n])) },
+    ...sig.map((_, i) => h('pad', { num: i + 1, at: `${i % 2 ? 7.78 : 6} ${i * 1.02}`, size: [1.3, 1.3], shape: 'circle', type: 'thru', drill: 0.9 })),
   )
   const b = compileBoard(
     h(
@@ -526,8 +628,12 @@ test('pair router: the end stub into staggered rows leaves in the first free dir
       edge(),
       jack,
       row('U1', 26, 6, ['AP', 'AN', 'G', 'BP', 'BN']),
-      route(['J1.2', 'J1.3'], ['U1.1', 'U1.2']).width(0.16).gap(0.16),
-      route(['J1.4', 'J1.5'], ['U1.4', 'U1.5']).width(0.16).gap(0.16),
+      route([handle('J1.2'), handle('J1.3')], [handle('U1.1'), handle('U1.2')])
+        .width(0.16)
+        .gap(0.16),
+      route([handle('J1.4'), handle('J1.5')], [handle('U1.4'), handle('U1.5')])
+        .width(0.16)
+        .gap(0.16),
     ),
     opts,
   )
@@ -539,9 +645,13 @@ test('pair router: the end stub into staggered rows leaves in the first free dir
 })
 
 test('neck: a route wider than its 0.5 mm pitch pad necks down at the pad, autorouted or drawn, and length 0 turns it off', () => {
-  const pads = () => [row('J1', 3, 6, ['G1', 'S', 'G2']), h('footprint', { ref: 'T1', at: [20, 12], nets: { 1: 'S' } }, h('pad', { num: 1, size: [1.5, 1.5], type: 'smd' }))]
-  for (const path of ['XZ', 'H 8 XZ', 'H 8 V 12 H 20']) {
-    const b = compileBoard(h(PCB, { name: 'Neck' }, edge(), ...pads(), route('J1.2', 'T1.1', path + (path.endsWith('Z') ? '' : ' Z')).width(0.6)), opts)
+  const pads = () => [row('J1', 3, 6, ['G1', 'S', 'G2']), fp({ ref: 'T1', at: '20 12', nets: { 1: 'S' } }, h('pad', { num: 1, size: [1.5, 1.5], type: 'smd' }))]
+  for (const [path, chain] of [
+    ['automatic', r => r],
+    ['H 8 then automatic', r => r.H(8)],
+    ['H 8 V 12 H 20 Z', r => r.H(8).V(12).H(20).Z()],
+  ]) {
+    const b = compileBoard(h(PCB, { name: 'Neck' }, edge(), ...pads(), chain(route(handle('J1.2'), handle('T1.1')).width(0.6))), opts)
     assert.deepEqual(real(b), [], path)
     const ts = tracks(b, 'S')
     const neck = ts.find(t => t.width === 0.3)
@@ -549,7 +659,7 @@ test('neck: a route wider than its 0.5 mm pitch pad necks down at the pad, autor
     assert.deepEqual(neck.pts[0], [3, 6.5])
     assert.ok(ts.some(t => t.width === 0.6))
   }
-  const off = compileBoard(h(PCB, { name: 'Neck' }, edge(), ...pads(), route('J1.2', 'T1.1', 'H 8 V 12 H 20 Z').width(0.6).neck({ length: 0 })), opts)
+  const off = compileBoard(h(PCB, { name: 'Neck' }, edge(), ...pads(), route(handle('J1.2'), handle('T1.1')).width(0.6).neck({ length: 0 }).H(8).V(12).H(20).Z()), opts)
   assert.ok(findings(off, 'clearance').length > 0)
   const narrow = compileBoard(
     h(
@@ -557,9 +667,13 @@ test('neck: a route wider than its 0.5 mm pitch pad necks down at the pad, autor
       { name: 'Neck', classes: { s: { neck: { width: 0.2 } } } },
       edge(),
       ...pads(),
-      route('J1.2', 'T1.1', 'H 8 V 12 H 20 Z')
+      route(handle('J1.2'), handle('T1.1'))
         .width(0.6)
-        .net(nets({ S: { class: 's' } }).S),
+        .net(nets({ S: { class: 's' } }).S)
+        .H(8)
+        .V(12)
+        .H(20)
+        .Z(),
     ),
     opts,
   )
@@ -567,13 +681,22 @@ test('neck: a route wider than its 0.5 mm pitch pad necks down at the pad, autor
     tracks(narrow, 'S').some(t => t.width === 0.2),
     'the class neck width',
   )
-  assert.throws(() => route('J1.2', 'T1.1').neck({ depth: 1 }), { name: 'TypeError', message: /takes \{ width\?, length\? \}/ })
+  assert.throws(() => route(handle('J1.2'), handle('T1.1')).neck({ depth: 1 }), { name: 'TypeError', message: /takes \{ width\?, length\? \}/ })
 })
 
 test('neck: a pair wider than its pads necks at both ends, fans clear of the pads beside them and passes DRC', () => {
   const ns = ['G1', 'AP', 'AN', 'G2']
   const b = compileBoard(
-    h(PCB, { name: 'PairNeck' }, edge(), row('J1', 3.03, 6.07, ns), row('J2', 26.97, 9.13, ns, 180), route(['J1.2', 'J1.3'], ['J2.2', 'J2.3']).width(0.6).gap(0.2)),
+    h(
+      PCB,
+      { name: 'PairNeck' },
+      edge(),
+      row('J1', 3.03, 6.07, ns),
+      row('J2', 26.97, 9.13, ns, 180),
+      route([handle('J1.2'), handle('J1.3')], [handle('J2.2'), handle('J2.3')])
+        .width(0.6)
+        .gap(0.2),
+    ),
     opts,
   )
   assert.deepEqual(real(b, ['G1', 'G2']), [])
@@ -586,7 +709,17 @@ test('neck: a pair wider than its pads necks at both ends, fans clear of the pad
 test('pair length: .length() meanders the centre line to the target, and a match group of pairs closes', () => {
   const ns = ['G1', 'AP', 'AN', 'G2', 'BP', 'BN', 'G3']
   const one = compileBoard(
-    h(PCB, { name: 'Len' }, edge(), row('J1', 3.03, 6.07, ns), row('J2', 26.97, 9.13, ns, 180), route(['J1.2', 'J1.3'], ['J2.2', 'J2.3']).width(0.2).gap(0.2).length(30)),
+    h(
+      PCB,
+      { name: 'Len' },
+      edge(),
+      row('J1', 3.03, 6.07, ns),
+      row('J2', 26.97, 9.13, ns, 180),
+      route([handle('J1.2'), handle('J1.3')], [handle('J2.2'), handle('J2.3')])
+        .width(0.2)
+        .gap(0.2)
+        .length(30),
+    ),
     opts,
   )
   assert.deepEqual(real(one, ['G1', 'G2', 'G3', 'BP', 'BN']), [])
@@ -603,8 +736,14 @@ test('pair length: .length() meanders the centre line to the target, and a match
       row('J1', 3.03, 6.07, ns),
       row('J2', 26.97, 9.13, ns, 180),
       row('J3', 20.97, 13.13, ns, 180),
-      route(['J1.2', 'J1.3'], ['J2.2', 'J2.3']).width(0.2).gap(0.2).match('M', 0.2),
-      route(['J1.5', 'J1.6'], ['J3.5', 'J3.6']).width(0.2).gap(0.2).match('M', 0.2),
+      route([handle('J1.2'), handle('J1.3')], [handle('J2.2'), handle('J2.3')])
+        .width(0.2)
+        .gap(0.2)
+        .match('M', 0.2),
+      route([handle('J1.5'), handle('J1.6')], [handle('J3.5'), handle('J3.6')])
+        .width(0.2)
+        .gap(0.2)
+        .match('M', 0.2),
     ),
     opts,
   )

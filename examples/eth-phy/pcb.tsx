@@ -5,7 +5,7 @@
 // Frame: mm, origin at the top-left corner of the outline, x right, y down. The jack mouth overhangs the left edge.
 import PCB from '@pcbjs/fab/JLCPCB/4-Layer'
 import { nets, route, pour, via, NC } from '@pcbjs/core'
-import { Brand, QFN, SOT23, Crystal3225, R0603, C0402, C0603, LED0603, PinHeader, MountingHole, rect, roundedRect } from '@pcbjs/lib'
+import { Brand, QFN, SOT23, Crystal3225, R0603, C0402, C0603, LED0603, PinHeader, MountingHole, rect, roundedRect, withPins } from '@pcbjs/lib'
 import { JLCPCB_4L_7628 } from '@pcbjs/lib/stackups'
 import { MagJack } from './lib/MagJack'
 
@@ -135,47 +135,52 @@ const PHY_PINS = {
   48: 'AVDDH',
   EP: 'GND',
 } as const
-const U1 = QFN(48, 7, 0.5, 5.6, { vias: 3, pinNames: PHY_PINS })('KSZ9031RNXCA').source({ MPN: 'KSZ9031RNXCA-TR' }).connect({
-  AVDDH: V3V3,
-  DVDDH: V3V3,
-  AVDDL: V1V2,
-  DVDDL: V1V2,
-  AVDDL_PLL: V1V2,
-  GND,
-  TXRXP_A: MDI_AP,
-  TXRXM_A: MDI_AN,
-  TXRXP_B: MDI_BP,
-  TXRXM_B: MDI_BN,
-  TXRXP_C: MDI_CP,
-  TXRXM_C: MDI_CN,
-  TXRXP_D: MDI_DP,
-  TXRXM_D: MDI_DN,
-  TXD0,
-  TXD1,
-  TXD2,
-  TXD3,
-  GTX_CLK: TX_CLK,
-  TX_EN: TX_CTL,
-  RXD0,
-  RXD1,
-  RXD2,
-  RXD3,
-  RX_DV: RX_CTL,
-  RX_CLK,
-  MDC,
-  MDIO,
-  INT_N,
-  RESET_N,
-  XI,
-  XO,
-  ISET,
-  LED1,
-  LED2,
-  CLK125: NC,
-  LDO_O: NC,
-})
+const U1 = withPins(
+  QFN(48, 7, 0.5, { ep: 5.6, vias: 3 }),
+  PHY_PINS,
+)('KSZ9031RNXCA')
+  .source({ MPN: 'KSZ9031RNXCA-TR' })
+  .connect({
+    AVDDH: V3V3,
+    DVDDH: V3V3,
+    AVDDL: V1V2,
+    DVDDL: V1V2,
+    AVDDL_PLL: V1V2,
+    GND,
+    TXRXP_A: MDI_AP,
+    TXRXM_A: MDI_AN,
+    TXRXP_B: MDI_BP,
+    TXRXM_B: MDI_BN,
+    TXRXP_C: MDI_CP,
+    TXRXM_C: MDI_CN,
+    TXRXP_D: MDI_DP,
+    TXRXM_D: MDI_DN,
+    TXD0,
+    TXD1,
+    TXD2,
+    TXD3,
+    GTX_CLK: TX_CLK,
+    TX_EN: TX_CTL,
+    RXD0,
+    RXD1,
+    RXD2,
+    RXD3,
+    RX_DV: RX_CTL,
+    RX_CLK,
+    MDC,
+    MDIO,
+    INT_N,
+    RESET_N,
+    XI,
+    XO,
+    ISET,
+    LED1,
+    LED2,
+    CLK125: NC,
+    LDO_O: NC,
+  })
 
-const J1 = MagJack({ value: 'JK0654219NL', model: { file: './models/RJ45_Pulse_JK0654219NL_Horizontal.step', offset: [8.04, -6.5, 0], rotate: [0, 0, 180] } })
+const J1 = MagJack('JK0654219NL', { model: { file: './models/RJ45_Pulse_JK0654219NL_Horizontal.step', offset: [8.04, -6.5, 0], rotate: [0, 0, 180] } })
   .source({ MPN: 'JK0654219NL' })
   .connect({
     D1P: MDI_AP,
@@ -195,30 +200,30 @@ const J1 = MagJack({ value: 'JK0654219NL', model: { file: './models/RJ45_Pulse_J
   })
 
 const Y1 = Crystal3225('25MHz').source({ MPN: 'ABM8-25.000MHZ-B2-T' }).connect({ X1: XI, X2: XO, GND })
-const C1 = C0402('12p').source({ MPN: 'GRM1555C1H120JA01D' }).connect(XI, GND)
-const C2 = C0402('12p').source({ MPN: 'GRM1555C1H120JA01D' }).connect(XO, GND)
-const R1 = R0603('12.1k').source({ MPN: 'RC0603FR-0712K1L' }).connect(ISET, GND)
-const R2 = R0603('10k').source({ MPN: 'RC0603FR-0710KL' }).connect(V3V3, RESET_N)
-const R3 = R0603('1.5k').source({ MPN: 'RC0603FR-071K5L' }).connect(V3V3, MDIO)
-const R4 = R0603('470').source({ MPN: 'RC0603FR-07470RL' }).connect(V3V3, LED1A)
-const R5 = R0603('470').source({ MPN: 'RC0603FR-07470RL' }).connect(V3V3, LED2A)
-const C3 = C0603('100n').source({ MPN: 'CL10B104KB8NNNC' }).connect(CT, GND)
+const C1 = C0402('12p').source({ MPN: 'GRM1555C1H120JA01D' }).connect({ 1: XI, 2: GND })
+const C2 = C0402('12p').source({ MPN: 'GRM1555C1H120JA01D' }).connect({ 1: XO, 2: GND })
+const R1 = R0603('12.1k').source({ MPN: 'RC0603FR-0712K1L' }).connect({ 1: ISET, 2: GND })
+const R2 = R0603('10k').source({ MPN: 'RC0603FR-0710KL' }).connect({ 1: V3V3, 2: RESET_N })
+const R3 = R0603('1.5k').source({ MPN: 'RC0603FR-071K5L' }).connect({ 1: V3V3, 2: MDIO })
+const R4 = R0603('470').source({ MPN: 'RC0603FR-07470RL' }).connect({ 1: V3V3, 2: LED1A })
+const R5 = R0603('470').source({ MPN: 'RC0603FR-07470RL' }).connect({ 1: V3V3, 2: LED2A })
+const C3 = C0603('100n').source({ MPN: 'CL10B104KB8NNNC' }).connect({ 1: CT, 2: GND })
 
 // decoupling at the PHY: 100 nF per supply corner
-const C4 = C0402('100n').source({ MPN: 'GRM155R71C104KA88D' }).connect(V3V3, GND)
-const C5 = C0402('100n').source({ MPN: 'GRM155R71C104KA88D' }).connect(V1V2, GND)
-const C6 = C0402('100n').source({ MPN: 'GRM155R71C104KA88D' }).connect(V3V3, GND)
-const C7 = C0402('100n').source({ MPN: 'GRM155R71C104KA88D' }).connect(V1V2, GND)
+const C4 = C0402('100n').source({ MPN: 'GRM155R71C104KA88D' }).connect({ 1: V3V3, 2: GND })
+const C5 = C0402('100n').source({ MPN: 'GRM155R71C104KA88D' }).connect({ 1: V1V2, 2: GND })
+const C6 = C0402('100n').source({ MPN: 'GRM155R71C104KA88D' }).connect({ 1: V3V3, 2: GND })
+const C7 = C0402('100n').source({ MPN: 'GRM155R71C104KA88D' }).connect({ 1: V1V2, 2: GND })
 
 // supplies: 5 V from the header into two AP2112K LDOs
-const LDO = SOT23(5, { pinNames: ['VIN', 'GND', 'EN', 'NC', 'VOUT'] })
+const LDO = withPins(SOT23(5), ['VIN', 'GND', 'EN', 'NC', 'VOUT'])
 const U2 = LDO('AP2112K-3.3').source({ MPN: 'AP2112K-3.3TRG1' }).connect({ VIN: V5, GND, EN: V5, VOUT: V3V3 })
 const U3 = LDO('AP2112K-1.2').source({ MPN: 'AP2112K-1.2TRG1' }).connect({ VIN: V3V3, GND, EN: V3V3, VOUT: V1V2 })
-const C8 = C0603('1u').source({ MPN: 'CL10A105KB8NNNC' }).connect(V5, GND)
-const C9 = C0603('1u').source({ MPN: 'CL10A105KB8NNNC' }).connect(V3V3, GND)
-const C10 = C0603('1u').source({ MPN: 'CL10A105KB8NNNC' }).connect(V1V2, GND)
+const C8 = C0603('1u').source({ MPN: 'CL10A105KB8NNNC' }).connect({ 1: V5, 2: GND })
+const C9 = C0603('1u').source({ MPN: 'CL10A105KB8NNNC' }).connect({ 1: V3V3, 2: GND })
+const C10 = C0603('1u').source({ MPN: 'CL10A105KB8NNNC' }).connect({ 1: V1V2, 2: GND })
 const D1 = LED0603('green').source({ MPN: 'LTST-C190GKT' }).connect({ A: PWR, K: GND })
-const R6 = R0603('1k').source({ MPN: 'RC0603FR-071KL' }).connect(V3V3, PWR)
+const R6 = R0603('1k').source({ MPN: 'RC0603FR-071KL' }).connect({ 1: V3V3, 2: PWR })
 
 // the host header, pin 1 at the right end: signals on the odd row, nearer the PHY, ground and power on the even row
 const HDR: Record<number, any> = {}
@@ -244,21 +249,22 @@ Object.assign(HDR, {
   38: V5,
   40: V5,
 })
-const J2 = PinHeader(20, { rows: 2 })
+const J2 = PinHeader(20, { rows: 2 })()
   .source({ MPN: 'PZ254V-12-40P' })
-  .connect(...Array.from({ length: 40 }, (_, i) => HDR[i + 1]))
-const Hole = MountingHole(2.2)
+  .connect(Object.fromEntries(Array.from({ length: 40 }, (_, i) => [i + 1, HDR[i + 1]])))
+const H1 = MountingHole(2.2)()
+const H2 = MountingHole(2.2)()
 
 // a short stub from a pad to a small via into a plane
 const SMALL = { drill: 0.2, size: 0.45 }
-const tie = (end: any, net: any, x: number, y: number, w = 0.25) => [route(end, `${x} ${y}`, 'Z').width(w), via(net, `${x} ${y}`, SMALL)]
+const tie = (end: any, net: any, x: number, y: number, w = 0.25) => [route(end, `${x} ${y}`).width(w).Z(), via(net, `${x} ${y}`, SMALL)]
 // the 1.2 V island on In2.Cu: under the PHY, with a strip down to the 1.2 V LDO
 const ISLAND = 'M 17 26 L 24 26 L 24 7.5 L 38.5 7.5 L 38.5 22 L 27 22 L 27 30.5 L 17 30.5 Z'
 
 export default (
   <PCB
     name="eth-phy"
-    revision="0.1.0"
+    rev="0.1.0"
     stackup={JLC_3313}
     classes={{ mdi: { impedance: 100, gap: 0.15, uncoupled: 8 }, rgmii: { impedance: 50, tolerance: 0.25 } }}
     autoroute={{ layers: ['F.Cu', 'In2.Cu', 'B.Cu'] }}
@@ -297,27 +303,27 @@ export default (
     <D1 at="23 28" />
     <R6 at="23 30.5" />
 
-    <Hole ref="H1" at="53 3" />
-    <Hole ref="H2" at="53 28" />
+    <H1 at="53 3" />
+    <H2 at="53 28" />
 
     {/* PHY supply pads: a stub out of each to its plane via, further out where RGMII lines pass on both sides */}
-    {tie(U1.pad('1'), V3V3, 26.4, 12.25)}
-    {tie(U1.pad('4'), V1V2, 25.9, 13.75)}
-    {tie(U1.pad('9'), V1V2, 25.9, 16.25)}
-    {tie(U1.pad('12'), V3V3, 26.4, 17.75)}
-    {tie(U1.pad('16'), V3V3, 29.75, 19.6)}
-    {tie(U1.pad('18'), V1V2, 30.75, 20.9)}
-    {tie(U1.pad('23'), V1V2, 33.25, 20.9)}
-    {tie(U1.pad('26'), V1V2, 36.9, 17.25)}
-    {tie(U1.pad('29'), V1V2, 36.9, 15.75)}
-    {tie(U1.pad('33'), V3V3, 36.9, 13.75)}
-    {tie(U1.pad('38'), V1V2, 33.25, 9.5)}
-    {tie(U1.pad('39'), V3V3, 32.6, 10.3)}
-    {tie(U1.pad('43'), V1V2, 30.75, 10.4)}
-    {tie(U1.pad('48'), V3V3, 28.25, 10.4)}
+    {tie(U1[1], V3V3, 26.4, 12.25)}
+    {tie(U1[4], V1V2, 25.9, 13.75)}
+    {tie(U1[9], V1V2, 25.9, 16.25)}
+    {tie(U1[12], V3V3, 26.4, 17.75)}
+    {tie(U1[16], V3V3, 29.75, 19.6)}
+    {tie(U1[18], V1V2, 30.75, 20.9)}
+    {tie(U1[23], V1V2, 33.25, 20.9)}
+    {tie(U1[26], V1V2, 36.9, 17.25)}
+    {tie(U1[29], V1V2, 36.9, 15.75)}
+    {tie(U1[33], V3V3, 36.9, 13.75)}
+    {tie(U1[38], V1V2, 33.25, 9.5)}
+    {tie(U1[39], V3V3, 32.6, 10.3)}
+    {tie(U1[43], V1V2, 30.75, 10.4)}
+    {tie(U1[48], V3V3, 28.25, 10.4)}
     {/* In2.Cu signals cut the 1.2 V island in three: B.Cu links join its AVDDL and DVDDL vias across the cuts */}
-    {route('25.9 13.75 B.Cu', '25.9 16.25 B.Cu', 'Z').net(V1V2).width(0.25)}
-    {route('30.75 20.9 B.Cu', '33.25 20.9 B.Cu', 'Z').net(V1V2).width(0.25)}
+    {route('25.9 13.75 B.Cu', '25.9 16.25 B.Cu').width(0.25).net(V1V2).Z()}
+    {route('30.75 20.9 B.Cu', '33.25 20.9 B.Cu').width(0.25).net(V1V2).Z()}
 
     {/* decoupling, crystal and bias: supply and ground vias */}
     {tie(C4[1], V3V3, 22.02, 8.0)}
@@ -328,8 +334,8 @@ export default (
     {tie(C5[2], GND, 37.68, 11.6)}
     {tie(C6[1], V3V3, 24.32, 19.6)}
     {tie(C6[2], GND, 25.28, 21.6)}
-    {tie(Y1.pad('2'), GND, 30, 5.5)}
-    {route(Y1.pad('4'), '30 5.5', 'Z').width(0.25)}
+    {tie(Y1[2], GND, 30, 5.5)}
+    {route(Y1[4], '30 5.5').width(0.25).Z()}
     {tie(C1[2], GND, 27.08, 7.4)}
     {tie(C2[2], GND, 35.1, 4.65)}
     {tie(R1[2], GND, 23.6, 3.5)}
@@ -357,10 +363,17 @@ export default (
           [20, y + 0.4],
           [20, y + 0.69],
         ],
-        `X 21.5 ${y + 0.545} Z`,
-      ).impedance(100),
-      route(`20 ${y + 0.4}`, J1.pin(p), 'Z').width(0.14),
-      route(`20 ${y + 0.69}`, J1.pin(n), `L 19.4 ${y + 1.02} Z`).width(0.14),
+      )
+        .impedance(100)
+        .X(`21.5 ${y + 0.545}`)
+        .Z(),
+      route(`20 ${y + 0.4}`, J1[p])
+        .width(0.14)
+        .Z(),
+      route(`20 ${y + 0.69}`, J1[n])
+        .width(0.14)
+        .L(19.4, y + 1.02)
+        .Z(),
     ])}
 
     {/* RGMII to the header, 50 ohm: the six TX lines matched as one group, the six RX lines as another, clocks included */}
@@ -392,13 +405,13 @@ export default (
     {route(U1.LED2, J1.L2K)}
     {route(R5[2], J1.L2A)}
     {tie(R5[1], V3V3, 10.1, 24)}
-    {route(J1.pad('10'), C3[1])}
-    {route(J1.pad('1'), C3[1])}
+    {route(J1[10], C3[1])}
+    {route(J1[1], C3[1])}
     {tie(C3[2], GND, 22.33, 21.6)}
 
     {/* supplies: 5 V from the header into the 3.3 V LDO, 3.3 V into the 1.2 V LDO */}
     {route(J2[40], C8[1]).width(0.5)}
-    {route(J2[38], J2[40], 'Z').width(0.5)}
+    {route(J2[38], J2[40]).width(0.5).Z()}
     {route(C8[1], U2.VIN).width(0.4)}
     {route(U2.EN, C8[1]).width(0.3)}
     {tie(C8[2], GND, 2.5, 26.1, 0.4)}
@@ -413,8 +426,8 @@ export default (
     {tie(C10[1], V1V2, 18.5, 29.9, 0.4)}
     {tie(C10[2], GND, 18.5, 26.1, 0.4)}
     {/* the In2.Cu strip to the LDO is cut off by the In2.Cu signal tracks: a 1.2 V track from C10 back to the PHY island */}
-    {route(C10[1], U1.pad('9')).width(0.25)}
-    {route(R6[2], D1.A, 'Z').width(0.25)}
+    {route(C10[1], U1[9]).width(0.25)}
+    {route(R6[2], D1.A).width(0.25).Z()}
     {tie(R6[1], V3V3, 21.1, 30.5)}
     {tie(D1.K, GND, 22.18, 29.1)}
 

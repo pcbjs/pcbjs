@@ -1,26 +1,28 @@
 import { test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { h } from '@pcbjs/core/jsx-runtime'
-import PCB, { route, nets, variants, defineDefaultBoard, resetDefaults, BASE_BOARD } from '@pcbjs/core'
+import PCB, { route, nets, variants, defineDefaultBoard, resetDefaults, BASE_BOARD, pour } from '@pcbjs/core'
 import { bindPCB } from '@pcbjs/fab'
 import { compileBoard, compileBoards, CompileError } from '@pcbjs/compile'
-import { classClearance, classOf } from '@pcbjs/compile/netclass'
+import { classClearance, classOf } from '@pcbjs/compile/internal/netclass'
 import { BASE } from '@pcbjs/lib/rules'
-import { twoLayer, JLCPCB_4L_7628, traceWidth } from '@pcbjs/lib'
+import { twoLayer, JLCPCB_4L_7628 } from '@pcbjs/lib/stackups'
+import { traceWidth } from '@pcbjs/lib/impedance'
 import { near } from './helpers.mjs'
+import { fp, handle, netOf } from './parts.mjs'
 
 afterEach(() => resetDefaults())
 
 const edge = (w = 20, hh = 10) => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w, h: hh })
-const smd = (ref, x, y, net, size = 1) => h('footprint', { ref, at: [x, y], nets: { 1: net } }, h('pad', { num: 1, size, type: 'smd' }))
+const smd = (ref, x, y, net, size = 1) => fp({ ref, at: `${x} ${y}`, nets: { 1: net } }, h('pad', { num: 1, size, type: 'smd' }))
 const tracks = (b, net) => b.items.filter(i => i.kind === 'track' && (net === undefined || i.net === net))
 const vias = b => b.items.filter(i => i.kind === 'via')
-const opts = { routeCache: false }
+const opts = { cache: false }
 
 test('net classes: BASE_BOARD has none and a board without classes gets no Board.classes', () => {
   assert.deepEqual(BASE_BOARD.classes, {})
   const { P } = nets({ P: { class: 'power' } })
-  const b = compileBoard(h(PCB, { name: 'C' }, edge(), smd('J1', 3, 5, P), smd('J2', 15, 5, P), route('J1.1', 'J2.1')), opts)
+  const b = compileBoard(h(PCB, { name: 'C' }, edge(), smd('J1', 3, 5, P), smd('J2', 15, 5, P), route(handle('J1.1'), handle('J2.1'))), opts)
   assert.equal(b.classes, undefined)
   // without a class table a tag is a label: no finding, the width stays the rules' minimum
   assert.deepEqual(
@@ -57,8 +59,8 @@ test('net classes: a route takes the class width and via, under its own width', 
       smd('J2', 15, 3, P),
       smd('J3', 3, 7, Q),
       smd('J4', 15, 7, Q),
-      route('J1.1', 'J2.1', 'H 6 U B.Cu H 12 U F.Cu XZ'),
-      route('J3.1', 'J4.1').width(0.3),
+      route(handle('J1.1'), handle('J2.1')).H(6).via('B.Cu').H(12).via('F.Cu'),
+      route(handle('J3.1'), handle('J4.1')).width(0.3),
     ),
     opts,
   )
@@ -79,23 +81,23 @@ test('net classes: a route takes the class width and via, under its own width', 
 test('net classes: the class layers bound the router', () => {
   const { P } = nets({ P: { class: 'top' } })
   // a wall of another net across F.Cu: only B.Cu gets around it
-  const kids = r => [edge(), smd('J1', 5, 5, P), smd('J2', 15, 5, P), h('track', { net: 'W', layer: 'F.Cu', width: 0.4, d: 'M10 0.7 L10 9.3' }), r]
-  const stuck = compileBoard(h(PCB, { name: 'C', classes: { top: { layers: ['F.Cu'] } } }, ...kids(route('J1.1', 'J2.1'))), opts)
+  const kids = r => [edge(), smd('J1', 5, 5, P), smd('J2', 15, 5, P), route('10 0.7').net(netOf('W')).width(0.4).L(10, 9.3), r]
+  const stuck = compileBoard(h(PCB, { name: 'C', classes: { top: { layers: ['F.Cu'] } } }, ...kids(route(handle('J1.1'), handle('J2.1')))), opts)
   assert.equal(stuck.drc.filter(d => d.rule === 'route-failed').length, 1)
-  const free = compileBoard(h(PCB, { name: 'C', classes: { top: { layers: ['top', 'bottom'] } } }, ...kids(route('J1.1', 'J2.1'))), opts)
+  const free = compileBoard(h(PCB, { name: 'C', classes: { top: { layers: ['F.Cu', 'B.Cu'] } } }, ...kids(route(handle('J1.1'), handle('J2.1')))), opts)
   assert.ok(tracks(free, 'P').some(t => t.layer === 'B.Cu'))
   assert.equal(free.unconnected, 0)
   // the route's own layers win over the class
-  const own = compileBoard(h(PCB, { name: 'C', classes: { top: { layers: ['F.Cu'] } } }, ...kids(route('J1.1', 'J2.1').rules({ layers: ['F.Cu', 'B.Cu'] }))), opts)
+  const own = compileBoard(h(PCB, { name: 'C', classes: { top: { layers: ['F.Cu'] } } }, ...kids(route(handle('J1.1'), handle('J2.1')).layers(['F.Cu', 'B.Cu']))), opts)
   assert.equal(own.unconnected, 0)
 })
 
 test('net classes: class autoroute parameters sit over the board and under the route', () => {
   const { P } = nets({ P: { class: 'slow' } })
   const board = r => h(PCB, { name: 'C', autoroute: { bend: '45' }, classes: { slow: { autoroute: { bend: '90' } } } }, edge(), smd('J1', 3, 3, P), smd('J2', 15, 7, P), r)
-  const ortho = compileBoard(board(route('J1.1', 'J2.1')), opts)
+  const ortho = compileBoard(board(route(handle('J1.1'), handle('J2.1'))), opts)
   for (const t of tracks(ortho, 'P')) for (let i = 1; i < t.pts.length; i++) assert.ok(t.pts[i][0] === t.pts[i - 1][0] || t.pts[i][1] === t.pts[i - 1][1], '90-degree bends only')
-  const diag = compileBoard(board(route('J1.1', 'J2.1').rules({ bend: '45' })), opts)
+  const diag = compileBoard(board(route(handle('J1.1'), handle('J2.1')).rules({ bend: '45' })), opts)
   assert.ok(
     tracks(diag, 'P').some(t => t.pts.some((p, i) => i > 0 && p[0] !== t.pts[i - 1][0] && p[1] !== t.pts[i - 1][1])),
     'the route itself allows 45 degrees',
@@ -105,7 +107,7 @@ test('net classes: class autoroute parameters sit over the board and under the r
 test('net classes: a class impedance gives the width for the start layer, rounded to 0.01 mm', () => {
   const { S } = nets({ S: { class: 'rf' } })
   const b = compileBoard(
-    h(PCB, { name: 'C', stackup: JLCPCB_4L_7628, classes: { rf: { impedance: 50 } } }, edge(), smd('J1', 3, 5, S), smd('J2', 15, 5, S), route('J1.1', 'J2.1')),
+    h(PCB, { name: 'C', stackup: JLCPCB_4L_7628, classes: { rf: { impedance: 50 } } }, edge(), smd('J1', 3, 5, S), smd('J2', 15, 5, S), route(handle('J1.1'), handle('J2.1'))),
     opts,
   )
   const want = Math.round(traceWidth(JLCPCB_4L_7628, 'F.Cu', 50) * 100) / 100
@@ -113,7 +115,14 @@ test('net classes: a class impedance gives the width for the start layer, rounde
   for (const t of tracks(b, 'S')) assert.equal(t.width, want)
   // an explicit class width wins over the impedance
   const c = compileBoard(
-    h(PCB, { name: 'C', stackup: JLCPCB_4L_7628, classes: { rf: { impedance: 50, width: 0.3 } } }, edge(), smd('J1', 3, 5, S), smd('J2', 15, 5, S), route('J1.1', 'J2.1')),
+    h(
+      PCB,
+      { name: 'C', stackup: JLCPCB_4L_7628, classes: { rf: { impedance: 50, width: 0.3 } } },
+      edge(),
+      smd('J1', 3, 5, S),
+      smd('J2', 15, 5, S),
+      route(handle('J1.1'), handle('J2.1')),
+    ),
     opts,
   )
   for (const t of tracks(c, 'S')) assert.equal(t.width, 0.3)
@@ -132,7 +141,7 @@ test('net classes: an unknown class tag is an ERC warning net-class when the boa
 test('net classes: DRC uses the larger class clearance between two nets', () => {
   const { A, B } = nets({ A: { class: 'hv' } })
   // 0.3 mm between the copper of A and B: clean under the rules, too close for the class
-  const parts = () => [edge(), h('track', { net: A, layer: 'F.Cu', width: 0.2, d: 'M2 5 L18 5' }), h('track', { net: B, layer: 'F.Cu', width: 0.2, d: 'M2 5.5 L18 5.5' })]
+  const parts = () => [edge(), route('2 5').net(A).width(0.2).L(18, 5), route('2 5.5').net(B).width(0.2).L(18, 5.5)]
   const plain = compileBoard(h(PCB, { name: 'C' }, ...parts()), opts)
   assert.deepEqual(
     plain.drc.filter(d => d.rule === 'clearance'),
@@ -157,7 +166,7 @@ test('net classes: a preset and a variant target carry classes under the element
   const Fab = bindPCB({ name: 'Fab 2-Layer', stackup: twoLayer(), rules: BASE, classes: { power: { width: 0.4, clearance: 0.25 } } })
   assert.deepEqual(Fab.preset.classes, { power: { width: 0.4, clearance: 0.25 } })
   const { P } = nets({ P: { class: 'power' } })
-  const kids = () => [edge(), smd('J1', 3, 5, P), smd('J2', 15, 5, P), route('J1.1', 'J2.1')]
+  const kids = () => [edge(), smd('J1', 3, 5, P), smd('J2', 15, 5, P), route(handle('J1.1'), handle('J2.1'))]
   const b = compileBoard(h(Fab, { name: 'C', classes: { power: { width: 0.6 } } }, ...kids()), opts)
   assert.equal(b.classes.power.width, 0.6)
   assert.equal(b.classes.power.clearance, 0.25)
@@ -171,7 +180,7 @@ test('net classes: a preset and a variant target carry classes under the element
 
 test('net classes: a pour keeps the class clearance from other-net copper, and its own where that is larger', async () => {
   const { pour } = await import('@pcbjs/core')
-  const { polysToRings, intersection } = await import('@pcbjs/compile/geom')
+  const { polysToRings, intersection } = await import('@pcbjs/compile/internal/geom')
   const { V5, GND } = nets({ V5: { class: 'power' } })
   const fill = zoneClearance =>
     compileBoard(
@@ -181,7 +190,7 @@ test('net classes: a pour keeps the class clearance from other-net copper, and i
         edge(),
         smd('J1', 5, 5, V5),
         smd('J2', 15, 5, V5),
-        route('J1.1', 'J2.1', 'Z').width(0.3),
+        route(handle('J1.1'), handle('J2.1')).width(0.3).Z(),
         smd('J3', 10, 8, GND),
         smd('J4', 18, 8, GND),
         pour(GND, 'F.Cu', 'M0 0 H20 V10 H0 Z', zoneClearance === undefined ? undefined : { clearance: zoneClearance }),

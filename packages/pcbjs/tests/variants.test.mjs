@@ -1,36 +1,37 @@
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h, route, variants, isVariants, variantSlug, resetDefaults, defineDefaultRules } from '@pcbjs/core'
+import PCB, { h, route, variants, isVariants, variantSlug, resetDefaults, defineDefaultBoard } from '@pcbjs/core'
 import { compileBoard, compileBoards, CompileError } from '@pcbjs/compile'
-import { buildFab } from '@pcbjs/export/fab'
-import { siteData, sourceIndex } from '@pcbjs/export/site-data'
-import { boardsIndex, boardsPayload, routeEndpoint, slotsFor, slugsOf, markConflicts } from '@pcbjs/cli/boards'
-import { boardDir, boardFile, boardUrls } from '@pcbjs/cli/project'
-import { pluginState, virtualModule } from '@pcbjs/cli/plugin'
-import { JLCPCB, OSHPARK, BASE, resolveRules, withMaskColor } from '@pcbjs/lib/rules'
-import { JLCPCB_2L, OSHPARK_2L } from '@pcbjs/lib/stackups'
+import { buildFab } from '@pcbjs/export/internal/fab'
+import { siteData, sourceIndex } from '@pcbjs/export/internal/site-data'
+import { boardsIndex, boardsPayload, routeEndpoint, slotsFor, slugsOf, markConflicts } from '@pcbjs/cli/internal/boards'
+import { boardDir, boardFile, boardUrls } from '@pcbjs/cli/internal/project'
+import { pluginState, virtualModule } from '@pcbjs/cli/internal/site'
+import { JLCPCB, OSHPARK, BASE } from '@pcbjs/lib/rules'
+import { resolveRules, withMaskColor } from '@pcbjs/core/internal/rules'
+import { JLCPCB_2L, OSHPARK_2L, twoLayer } from '@pcbjs/lib/stackups'
 import JLC2 from '@pcbjs/fab/JLCPCB/2-Layer'
 import OSH2 from '@pcbjs/fab/OSHPark/2-Layer'
+import { fp, handle, netOf } from './parts.mjs'
 
 beforeEach(() => resetDefaults())
 
-const HOUSE = { board: { thickness: 1.2 }, rules: { clearance: 0.2 }, color: 'black', name: 'House' }
+const HOUSE = { board: { stackup: twoLayer({ thickness: 1.2 }) }, rules: { clearance: 0.2 }, color: 'black', name: 'House' }
 // a resistor between two pads, one hand-drawn track and one autorouted
 const design = (C, props = {}) =>
   h(
     C,
-    { name: 'V', revision: 'A', ...props },
+    { name: 'V', rev: 'A', ...props },
     h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 12 }),
-    h('footprint', { ref: 'TP1', at: '4mm 6mm', 'net:pad1': 'A' }, h('pad', { num: 1, size: 1.5, shape: 'circle' })),
-    h(
-      'footprint',
+    fp({ ref: 'TP1', at: '4mm 6mm', 'net:pad1': 'A' }, h('pad', { num: 1, size: 1.5, shape: 'circle' })),
+    fp(
       { ref: 'R1', at: '10mm 6mm', 'net:pad1': 'A', 'net:pad2': 'B' },
       h('pad', { num: 1, at: '-0.8mm 0', size: [0.8, 0.9] }),
       h('pad', { num: 2, at: '0.8mm 0', size: [0.8, 0.9] }),
     ),
-    h('footprint', { ref: 'TP2', at: '15mm 9mm', 'net:pad1': 'B' }, h('pad', { num: 1, size: 1.5, shape: 'circle' })),
-    route({ net: 'A', layer: 'F.Cu', width: 0.3, d: 'M 4 6 H 9.2' }),
-    route({ net: 'B', layer: 'F.Cu', width: 0.3, d: { start: 'R1.2', end: 'TP2.1' } }),
+    fp({ ref: 'TP2', at: '15mm 9mm', 'net:pad1': 'B' }, h('pad', { num: 1, size: 1.5, shape: 'circle' })),
+    route('4 6').net(netOf('A')).width(0.3).H(9.2),
+    route(handle('R1.2'), handle('TP2.1')).net(netOf('B')).width(0.3),
   )
 const Multi = variants(JLC2, OSH2, HOUSE)
 
@@ -49,7 +50,7 @@ test('variants: three targets compile into three boards with their names, stacku
     boards.map(b => b.variant.fab),
     ['JLCPCB', 'OSH Park', undefined],
   )
-  assert.ok(boards.every(b => b.name === 'V' && b.revision === 'A'))
+  assert.ok(boards.every(b => b.name === 'V' && b.rev === 'A'))
   const [j, o, hs] = boards
   assert.deepEqual(j.rules, withMaskColor(resolveRules(JLCPCB), j.stackup.maskColor))
   assert.deepEqual(o.rules, { ...OSHPARK })
@@ -89,7 +90,7 @@ test('variants: the element props win in every target, colours go through each p
 })
 
 test('variants: global default rules sit under the target, as with a preset', () => {
-  defineDefaultRules({ clearance: 0.25, minDrill: 0.4 })
+  defineDefaultBoard({ rules: { clearance: 0.25, minDrill: 0.4 } })
   const [j, , hs] = compileBoards(design(Multi))
   assert.equal(j.rules.clearance, JLCPCB.clearance)
   assert.equal(hs.rules.clearance, 0.2)
@@ -121,19 +122,29 @@ test('variants: compileBoard on a variants root throws with the hint, compileBoa
   assert.equal(boards[0].variant, undefined)
 })
 
-test('variants: item ids and the source index are identical across targets', () => {
+test('variants: item ids and the source index by id are identical across targets', () => {
   const src = { file: 'multi.tsx', line: 1, col: 1, endLine: 1, endCol: 9 }
   const root = h(
     Multi,
     { name: 'V' },
     h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 12, __src: src }),
-    h('footprint', { ref: 'TP1', at: '4mm 6mm', 'net:pad1': 'A', __src: { ...src, line: 2 } }, h('pad', { num: 1, size: 1.5 })),
-    h('footprint', { ref: 'TP2', at: '15mm 6mm', 'net:pad1': 'A', __src: { ...src, line: 3 } }, h('pad', { num: 1, size: 1.5 })),
-    h('track', { net: 'A', layer: 'F.Cu', width: 0.3, d: 'M 4 6 H 15', __src: { ...src, line: 4 } }),
+    fp({ ref: 'TP1', at: '4mm 6mm', 'net:pad1': 'A', __src: { ...src, line: 2 } }, h('pad', { num: 1, size: 1.5 })),
+    fp({ ref: 'TP2', at: '15mm 6mm', 'net:pad1': 'A', __src: { ...src, line: 3 } }, h('pad', { num: 1, size: 1.5 })),
+    route('4 6', { __src: { ...src, line: 4 } })
+      .net(netOf('A'))
+      .width(0.3)
+      .H(15),
   )
   const boards = compileBoards(root)
   const shape = b => b.items.map(i => [i.id, i.kind, i.ref ?? null])
-  const idx = b => sourceIndex(b, f => f)
+  // uids hash geometry, which a target's rules may change, so only the ids must agree
+  const idx = b =>
+    JSON.parse(
+      JSON.stringify(
+        sourceIndex(b, f => f),
+        (k, v) => (k === 'uids' ? undefined : v),
+      ),
+    )
   for (const b of boards.slice(1)) {
     assert.deepEqual(shape(b), shape(boards[0]))
     assert.deepEqual(idx(b), idx(boards[0]))
@@ -168,13 +179,13 @@ test('variants: urls, boards.json, the payload and the dev routes for a variants
     const [, slug] = boardDir(board)
     const zip = buildFab(board).zipName
     const urls = boardUrls(board.name, zip, true, slug)
-    return { entry, board, site: { name: board.name, variant: board.variant, fab: { status: 'ok', url: urls.fab }, svgUrl: urls.svg } }
+    return { entry, board, site: { name: board.name, variant: board.variant, footprints: [], fab: { status: 'ok', url: urls.fab }, svgUrl: urls.svg } }
   })
   assert.deepEqual(boardUrls('V', 'V-fab-A-house.zip', true, 'house'), { fab: '/__pcbjs/V/house/fab/V-fab-A-house.zip', svg: '/__pcbjs/V/house/V.pcb.svg' })
   assert.deepEqual(boardUrls('V', 'V-fab-A-house.zip', false, 'house'), { fab: 'fab/V/house/V-fab-A-house.zip', svg: 'fab/V/house/V.pcb.svg' })
   assert.equal(boardFile(boards[1]), 'boards/V/osh-park-2-layer.json')
   assert.equal(boardFile({ name: 'Coin' }), 'boards/Coin.json')
-  const coin = { entry: { file: '/p/coin.tsx', rel: 'coin.tsx' }, board: { name: 'Coin', title: 'Coin', revision: '1' }, site: { name: 'Coin', fab: { status: 'ok' } } }
+  const coin = { entry: { file: '/p/coin.tsx', rel: 'coin.tsx' }, board: { name: 'Coin', title: 'Coin', rev: '1' }, site: { name: 'Coin', footprints: [], fab: { status: 'ok' } } }
   assert.deepEqual(
     boardsIndex([coin, ...compiled], false).boards.map(b => [b.name, b.variant, b.file]),
     [
@@ -192,7 +203,7 @@ test('variants: urls, boards.json, the payload and the dev routes for a variants
   markConflicts(slots)
   const p = boardsPayload(slots)
   assert.deepEqual(
-    p.boards.map(b => [b.name, b.variant?.name ?? null]),
+    p.boards.map(b => [b.board, b.target]),
     [
       ['Coin', null],
       ['V', 'JLCPCB 2-Layer'],
@@ -219,5 +230,5 @@ test('variants: urls, boards.json, the payload and the dev routes for a variants
   state.slots[0].compiled = compiled
   const src = virtualModule(state)
   assert.match(src, /"House"/)
-  assert.match(src, /export default \{"name":"V","variant":\{"name":"JLCPCB 2-Layer"/)
+  assert.match(src, /export const boards = \[\{"board":"V","target":"JLCPCB 2-Layer","facets":\{"meta":\{"name":"V"/)
 })

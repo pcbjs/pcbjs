@@ -4,10 +4,10 @@ import assert from 'node:assert/strict'
 import PCB, { h, nets, circuit, layout } from '@pcbjs/core'
 import { R0603, LED0603 } from '@pcbjs/lib'
 import { compileBoards } from '@pcbjs/compile'
-import { instantiate, previewRoot, ROW_PITCH, withOutline } from '@pcbjs/cli/preview'
+import { instantiate, previewRoot, ROW_PITCH, withOutline } from '@pcbjs/cli/internal/preview'
 
 const chan = circuit('pchan', ({ VCC, SW }, { nets: { led } }) => ({
-  R: R0603('330').connect(VCC, led),
+  R: R0603('330').connect({ 1: VCC, 2: led }),
   D: LED0603('green').connect({ A: led, K: SW }),
 }))
 const Row = layout(chan, (g, { at }) => h('g', { at }, h(g.R, { at: '0 0' }), h(g.D, { at: '6 0 180deg' })), 'PRow')
@@ -24,7 +24,7 @@ test('preview: a default-exported <PCB> is compiled as it is', () => {
 
 test('preview: a part is placed at the origin of a wrapped board, which gets an outline around it', () => {
   const { A, B } = nets()
-  const r = previewRoot({ default: R0603('1k').connect(A, B) })
+  const r = previewRoot({ default: R0603('1k', { ref: 'R1' }).connect({ 1: A, 2: B }) })
   assert.equal(r.kind, 'part')
   const b = compile(r)
   assert.equal(b.footprints.length, 1)

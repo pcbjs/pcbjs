@@ -37,23 +37,24 @@ const PINS = [
   '30',
 ] as const
 
-function DF12Footprint(props: FootprintProps) {
-  const { children, ...rest } = props
-  return (
-    <footprint id="lvds:DF12-30DS-0.5V" value="DF12-30DS" height={3} {...rest}>
-      {PINS.map((num, i) => {
-        const k = Math.floor(i / 2),
-          odd = i % 2 === 0
-        return <pad num={num} at={`${(k - 7) * 0.5} ${odd ? -1.9 : 1.9}`} size={[0.3, 1.3]} />
-      })}
-      {npth(-4.6, 0, 0.7)}
-      {npth(4.6, 0, 0.7)}
-      {silkRect(8.6, 2.2)}
-      <circle layer="F.SilkS" cx={-4.2} cy={-2.3} r={0.15} width={0.2} />
-      {courtyard(10.4, 5.4)}
-      {children}
-    </footprint>
-  )
-}
-
-export const DF12 = defineFootprint(DF12Footprint, { pins: PINS, prefix: 'J', id: 'lvds:DF12-30DS-0.5V', name: 'DF12' })
+export const DF12 = defineFootprint(
+  function DF12(props: FootprintProps) {
+    const { children, ...rest } = props
+    return (
+      <footprint id="lvds:DF12-30DS-0.5V" value="DF12-30DS" height={3} {...rest}>
+        {PINS.map((num, i) => {
+          const k = Math.floor(i / 2),
+            odd = i % 2 === 0
+          return <pad num={num} at={`${(k - 7) * 0.5} ${odd ? -1.9 : 1.9}`} size={[0.3, 1.3]} />
+        })}
+        {npth(-4.6, 0, 0.7)}
+        {npth(4.6, 0, 0.7)}
+        {silkRect(8.6, 2.2)}
+        <circle layer="F.SilkS" cx={-4.2} cy={-2.3} r={0.15} width={0.2} />
+        {courtyard(10.4, 5.4)}
+        {children}
+      </footprint>
+    )
+  },
+  { pins: PINS, prefix: 'J' },
+)

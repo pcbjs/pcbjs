@@ -2,28 +2,30 @@
 // The top 45 mm share the controller's outline and holes; the strip below carries the phase and ground wire pads.
 // Frame: millimetres, origin at the top-left corner of the outline, x right, y down, seen from the top of the stack.
 import PCB from '@pcbjs/fab/JLCPCB/2-Layer'
-import { pour, via } from '@pcbjs/core'
+import { pour, via, Place } from '@pcbjs/core'
 import { Brand, MountingHole, roundedRect, rect } from '@pcbjs/lib'
 import { twoLayer } from '@pcbjs/lib/stackups'
 import { W, HOLES } from '../lib/mech'
 import { DRIVER_HEADER_AT, headerPin } from '../lib/header'
 import { nHA, nLA, nHB, nLB, nHC, nLC, ISA, ISB, ISC, VSNS, nFAULT, SD } from '../lib/nets'
 import { chain } from '../lib/wire'
-import { HalfBridgeColumn } from './halfbridge.layout'
+import { layout as HalfBridgeColumn } from './halfbridge'
 import * as sch from './driver.sch'
 
 const H = 62
 const COLS = [29.5, 39.5, 49.5] as const
-const Hole = MountingHole(3.2)
+const HOLE_AT = [...HOLES, [3.5, 58.5], [56.5, 58.5]]
+// made in a loop, so each hole takes its ref from the loop
+const HOLE_PARTS = HOLE_AT.map((_, i) => MountingHole(3.2)({ ref: `H${i + 1}` }))
 const SIG = 0.25,
   GATE = 0.4,
   PWR = 0.6
 
 export default (
-  <PCB name="driver" title="Motor stack driver" revision="0.1.0" schematic={sch} color="black" stackup={twoLayer({ outerCopper: 2, finish: 'HASL' })}>
+  <PCB name="driver" title="Motor stack driver" rev="0.1.0" schematic={sch} color="black" stackup={twoLayer({ outerCopper: 2, finish: 'HASL' })}>
     <path layer="Edge.Cuts" d={roundedRect(W, H, 2)} />
-    {[...HOLES, [3.5, 58.5], [56.5, 58.5]].map(([x, y], i) => (
-      <Hole ref={`H${i + 1}`} at={`${x} ${y}`} />
+    {HOLE_AT.map(([x, y], i) => (
+      <Place part={HOLE_PARTS[i]} at={`${x} ${y}`} />
     ))}
 
     <J1 at={DRIVER_HEADER_AT} thermal={{ 3: 'solid', 4: 'solid', 11: 'solid', 12: 'solid', 19: 'solid', 20: 'solid' }} />
@@ -31,9 +33,9 @@ export default (
     <C_VCC at="18.3 36" />
 
     {/* the three phases, A to C left to right, and their wire pads on the bottom strip */}
-    <HalfBridgeColumn g={A} at={`${COLS[0]} 0`} />
-    <HalfBridgeColumn g={B} at={`${COLS[1]} 0`} />
-    <HalfBridgeColumn g={C} at={`${COLS[2]} 0`} />
+    <HalfBridgeColumn g={A} at={`${COLS[0]} 28`} />
+    <HalfBridgeColumn g={B} at={`${COLS[1]} 28`} />
+    <HalfBridgeColumn g={C} at={`${COLS[2]} 28`} />
     <J_A at={`${COLS[0]} 55`} />
     <J_B at={`${COLS[1]} 55`} />
     <J_C at={`${COLS[2]} 55`} />
@@ -70,9 +72,9 @@ export default (
         [SD, U1.SD],
       ] as const
     ).map(([net, pin]) => chain(SIG, J1[headerPin(net)], pin))}
-    {chain(SIG, J1[headerPin(ISA)], A.CF[2])}
-    {chain(SIG, J1[headerPin(ISB)], B.CF[2])}
-    {chain(SIG, J1[headerPin(ISC)], C.CF[2])}
+    {chain(SIG, J1[headerPin(ISA)], A.C02[2])}
+    {chain(SIG, J1[headerPin(ISB)], B.C02[2])}
+    {chain(SIG, J1[headerPin(ISC)], C.C02[2])}
     {chain(SIG, J1[headerPin(VSNS)], R_VB[1], C_VS[1])}
     {chain(SIG, R_VT[2], R_VB[1])}
 
@@ -83,7 +85,7 @@ export default (
         [B, U1.HO2, U1.LO2, U1.VB2, U1.VS2],
         [C, U1.HO3, U1.LO3, U1.VB3, U1.VS3],
       ] as const
-    ).map(([g, ho, lo, vb, vs]) => [chain(GATE, ho, g.RGH[1]), chain(GATE, lo, g.RGL[1]), chain(GATE, vb, g.CB[1]), chain(GATE, vs, g.QH.S)])}
+    ).map(([g, ho, lo, vb, vs]) => [chain(GATE, ho, g.R02[1]), chain(GATE, lo, g.R03[1]), chain(GATE, vb, g.C01[1]), chain(GATE, vs, g.Q01.S)])}
     {chain(SIG, U1.CAO, U1.CAm)}
 
     {/* supplies: VM to the 12 V regulator, 12 V to the gate driver, the bootstrap diodes and the 5 V regulator, 5 V up the header */}
@@ -92,8 +94,8 @@ export default (
     {chain(PWR, J_VM[1], C_12IN[1])}
     {chain(PWR, U2.OUT, C_12OUT[1], U3.IN)}
     {chain(PWR, C_12OUT[1], C_VCC[1], U1.VCC)}
-    {chain(GATE, C_VCC[1], A.DB.A, B.DB.A, C.DB.A)}
-    {chain(PWR, U3.pad('4'), U3.pad('2'))}
+    {chain(GATE, C_VCC[1], A.D01.A, B.D01.A, C.D01.A)}
+    {chain(PWR, U3[4], U3[2])}
     {chain(PWR, U3.OUT, C_5OUT[1], J1[1], J1[2])}
     {chain(SIG, U1.nFLTCLR, J1[1])}
 
@@ -116,7 +118,7 @@ export default (
       [44, 47],
     ].map(([x, y]) => via(GND, `${x} ${y}`, { drill: 0.4, size: 0.8 }))}
     {/* GND pieces the rerouted gate tracks fence off: the driver's COM pin tied to its VCC capacitor, a via beside the phase A shunt */}
-    {chain(SIG, U1.pad('1'), C_VCC[2])}
+    {chain(SIG, U1[1], C_VCC[2])}
     {[[32.45, 34.45]].map(([x, y]) => via(GND, `${x} ${y}`, { drill: 0.3, size: 0.6 }))}
 
     <text layer="F.SilkS" at="31 60" size={1.5}>

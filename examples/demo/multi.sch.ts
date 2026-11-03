@@ -5,6 +5,6 @@ import { R0603 } from '@pcbjs/lib'
 import { TestPad } from './lib/TestPad'
 
 export const { VBAT, OUT } = nets()
-export const TP1 = TestPad('VBAT').connect(VBAT)
-export const R1 = R0603('1k', { MPN: 'RC0603FR-071KL', 'MPN:US': 'ERJ-3EKF1001V', 'MPN:LCSC': 'C21190' }).connect(VBAT, OUT)
-export const TP2 = TestPad('OUT').connect(OUT)
+export const TP1 = TestPad('VBAT').connect({ 1: VBAT })
+export const R1 = R0603('1k').source({ MPN: 'RC0603FR-071KL', 'MPN:US': 'ERJ-3EKF1001V', 'MPN:LCSC': 'C21190' }).connect({ 1: VBAT, 2: OUT })
+export const TP2 = TestPad('OUT').connect({ 1: OUT })

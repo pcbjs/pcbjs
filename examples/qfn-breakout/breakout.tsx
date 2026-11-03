@@ -1,8 +1,8 @@
 // The QFN breakout board as a function, so pcb.tsx and tangled.tsx build the same board with the headers either way round.
 // Frame: mm, origin at the top-left corner of the outline, x right, y down.
 import PCB from '@pcbjs/fab/JLCPCB/2-Layer'
-import { nets, route, pour, type Net } from '@pcbjs/core'
-import { Brand, QFN, PinHeader, C0402, rect } from '@pcbjs/lib'
+import { nets, route, pour, type Net, type RouteBuilder } from '@pcbjs/core'
+import { Brand, QFN, PinHeader, C0402, rect, withPins } from '@pcbjs/lib'
 
 export interface BreakoutOptions {
   name: string
@@ -26,15 +26,19 @@ const rank = [10, 7, 1, 16, 2, 15, 9, 8, 3, 14, 4, 13, 5, 12, 6, 11]
 const turn = (side: number, x: number, y: number) => {
   let [dx, dy] = [x - C, y - C]
   for (let q = 0; q < side; q++) [dx, dy] = [dy, -dx]
-  return `${(C + dx).toFixed(4)} ${(C + dy).toFixed(4)}`
+  return `${(C + dx).toFixed(4)} ${(C + dy).toFixed(4)}` as const
 }
-function stair(n: number) {
+function stair(r: RouteBuilder, n: number) {
   const side = Math.floor((n - 1) / 16),
     k = ((n - 1) % 16) + 1
   const x = 3.5 + 0.7 * rank.indexOf(k)
   const y = C - 3.75 + 0.5 * (k - 1)
   const Y = e + 2.54 * (16 - k)
-  return `L ${turn(side, x, y)} @B.Cu L ${turn(side, x, Y)} @F.Cu XZ`
+  return r
+    .L(turn(side, x, y))
+    .via('B.Cu')
+    .L(turn(side, x, Y))
+    .via('F.Cu')
 }
 
 export function breakout({ name, tangle = false, stair: stairSides = [], ripup }: BreakoutOptions) {
@@ -43,7 +47,8 @@ export function breakout({ name, tangle = false, stair: stairSides = [], ripup }
   const { VDD, GND } = N
   const netOf = (n: number): Net => ((n - 1) % 16 === 0 ? VDD : (n - 1) % 16 === 15 ? GND : N[`S${n}`])
 
-  const U1 = QFN(64, 9, 0.5, 5.2, { vias: 3, pinNames: { EP: 'GND' } })('QFN64-9x9').connect(
+  // parts made in a function have no binding to name them, so each takes its ref
+  const U1 = withPins(QFN(64, 9, 0.5, { ep: 5.2, vias: 3 }), { EP: 'GND' })('QFN64-9x9', { ref: 'U1' }).connect(
     Object.fromEntries([...Array.from({ length: 64 }, (_, i) => [i + 1, netOf(i + 1)]), ['GND', GND]]),
   )
 
@@ -54,10 +59,10 @@ export function breakout({ name, tangle = false, stair: stairSides = [], ripup }
     (i: number) => 48 - i + 1, // right: QFN 33..48 run up, header pins run down
     (i: number) => 64 - i + 1, // top: QFN 49..64 run left, header pins run right
   ]
-  const headers = order.map(f =>
-    PinHeader(16)
+  const headers = order.map((f, k) =>
+    PinHeader(16)({ ref: `J${k + 1}` })
       .source({ MPN: 'PZ254V-11-16P' })
-      .connect(...Array.from({ length: 16 }, (_, i) => netOf(f(i + 1)))),
+      .connect(Object.fromEntries(Array.from({ length: 16 }, (_, i) => [i + 1, netOf(f(i + 1))]))),
   )
   const [JL, JB, JR, JT] = headers
   const pinOf = (n: number) => {
@@ -72,14 +77,18 @@ export function breakout({ name, tangle = false, stair: stairSides = [], ripup }
     [33, 32],
     [49, 48],
   ]
-  const caps = corners.map(([v, g]) => C0402('100n').source({ MPN: 'CL05B104KO5NNNC', 'MPN:LCSC': 'C1525' }).connect(netOf(v), netOf(g)))
+  const caps = corners.map(([v, g], k) =>
+    C0402('100n', { ref: `C${k + 1}` })
+      .source({ MPN: 'CL05B104KO5NNNC', 'MPN:LCSC': 'C1525' })
+      .connect({ 1: netOf(v), 2: netOf(g) }),
+  )
 
   // tangled: pin 1 of each header at the other end, turned half a turn
   const a = tangle ? e + span : e
   const rot = (r: number) => `${r + (tangle ? 180 : 0)}deg`
 
   return (
-    <PCB name={name} revision="0.1.0" autoroute={ripup === undefined ? undefined : { ripup }}>
+    <PCB name={name} rev="0.1.0" autoroute={ripup === undefined ? undefined : { ripup }}>
       <rect layer="Edge.Cuts" x={0} y={0} w={W} h={W} />
 
       <U1 at={`${C} ${C}`} />
@@ -101,7 +110,8 @@ export function breakout({ name, tangle = false, stair: stairSides = [], ripup }
       {Array.from({ length: 64 }, (_, i) => {
         const n = i + 1,
           side = Math.floor(i / 16)
-        return route(U1[n as 1], headers[side][pinOf(n) as 1], stairSides.includes(side) ? stair(n) : undefined)
+        const r = route(U1[n as 1], headers[side][pinOf(n) as 1])
+        return stairSides.includes(side) ? stair(r, n) : r
       })}
       {/* decoupling: each cap to its two pins, and the four VDD pads joined in a ring under the QFN, a loop by design */}
       {caps.map((Cn, k) => route(Cn[1], U1[corners[k][0] as 1]))}

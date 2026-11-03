@@ -1,13 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { gerberLayer } from '@pcbjs/export/gerber'
-import { buildFab } from '@pcbjs/export/fab'
-import { union, polysToRings } from '@pcbjs/compile/geom'
-import { excellon } from '@pcbjs/export/excellon'
-import { bomCsv, bomRows } from '@pcbjs/export/bom'
-import { boardSvg, layerMarkup } from '@pcbjs/export/svg'
-import { siteData } from '@pcbjs/export/site-data'
+import { gerberLayer } from '@pcbjs/export/internal/gerber'
+import { buildFab } from '@pcbjs/export/internal/fab'
+import { union, polysToRings } from '@pcbjs/compile/internal/geom'
+import { excellon } from '@pcbjs/export/internal/excellon'
+import { bomCsv, bomRows } from '@pcbjs/export/internal/bom'
+import { boardSvg, layerMarkup } from '@pcbjs/export/internal/svg'
+import { siteData } from '@pcbjs/export/internal/site-data'
 import { compiledBase, bomBoard, baseBoard, compileBoard, h, PCB } from './fixtures.mjs'
+import { via, pour } from '@pcbjs/core'
+import { netOf } from './parts.mjs'
 
 const DATE = '2026-01-01T00:00:00Z'
 
@@ -143,11 +145,7 @@ test('excellon: header declares METRIC,TZ', () => {
 test('gerber: two overlapping GND zones on B.Cu are written as one unioned region with a single clear block', () => {
   // the zones overlap on x 4..6; a via of net B in the overlap cuts a hole into both fills
   const b = compileBoard(
-    baseBoard([
-      h('zone', { net: 'GND', layer: 'B.Cu', d: 'M0 6 H6 V10 H0 Z', islands: 'keep' }),
-      h('zone', { net: 'GND', layer: 'B.Cu', d: 'M4 6 H10 V10 H4 Z', islands: 'keep' }),
-      h('via', { net: 'B', at: '5 8' }),
-    ]),
+    baseBoard([pour(netOf('GND'), 'B.Cu', 'M0 6 H6 V10 H0 Z', { islands: 'keep' }), pour(netOf('GND'), 'B.Cu', 'M4 6 H10 V10 H4 Z', { islands: 'keep' }), via(netOf('B'), '5 8')]),
   )
   const zones = b.items.filter(i => i.kind === 'zone')
   assert.equal(zones.length, 2)

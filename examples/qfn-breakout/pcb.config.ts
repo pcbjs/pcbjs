@@ -4,5 +4,5 @@ import { defineConfig } from '@pcbjs/core'
 export default defineConfig({
   entries: ['pcb.tsx'], // the boards; every pcbjs command reads them, globs such as 'boards/*.tsx' allowed
   // base: '/my-board/',                 // the URL path the built site is served under, default "/"
-  // repo: 'https://github.com/me/board', // link the built site's items to their source lines
+  // repo: { url: 'https://github.com/me/board' }, // link the built site's items to their source lines
 })

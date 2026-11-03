@@ -1,0 +1,17 @@
+{
+  "name": "carrier",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pcbjs dev",
+    "build": "pcbjs build",
+    "check": "pcbjs check"
+  },
+  "devDependencies": {
+    "@pcbjs-examples/power": "file:../power/dist",
+    "@pcbjs/pcbjs": "0.0.1-beta.1",
+    "@pcbjs/core": "0.0.1-beta.0",
+    "@pcbjs/fab": "0.0.1-beta.0",
+    "@pcbjs/lib": "0.0.1-beta.0"
+  }
+}

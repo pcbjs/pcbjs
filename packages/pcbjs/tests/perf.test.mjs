@@ -1,9 +1,10 @@
 // A guard against quadratic compile passes: a generated board of about 400 items with a pour must compile quickly.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import PCB, { h, pour } from '@pcbjs/core'
-import { PinHeader } from '@pcbjs/lib/headers'
+import PCB, { h, pour, route } from '@pcbjs/core'
+import { PinHeader } from '@pcbjs/lib/internal/headers'
 import { compileBoard } from '@pcbjs/compile'
+import { netOf, place } from './parts.mjs'
 
 /** cols x rows pairs of 1x2 headers, pin 1 of each pair joined on F.Cu, pin 2 on GND, a GND pour on B.Cu. */
 function gridBoard(cols, rows) {
@@ -16,11 +17,16 @@ function gridBoard(cols, rows) {
       const x = c * 10 + 2,
         y = r * 6 + 2,
         net = `S${r}_${c}`
-      kids.push(h(PinHeader, { ref: `J${++n}`, pins: 2, at: `${x} ${y}`, 'net:1': net, 'net:2': 'GND' }))
-      kids.push(h(PinHeader, { ref: `J${++n}`, pins: 2, at: `${x + 5} ${y}`, 'net:1': net, 'net:2': 'GND' }))
-      kids.push(h('track', { net, layer: 'F.Cu', width: 0.3, d: `M${x} ${y} L${x + 5} ${y}` }))
+      kids.push(place(PinHeader(2), { ref: `J${++n}`, at: `${x} ${y}`, 'net:1': net, 'net:2': 'GND' }))
+      kids.push(place(PinHeader(2), { ref: `J${++n}`, at: `${x + 5} ${y}`, 'net:1': net, 'net:2': 'GND' }))
+      kids.push(
+        route(`${x} ${y}`)
+          .net(netOf(net))
+          .width(0.3)
+          .H(x + 5),
+      )
     }
-  kids.push(pour('GND', 'B.Cu', `M0 0 H${w} V${ht} H0 Z`))
+  kids.push(pour(netOf('GND'), 'B.Cu', `M0 0 H${w} V${ht} H0 Z`))
   return h(PCB, { name: 'Grid' }, ...kids)
 }
 

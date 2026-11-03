@@ -29,7 +29,7 @@ export function driverHeader() {
   B2B.forEach((net, i) => {
     pins[i + 1] = net
   })
-  return PinHeader(ROWS, { rows: 2, value: 'TSW-110-07-G-D', source: { MPN: 'TSW-110-07-G-D', Manufacturer: 'Samtec' } }).connect(pins)
+  return PinHeader(ROWS, { rows: 2 })('TSW-110-07-G-D').source({ MPN: 'TSW-110-07-G-D', Manufacturer: 'Samtec' }).connect(pins)
 }
 
 export function controllerSocket() {
@@ -37,7 +37,7 @@ export function controllerSocket() {
   B2B.forEach((net, i) => {
     pins[mate(i + 1)] = net
   })
-  return PinSocket(ROWS, { rows: 2, value: 'SSW-110-01-G-D' }).source({ MPN: 'SSW-110-01-G-D', Manufacturer: 'Samtec' }).connect(pins)
+  return PinSocket(ROWS, { rows: 2 })('SSW-110-01-G-D').source({ MPN: 'SSW-110-01-G-D', Manufacturer: 'Samtec' }).connect(pins)
 }
 
 // header pin and socket pin of a net, the first when it has several

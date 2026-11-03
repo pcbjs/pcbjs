@@ -114,30 +114,30 @@ export const U2 = SDRAM_TSOP54('W9825G6KH-6I')
   } as any)
 
 // USB-C for power and full-speed data, 5.1k pull-downs on CC for a 5 V sink
-export const J1 = USBC('full16', 'TYPE-C-31-M-12')
+export const J1 = USBC('full16')('TYPE-C-31-M-12')
   .source({ MPN: 'TYPE-C-31-M-12', Manufacturer: 'HRO', 'MPN:LCSC': 'C165948' })
   .connect({ GND, VBUS, CC1, CC2, DP: USB_DP, DN: USB_DN, SBU1: NC, SBU2: NC, SHIELD: GND })
-export const R_CC1 = R0603('5k1').connect(CC1, GND)
-export const R_CC2 = R0603('5k1').connect(CC2, GND)
+export const R_CC1 = R0603('5k1').connect({ 1: CC1, 2: GND })
+export const R_CC2 = R0603('5k1').connect({ 1: CC2, 2: GND })
 
 // 3.3 V LDO
 export const U3 = AMS1117('AMS1117-3.3').source({ MPN: 'AMS1117-3.3', Manufacturer: 'AMS', 'MPN:LCSC': 'C6186' }).connect({ VIN: VBUS, GND, VOUT: V3V3 })
-export const C_IN = C0805('10u').connect(VBUS, GND)
-export const C_OUT = C0805('22u').connect(V3V3, GND)
+export const C_IN = C0805('10u').connect({ 1: VBUS, 2: GND })
+export const C_OUT = C0805('22u').connect({ 1: V3V3, 2: GND })
 
 // 25 MHz HSE crystal with its load capacitors
 export const Y1 = Crystal3225('25MHz').source({ MPN: 'X322525MOB4SI', Manufacturer: 'Yangxing' }).connect({ X1: OSC_IN, X2: OSC_OUT, GND })
-export const C_X1 = C0603('12p').connect(OSC_IN, GND)
-export const C_X2 = C0603('12p').connect(OSC_OUT, GND)
+export const C_X1 = C0603('12p').connect({ 1: OSC_IN, 2: GND })
+export const C_X2 = C0603('12p').connect({ 1: OSC_OUT, 2: GND })
 
 // reset button and the BOOT0 jumper: 1-2 boots from the system loader, 2-3 from flash; the pull-down holds BOOT0 low when open
 export const SW1 = TactSwitch('5.1x5.1')('RESET').source({ MPN: 'TS-1187A-B-A-B', Manufacturer: 'XKB', 'MPN:LCSC': 'C318884' }).connect({ A: NRST, B: GND })
-export const C_RST = C0603('100n').connect(NRST, GND)
-export const J2 = PinHeader(3).source({ MPN: 'PZ254V-11-03P' }).connect(V3V3, BOOT0, GND)
-export const R_BOOT = R0603('10k').connect(BOOT0, GND)
+export const C_RST = C0603('100n').connect({ 1: NRST, 2: GND })
+export const J2 = PinHeader(3)().source({ MPN: 'PZ254V-11-03P' }).connect({ 1: V3V3, 2: BOOT0, 3: GND })
+export const R_BOOT = R0603('10k').connect({ 1: BOOT0, 2: GND })
 
 // decoupling: one 100 nF per MCU supply pin, 12 VDD, VBAT, and one for VDDA and VREF+ which sit side by side, 2.2 uF on each VCAP, one 100 nF per SDRAM supply pin
-export const C_MCU = Array.from({ length: 14 }, () => C0402('100n').connect(V3V3, GND))
-export const C_VCAP1 = C0402('2.2u').connect(VCAP1, GND)
-export const C_VCAP2 = C0402('2.2u').connect(VCAP2, GND)
-export const C_RAM = Array.from({ length: 7 }, () => C0603('100n').connect(V3V3, GND))
+export const C_MCU = Array.from({ length: 14 }, (_, i) => C0402('100n', { ref: `C_MCU${i + 1}` }).connect({ 1: V3V3, 2: GND }))
+export const C_VCAP1 = C0402('2.2u').connect({ 1: VCAP1, 2: GND })
+export const C_VCAP2 = C0402('2.2u').connect({ 1: VCAP2, 2: GND })
+export const C_RAM = Array.from({ length: 7 }, (_, i) => C0603('100n', { ref: `C_RAM${i + 1}` }).connect({ 1: V3V3, 2: GND }))

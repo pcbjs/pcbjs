@@ -4,22 +4,22 @@
 import { test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { h } from '@pcbjs/core/jsx-runtime'
-import PCB, { route, nets, resetDefaults } from '@pcbjs/core'
+import PCB, { route, nets, resetDefaults, keepout } from '@pcbjs/core'
 import { compileBoard, CompileError } from '@pcbjs/compile'
-import { routesCopper, pairsOf } from '@pcbjs/compile/pair-info'
-import { inspectBoard } from '@pcbjs/cli/inspect'
+import { routesCopper, pairsOf } from '@pcbjs/compile/internal/pair-info'
+import { inspectBoard } from '@pcbjs/cli/internal/inspect'
+import { fp, handle } from './parts.mjs'
 
 afterEach(() => resetDefaults())
 
-const opts = { routeCache: false }
+const opts = { cache: false }
 const edge = (w = 40, hh = 20) => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w, h: hh })
-const smd = (ref, x, y, net, size = 1) => h('footprint', { ref, at: [x, y], nets: { 1: net } }, h('pad', { num: 1, size, type: 'smd' }))
+const smd = (ref, x, y, net, size = 1) => fp({ ref, at: `${x} ${y}`, nets: { 1: net } }, h('pad', { num: 1, size, type: 'smd' }))
 const two = (ref, x, y, a, b, rot = 0) =>
-  h(
-    'footprint',
+  fp(
     { ref, at: `${x} ${y} ${rot}deg`, nets: { 1: a, 2: b } },
-    h('pad', { num: 1, at: [-0.25, 0], size: [0.3, 1], type: 'smd' }),
-    h('pad', { num: 2, at: [0.25, 0], size: [0.3, 1], type: 'smd' }),
+    h('pad', { num: 1, at: '-0.25 0', size: [0.3, 1], type: 'smd' }),
+    h('pad', { num: 2, at: '0.25 0', size: [0.3, 1], type: 'smd' }),
   )
 const findings = (b, rule) => b.drc.filter(d => d.rule === rule)
 const lengthOf = (b, id) => routesCopper(b).get(id).length
@@ -34,21 +34,41 @@ const clean = b => {
 /** Four lines from left pads to right pads 30 mm apart, the first three straight, the last with a jog. */
 const bus = (mod = r => r) => [
   ...[0, 1, 2, 3].flatMap(i => [smd(`A${i}`, 5, 4 + i * 4, `D${i}`), smd(`B${i}`, 35, 4 + i * 4, `D${i}`)]),
-  ...[0, 1, 2, 3].map(i => mod(route(`A${i}.1`, `B${i}.1`, i === 3 ? 'H 15 V 18 H 25 V 16 Z' : 'Z').width(0.2), i)),
+  ...[0, 1, 2, 3].map(i =>
+    mod(
+      i === 3
+        ? route(handle(`A${i}.1`), handle(`B${i}.1`))
+            .width(0.2)
+            .H(15)
+            .V(18)
+            .H(25)
+            .V(16)
+            .Z()
+        : route(handle(`A${i}.1`), handle(`B${i}.1`))
+            .width(0.2)
+            .Z(),
+      i,
+    ),
+  ),
 ]
 
 test('builder: .length() takes a number or a range, .match() a group and a tolerance; bad input is a TypeError', () => {
-  assert.equal(route('J1.1', 'J2.1').length(42).props.length, 42)
-  assert.deepEqual(route('J1.1', 'J2.1').length({ min: 40, max: 42 }).props.length, { min: 40, max: 42 })
-  assert.deepEqual(route('J1.1', 'J2.1').length({ target: 40, tolerance: 0.2 }).props.length, { target: 40, tolerance: 0.2 })
-  assert.deepEqual(route('J1.1', 'J2.1').match('DQ').props.match, { group: 'DQ' })
-  assert.deepEqual(route('J1.1', 'J2.1').match('DQ', 0.05).props.match, { group: 'DQ', tolerance: 0.05 })
-  assert.deepEqual(route(['J1.1', 'J1.2'], ['J2.1', 'J2.2']).length(30).match('P').props.match, { group: 'P' })
-  assert.throws(() => route('J1.1', 'J2.1').length(-1), { name: 'TypeError', message: /positive length/ })
-  assert.throws(() => route('J1.1', 'J2.1').length({ lo: 3 }), { name: 'TypeError', message: /field "lo"/ })
-  assert.throws(() => route('J1.1', 'J2.1').length({ tolerance: 3 }), { name: 'TypeError', message: /needs min, max or target/ })
-  assert.throws(() => route('J1.1', 'J2.1').length({ target: 3, min: 2 }), { name: 'TypeError', message: /not both/ })
-  assert.throws(() => route('J1.1', 'J2.1').match(''), { name: 'TypeError', message: /group name/ })
+  assert.equal(route(handle('J1.1'), handle('J2.1')).length(42).props.length, 42)
+  assert.deepEqual(route(handle('J1.1'), handle('J2.1')).length({ min: 40, max: 42 }).props.length, { min: 40, max: 42 })
+  assert.deepEqual(route(handle('J1.1'), handle('J2.1')).length({ target: 40, tolerance: 0.2 }).props.length, { target: 40, tolerance: 0.2 })
+  assert.deepEqual(route(handle('J1.1'), handle('J2.1')).match('DQ').props.match, { group: 'DQ' })
+  assert.deepEqual(route(handle('J1.1'), handle('J2.1')).match('DQ', 0.05).props.match, { group: 'DQ', tolerance: 0.05 })
+  assert.deepEqual(
+    route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+      .length(30)
+      .match('P').props.match,
+    { group: 'P' },
+  )
+  assert.throws(() => route(handle('J1.1'), handle('J2.1')).length(-1), { name: 'TypeError', message: /positive length/ })
+  assert.throws(() => route(handle('J1.1'), handle('J2.1')).length({ lo: 3 }), { name: 'TypeError', message: /field "lo"/ })
+  assert.throws(() => route(handle('J1.1'), handle('J2.1')).length({ tolerance: 3 }), { name: 'TypeError', message: /needs min, max or target/ })
+  assert.throws(() => route(handle('J1.1'), handle('J2.1')).length({ target: 3, min: 2 }), { name: 'TypeError', message: /not both/ })
+  assert.throws(() => route(handle('J1.1'), handle('J2.1')).match(''), { name: 'TypeError', message: /group name/ })
 })
 
 test('route ids: route:<n> in document order on every item of a route, manual and automatic; pairs keep pair:<n>', () => {
@@ -63,9 +83,14 @@ test('route ids: route:<n> in document order on every item of a route, manual an
       smd('D', 30, 15, 'Y'),
       two('J1', 10, 9, 'DP', 'DN'),
       two('J2', 25, 9, 'DN', 'DP', 0),
-      route('A.1', 'B.1', 'H 10 @B.Cu H 20 @F.Cu XZ').width(0.2),
-      route('C.1', 'D.1').width(0.2),
-      route(['J1.1', 'J1.2'], ['J2.2', 'J2.1'], 'V 11 H 25 Z').width(0.2).gap(0.2),
+      route(handle('A.1'), handle('B.1')).width(0.2).H(10).via('B.Cu').H(20).via('F.Cu'),
+      route(handle('C.1'), handle('D.1')).width(0.2),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.2'), handle('J2.1')])
+        .width(0.2)
+        .gap(0.2)
+        .V(11)
+        .H(25)
+        .Z(),
     ),
     opts,
   )
@@ -92,14 +117,17 @@ test('route ids: route:<n> in document order on every item of a route, manual an
 })
 
 test('tune: a route shorter than its target gets a meander and lands inside the range, DRC clean', () => {
-  const b = compileBoard(h(PCB, { name: 'Len' }, edge(), smd('A', 5, 10, 'X'), smd('B', 35, 10, 'X'), route('A.1', 'B.1', 'Z').width(0.2).length(36)), opts)
+  const b = compileBoard(h(PCB, { name: 'Len' }, edge(), smd('A', 5, 10, 'X'), smd('B', 35, 10, 'X'), route(handle('A.1'), handle('B.1')).width(0.2).length(36).Z()), opts)
   const L = lengthOf(b, 'route:1')
   assert.ok(Math.abs(L - 36) <= 0.1 + 1e-6, `length ${L}`)
   assert.ok(b.routes[0].tuned > 5)
   assert.ok(b.items.find(i => i.kind === 'track').pts.length > 4)
   clean(b)
   // a range: tuned to its middle
-  const r = compileBoard(h(PCB, { name: 'Len' }, edge(), smd('A', 5, 10, 'X'), smd('B', 35, 10, 'X'), route('A.1', 'B.1', 'Z').width(0.2).length({ min: 33, max: 34 })), opts)
+  const r = compileBoard(
+    h(PCB, { name: 'Len' }, edge(), smd('A', 5, 10, 'X'), smd('B', 35, 10, 'X'), route(handle('A.1'), handle('B.1')).width(0.2).length({ min: 33, max: 34 }).Z()),
+    opts,
+  )
   assert.ok(Math.abs(lengthOf(r, 'route:1') - 33.5) < 1e-3)
   clean(r)
 })
@@ -107,18 +135,18 @@ test('tune: a route shorter than its target gets a meander and lands inside the 
 test('tune: the tolerance comes from .length(), else the class, else 0.1; a route inside it is left alone', () => {
   const { X } = nets({ X: { class: 'clk' } })
   const loose = compileBoard(
-    h(PCB, { name: 'Len', classes: { clk: { tolerance: 0.5 } } }, edge(), smd('A', 5, 10, X), smd('B', 35, 10, X), route('A.1', 'B.1', 'Z').width(0.2).length(30.4)),
+    h(PCB, { name: 'Len', classes: { clk: { tolerance: 0.5 } } }, edge(), smd('A', 5, 10, X), smd('B', 35, 10, X), route(handle('A.1'), handle('B.1')).width(0.2).length(30.4).Z()),
     opts,
   )
   assert.equal(loose.routes[0].tuned, undefined)
   assert.deepEqual(loose.routes[0].target, { min: 29.9, max: 30.9 })
   clean(loose)
   // 0.4 mm short is below the smallest U bump, 0.46 mm at the 0.2 mm radius: that one bump overshoots, but stays in the range
-  const tight = compileBoard(h(PCB, { name: 'Len' }, edge(), smd('A', 5, 10, 'X'), smd('B', 35, 10, 'X'), route('A.1', 'B.1', 'Z').width(0.2).length(30.4)), opts)
+  const tight = compileBoard(h(PCB, { name: 'Len' }, edge(), smd('A', 5, 10, 'X'), smd('B', 35, 10, 'X'), route(handle('A.1'), handle('B.1')).width(0.2).length(30.4).Z()), opts)
   assert.ok(Math.abs(lengthOf(tight, 'route:1') - 30.4) <= 0.1 + 1e-6, `${lengthOf(tight, 'route:1')}`)
   clean(tight)
   // 0.2 mm short, inside a 0.1 mm tolerance, cannot be tuned: the finding says why
-  const short = compileBoard(h(PCB, { name: 'Len' }, edge(), smd('A', 5, 10, 'X'), smd('B', 35, 10, 'X'), route('A.1', 'B.1', 'Z').width(0.2).length(30.2)), opts)
+  const short = compileBoard(h(PCB, { name: 'Len' }, edge(), smd('A', 5, 10, 'X'), smd('B', 35, 10, 'X'), route(handle('A.1'), handle('B.1')).width(0.2).length(30.2).Z()), opts)
   assert.match(findings(short, 'length')[0].message, /below the smallest U bump of 0\.46 mm/)
 })
 
@@ -126,10 +154,11 @@ test('tune: amplitude and spacing come from tune, board wide or per route, and s
   const kids = amp => [
     smd('A', 5, 10, 'X'),
     smd('B', 35, 10, 'X'),
-    route('A.1', 'B.1', 'Z')
+    route(handle('A.1'), handle('B.1'))
       .width(0.2)
       .length(40)
-      .rules({ tune: { amplitude: amp } }),
+      .rules({ tune: { amplitude: amp } })
+      .Z(),
   ]
   const height = b => {
     const ys = b.items.find(i => i.kind === 'track').pts.map(p => p[1])
@@ -140,7 +169,14 @@ test('tune: amplitude and spacing come from tune, board wide or per route, and s
   // U bumps reach the amplitude; at 0.8 mm, twice their radius, the last ones may stay a little lower
   assert.ok(Math.abs(height(big) - 2) < 1e-6 && height(small) <= 0.8 + 1e-6 && height(small) > 0.75, `${height(big)} ${height(small)}`)
   const board = compileBoard(
-    h(PCB, { name: 'Len', autoroute: { tune: { amplitude: 1.5 } } }, edge(), smd('A', 5, 10, 'X'), smd('B', 35, 10, 'X'), route('A.1', 'B.1', 'Z').width(0.2).length(40)),
+    h(
+      PCB,
+      { name: 'Len', autoroute: { tune: { amplitude: 1.5 } } },
+      edge(),
+      smd('A', 5, 10, 'X'),
+      smd('B', 35, 10, 'X'),
+      route(handle('A.1'), handle('B.1')).width(0.2).length(40).Z(),
+    ),
     opts,
   )
   assert.ok(Math.abs(height(board) - 1.5) < 1e-6)
@@ -170,9 +206,9 @@ test('tune: a member with its own max stays under it; when that is below the win
       { name: 'Cap' },
       edge(40, 20),
       ...kids,
-      route('A0.1', 'B0.1', 'Z').width(0.25).length({ max: 31 }).match('G'),
-      route('A1.1', 'B1.1', 'H 20 V 14 H 35 Z').width(0.25).match('G'),
-      route('A2.1', 'B2.1', 'Z').width(0.25).length({ max: 41.95 }).match('G'),
+      route(handle('A0.1'), handle('B0.1')).width(0.25).length({ max: 31 }).match('G').Z(),
+      route(handle('A1.1'), handle('B1.1')).width(0.25).match('G').H(20).V(14).H(35).Z(),
+      route(handle('A2.1'), handle('B2.1')).width(0.25).length({ max: 41.95 }).match('G').Z(),
     ),
     opts,
   )
@@ -201,9 +237,13 @@ test('tune: a group of pairs and single routes tunes both, the pairs in their ce
       smd('B', 35, 12, 'S'),
       smd('C', 5, 26, 'T'),
       smd('D', 35, 26, 'T'),
-      route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'Z').width(0.2).gap(0.2).match('M', 0.2),
-      route('A.1', 'B.1', 'H 12 V 18 H 28 V 12 Z').width(0.2).match('M', 0.2),
-      route('C.1', 'D.1', 'Z').width(0.2).match('M', 0.2),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.2)
+        .gap(0.2)
+        .match('M', 0.2)
+        .Z(),
+      route(handle('A.1'), handle('B.1')).width(0.2).match('M', 0.2).H(12).V(18).H(28).V(12).Z(),
+      route(handle('C.1'), handle('D.1')).width(0.2).match('M', 0.2).Z(),
     ),
     opts,
   )
@@ -225,10 +265,12 @@ test('tune: meanders spread over several segments, and grow past the amplitude i
       edge(40, 30),
       smd('A', 5, 4, 'X'),
       smd('B', 20, 26, 'X'),
-      route('A.1', 'B.1', 'H 20 Z')
+      route(handle('A.1'), handle('B.1'))
         .width(0.2)
         .length(64)
-        .rules({ tune: { amplitude: 1, maxAmplitude: 1 } }),
+        .rules({ tune: { amplitude: 1, maxAmplitude: 1 } })
+        .H(20)
+        .Z(),
     ),
     opts,
   )
@@ -248,7 +290,7 @@ test('tune: meanders spread over several segments, and grow past the amplitude i
   )
   clean(L)
   // 30 mm at amplitude 1 holds about 35 mm; 50 mm grows the meander, up to 3 mm by default
-  const big = compileBoard(h(PCB, { name: 'Grow' }, edge(40, 20), smd('A', 5, 10, 'X'), smd('B', 35, 10, 'X'), route('A.1', 'B.1', 'Z').width(0.2).length(80)), opts)
+  const big = compileBoard(h(PCB, { name: 'Grow' }, edge(40, 20), smd('A', 5, 10, 'X'), smd('B', 35, 10, 'X'), route(handle('A.1'), handle('B.1')).width(0.2).length(80).Z()), opts)
   const ys = big.items.find(i => i.kind === 'track').pts.map(p => p[1])
   assert.ok(Math.abs(lengthOf(big, 'route:1') - 80) <= 0.1 + 1e-6, `${lengthOf(big, 'route:1')}`)
   assert.ok(Math.max(...ys) - Math.min(...ys) > 1.5 && Math.max(...ys.map(y => Math.abs(y - 10))) <= 3 + 1e-6, `height ${Math.max(...ys) - Math.min(...ys)}`)
@@ -262,11 +304,11 @@ test('tune: courtyards and silk labels of other parts keep meanders out; the own
       PCB,
       { name: 'Yard' },
       edge(40, 20),
-      h('footprint', { ref: 'A', at: [5, 10], nets: { 1: 'X' } }, h('pad', { num: 1, size: 1, type: 'smd' }), cy(6, 6)),
+      fp({ ref: 'A', at: '5 10', nets: { 1: 'X' } }, h('pad', { num: 1, size: 1, type: 'smd' }), cy(6, 6)),
       smd('B', 35, 10, 'X'),
-      h('footprint', { ref: 'U', at: [21, 13] }, cy(16, 4)),
+      fp({ ref: 'U', at: '21 13' }, cy(16, 4)),
       h('text', { layer: 'F.SilkS', at: '21 7.5', size: 1.5 }, 'LABEL'),
-      route('A.1', 'B.1', 'Z').width(0.2).length(40),
+      route(handle('A.1'), handle('B.1')).width(0.2).length(40).Z(),
     ),
     opts,
   )
@@ -291,7 +333,11 @@ test('tune: a pair whose skew is over its tolerance gets the shorter track meand
       edge(30, 20),
       two('J1', 10, 3, 'DP', 'DN'),
       two('J2', 20, 12, 'DP', 'DN', 90),
-      route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'V 12 Z').width(0.2).gap(0.2),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.2)
+        .gap(0.2)
+        .V(12)
+        .Z(),
     ),
     opts,
   )
@@ -305,7 +351,7 @@ test('tune: deterministic, and a second compile takes every leg and every tuned 
   const { mkdtempSync, rmSync, readFileSync } = await import('node:fs')
   const { tmpdir } = await import('node:os')
   const { join } = await import('node:path')
-  const { clearRouteCache } = await import('@pcbjs/compile/route-cache')
+  const { clearRouteCache } = await import('@pcbjs/compile/internal/route-cache')
   const make = (...more) =>
     h(
       PCB,
@@ -315,26 +361,33 @@ test('tune: deterministic, and a second compile takes every leg and every tuned 
       ...bus(r => r.match('DATA')),
       smd('E', 5, 25, 'X'),
       smd('F', 35, 25, 'X'),
-      route('E.1', 'F.1').width(0.2).length(34),
+      route(handle('E.1'), handle('F.1')).width(0.2).length(34),
       two('J1', 10, 21, 'DP', 'DN'),
       two('J2', 22, 27, 'DP', 'DN', 90),
-      route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'V 23 XZ').width(0.2).gap(0.2),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.2)
+        .gap(0.2)
+        .V(23),
       // a mixed group: the pair is tuned in its centre line and kept in the cache as a pair
       two('J3', 5, 33, 'QP', 'QN', 90),
       two('J4', 35, 33, 'QP', 'QN', 90),
       smd('G', 5, 38, 'Y'),
       smd('H', 35, 38, 'Y'),
-      route(['J3.1', 'J3.2'], ['J4.1', 'J4.2'], 'Z').width(0.2).gap(0.2).match('Q', 0.2),
-      route('G.1', 'H.1', 'H 15 V 40.5 H 25 V 38 Z').width(0.2).match('Q', 0.2),
+      route([handle('J3.1'), handle('J3.2')], [handle('J4.1'), handle('J4.2')])
+        .width(0.2)
+        .gap(0.2)
+        .match('Q', 0.2)
+        .Z(),
+      route(handle('G.1'), handle('H.1')).width(0.2).match('Q', 0.2).H(15).V(40.5).H(25).V(38).Z(),
     )
   clearRouteCache()
   const dir = mkdtempSync(join(tmpdir(), 'pcbjs-tune-'))
   try {
-    const o = { routeCache: { dir } }
+    const o = { cache: { dir } }
     const cold = compileBoard(make(), o)
     clean(cold)
     assert.ok(cold.routes.find(r => r.id === 'route:7').tuned > 2, 'the pair of group Q is tuned')
-    const file = JSON.parse(readFileSync(join(dir, 'TuneCache.json'), 'utf8'))
+    const file = JSON.parse(readFileSync(join(dir, 'route', 'TuneCache.json'), 'utf8'))
     const tunes = Object.values(file.groups[''].tunes)
     assert.ok(tunes.length >= 5 && tunes.some(t => t.pair) && tunes.some(t => t.tracks.length), `${tunes.length} tune entries`)
     const warm = compileBoard(make(), o)
@@ -361,7 +414,7 @@ test('tune: deterministic, and a second compile takes every leg and every tuned 
 // ---- DRC ----
 
 test('DRC length: a route too long for its target is an error with the measured and allowed values and the route call', () => {
-  const b = compileBoard(h(PCB, { name: 'Len' }, edge(), smd('A', 5, 10, 'X'), smd('B', 35, 10, 'X'), route('A.1', 'B.1', 'Z').width(0.2).length(20)), opts)
+  const b = compileBoard(h(PCB, { name: 'Len' }, edge(), smd('A', 5, 10, 'X'), smd('B', 35, 10, 'X'), route(handle('A.1'), handle('B.1')).width(0.2).length(20).Z()), opts)
   const [f] = findings(b, 'length')
   assert.ok(f, b.drc.map(d => d.message).join('\n'))
   assert.equal(f.severity, 'error')
@@ -372,7 +425,10 @@ test('DRC length: a route too long for its target is an error with the measured 
 
 test('DRC length: a route with no room for a meander stays short and says why', () => {
   // a 1.2 mm high board: no room above or below the track
-  const b = compileBoard(h(PCB, { name: 'Len' }, edge(40, 1.6), smd('A', 5, 0.8, 'X', 0.5), smd('B', 35, 0.8, 'X', 0.5), route('A.1', 'B.1', 'Z').width(0.2).length(40)), opts)
+  const b = compileBoard(
+    h(PCB, { name: 'Len' }, edge(40, 1.6), smd('A', 5, 0.8, 'X', 0.5), smd('B', 35, 0.8, 'X', 0.5), route(handle('A.1'), handle('B.1')).width(0.2).length(40).Z()),
+    opts,
+  )
   const [f] = findings(b, 'length')
   assert.ok(f, b.drc.map(d => d.message).join('\n'))
   assert.match(
@@ -387,8 +443,8 @@ test('DRC length: a route with no room for a meander stays short and says why', 
       edge(40, 20),
       smd('A', 5, 10, 'X', 0.5),
       smd('B', 35, 10, 'X', 0.5),
-      h('keepout', { layers: 'all', d: 'M 5.6 0 H 34.4 V 9.85 H 5.6 Z M 5.6 10.15 H 34.4 V 20 H 5.6 Z' }),
-      route('A.1', 'B.1', 'Z').width(0.2).length(40),
+      keepout('M 5.6 0 H 34.4 V 9.85 H 5.6 Z M 5.6 10.15 H 34.4 V 20 H 5.6 Z'),
+      route(handle('A.1'), handle('B.1')).width(0.2).length(40).Z(),
     ),
     opts,
   )
@@ -402,7 +458,7 @@ test('DRC length-match: a group spread over its tolerance names the shortest and
       PCB,
       { name: 'Bus' },
       h('path', { layer: 'Edge.Cuts', d: 'M 0 0 H 40 V 20 H 0 Z' }),
-      h('keepout', { layers: 'all', d: 'M 6 1.8 H 34 V 3.5 H 6 Z M 6 4.5 H 34 V 7 H 6 Z' }),
+      keepout('M 6 1.8 H 34 V 3.5 H 6 Z M 6 4.5 H 34 V 7 H 6 Z'),
       ...bus(r => r.match('DATA')),
     ),
     opts,
@@ -426,8 +482,12 @@ test('DRC: a pair that cannot be tuned keeps its pair-skew finding', () => {
       edge(14, 8),
       two('J1', 2, 1, 'DP', 'DN'),
       two('J2', 12, 6, 'DP', 'DN', 90),
-      h('keepout', { layers: 'all', d: 'M 2.4 1.6 H 14 V 5.35 H 2.4 Z' }),
-      route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'V 6 Z').width(0.2).gap(0.2),
+      keepout('M 2.4 1.6 H 14 V 5.35 H 2.4 Z'),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.2)
+        .gap(0.2)
+        .V(6)
+        .Z(),
     ),
     opts,
   )
@@ -437,7 +497,7 @@ test('DRC: a pair that cannot be tuned keeps its pair-skew finding', () => {
 // ---- site data and inspect ----
 
 test('site routes: every route with its length, a pair with its skew, a group with the range that holds it', async () => {
-  const { routeInfos } = await import('@pcbjs/export/site-data')
+  const { routeInfos } = await import('@pcbjs/export/internal/site-data')
   const b = compileBoard(h(PCB, { name: 'Bus' }, edge(), ...bus((r, i) => (i < 2 ? r.match('DATA') : i === 2 ? r.length({ min: 31 }) : r))), opts)
   const rs = routeInfos(b).routes
   assert.deepEqual(
@@ -450,7 +510,17 @@ test('site routes: every route with its length, a pair with its skew, a group wi
   assert.equal(rs[3].target, null)
   assert.ok(rs.every(r => r.length > 29))
   const p = compileBoard(
-    h(PCB, { name: 'Pair' }, edge(30, 20), two('J1', 10, 3, 'DP', 'DN'), two('J2', 10, 17, 'DP', 'DN'), route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'Z').width(0.2).gap(0.2)),
+    h(
+      PCB,
+      { name: 'Pair' },
+      edge(30, 20),
+      two('J1', 10, 3, 'DP', 'DN'),
+      two('J2', 10, 17, 'DP', 'DN'),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.2)
+        .gap(0.2)
+        .Z(),
+    ),
     opts,
   )
   const [pr] = routeInfos(p).routes
@@ -470,11 +540,11 @@ test('inspect --lengths: one row per route with its status; inspect <net> prints
   assert.equal(one.json.routes.length, 1)
   const net = inspectBoard(b, 'bus.tsx', '/', 'D3')
   assert.match(net.text.join('\n'), /route route:4  length [\d.]+ with vias/)
-  assert.equal(net.json.routes[0].id, 'route:4')
+  assert.equal(net.json.routes[0].ref, 'route:4')
 })
 
 test('site data: the routes, and the pair of every pair track although the router removed the placeholders', async () => {
-  const { siteData } = await import('@pcbjs/export/site-data')
+  const { siteData } = await import('@pcbjs/export/internal/site-data')
   const b = compileBoard(
     h(
       PCB,
@@ -482,7 +552,11 @@ test('site data: the routes, and the pair of every pair track although the route
       edge(30, 20),
       two('J1', 10, 3, 'DP', 'DN'),
       two('J2', 20, 12, 'DP', 'DN', 90),
-      route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'V 12 Z').width(0.2).gap(0.2),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.2)
+        .gap(0.2)
+        .V(12)
+        .Z(),
     ),
     opts,
   )

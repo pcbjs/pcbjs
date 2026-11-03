@@ -1,5 +1,6 @@
 // stm32-dev, the schematic: an STM32F103C8 with USB-C power and data, 8 MHz and 32.768 kHz crystals, SWD, reset and boot buttons,
 // two LEDs and every free GPIO on two 19-pin headers. Supply pins each get a 100 nF capacitor on the back.
+// Each part is named by its constant; the circuit parts take their instance index, so the regulator of LDO2 is U21.
 import { nets, type Net } from '@pcbjs/core'
 import { C0603, R0603, LED0603, PinHeader } from '@pcbjs/lib'
 import { STM32F103C8, Tact } from './lib/parts'
@@ -38,33 +39,53 @@ export const U1 = STM32F103C8('STM32F103C8T6').connect({
 })
 
 // power, clocks and USB
-export const USB = usbc({ VBUS, DP: USB_DP, DN: USB_DN, GND }, 'USB')
-export const LDO = ldo({ VIN: VBUS, VOUT: V3V3, GND }, 'LDO')
-export const HSE = hse({ XIN: OSC_IN, XOUT: OSC_OUT, GND }, 'HSE')
-export const LSE = lse({ XIN: OSC32_IN, XOUT: OSC32_OUT, GND }, 'LSE')
-export const R_DP = R0603('1k5').connect(V3V3, USB_DP) // full-speed pull-up on D+
+export const USB = usbc({ VBUS, DP: USB_DP, DN: USB_DN, GND }, 'USB1')
+export const LDO = ldo({ VIN: VBUS, VOUT: V3V3, GND }, 'LDO2')
+export const HSE = hse({ XIN: OSC_IN, XOUT: OSC_OUT, GND }, 'HSE3')
+export const LSE = lse({ XIN: OSC32_IN, XOUT: OSC32_OUT, GND }, 'LSE4')
+export const R3 = R0603('1k5').connect({ 1: V3V3, 2: USB_DP }) // full-speed pull-up on D+
 
-// one 100 nF per supply pin, on the back under the package
-export const C_VBAT = C0603('100n').connect(V3V3, GND)
-export const C_VDDA = C0603('100n').connect(V3V3, GND)
-export const C_VDD1 = C0603('100n').connect(V3V3, GND)
-export const C_VDD2 = C0603('100n').connect(V3V3, GND)
-export const C_VDD3 = C0603('100n').connect(V3V3, GND)
+// one 100 nF per supply pin, on the back under the package: C7 VBAT, C8 VDDA, C9 to C11 VDD_1 to VDD_3
+export const C7 = C0603('100n').connect({ 1: V3V3, 2: GND })
+export const C8 = C0603('100n').connect({ 1: V3V3, 2: GND })
+export const C9 = C0603('100n').connect({ 1: V3V3, 2: GND })
+export const C10 = C0603('100n').connect({ 1: V3V3, 2: GND })
+export const C11 = C0603('100n').connect({ 1: V3V3, 2: GND })
 
-// reset and boot
-export const SW_RST = Tact('RESET').connect(NRST, GND)
-export const C_NRST = C0603('100n').connect(NRST, GND)
-export const SW_BOOT = Tact('BOOT0').connect(BOOT0, V3V3)
-export const R_BOOT0 = R0603('10k').connect(BOOT0, GND)
-export const R_BOOT1 = R0603('10k').connect(IO.PB2, GND)
+// reset and boot: SW1 resets, SW2 pulls BOOT0 high, R4 and R5 hold BOOT0 and BOOT1 low
+export const SW1 = Tact('RESET').connect({ 1: NRST, 2: GND })
+export const C12 = C0603('100n').connect({ 1: NRST, 2: GND })
+export const SW2 = Tact('BOOT0').connect({ 1: BOOT0, 2: V3V3 })
+export const R4 = R0603('10k').connect({ 1: BOOT0, 2: GND })
+export const R5 = R0603('10k').connect({ 1: IO.PB2, 2: GND })
 
-// LEDs: power on 3V3, user on PC13 (active low)
-export const R_LED1 = R0603('1k').connect(V3V3, LED_PWR)
-export const D_PWR = LED0603('red').connect({ A: LED_PWR, K: GND })
-export const R_LED2 = R0603('1k').connect(V3V3, LED_USR)
-export const D_USR = LED0603('green').connect({ A: LED_USR, K: IO.PC13 })
+// LEDs: D1 power on 3V3, D2 user on PC13, active low
+export const R6 = R0603('1k').connect({ 1: V3V3, 2: LED_PWR })
+export const D1 = LED0603('red').connect({ A: LED_PWR, K: GND })
+export const R7 = R0603('1k').connect({ 1: V3V3, 2: LED_USR })
+export const D2 = LED0603('green').connect({ A: LED_USR, K: IO.PC13 })
 
-// connectors: SWD on the left edge, the two GPIO rows on the long edges, pin 1 on the left
-export const J_SWD = PinHeader(5).connect(V3V3, SWCLK, GND, SWDIO, NRST)
-export const J_TOP = PinHeader(19).connect(GND, V3V3, IO.PA0, NRST, IO.PC13, IO.PB9, IO.PB8, IO.PB7, IO.PB6, IO.PB5, IO.PB4, IO.PB3, IO.PA15, SWCLK, SWDIO, V3V3, GND, VBUS, GND)
-export const J_BOT = PinHeader(19).connect(...BOTTOM_IO.map(p => IO[p]))
+// connectors: J2 SWD on the left edge, J3 and J4 the GPIO rows on the long edges, pin 1 on the left
+export const J2 = PinHeader(5)().connect({ 1: V3V3, 2: SWCLK, 3: GND, 4: SWDIO, 5: NRST })
+export const J3 = PinHeader(19)().connect({
+  1: GND,
+  2: V3V3,
+  3: IO.PA0,
+  4: NRST,
+  5: IO.PC13,
+  6: IO.PB9,
+  7: IO.PB8,
+  8: IO.PB7,
+  9: IO.PB6,
+  10: IO.PB5,
+  11: IO.PB4,
+  12: IO.PB3,
+  13: IO.PA15,
+  14: SWCLK,
+  15: SWDIO,
+  16: V3V3,
+  17: GND,
+  18: VBUS,
+  19: GND,
+})
+export const J4 = PinHeader(19)().connect(Object.fromEntries(BOTTOM_IO.map((p, i) => [i + 1, IO[p]])))

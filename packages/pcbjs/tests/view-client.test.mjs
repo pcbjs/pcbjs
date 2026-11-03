@@ -1,25 +1,52 @@
 // The viewer's view query, the pair and length helpers it reads routes with, the pair fields of the site items, and the
-// helpers of `pcbjs shot`. The client modules are imported straight from their TypeScript.
+// helpers of `pcbjs shot`. The client modules come from @pcbjs/ui as built.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { EXPLODE_MAX, findLayer, hasViewQuery, parseViewQuery, queryMode, soloHidden } from '@pcbjs/viewer/src/query.ts'
-import { lengthStatus, netLengths, pairNets, pairOf, routeHover, routesOf, targetText } from '@pcbjs/viewer/src/routes.ts'
-import { siteData } from '@pcbjs/export/site-data'
-import { chromeCandidates, findChrome, parseSize, shotJobs, shotQuery, shotSuffix } from '@pcbjs/cli/shot'
+import { unfrozen } from './helpers.mjs'
+import {
+  EXPLODE_MAX,
+  findLayer,
+  hasViewQuery,
+  lengthStatus,
+  netLengths,
+  pairNets,
+  pairOf,
+  parseViewQuery,
+  queryMode,
+  routeHover,
+  routesOf,
+  soloHidden,
+  targetText,
+} from '@pcbjs/ui'
+import { siteData } from '@pcbjs/export/internal/site-data'
+import { parseSize, shotJobs, shotSuffix } from '@pcbjs/cli/internal/shot'
 import { compileBoard, h, PCB, outline } from './fixtures.mjs'
+import { netOf } from './parts.mjs'
 
-test('view query: view, explode, layer, select, side and theme, bad values dropped', () => {
-  assert.deepEqual(parseViewQuery('?view=3D&explode=0.5&layer=F.Cu&select=U1&side=Bottom&theme=dark'), {
+test('view query: view, explode, layer, select, isolate, side and theme, bad values dropped', () => {
+  assert.deepEqual(parseViewQuery('?view=3D&explode=0.5&layer=F.Cu&select=U1,net:GND&isolate=CH1&side=b&mirror=1&theme=dark'), {
     view: '3d',
     explode: 0.5,
     layer: 'F.Cu',
-    select: 'U1',
-    side: 'bottom',
+    select: 'U1,net:GND',
+    isolate: 'CH1',
+    side: 'B',
+    mirror: true,
     theme: 'dark',
   })
-  assert.deepEqual(parseViewQuery(''), { view: null, explode: null, layer: null, select: null, side: null, theme: null })
-  assert.deepEqual(parseViewQuery('?view=iso&explode=x&layer=&side=under&theme=hc'), { view: null, explode: null, layer: null, select: null, side: null, theme: null })
-  assert.equal(hasViewQuery(parseViewQuery('?side=bottom')), true)
+  assert.deepEqual(parseViewQuery(''), { view: null, explode: null, layer: null, select: null, isolate: null, side: null, mirror: null, theme: null })
+  assert.deepEqual(parseViewQuery('?view=iso&explode=x&layer=&isolate=&side=bottom&mirror=yes&theme=hc'), {
+    view: null,
+    explode: null,
+    layer: null,
+    select: null,
+    isolate: null,
+    side: null,
+    mirror: null,
+    theme: null,
+  })
+  assert.equal(hasViewQuery(parseViewQuery('?side=B')), true)
+  assert.equal(hasViewQuery(parseViewQuery('?mirror=0')), true)
   assert.equal(parseViewQuery('?explode=4').explode, 1, 'clamped to 0..1')
   assert.equal(parseViewQuery('?explode=-1').explode, 0)
   assert.equal(hasViewQuery(parseViewQuery('?ide=1')), false)
@@ -99,8 +126,32 @@ test('routes: length status, target text and the Nets list lengths with the N ne
 })
 
 test('site data: tracks carry their width, and pair and role when the compiler set them', () => {
-  const b = compileBoard(
-    h(PCB, { name: 'Pairs' }, outline(), h('track', { net: 'A', layer: 'F.Cu', width: 0.3, d: 'M2 2 L7 2' }), h('track', { net: 'B', layer: 'F.Cu', width: 0.3, d: 'M2 4 L7 4' })),
+  const b = unfrozen(() =>
+    compileBoard(
+      h(
+        PCB,
+        { name: 'Pairs' },
+        outline(),
+        h('track', {
+          net: netOf('A'),
+          layer: 'F.Cu',
+          width: 0.3,
+          points: [
+            [2, 2],
+            [7, 2],
+          ],
+        }),
+        h('track', {
+          net: netOf('B'),
+          layer: 'F.Cu',
+          width: 0.3,
+          points: [
+            [2, 4],
+            [7, 4],
+          ],
+        }),
+      ),
+    ),
   )
   const tracks = b.items.filter(it => it.kind === 'track')
   tracks[0].pair = 'x'
@@ -119,30 +170,15 @@ test('site data: tracks carry their width, and pair and role when the compiler s
   assert.equal(s.routes, undefined, 'nothing produces routes yet')
 })
 
-test('shot: browser lookup, the query, the size and one job per board, target and view', () => {
-  assert.equal(chromeCandidates('darwin', { PCBJS_CHROME: '/x/chrome', HOME: '/Users/a' })[0], '/x/chrome')
-  assert.ok(chromeCandidates('darwin', {}).includes('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'))
-  assert.ok(chromeCandidates('linux', { PATH: '/opt/bin' }).includes('/opt/bin/chromium'))
-  assert.ok(chromeCandidates('win32', { PROGRAMFILES: 'C:\\PF' }).some(p => p.endsWith('msedge.exe')))
-  assert.equal(
-    findChrome('linux', { PATH: '/opt/bin' }, p => p === '/usr/bin/chromium'),
-    '/usr/bin/chromium',
-  )
-  assert.equal(
-    findChrome('linux', { PATH: '' }, () => false),
-    null,
-  )
-  assert.equal(shotQuery('2d', { explode: 0.5, layer: 'F.Cu', theme: 'dark' }), '?view=2d&layer=F.Cu&theme=dark')
-  assert.equal(shotQuery('3d', { explode: 0.5, select: 'U1' }), '?view=3d&explode=0.5&select=U1')
-  assert.equal(shotQuery('3d', { select: 'U1', side: 'bottom' }), '?view=3d&select=U1&side=bottom')
-  assert.equal(shotQuery('2d', { side: 'top' }), '?view=2d', 'top is the default and adds nothing')
-  assert.deepEqual(parseSize('1600x1000'), [1600, 1000])
-  assert.equal(parseSize('16x10'), null)
+test('shot: the size and one job per board, target and view, its options in the file name', () => {
+  assert.deepEqual(parseSize('1280x960'), [1280, 960])
+  assert.deepEqual(parseSize('16x10'), null)
+  assert.equal(parseSize('8000x8000'), null, 'the renderer stops at 4096')
   assert.equal(parseSize('wide'), null)
   const jobs = shotJobs(
     [
-      { name: 'Blinky', targets: [null] },
-      { name: 'Multi', targets: ['JLCPCB 2-Layer', 'House'] },
+      { entry: '/p/blinky.pcb.tsx', name: 'Blinky', targets: [null] },
+      { entry: '/p/multi.pcb.tsx', name: 'Multi', targets: ['JLCPCB 2-Layer', 'House'] },
     ],
     ['2d', '3d'],
     '/o',
@@ -151,15 +187,19 @@ test('shot: browser lookup, the query, the size and one job per board, target an
     jobs.map(j => j.file),
     ['/o/Blinky-2d.png', '/o/Blinky-3d.png', '/o/Multi-jlcpcb-2-layer-2d.png', '/o/Multi-jlcpcb-2-layer-3d.png', '/o/Multi-house-2d.png', '/o/Multi-house-3d.png'],
   )
-  assert.equal(jobs[2].path, '/board/Multi/jlcpcb-2-layer')
-  // the options are in the name, so shots with other options never overwrite each other; explode is 3D only
-  const o = { explode: 0.6, select: 'U1', layer: 'F.Cu', theme: 'dark' }
+  assert.deepEqual(jobs[2].spec, { view: '2d', entry: '/p/multi.pcb.tsx', target: 'JLCPCB 2-Layer' })
+  // the options are in the name, so shots with other options never overwrite each other; explode and the camera are 3D only
+  const o = { explode: 0.6, layers: ['F.Cu'], theme: 'dark', camera: 'top' }
   assert.deepEqual(
-    shotJobs([{ name: 'Blinky', targets: [null] }], ['2d', '3d'], '/o', o).map(j => j.file),
-    ['/o/Blinky-2d-select-U1-F.Cu-dark.png', '/o/Blinky-3d-explode60-select-U1-F.Cu-dark.png'],
+    shotJobs([{ entry: '/p/b.tsx', name: 'Blinky', targets: [null] }], ['2d', '3d'], '/o', o, ['U1']).map(j => j.file),
+    ['/o/Blinky-2d-select-U1-F.Cu-dark.png', '/o/Blinky-3d-top-explode60-select-U1-F.Cu-dark.png'],
   )
   assert.equal(shotSuffix('2d'), '')
   assert.equal(shotSuffix('3d', { explode: 0 }), '-explode0')
-  assert.equal(shotSuffix('3d', { select: 'U1', side: 'bottom', theme: 'dark' }), '-select-U1-bottom-dark')
-  assert.equal(shotSuffix('2d', { side: 'top' }), '')
+  assert.equal(shotSuffix('3d', { select: 'U1', side: 'B', theme: 'dark' }), '-select-U1-back-dark')
+  assert.equal(shotSuffix('2d', { side: 'B', mirror: true }), '-back-mirror')
+  assert.equal(shotSuffix('3d', { mirror: true }), '-mirror')
+  assert.equal(shotSuffix('sch', { mirror: true, side: 'B' }), '')
+  assert.equal(shotSuffix('2d', { frame: 'net:GND', highlight: ['R1', 'R2'] }), '-frame-net-GND-hl-R1+R2')
+  assert.equal(shotSuffix('2d', { side: 'F' }), '')
 })

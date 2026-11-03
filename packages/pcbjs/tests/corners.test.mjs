@@ -8,22 +8,22 @@ import { fileURLToPath } from 'node:url'
 import { h } from '@pcbjs/core/jsx-runtime'
 import PCB, { route, nets, resetDefaults } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
-import { routesCopper } from '@pcbjs/compile/pair-info'
-import { boardShapeIssues } from '@pcbjs/compile/route-shape'
-import { arcRadius } from '@pcbjs/compile/round'
+import { routesCopper } from '@pcbjs/compile/internal/pair-info'
+import { boardShapeIssues } from '@pcbjs/compile/internal/route-shape'
+import { arcRadius } from '@pcbjs/compile/internal/round'
 import { near } from './helpers.mjs'
+import { fp, handle } from './parts.mjs'
 
 afterEach(() => resetDefaults())
 
-const opts = { routeCache: false }
+const opts = { cache: false }
 const edge = (w = 30, hh = 20) => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w, h: hh })
-const smd = (ref, x, y, net, size = 1) => h('footprint', { ref, at: [x, y], nets: { 1: net } }, h('pad', { num: 1, size, type: 'smd' }))
+const smd = (ref, x, y, net, size = 1) => fp({ ref, at: `${x} ${y}`, nets: { 1: net } }, h('pad', { num: 1, size, type: 'smd' }))
 const two = (ref, x, y, a, b) =>
-  h(
-    'footprint',
-    { ref, at: [x, y], nets: { 1: a, 2: b } },
-    h('pad', { num: 1, at: [-0.25, 0], size: [0.3, 1], type: 'smd' }),
-    h('pad', { num: 2, at: [0.25, 0], size: [0.3, 1], type: 'smd' }),
+  fp(
+    { ref, at: `${x} ${y}`, nets: { 1: a, 2: b } },
+    h('pad', { num: 1, at: '-0.25 0', size: [0.3, 1], type: 'smd' }),
+    h('pad', { num: 2, at: '0.25 0', size: [0.3, 1], type: 'smd' }),
   )
 const arcsOf = b => b.items.filter(i => i.kind === 'track').flatMap(t => (t.prims ?? []).filter(p => p.kind === 'arc').map(p => ({ ...p, t })))
 const clean = b => {
@@ -35,16 +35,16 @@ const clean = b => {
 }
 
 test('builder: .corner() takes a radius or none; a bad one is a TypeError, a bad class corner a compile error', () => {
-  assert.equal(route('A.1', 'B.1').corner(0.5).props.corner, 0.5)
-  assert.equal(route('A.1', 'B.1').corner('20mil').props.corner, '20mil')
-  assert.equal(route(['A.1', 'A.2'], ['B.1', 'B.2']).corner('none').props.corner, 'none')
-  assert.throws(() => route('A.1', 'B.1').corner({ r: 1 }), { name: 'TypeError', message: /radius or 'none'/ })
-  assert.throws(() => compileBoard(h(PCB, { name: 'C', classes: { x: { corner: { radius: -1 } } } }, edge()), opts), /corner radius must be a positive length or 'none'/)
-  assert.throws(() => compileBoard(h(PCB, { name: 'C', classes: { x: { corner: { r: 1 } } } }, edge()), opts), /corner has an unknown field "r"/)
+  assert.equal(route(handle('A.1'), handle('B.1')).corner(0.5).props.corner, 0.5)
+  assert.equal(route(handle('A.1'), handle('B.1')).corner('20mil').props.corner, '20mil')
+  assert.equal(route([handle('A.1'), handle('A.2')], [handle('B.1'), handle('B.2')]).corner('none').props.corner, 'none')
+  assert.throws(() => route(handle('A.1'), handle('B.1')).corner({ r: 1 }), { name: 'TypeError', message: /radius or 'none'/ })
+  assert.throws(() => compileBoard(h(PCB, { name: 'C', classes: { x: { corner: -1 } } }, edge()), opts), /corner must be a positive length or 'none'/)
+  assert.throws(() => compileBoard(h(PCB, { name: 'C', classes: { x: { corner: { radius: 1 } } } }, edge()), opts), /corner: bad length/)
 })
 
 test('single routes: square by default; .corner(r) rounds the corners between manual commands, shorter by (2 - pi / 2) r each', () => {
-  const kids = c => [smd('A', 5, 5, 'X'), smd('B', 25, 15, 'X'), c(route('A.1', 'B.1', 'H 15 V 15 Z').width(0.25))]
+  const kids = c => [smd('A', 5, 5, 'X'), smd('B', 25, 15, 'X'), c(route(handle('A.1'), handle('B.1')).width(0.25).H(15).V(15).Z())]
   const sq = compileBoard(h(PCB, { name: 'S' }, edge(), ...kids(r => r)), opts)
   assert.equal(arcsOf(sq).length, 0)
   const rd = compileBoard(h(PCB, { name: 'S' }, edge(), ...kids(r => r.corner(1))), opts)
@@ -56,18 +56,18 @@ test('single routes: square by default; .corner(r) rounds the corners between ma
   // the class corner applies to its routes, and .corner('none') turns it off
   const { X } = nets({ X: { class: 'r' } })
   const cl = compileBoard(
-    h(PCB, { name: 'S', classes: { r: { corner: { radius: 0.5 } } } }, edge(), smd('A', 5, 5, X), smd('B', 25, 15, X), route('A.1', 'B.1', 'H 15 V 15 Z').width(0.25)),
+    h(PCB, { name: 'S', classes: { r: { corner: 0.5 } } }, edge(), smd('A', 5, 5, X), smd('B', 25, 15, X), route(handle('A.1'), handle('B.1')).width(0.25).H(15).V(15).Z()),
     opts,
   )
   assert.equal(arcsOf(cl).length, 2)
   const off = compileBoard(
     h(
       PCB,
-      { name: 'S', classes: { r: { corner: { radius: 0.5 } } } },
+      { name: 'S', classes: { r: { corner: 0.5 } } },
       edge(),
       smd('A', 5, 5, X),
       smd('B', 25, 15, X),
-      route('A.1', 'B.1', 'H 15 V 15 Z').width(0.25).corner('none'),
+      route(handle('A.1'), handle('B.1')).width(0.25).corner('none').H(15).V(15).Z(),
     ),
     opts,
   )
@@ -77,7 +77,15 @@ test('single routes: square by default; .corner(r) rounds the corners between ma
 test('single routes: an arc that would meet a pad on the inside of the corner shrinks, then chamfers; the copper never moves onto it', () => {
   // a pad of another net just inside the corner at (15, 5): a 2 mm arc would cut across it
   const b = compileBoard(
-    h(PCB, { name: 'S' }, edge(), smd('A', 5, 5, 'X'), smd('B', 25, 15, 'X'), smd('C', 14.2, 5.8, 'Y', 0.4), route('A.1', 'B.1', 'H 15 V 15 Z').width(0.25).corner(2)),
+    h(
+      PCB,
+      { name: 'S' },
+      edge(),
+      smd('A', 5, 5, 'X'),
+      smd('B', 25, 15, 'X'),
+      smd('C', 14.2, 5.8, 'Y', 0.4),
+      route(handle('A.1'), handle('B.1')).width(0.25).corner(2).H(15).V(15).Z(),
+    ),
     opts,
   )
   const a = arcsOf(b),
@@ -94,13 +102,18 @@ test('single routes: an arc that would meet a pad on the inside of the corner sh
 test('pairs: every corner drawn by hand is rounded on the centre line by the pitch, both tracks concentric; .corner("none") keeps them square', () => {
   const kids = c => [
     two('J1', 5, 3, 'DP', 'DN'),
-    h(
-      'footprint',
+    fp(
       { ref: 'J2', at: '25 15 90deg', nets: { 1: 'DP', 2: 'DN' } },
-      h('pad', { num: 1, at: [-0.25, 0], size: [0.3, 1], type: 'smd' }),
-      h('pad', { num: 2, at: [0.25, 0], size: [0.3, 1], type: 'smd' }),
+      h('pad', { num: 1, at: '-0.25 0', size: [0.3, 1], type: 'smd' }),
+      h('pad', { num: 2, at: '0.25 0', size: [0.3, 1], type: 'smd' }),
     ),
-    c(route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'V 15 Z').width(0.2).gap(0.2)),
+    c(
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.2)
+        .gap(0.2)
+        .V(15)
+        .Z(),
+    ),
   ]
   const b = compileBoard(h(PCB, { name: 'P' }, edge(), ...kids(r => r)), opts)
   // the corner: an arc on each track about one centre, the pitch of 0.4 less and more the half pitch
@@ -128,7 +141,17 @@ test('pairs: a via pair in a run with rounded corners is clean copper, each trac
       edge(),
       two('J1', 5, 3, 'DP', 'DN'),
       two('J2', 25, 17, 'DP', 'DN'),
-      route(['J1.1', 'J1.2'], ['J2.1', 'J2.2'], 'V 6 @B.Cu V 10 H 18 @F.Cu H 25 Z').width(0.2).gap(0.2).vias({ drill: 0.3, size: 0.6 }),
+      route([handle('J1.1'), handle('J1.2')], [handle('J2.1'), handle('J2.2')])
+        .width(0.2)
+        .gap(0.2)
+        .vias({ drill: 0.3, size: 0.6 })
+        .V(6)
+        .via('B.Cu')
+        .V(10)
+        .H(18)
+        .via('F.Cu')
+        .H(25)
+        .Z(),
     ),
     opts,
   )
@@ -145,14 +168,15 @@ test('pairs: a via pair in a run with rounded corners is clean copper, each trac
 
 test("examples/usb-hub: DRC clean, and every route's copper is free of overlaps and notches", async () => {
   const R = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
-  const { resolveConfig } = await import('@pcbjs/cli/config')
-  const { pluginState } = await import('@pcbjs/cli/plugin')
-  const { compileServer, compileSlots } = await import('@pcbjs/cli/check')
+  const { resolveConfig } = await import('@pcbjs/cli/internal/config')
+  const { pluginState } = await import('@pcbjs/cli/internal/site')
+  const { compileServer, compileSlots } = await import('@pcbjs/cli/internal/compile')
+  const { viteLoader } = await import('@pcbjs/cli/internal/loader')
   const cfg = await resolveConfig([], 'build', undefined, resolve(R, '../examples/usb-hub'))
   const state = pluginState(cfg)
-  const server = await compileServer(cfg, state, {})
+  const server = await compileServer(cfg)
   try {
-    await compileSlots(server, cfg, state.slots, new Map())
+    await compileSlots(viteLoader(server), cfg, state.slots, new Map())
   } finally {
     await server.close()
   }

@@ -4,8 +4,8 @@
 // PCA9306 from the host's 3.3 V to the camera's 1.8 V, an AP2112K makes 1.8 V from 3.3 V. In2.Cu is split: 1V8 left, 3V3 right.
 // Frame: mm, origin at the top-left corner of the outline, x right, y down.
 import PCB from '@pcbjs/fab/JLCPCB/4-Layer'
-import { nets, route, pour, via, NC, type Net, type Pos } from '@pcbjs/core'
-import { Brand, SOT23, TSSOP, R0402, C0402, rect, roundedRect } from '@pcbjs/lib'
+import { nets, route, pour, via, NC, type Net, type RouteEnd } from '@pcbjs/core'
+import { Brand, SOT23, TSSOP, R0402, C0402, rect, roundedRect, withPins } from '@pcbjs/lib'
 import { DF12 } from './lib/DF12'
 import { FTSH } from './lib/FTSH'
 
@@ -13,7 +13,7 @@ const W = 60,
   H = 18
 const SMALL = { drill: 0.2, size: 0.45 }
 /** a short straight stub from a pad to a via of its net, the via drops into a plane or carries on on B.Cu */
-const tie = (pad: Pos, x: number, y: number, net: Net, w = 0.2) => [route(pad, `${x} ${y}`, 'Z').width(w), via(net, `${x} ${y}`, SMALL)]
+const tie = (pad: RouteEnd, x: number, y: number, net: Net, w = 0.2) => [route(pad, `${x} ${y}`).width(w).Z(), via(net, `${x} ${y}`, SMALL)]
 const lvds = { class: 'lvds' } as const
 const { GND, V3V3, V1V8, SDA_H, SCL_H, SDA_C, SCL_C, RST, EN_REF, D0P, D0N, D1P, D1N, CKP, CKN, D2P, D2N, D3P, D3N } = nets({
   D0P: lvds,
@@ -85,22 +85,20 @@ const J2 = FTSH('FTSH-110-01-L-DV').source({ MPN: 'FTSH-110-01-L-DV' }).connect(
   20: GND,
 })
 // 1.8 V regulator
-const U1 = SOT23(5, { pinNames: ['VIN', 'GND', 'EN', 'NC', 'VOUT'] })('AP2112K-1.8TRG1')
-  .source({ MPN: 'AP2112K-1.8TRG1' })
-  .connect({ VIN: V3V3, GND, EN: V3V3, VOUT: V1V8 })
-const C1 = C0402('1u').source({ MPN: 'GRM155R61A105KE15D' }).connect(V3V3, GND)
-const C2 = C0402('1u').source({ MPN: 'GRM155R61A105KE15D' }).connect(V1V8, GND)
+const U1 = withPins(SOT23(5), ['VIN', 'GND', 'EN', 'NC', 'VOUT'])('AP2112K-1.8TRG1').source({ MPN: 'AP2112K-1.8TRG1' }).connect({ VIN: V3V3, GND, EN: V3V3, VOUT: V1V8 })
+const C1 = C0402('1u').source({ MPN: 'GRM155R61A105KE15D' }).connect({ 1: V3V3, 2: GND })
+const C2 = C0402('1u').source({ MPN: 'GRM155R61A105KE15D' }).connect({ 1: V1V8, 2: GND })
 // I2C level translator, PCA9306DP in TSSOP-8: 1 GND, 2 VREF1, 3 SCL1, 4 SDA1, 5 SDA2, 6 SCL2, 7 VREF2, 8 EN
-const U2 = TSSOP(8, { pinNames: ['GND', 'VREF1', 'SCL1', 'SDA1', 'SDA2', 'SCL2', 'VREF2', 'EN'] })('PCA9306DP')
+const U2 = withPins(TSSOP(8), ['GND', 'VREF1', 'SCL1', 'SDA1', 'SDA2', 'SCL2', 'VREF2', 'EN'])('PCA9306DP')
   .source({ MPN: 'PCA9306DP,118' })
   .connect({ GND, VREF1: V1V8, SCL1: SCL_C, SDA1: SDA_C, SDA2: SDA_H, SCL2: SCL_H, VREF2: EN_REF, EN: EN_REF })
-const R1 = R0402('200k').connect(V3V3, EN_REF)
-const R2 = R0402('2.2k').connect(V1V8, SDA_C)
-const R3 = R0402('2.2k').connect(V1V8, SCL_C)
-const R4 = R0402('10k').connect(V1V8, RST)
+const R1 = R0402('200k').connect({ 1: V3V3, 2: EN_REF })
+const R2 = R0402('2.2k').connect({ 1: V1V8, 2: SDA_C })
+const R3 = R0402('2.2k').connect({ 1: V1V8, 2: SCL_C })
+const R4 = R0402('10k').connect({ 1: V1V8, 2: RST })
 
 export default (
-  <PCB name="lvds-camera" revision="0.1.0" classes={{ lvds: { impedance: 100, skew: 0.1, tolerance: 0.2, via: { drill: 0.2, size: 0.45 } } }}>
+  <PCB name="lvds-camera" rev="0.1.0" classes={{ lvds: { impedance: 100, skew: 0.1, tolerance: 0.2, via: { drill: 0.2, size: 0.45 } } }}>
     <path layer="Edge.Cuts" d={roundedRect(W, H, 1)} />
     <J1 at="4.5 9 90deg" />
     <J2 at="54.5 9 -90deg" />
@@ -116,37 +114,37 @@ export default (
     {/* the lanes: pairs with array ends, the path is the centre line. D3 and D2 run over the top of the translator, the clock
         drops to B.Cu under it through two via pairs, D1 and D0 take the bottom channel. All five are in the LANES match group:
         the router meanders the centre lines of the shorter pairs until the group closes. */}
-    {route([J1.pad('4'), J1.pad('6')], [J2.pad('19'), J2.pad('17')], 'h 1.2 L 12.45 16.6 H 44.6 V 14.085 Z').match('LANES')}
-    {route([J1.pad('10'), J1.pad('12')], [J2.pad('15'), J2.pad('13')], 'h 1.2 L 12.45 15.1 H 41.5 L 45.055 11.545 Z').match('LANES')}
-    {route([J1.pad('16'), J1.pad('18')], [J2.pad('11'), J2.pad('9')], 'h 1.2 H 20 @B.Cu L 22 10.75 H 36 L 38 8.75 @F.Cu H 46 L 46.255 9.005 Z').match('LANES')}
-    {route([J1.pad('22'), J1.pad('24')], [J2.pad('7'), J2.pad('5')], 'h 1.2 H 48 V 6.465 Z').match('LANES')}
-    {route([J1.pad('28'), J1.pad('30')], [J2.pad('3'), J2.pad('1')], 'h 1.2 H 46 L 47.825 3.925 Z').match('LANES')}
+    {route([J1[4], J1[6]], [J2[19], J2[17]]).match('LANES').h(1.2).L(12.45, 16.6).H(44.6).V(14.085).Z()}
+    {route([J1[10], J1[12]], [J2[15], J2[13]]).match('LANES').h(1.2).L(12.45, 15.1).H(41.5).L(45.055, 11.545).Z()}
+    {route([J1[16], J1[18]], [J2[11], J2[9]]).match('LANES').h(1.2).H(20).via('B.Cu').L(22, 10.75).H(36).L(38, 8.75).via('F.Cu').H(46).L(46.255, 9.005).Z()}
+    {route([J1[22], J1[24]], [J2[7], J2[5]]).match('LANES').h(1.2).H(48).V(6.465).Z()}
+    {route([J1[28], J1[30]], [J2[3], J2[1]]).match('LANES').h(1.2).H(46).L(47.825, 3.925).Z()}
 
     {/* J1 odd row: stubs out to vias staggered under the body and beside the edge */}
-    {tie(J1.pad('1'), 3.8, 12.5, GND)}
-    {tie(J1.pad('3'), 1.5, 12.0, V1V8)}
-    {tie(J1.pad('5'), 3.8, 11.5, V1V8)}
-    {tie(J1.pad('7'), 1.5, 11.0, GND)}
-    {tie(J1.pad('15'), 1.5, 9.0, GND)}
-    {tie(J1.pad('21'), 3.8, 7.5, GND)}
-    {tie(J1.pad('29'), 3.8, 5.5, GND)}
+    {tie(J1[1], 3.8, 12.5, GND)}
+    {tie(J1[3], 1.5, 12.0, V1V8)}
+    {tie(J1[5], 3.8, 11.5, V1V8)}
+    {tie(J1[7], 1.5, 11.0, GND)}
+    {tie(J1[15], 1.5, 9.0, GND)}
+    {tie(J1[21], 3.8, 7.5, GND)}
+    {tie(J1[29], 3.8, 5.5, GND)}
     {/* J1 even row grounds between the pairs: vias under the body */}
-    {['2', '8', '14', '20', '26'].map(p => tie(J1.pad(p), 5.2, 12.5 - 1.5 * ['2', '8', '14', '20', '26'].indexOf(p), GND))}
+    {(['2', '8', '14', '20', '26'] as const).map(p => tie(J1[p], 5.2, 12.5 - 1.5 * ['2', '8', '14', '20', '26'].indexOf(p), GND))}
     {/* J2 even row: power and grounds to vias beside the pads */}
-    {(['2', '8', '16', '18', '20'] as const).map(p => tie(J2.pad(p), 58.4, [3.29, 7.1, 12.18, 13.45, 14.72][['2', '8', '16', '18', '20'].indexOf(p)], GND))}
-    {tie(J2.pad('4'), 58.4, 4.56, V3V3, 0.3)}
-    {tie(J2.pad('6'), 58.4, 5.83, V3V3, 0.3)}
+    {(['2', '8', '16', '18', '20'] as const).map(p => tie(J2[p], 58.4, [3.29, 7.1, 12.18, 13.45, 14.72][['2', '8', '16', '18', '20'].indexOf(p)], GND))}
+    {tie(J2[4], 58.4, 4.56, V3V3, 0.3)}
+    {tie(J2[6], 58.4, 5.83, V3V3, 0.3)}
 
     {/* I2C and reset on B.Cu */}
-    {route(J1.pad('9'), U2.SDA1, 'H 3.8 @B.Cu XZ').width(0.2)}
-    {route(J1.pad('11'), U2.SCL1, 'H 1.5 @B.Cu XZ').width(0.2)}
-    {route(J1.pad('13'), J2.pad('14'), 'H 3.8 @B.Cu X 58.4 10.91 @F.Cu Z').width(0.2)}
-    {route(J2.pad('10'), U2.SDA2, 'H 58.4 @B.Cu XZ').width(0.2)}
-    {route(J2.pad('12'), U2.SCL2, 'H 58.4 @B.Cu XZ').width(0.2)}
+    {route(J1[9], U2.SDA1).width(0.2).H(3.8).via('B.Cu')}
+    {route(J1[11], U2.SCL1).width(0.2).H(1.5).via('B.Cu')}
+    {route(J1[13], J2[14]).width(0.2).H(3.8).via('B.Cu').X('58.4 10.91').via('F.Cu').Z()}
+    {route(J2[10], U2.SDA2).width(0.2).H(58.4).via('B.Cu')}
+    {route(J2[12], U2.SCL2).width(0.2).H(58.4).via('B.Cu')}
     {route(R2[2], U2.SDA1).width(0.2)}
     {route(R3[2], U2.SCL1).width(0.2)}
-    {route(R4[2], J1.pad('13')).width(0.2)}
-    {route(U2.EN, U2.VREF2, 'Z').width(0.2)}
+    {route(R4[2], J1[13]).width(0.2)}
+    {route(U2.EN, U2.VREF2).width(0.2).Z()}
     {route(R1[2], U2.VREF2).width(0.2)}
 
     {/* power: the regulator and its capacitors, pullups and the translator to the planes */}
@@ -155,14 +153,14 @@ export default (
     {tie(U1.GND, 33.2, 3.2, GND, 0.3)}
     {tie(U1.VOUT, 27.4, 4.15, V1V8, 0.3)}
     {route(C1[1], U1.VIN).width(0.3)}
-    {route(C1[2], '35.6 3.2', 'Z').width(0.3)}
+    {route(C1[2], '35.6 3.2').width(0.3).Z()}
     {via(GND, '35.6 3.2', SMALL)}
-    {route(C2[1], '24.4 3.2', 'Z').width(0.3)}
+    {route(C2[1], '24.4 3.2').width(0.3).Z()}
     {via(V1V8, '24.4 3.2', SMALL)}
     {route(C2[2], U1.GND).width(0.3)}
     {tie(U2.GND, 25.6, 9.6, GND)}
     {/* VREF1 steps left before it drops, its via sits below the clock pair that runs on B.Cu under the translator */}
-    {route(U2.VREF1, '25.6 12.1', 'H 25.6 Z').width(0.2)}
+    {route(U2.VREF1, '25.6 12.1').width(0.2).H(25.6).Z()}
     {via(V1V8, '25.6 12.1', SMALL)}
     {tie(R2[1], 20.6, 11.3, V1V8)}
     {tie(R3[1], 20.6, 12.6, V1V8)}

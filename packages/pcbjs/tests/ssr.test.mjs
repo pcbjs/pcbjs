@@ -6,28 +6,38 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from '@pcbjs/cli'
-import { pageHtml, scriptJson, siteRoutes } from '@pcbjs/cli/prerender'
+import { pageHtml, scriptJson, siteRoutes } from '@pcbjs/cli/internal/prerender'
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 // two pads joined by a track on a round board, the smallest board that compiles clean
+const PADS = `import { defineFootprint, nets, type FootprintProps } from '@pcbjs/core'
+const TestPad = defineFootprint(function TestPad(props: FootprintProps) {
+  return <footprint id="pcbjs:TestPad-2mm" bom={false} {...props}><pad num={1} size={2} shape="circle" /></footprint>
+}, { pins: ['1'], prefix: 'TP' })
+const { V } = nets()
+const TP1 = TestPad('V').connect({ 1: V })
+const TP2 = TestPad('V').connect({ 1: V })
+`
 const board = (open, close = '</PCB>') => `${open}
     <circle layer="Edge.Cuts" cx={10} cy={10} r={10} />
-    <footprint ref="TP1" value="V" id="pcbjs:TestPad-2mm" at="5mm 10mm" net:pad1="V" bom={false}><pad num={1} size={2} shape="circle" /></footprint>
-    <footprint ref="TP2" value="V" id="pcbjs:TestPad-2mm" at="15mm 10mm" net:pad1="V" bom={false}><pad num={1} size={2} shape="circle" /></footprint>
-    <track net="V" layer="F.Cu" width={0.5} d="M 5 10 H 15" />
+    <TP1 at="5mm 10mm" />
+    <TP2 at="15mm 10mm" />
+    {route('5 10').net(V).width(0.5).H(15)}
   ${close}`
-const ALPHA = `import PCB from '@pcbjs/core'
+const ALPHA = `import PCB, { route } from '@pcbjs/core'
+${PADS}
 export default (
-  ${board('<PCB name="Alpha" title="Alpha Board" revision="1.0" copper={2} rules={{ clearance: 0.2, minTrackWidth: 0.2 }}>')}
+  ${board('<PCB name="Alpha" title="Alpha Board" rev="1.0" rules={{ clearance: 0.2, minTrackWidth: 0.2 }}>')}
 )
 `
-const BETA = `import { variants } from '@pcbjs/core'
+const BETA = `import { route, variants } from '@pcbjs/core'
 import JLCPCB from '@pcbjs/fab/JLCPCB/2-Layer'
 import OSHPark from '@pcbjs/fab/OSHPark/2-Layer'
+${PADS}
 const PCB = variants(JLCPCB, OSHPark)
 export default (
-  ${board('<PCB name="Beta" title="Beta Board" revision="2.0">')}
+  ${board('<PCB name="Beta" title="Beta Board" rev="2.0">')}
 )
 `
 
@@ -50,7 +60,7 @@ before(async () => {
     process.exitCode = code
   }
   out = join(root, '.pcbjs', 'dist')
-  ssr = await import(pathToFileURL(join(root, '.pcbjs', 'cache', 'ssr', 'entry-server.mjs')).href)
+  ssr = await import(pathToFileURL(join(root, '.pcbjs', 'cache', 'vite', 'ssr', 'entry-server.mjs')).href)
 })
 after(() => {
   if (root) rmSync(root, { recursive: true, force: true })
@@ -130,7 +140,13 @@ test('ssr: an IDE pane has no header and no view switcher, only its floating row
 })
 
 test('ssr: the route list and the page template', () => {
-  const routes = siteRoutes({ boards: [{ name: 'A' }, { name: 'B', variant: { name: 'JLCPCB 2-Layer' } }, { name: 'B', variant: { name: 'House' } }] })
+  const routes = siteRoutes({
+    boards: [
+      { board: 'A', target: null },
+      { board: 'B', target: 'JLCPCB 2-Layer' },
+      { board: 'B', target: 'House' },
+    ],
+  })
   assert.deepEqual(routes, [[], ['board', 'A'], ['board', 'B'], ['board', 'B', 'jlcpcb-2-layer'], ['board', 'B', 'house']])
   assert.equal(scriptJson({ s: '</script>\u2028' }), '{"s":"\\u003c/script>\\u2028"}')
   const tpl = '<html><head><title>pcbjs</title></head><body><div id="app"></div></body></html>'

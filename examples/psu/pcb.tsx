@@ -2,7 +2,7 @@
 // Power path: J1 → F1 → D1 reverse protection → VIN pour → U1 → SW pour → L1 → VOUT pour → J2. Ground pours on both sides.
 // Frame: mm, origin at the top-left corner of the outline, x right, y down.
 import PCB from '@pcbjs/fab/JLCPCB/2-Layer'
-import { nets, route, pour, via, keepout, stitch, NC } from '@pcbjs/core'
+import { nets, route, pour, via, keepout, stitch, NC, Place } from '@pcbjs/core'
 import { Brand, R0603, C0603, C1206, LED0805, MountingHole, roundedRect, rect, circle } from '@pcbjs/lib'
 import { twoLayer } from '@pcbjs/lib/stackups'
 import { MKDS2, TR5, TO220V2, CP8, SRR1260, TPS56637 } from './lib/parts'
@@ -13,32 +13,32 @@ const W = 64,
 // ---- schematic ----
 const { VRAW, VFUSE, VIN, SW, BOOT, VOUT, FB, LEDA, GND } = nets()
 
-const J1 = MKDS2({ value: '24V IN', model: { file: './models/TerminalBlock_Phoenix_MKDS-1_5-2-5.08_1x02_P5.08mm_Horizontal.step' } })
+const J1 = MKDS2('24V IN', { model: { file: './models/TerminalBlock_Phoenix_MKDS-1_5-2-5.08_1x02_P5.08mm_Horizontal.step' } })
   .source({ MPN: '1715721', Manufacturer: 'Phoenix Contact' })
   .connect({ 1: VRAW, 2: GND })
-const F1 = TR5({ value: '2A', model: { file: './models/Fuseholder_TR5_Littelfuse_No560_No460.step' } })
+const F1 = TR5('2A', { model: { file: './models/Fuseholder_TR5_Littelfuse_No560_No460.step' } })
   .source({ MPN: '56000001009', Manufacturer: 'Littelfuse', fuse: '37212000411 TR5 2 A' })
-  .connect(VRAW, VFUSE)
-const D1 = TO220V2({ value: 'MBR1045G', model: { file: './models/TO-220-2_Vertical.step', offset: [0, 0, -3.69] } })
+  .connect({ 1: VRAW, 2: VFUSE })
+const D1 = TO220V2('MBR1045G', { model: { file: './models/TO-220-2_Vertical.step', offset: [0, 0, -3.69] } })
   .source({ MPN: 'MBR1045G', Manufacturer: 'onsemi' })
   .connect({ A: VFUSE, K: VIN })
-const C1 = C1206('10u 50V').source({ MPN: 'GRM31CR61H106KA12L' }).connect(GND, VIN)
-const C2 = C1206('10u 50V').source({ MPN: 'GRM31CR61H106KA12L' }).connect(GND, VIN)
+const C1 = C1206('10u 50V').source({ MPN: 'GRM31CR61H106KA12L' }).connect({ 1: GND, 2: VIN })
+const C2 = C1206('10u 50V').source({ MPN: 'GRM31CR61H106KA12L' }).connect({ 1: GND, 2: VIN })
 const C3 = CP8('100u 35V').source({ MPN: 'EEU-FR1V101', Manufacturer: 'Panasonic' }).connect({ '+': VIN, '-': GND })
 const U1 = TPS56637('TPS56637').source({ MPN: 'TPS56637RPAR', Manufacturer: 'Texas Instruments' }).connect({ VIN, PGND: GND, AGND: GND, SW, BOOT, FB, EN: NC, PG: NC, MODE: NC }) // EN and MODE float: enabled, FCCM
-const C4 = C0603('100n').source({ MPN: 'GRM188R71H104KA93D' }).connect(BOOT, SW)
-const L1 = SRR1260({ value: '3.3u', model: { file: './models/L_Bourns_SRR1260.step' } })
+const C4 = C0603('100n').source({ MPN: 'GRM188R71H104KA93D' }).connect({ 1: BOOT, 2: SW })
+const L1 = SRR1260('3.3u', { model: { file: './models/L_Bourns_SRR1260.step' } })
   .source({ MPN: 'SRR1260-3R3Y', Manufacturer: 'Bourns' })
-  .connect(SW, VOUT)
-const C5 = C1206('22u 16V').source({ MPN: 'GRM31CR61C226ME15L' }).connect(GND, VOUT)
-const C6 = C1206('22u 16V').source({ MPN: 'GRM31CR61C226ME15L' }).connect(GND, VOUT)
+  .connect({ 1: SW, 2: VOUT })
+const C5 = C1206('22u 16V').source({ MPN: 'GRM31CR61C226ME15L' }).connect({ 1: GND, 2: VOUT })
+const C6 = C1206('22u 16V').source({ MPN: 'GRM31CR61C226ME15L' }).connect({ 1: GND, 2: VOUT })
 const C7 = CP8('470u 10V').source({ MPN: 'EEU-FR1A471', Manufacturer: 'Panasonic' }).connect({ '+': VOUT, '-': GND })
-const R1 = R0603('73.2k').source({ MPN: 'RC0603FR-0773K2L' }).connect(FB, VOUT) // 0.6 V × (1 + 73.2k / 10k) = 4.99 V
-const R2 = R0603('10k').source({ MPN: 'RC0603FR-0710KL' }).connect(GND, FB)
-const C8 = C0603('150p').source({ MPN: 'GRM1885C1H151JA01D' }).connect(FB, VOUT) // feed-forward, datasheet table 4
-const R3 = R0603('2.2k').source({ MPN: 'RC0603FR-072K2L' }).connect(LEDA, VOUT)
+const R1 = R0603('73.2k').source({ MPN: 'RC0603FR-0773K2L' }).connect({ 1: FB, 2: VOUT }) // 0.6 V × (1 + 73.2k / 10k) = 4.99 V
+const R2 = R0603('10k').source({ MPN: 'RC0603FR-0710KL' }).connect({ 1: GND, 2: FB })
+const C8 = C0603('150p').source({ MPN: 'GRM1885C1H151JA01D' }).connect({ 1: FB, 2: VOUT }) // feed-forward, datasheet table 4
+const R3 = R0603('2.2k').source({ MPN: 'RC0603FR-072K2L' }).connect({ 1: LEDA, 2: VOUT })
 const D2 = LED0805('green').source({ MPN: 'LTST-C170GKT' }).connect({ A: LEDA, K: GND })
-const J2 = MKDS2({ value: '5V OUT', model: { file: './models/TerminalBlock_Phoenix_MKDS-1_5-2-5.08_1x02_P5.08mm_Horizontal.step' } })
+const J2 = MKDS2('5V OUT', { model: { file: './models/TerminalBlock_Phoenix_MKDS-1_5-2-5.08_1x02_P5.08mm_Horizontal.step' } })
   .source({ MPN: '1715721', Manufacturer: 'Phoenix Contact' })
   .connect({ 1: VOUT, 2: GND })
 const Hole = MountingHole(3.2)
@@ -49,7 +49,11 @@ const HOLES = [
   [4, H - 4],
   [W - 4, H - 4],
 ] as const
+// made in a loop, so each hole takes its ref from the loop
+const HOLE_PARTS = HOLES.map((_, i) => Hole({ ref: `H${i + 1}` }))
 const CUTOUT = [14, 34] as const
+// the switch node from U1 to the inductor, which the boot capacitor follows
+const sw = route(U1.SW, L1[1]).width(1.2).H(41).Z()
 
 // ---- pours ----
 // the power pours fill first and join their SMD pads solidly; the hand-soldered THT pads in them get reliefs back below.
@@ -61,7 +65,7 @@ export default (
   <PCB
     name="PSU"
     title="24 V to 5 V 5 A buck"
-    revision="0.1.0"
+    rev="0.1.0"
     color="black"
     stackup={twoLayer({ finish: 'HASL', outerCopper: 2 })}
     rules={{ clearance: 0.16, minTrackWidth: 0.16, thermal: { spokeWidth: 0.8 } }}
@@ -77,7 +81,8 @@ export default (
     <C2 at="26.5 19.8 90deg" thermal={{ 1: 'solid' }} />
     <C1 at="29 19.8 90deg" thermal={{ 1: 'solid' }} />
     <U1 at="32.5 21 90deg" thermal={{ PGND: 'solid' }} />
-    <C4 at="35.4 17.2 90deg" />
+    {/* the boot capacitor sits beside the switch node by the BOOT pin, its own legs routed once it is placed */}
+    <C4 at:follow={{ route: sw, near: U1.BOOT }} />
     <L1 at="43 24 270deg" />
     <C5 at="45 34 90deg" thermal={{ 1: 'solid' }} />
     <C6 at="47.6 34 90deg" thermal={{ 1: 'solid' }} />
@@ -86,27 +91,30 @@ export default (
     <R2 at="32.5 26 90deg" />
     <R1 at="34.8 28" />
     <C8 at="34.8 30" />
-    <D2 at="34 36" />
-    <R3 at="37.5 36" />
+    {/* the status LED and its resistor: the placer finds them a spot together, in a group of their own */}
+    <g name="Status" at="22 36">
+      <D2 at="auto auto 0" at:initial="-2 0" />
+      <R3 at="auto auto 0" at:initial="2 0" />
+    </g>
     {HOLES.map(([x, y], i) => (
-      <Hole ref={`H${i + 1}`} at={[x, y]} />
+      <Place part={HOLE_PARTS[i]} at={`${x} ${y}`} />
     ))}
 
     {/* input path, 1.2 A at most: 2 mm tracks */}
-    {route(J1[1]).X(F1[1]).width(2)}
-    {route(F1[2]).Z(D1.A).width(2)}
+    {route(J1[1], F1[1]).width(2)}
+    {route(F1[2], D1.A).width(2).Z()}
     {/* switch node: short and wide, a track rather than a pour */}
-    {route(U1.SW).H(41).Z(L1[1]).width(1.2)}
-    {route(C4[2]).X(L1[1]).width(0.5)}
+    {sw}
+    {route(C4[2], L1[1]).width(0.5)}
     {/* boot strap and feedback */}
-    {route(U1.BOOT).V(18).Z(C4[1]).width(0.25)}
-    {route(U1.FB).X(R2[2]).width(0.25)}
-    {route(R2[2]).X(R1[1]).width(0.25)}
-    {route(R1[1]).X(C8[1]).width(0.25)}
-    {route(R1[2]).X(C8[2]).width(0.3)}
-    {route(C8[2]).X(L1[2]).width(0.5)}
-    {route(R3[1]).Z(D2.A).width(0.3)}
-    {route(R3[2]).X(C5[2]).width(0.3)}
+    {route(U1.BOOT, C4[1]).width(0.25)}
+    {route(U1.FB, R2[2]).width(0.25)}
+    {route(R2[2], R1[1]).width(0.25)}
+    {route(R1[1], C8[1]).width(0.25)}
+    {route(R1[2], C8[2]).width(0.3)}
+    {route(C8[2], L1[2]).width(0.5)}
+    {route(R3[1], D2.A).width(0.3)}
+    {route(R3[2], C5[2]).width(0.3)}
 
     {pour(VIN, 'F.Cu', VIN_POUR, { priority: 2, connect: 'solid' })}
     {pour(VOUT, 'F.Cu', VOUT_POUR, { priority: 2, connect: 'solid' })}
@@ -126,11 +134,11 @@ export default (
       [40, 14],
       [44, 14],
       [56, 16],
-    ].map(([x, y]) => via(GND, [x, y], { drill: 0.4, size: 0.8 }))}
+    ].map(([x, y]) => via(GND, `${x} ${y}`, { drill: 0.4, size: 0.8 }))}
     {/* and over the rest of the board wherever both GND pours have fill, 4 mm apart */}
     {stitch(GND, { pitch: 4, layers: ['F.Cu', 'B.Cu'], padClearance: 1.0, via: { drill: 0.4, size: 0.8 }, avoid: { silk: true } })}
 
-    {HOLES.map(([x, y]) => keepout('all', circle(6.4, x, y), { pours: false }))}
+    {HOLES.map(([x, y]) => keepout(circle(6.4, x, y), { pours: false }))}
 
     <text layer="F.SilkS" at="14 27.6" size={1.2}>
       24V IN
