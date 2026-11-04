@@ -84,6 +84,7 @@ export async function serve(root, run, args = []) {
 export let S, page, chrome, ed, quad, TEXT0
 /** The WebSockets the page opened, by request id: the URL and how many of their frames speak pcbjs. */
 export const sockets = new Map()
+export const selections = []
 
 /** The fake VS Code editor around the extension's own wiring: the server, its links, the owner of each file, the document handoff and Sync as the extension runs them, with the language client over each link as vscode-languageclient runs it. */
 export async function editor(root, file) {
@@ -444,6 +445,12 @@ export function harness() {
       const w = sockets.get(p.requestId)
       if (w && (text.includes('pcbjs:') || text.includes('session/'))) w.pcbjs++
       if (/pcbjs:select|session\/select|session\/observe/.test(text)) debug(dir, text.slice(0, 300))
+      if (dir === 'in') {
+        try {
+          const frame = JSON.parse(text)
+          if (frame.event === 'pcbjs:select') selections.push(frame.data.selection)
+        } catch {}
+      }
     }
     page.on('Network.webSocketFrameReceived', p => seen('in', p))
     page.on('Network.webSocketFrameSent', p => seen('out', p))

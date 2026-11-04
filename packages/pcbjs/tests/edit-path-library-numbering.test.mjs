@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { harness, skip, click, centre, ev, ed, page, S, quad, until, sleep, key, viewSettled } from './edit-path-harness.mjs'
+import { harness, skip, click, centre, ev, ed, page, S, quad, until, sleep, key, viewSettled, selections } from './edit-path-harness.mjs'
 
 harness()
 
@@ -24,6 +24,7 @@ test('library labels restart for each instance and local selection edits the sha
       `!!document.querySelector('svg.board-svg [data-ref="R2"]') && !document.querySelector('.selection-status[role="status"]') && document.querySelector('.layout-state')?.textContent.includes('Library layout')`,
     ),
   )
+  await until('second library selection acknowledged', () => selections.at(-1)?.isolate?.ref === 'CH2' && selections.at(-1).isolate.mode === 'library')
   await viewSettled()
   const n = ed.selects.length
   await click(
@@ -54,6 +55,7 @@ test('library labels restart for each instance and local selection edits the sha
       `!!document.querySelector('svg.board-svg [data-ref="R1"]') && !document.querySelector('svg.board-svg [data-ref="R2"]') && !document.querySelector('.selection-status[role="status"]') && document.querySelector('.layout-state')?.textContent.includes('Library layout')`,
     ),
   )
+  await until('first library selection acknowledged', () => selections.at(-1)?.isolate?.ref === 'CH1' && selections.at(-1).isolate.mode === 'library')
   await viewSettled()
   const picked = await ed.link.request('session/select', { board: 'Blinky', refs: ['R1'], anchor: 'R1' })
   assert.equal(picked?.isolate?.mode, 'library', JSON.stringify(picked))
