@@ -48,8 +48,9 @@ const median = xs => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
 export const PROBE = `(() => {
   if (window.__probe) return
   const after = fn => { const c = new MessageChannel(); c.port1.onmessage = () => fn(performance.now()); c.port2.postMessage(0) }
-  const p = (window.__probe = { frames: [], on: false })
-  const tick = ts => {
+  const p = (window.__probe = { frames: [], on: false, frameStart: 0 })
+  const tick = () => {
+    const ts = p.frameStart = performance.now()
     requestAnimationFrame(tick)
     if (p.on) after(end => p.frames.push(end - ts))
   }
@@ -59,10 +60,13 @@ export const PROBE = `(() => {
     const on = () => {
       const t0 = performance.now()
       window.removeEventListener(type, on, true)
-      let n = 0
+      let n = 0, work = 0, accounted = t0
+      after(end => { work += end - accounted; accounted = end })
       const frame = () => after(end => {
+        work += Math.max(0, end - Math.max(accounted, p.frameStart))
+        accounted = end
         n++
-        if (!check || check() || n > 30) done({ ms: end - t0, frames: n })
+        if (!check || check() || n > 30) done({ ms: work, latency: end - t0, frames: n })
         else requestAnimationFrame(frame)
       })
       requestAnimationFrame(frame)
@@ -114,6 +118,7 @@ export async function viewBench({ shots, log = () => {}, devtools = 0, port = 0,
     await page.send('Runtime.enable')
     await page.send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false })
     await page.send('Page.enable')
+    await page.send('Page.addScriptToEvaluateOnNewDocument', { source: PROBE })
     if (!raster) await page.send('Page.addScriptToEvaluateOnNewDocument', { source: NO_RASTER })
     const ev = expr => evaluate(page, expr)
     const shot = async name => {
@@ -129,7 +134,6 @@ export async function viewBench({ shots, log = () => {}, devtools = 0, port = 0,
         () => ev(`document.documentElement.dataset.ready === '${view}' || !!document.querySelector('[data-ready="${view}"]')`).catch(() => false),
         120000,
       )
-      await ev(PROBE)
       await sleep(800)
     }
     // the load per core the run saw at its highest, sampled at its start, at each wheel step and at its end
@@ -293,8 +297,20 @@ export async function viewBench({ shots, log = () => {}, devtools = 0, port = 0,
     out.load = Math.max(out.load, loadPerCore())
     return { out, text }
   } finally {
-    await stopChrome(chrome?.proc)
-    for (const c of children) c.kill('SIGKILL')
-    rmSync(top, { recursive: true, force: true })
+    try {
+      await stopChrome(chrome?.proc)
+    } finally {
+      await Promise.all(
+        children.map(
+          c =>
+            new Promise(done => {
+              if (c.exitCode !== null || c.signalCode !== null) return done()
+              c.once('exit', done)
+              c.kill('SIGKILL')
+            }),
+        ),
+      )
+      rmSync(top, { recursive: true, force: true })
+    }
   }
 }

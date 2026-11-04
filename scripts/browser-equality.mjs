@@ -180,6 +180,14 @@ export async function stopChrome(proc) {
   try {
     signal('SIGTERM')
     await exited
+    if (process.platform !== 'win32') {
+      const groups = spawnSync('ps', ['-axo', 'pgid=,stat='], { encoding: 'utf8' })
+      const alive = groups.stdout?.split('\n').some(line => {
+        const [group, state] = line.trim().split(/\s+/)
+        return Number(group) === proc.pid && !state?.startsWith('Z')
+      })
+      if (groups.status === 0 && !alive) return
+    }
     signal('SIGKILL')
   } finally {
     clearTimeout(timer)

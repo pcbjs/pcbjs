@@ -17,8 +17,20 @@ const ARGS = ['session', 'serve', '--port', '0', '--host', '127.0.0.1', '--grace
 
 const root = WIN ? realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-pipe-'))) : ''
 const children = []
+let owned
+const { alive } = await import('../dist/session/start.js')
 after(async () => {
   await Promise.all(children.map(c => stop(c)))
+  if (owned) {
+    const { connectSession } = await import('../dist/session/client.js')
+    const client = await connectSession(owned.socket, { name: 'pipe cleanup', role: 'agent' }).catch(() => null)
+    if (client) {
+      await client.request('session/stop').catch(() => {})
+      await client.done
+    }
+    for (let i = 0; i < 200 && alive(owned.pid); i++) await new Promise(r => setTimeout(r, 100))
+    assert.equal(alive(owned.pid), false, 'the owned session exited before removing its working directory')
+  }
   if (root) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
@@ -30,6 +42,7 @@ test('the named pipe: bound, hello and ready exchanged, a second session on the 
   writeFileSync(join(root, 'pcb.config.ts'), "import { defineConfig } from '@pcbjs/core'\nexport default defineConfig({ entries: ['pcb.tsx'] })\n")
   writeFileSync(join(root, 'pcb.tsx'), board('Pipe'))
   const { info } = await ensureSession(root, { args: ARGS.slice(2) })
+  owned = info
   assert.match(info.socket, /^\\\\\.\\pipe\\pcbjs-[a-z0-9]+-[0-9a-f]{16}$/)
   const c = await connectSession(info.socket, { name: 'pipe test', role: 'agent' })
   assert.equal(c.ready.session, info.session)

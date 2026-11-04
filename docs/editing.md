@@ -15,7 +15,7 @@ The focus toolbar identifies Trace or Placement. Placement fields edit X, Y and 
 
 Trace controls select a geometric primitive, its relative form and its copper layer. The API uses uppercase `H`, `V`, `L`, `A` for absolute endpoints and lowercase `h`, `v`, `l`, `a` for relative offsets. Relative is checked for lowercase commands. Changing case rewrites coordinates to preserve the endpoint. Choosing a different primitive changes its geometry; a newly chosen arc uses a 90 degree sweep. `X` autoroutes and `Z` finishes straight to the route destination. The layer selector edits the nearest preceding via transition, or the route’s initial `.layer()` property when there is no transition; `.layer()` is route configuration, not an inline transition.
 
-A click on a literal trace segment selects its generating primitive in the source, including the leading dot. Previous and Next skip non-geometric calls; Delete removes the selected primitive and compensates the next relative command to keep its endpoint fixed, promoting a relative axis to `l` when needed. Click the interior of the focused manual segment to insert a snapped point. The grid menu includes standard pitches and subdivisions of a custom pitch. Placement grid choices write the component's `grid` attribute without moving geometry. Snap is recomputed from alignment with the selected grid and its allowed subdivisions; `maxLevel` bounds subdivisions, with two levels by default. See grids.md. Reset view restores the view’s fitted frame. Source destination and write details stay in tooltips.
+A click on a literal trace segment selects its generating primitive in the source, including the leading dot. Previous and Next skip non-geometric calls; Delete removes the selected primitive and compensates the next relative command to keep its endpoint fixed, promoting a relative axis to `l` when needed. Click the interior of the focused manual segment to insert a snapped point. The grid menu includes standard pitches and subdivisions of a custom pitch. Placement grid choices write the component's `grid` attribute without moving geometry. Snap is recomputed from alignment with the selected grid and its allowed subdivisions; `maxLevel` bounds subdivisions, with two levels by default. An explicit Snap choice survives board refreshes until the focused entity or its source grid changes. See grids.md. Reset view restores the view’s fitted frame. Source destination and write details stay in tooltips.
 
 Available operations, by anchor capabilities:
 
@@ -25,6 +25,8 @@ Available operations, by anchor capabilities:
 | `layered` | a part, a named `<g>`, an instance | the side, F or B |
 | `chain` | a route | primitive, relative form and layer |
 | `viaEnd` | a route with a chain via | the via's layer with its point |
+
+Editing pauses while streamed metadata is ahead of the committed board snapshot, then resumes when both revisions agree.
 
 Board `edit` holds capabilities, frame, coordinate grid, optional persisted `snap` pitch and subdivision limit, and sources. `def` names the literal's definition, schematic.md; `frames` lists enclosing instances/groups, outermost first, own frame last.
 

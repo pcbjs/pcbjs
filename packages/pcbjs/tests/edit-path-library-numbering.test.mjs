@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { harness, skip, click, centre, ev, ed, page, S, quad, until, sleep, key } from './edit-path-harness.mjs'
+import { harness, skip, click, centre, ev, ed, page, S, quad, until, sleep, key, viewSettled } from './edit-path-harness.mjs'
 
 harness()
 
@@ -24,6 +24,7 @@ test('library labels restart for each instance and local selection edits the sha
       `!!document.querySelector('svg.board-svg [data-ref="R2"]') && !document.querySelector('.selection-status[role="status"]') && document.querySelector('.layout-state')?.textContent.includes('Library layout')`,
     ),
   )
+  await viewSettled()
   const n = ed.selects.length
   await click(
     await ev(
@@ -53,6 +54,7 @@ test('library labels restart for each instance and local selection edits the sha
       `!!document.querySelector('svg.board-svg [data-ref="R1"]') && !document.querySelector('svg.board-svg [data-ref="R2"]') && !document.querySelector('.selection-status[role="status"]') && document.querySelector('.layout-state')?.textContent.includes('Library layout')`,
     ),
   )
+  await viewSettled()
   await ed.link.request('session/select', { board: 'Blinky', refs: ['R1'], anchor: 'R1' })
   await until('first instance also R0', async () => (await label()) === 'R0')
   await open('isolate=CH1&isolate-mode=library&select=R1', '3d')

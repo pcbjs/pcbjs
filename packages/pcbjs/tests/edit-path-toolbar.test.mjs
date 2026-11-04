@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { arcPoint } from '@pcbjs/core/internal/trace-arc'
-import { harness, skip, click, centre, screenOf, ev, ed, page, until, compiles, sleep, shot, quad } from './edit-path-harness.mjs'
+import { harness, skip, click, centre, screenOf, ev, ed, page, until, compiles, sleep, shot, quad, viewSettled } from './edit-path-harness.mjs'
 
 harness()
 
@@ -78,12 +78,13 @@ test('placement toolbar edits local coordinates, side and grid, and resets a zoo
   await click(await centre(snap))
   assert.equal(await ev(`document.querySelector(${JSON.stringify(snap)}).checked`), !before)
   await click(await centre('[aria-label="Reset view"]'))
-  await sleep(700)
+  await viewSettled()
   const fitted = await ev(`document.querySelector('svg.board-svg').getAttribute('viewBox')`)
   await ev(
     `(() => {const e=document.querySelector('svg.board-svg'),r=e.getBoundingClientRect();e.dispatchEvent(new WheelEvent('wheel',{clientX:r.x+r.width/2,clientY:r.y+r.height/2,deltaY:-300,bubbles:true,cancelable:true}));})()`,
   )
   await until('zoom changed', async () => (await ev(`document.querySelector('svg.board-svg').getAttribute('viewBox')`)) !== fitted)
+  await viewSettled()
   await click(await centre('[aria-label="Reset view"]'))
   await until('reset fitted frame', async () => (await ev(`document.querySelector('svg.board-svg').getAttribute('viewBox')`)) === fitted)
   await shot('placement-focus-toolbar')

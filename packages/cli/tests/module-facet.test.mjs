@@ -59,7 +59,7 @@ test("boards: 'compile' ships the poster, the board's module and the worker, no 
     cacheDir: join(root, '.vite'),
     build: { outDir: out, rollupOptions: { input: { main: join(root, 'index.html'), compiled: join(root, 'compiled.html') } } },
   })
-  const files = walk(out).map(f => f.slice(out.length + 1))
+  const files = walk(out).map(f => f.slice(out.length + 1).replaceAll('\\', '/'))
   assert.ok(files.includes('pcb/runtime/browser-worker.js'), 'the compile worker')
   const modules = files.filter(f => f.endsWith('.module.json'))
   assert.equal(modules.length, 1, files.join('\n'))

@@ -33,7 +33,10 @@ const layers = computed(() => store.site?.layers.filter(l => l.kind === 'copper'
 const currentLayer = computed(() => (props.as.on.value ? (props.as.ctx.value?.layer ?? 'F.Cu') : (node.value?.steps?.[step.value?.index ?? 0]?.layer ?? 'F.Cu')))
 const literalStep = computed(() => !!step.value && !!node.value?.steps?.[step.value.index]?.src)
 const canTrace = computed(
-  () => !!edit.client && edit.mode?.mode === 'rw' && (node.value?.caps.includes('chain') ? literalStep.value && !!props.tl.targets('point').refs.length : props.as.on.value),
+  () =>
+    !!edit.client &&
+    edit.mode?.mode === 'rw' &&
+    (node.value?.caps.includes('chain') ? props.tl.rw.value && literalStep.value && !!props.tl.targets('point').refs.length : props.as.on.value),
 )
 const segments = computed(() => segmentIndices(node.value?.steps ?? []))
 const segmentPosition = computed(() => segments.value.indexOf(step.value?.index ?? -1))

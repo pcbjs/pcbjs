@@ -5,7 +5,7 @@ import { build } from 'esbuild'
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const here = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const brand = resolve(here, '../../site/brand/icons')
@@ -67,7 +67,7 @@ for (const name of [
 // the keybindings come from the key map table the views read, so the editor and the viewer agree
 const ui = dirname(createRequire(import.meta.url).resolve('@pcbjs/ui/package.json'))
 await build({ ...common, minify: false, entryPoints: [join(ui, 'src/keys.ts')], outfile: 'dist/keys.cjs' })
-const { vscodeKeybindings } = await import(join(here, 'dist/keys.cjs')).then(m => m.default ?? m)
+const { vscodeKeybindings } = await import(pathToFileURL(join(here, 'dist/keys.cjs')).href).then(m => m.default ?? m)
 const manifest = join(here, 'package.json')
 const pkg = JSON.parse(readFileSync(manifest, 'utf8'))
 const keys = vscodeKeybindings()
@@ -76,7 +76,7 @@ if (JSON.stringify(pkg.contributes.keybindings) !== JSON.stringify(keys)) {
   writeFileSync(manifest, JSON.stringify(pkg, null, 2) + '\n')
 }
 
-const { ICONS, vsiconsName } = await import(join(here, 'dist/icon-map.cjs')).then(m => m.default ?? m)
+const { ICONS, vsiconsName } = await import(pathToFileURL(join(here, 'dist/icon-map.cjs')).href).then(m => m.default ?? m)
 const assets = join(here, 'assets')
 const copy = (from, to) => {
   mkdirSync(dirname(to), { recursive: true })

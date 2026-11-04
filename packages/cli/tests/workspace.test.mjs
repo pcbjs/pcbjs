@@ -4,7 +4,7 @@ import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import WebSocket from 'ws'
 import { expandEntries, pickEntries, resolveConfig } from '../dist/project/config.js'
@@ -108,7 +108,7 @@ const get = async p => {
   return { status: r.status, type: r.headers.get('content-type') ?? '', text: await r.text() }
 }
 const json = async p => JSON.parse((await get(p)).text)
-const watched = () => new Set(Object.entries(server.watcher.getWatched()).flatMap(([d, ns]) => ns.map(n => join(d, n))))
+const watched = () => new Set(Object.entries(server.watcher.getWatched()).flatMap(([d, ns]) => ns.map(n => resolve(d, n))))
 const scope = slug => workspace.scopes.find(s => s.slug === slug)
 
 before(async () => {
@@ -197,17 +197,17 @@ test('workspace: the watcher keeps the files of every compiled scope, so an edit
   )
   let now = watched()
   assert.ok(
-    alphaFiles.every(f => now.has(f)),
+    alphaFiles.every(f => now.has(resolve(f))),
     'alpha is watched once compiled',
   )
   await json('/__pcbjs/scope/f2')
   now = watched()
   assert.ok(
-    scope('f2').files.every(f => now.has(f)),
+    scope('f2').files.every(f => now.has(resolve(f))),
     'f2 is watched once compiled',
   )
   assert.ok(
-    alphaFiles.every(f => now.has(f)),
+    alphaFiles.every(f => now.has(resolve(f))),
     'alpha stays watched while hidden',
   )
 })

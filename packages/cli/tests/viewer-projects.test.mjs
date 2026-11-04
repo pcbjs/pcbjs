@@ -304,7 +304,7 @@ test('library entity source reveal uses the shared source beneath an own placeme
   )
   await new Promise(r => setImmediate(r))
   assert.equal(calls.length, 1)
-  assert.equal(calls[0][1][0].file, '/p/shared.tsx')
+  assert.equal(calls[0][1][0].file, join('/p', 'shared.tsx'))
 })
 
 test('selection offers validate board, target, snapshot and references before broadcasting', async () => {

@@ -85,7 +85,12 @@ export interface ToolHit {
 export function useGesture(d: GestureInput) {
   const t = d.store.edit
   const on = computed(() => !!t.client && !!t.mode && !!d.board().dev)
-  const rw = computed(() => on.value && t.mode?.mode === 'rw' && !(d.board().variant && d.board().variant!.index !== 0))
+  const current = computed(() => {
+    void d.store.rev
+    const run = d.store.held.get(keyOfSite(d.board()))?.facets.meta?.run
+    return run == null || run === d.store.run
+  })
+  const rw = computed(() => current.value && on.value && t.mode?.mode === 'rw' && !(d.board().variant && d.board().variant!.index !== 0))
   const node = computed<SiteEditNode | null>(() => editNodeOf(d.board(), d.sel().anchor))
   /** an isolation writes the definition, which a part with an own placement in the instance does not follow */
   const isolated = computed(() => (d.sel().isolate?.mode === 'instance' ? null : (d.sel().isolate?.ref ?? null)))
@@ -135,12 +140,9 @@ export function useGesture(d: GestureInput) {
   const alignment = computed(() => (node.value?.at ? alignedLevel(chosenGrid.value, [node.value.at[0], node.value.at[1]]) : 0))
   const snapEnabled = computed(() => snapOverride.value ?? alignment.value !== null)
   const paintGrid = computed<SnapGrid>(() => ({ ...chosenGrid.value, ...(alignment.value !== null ? { level: Math.max(levelOf(chosenGrid.value, false), alignment.value) } : {}) }))
-  watch(
-    () => [node.value?.ref, sourceGrid.value.pitch, sourceGrid.value.maxLevel, sourceGrid.value.minor.join(',')],
-    () => {
-      snapOverride.value = null
-    },
-  )
+  watch([() => node.value?.ref, () => sourceGrid.value.pitch, () => sourceGrid.value.maxLevel, () => sourceGrid.value.minor.join(',')], () => {
+    snapOverride.value = null
+  })
   const grid = computed<SnapGrid | null>(() => (snapEnabled.value ? paintGrid.value : null))
   /** the grid an editor hover lit, drawn as lines in its own frame */
   const shown = computed<SnapGrid | null>(() => (t.lit?.board === d.board().name ? (d.board().grids?.find(g => g.name === t.lit!.grid) ?? null) : null))
@@ -325,23 +327,20 @@ export function useGesture(d: GestureInput) {
   const focus = shallowRef<number | null>(null)
   watch(node, () => (focus.value = null))
   const waitForSteps = (ref: string, count: number): Promise<boolean> => {
-    const ready = () => node.value?.ref === ref && node.value.steps?.length === count
+    const ready = () => current.value && node.value?.ref === ref && node.value.steps?.length === count
     if (ready()) return Promise.resolve(true)
     return new Promise(resolve => {
       const timer = setTimeout(() => {
         stop()
         resolve(false)
       }, 10000)
-      const stop = watch(
-        () => node.value,
-        () => {
-          if (ready()) {
-            clearTimeout(timer)
-            stop()
-            resolve(true)
-          }
-        },
-      )
+      const stop = watch([() => node.value, current], () => {
+        if (ready()) {
+          clearTimeout(timer)
+          stop()
+          resolve(true)
+        }
+      })
     })
   }
   /** One step at once: `R`, the side, a deleted or inserted point: a begin, an update and a commit. */

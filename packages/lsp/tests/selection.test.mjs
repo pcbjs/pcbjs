@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 // The editor selection model: what a cursor or a selection names per board, as the references the viewers highlight.
 import { readFileSync } from 'node:fs'
@@ -89,7 +90,7 @@ test('selection: how an item is named, and pcbjs/select grouped by file', () => 
       ['b.tsx', 1],
     ],
   )
-  assert.deepEqual(p.primary, { uri: 'file:///p/a.tsx', index: 0 })
+  assert.deepEqual(p.primary, { uri: pathToFileURL(resolve('/p/a.tsx')).href, index: 0 })
   assert.equal(p.focus, undefined)
 })
 

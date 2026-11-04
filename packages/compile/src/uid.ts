@@ -3,6 +3,7 @@ import type { Board, Item } from '@pcbjs/core/model'
 import type { Src } from '@pcbjs/core/internal/types'
 import { digest } from './cache.js'
 import { changed } from './items.js'
+import { pulse } from './cancel.js'
 
 /** A project file's call by its text without its `at` and `side`; a package's by its path from the package and position, which a version fixes. */
 function srcKey(s: Src | undefined): unknown {
@@ -35,6 +36,7 @@ export function mintUids(board: Board): void {
   }
   for (const it of board.items) if (it.uid) count(seen, it.uid.split('~')[0])
   board.items.forEach((it, i) => {
+    if ((i & 127) === 0) pulse()
     const group = JSON.stringify([it.kind, maker(it)])
     const ordinal = it.kind === 'pad' && it.ref !== undefined ? it.num : count(placed, group) - 1
     if (it.uid) return

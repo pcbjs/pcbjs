@@ -1,3 +1,4 @@
+import { relative } from 'node:path'
 // Circuits: circuit() with ports and private nets, instances and their indices, refs from the index, hierarchical refs,
 // layouts, an unplaced instance as a compile error, sourcing through instances, and the circuits in the site data.
 import { test } from 'node:test'
@@ -161,9 +162,7 @@ test('layout: places an instance as an element or a call, and the site data name
   assert.equal(refAt(b, 20, 9), 'D2')
   assert.ok(b.items.some(it => it.kind === 'track' && it.net === 'A1/led'))
   const s = site(b).schematic
-  const here = fileURLToPath(import.meta.url)
-    .replaceAll('\\', '/')
-    .replace(/^\//, '')
+  const here = relative('/', fileURLToPath(import.meta.url)).replaceAll('\\', '/')
   assert.deepEqual(s.circuits, [
     { path: ['A1'], name: 'A1', kind: 'circuit', def: `${here}#chan`, circuit: 'chan', layout: `${here}#Row`, parts: ['R1', 'D1'], children: [], placed: true },
     { path: ['B2'], name: 'B2', kind: 'circuit', def: `${here}#chan`, circuit: 'chan', layout: `${here}#Column`, parts: ['R2', 'D2'], children: [], placed: true },
@@ -203,9 +202,7 @@ test('layout methods preserve placement, overrides, definition keys and instance
   assert.equal(refAt(b, 5, 10), 'R1')
   assert.equal(refAt(b, 13, 10), 'D1')
   assert.equal(refAt(b, 17, 20), 'R2')
-  const here = fileURLToPath(import.meta.url)
-    .replaceAll('\\', '/')
-    .replace(/^\//, '')
+  const here = relative('/', fileURLToPath(import.meta.url)).replaceAll('\\', '/')
   assert.deepEqual(
     site(b).schematic.circuits.map(c => c.layout),
     [`${here}#Shared`, `${here}#OnlyB`],

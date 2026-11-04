@@ -21,6 +21,7 @@ import {
   quad,
   screenOf,
   settled,
+  viewSettled,
   shot,
   show,
   skip,
@@ -56,6 +57,7 @@ test('a part under a defineGrid: its grid drawn as dots through its own origin, 
   assert.equal(await ev(`document.querySelector('.bv-edit input[type=checkbox]').checked`), false, 'an off-grid placement starts with snapping disabled')
   await ev(`document.querySelector('.bv-edit input[type=checkbox]').click()`)
   assert.equal(await ev(`document.querySelector('.bv-edit input[type=checkbox]').checked`), true)
+  await viewSettled()
   await shot('quad-r1-grid-dots')
   const [from, to] = [await screenOf(11.025, 8.5), await screenOf(12.325, 8.6)]
   await gesture('grid drag', () => drag(from, to))

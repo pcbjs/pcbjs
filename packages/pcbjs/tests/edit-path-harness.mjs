@@ -292,6 +292,23 @@ export async function settled(board) {
   }
 }
 
+/** Wait for view fitting to finish before deriving screen coordinates or comparing camera poses. */
+export const viewSettled = () =>
+  ev(`new Promise((done, reject) => {
+  let previous = null, stable = 0
+  const deadline = performance.now() + 15000
+  const sample = () => {
+    const c = window.__pcbjs3d?.camera
+    const value = c ? [...c.position.toArray(), ...c.quaternion.toArray(), c.zoom] : document.querySelector('svg.board-svg')?.getAttribute('viewBox').split(' ').map(Number)
+    stable = value && previous && value.every((n,i) => Math.abs(n - previous[i]) < 1e-8) ? stable + 1 : 0
+    previous = value
+    if (stable >= 8) done(value)
+    else if (performance.now() > deadline) reject(new Error('view fitting did not settle'))
+    else requestAnimationFrame(sample)
+  }
+  requestAnimationFrame(sample)
+})`)
+
 /** One gesture on a board's entry, Quad's by default: its applyEdits, the compile and the chip's confirmation after it. */
 export async function gesture(name, act, { board = 'Quad', file = quad } = {}) {
   await settled(board)

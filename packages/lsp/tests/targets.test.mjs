@@ -5,7 +5,7 @@
 import { test, after, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { dev } from './fixtures/dev.mjs'
 import { resolveFile, scopeInject } from '@pcbjs/compile/internal/scope'
@@ -271,7 +271,7 @@ test('pad signature resolves semantic receivers in incomplete accessors, preserv
   const file = join(root, 'main.tsx'),
     original = readFileSync(file, 'utf8')
   const docs = new Map()
-  const live = projects({ get: f => docs.get(f) })
+  const live = projects({ get: f => docs.get(resolve(f)) })
   let version = 0
   const hint = (marked, snapshots = boards) => {
     const start = original.length + 1,

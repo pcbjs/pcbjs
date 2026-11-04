@@ -15,7 +15,7 @@ registerHooks({
     }
   },
 })
-const { nextTick } = await import('vue')
+const { nextTick, reactive } = await import('vue')
 const { createViewer } = await import('../src/shell.ts')
 const { facetSet } = await import('@pcbjs/core/site-facets')
 const { useGesture } = await import('../src/gesture.ts')
@@ -331,4 +331,34 @@ test('persisted placement pitch derives snap and the usable subdivision from unc
   const next = gesture(off).g
   assert.equal(next.snapEnabled.value, false)
   assert.deepEqual(off.edit[0].at, [1.5, 5, 0])
+})
+
+test('snap choice survives refreshed geometry and resets only when the source grid changes', async () => {
+  const b = reactive(board())
+  b.edit[0].at = [1.23, 5.37, 0]
+  const { g } = gesture(b)
+  assert.equal(g.snapEnabled.value, false)
+  g.snapOverride.value = true
+  b.edit = b.edit.map(node => ({ ...node }))
+  b.grids = b.grids.map(grid => ({ ...grid, minor: [...grid.minor] }))
+  await nextTick()
+  assert.equal(g.snapEnabled.value, true)
+  b.grids[0].pitch = 2
+  await nextTick()
+  assert.equal(g.snapOverride.value, null)
+  assert.equal(g.snapEnabled.value, false)
+})
+
+test('editing waits for the committed snapshot when streamed metadata arrives first', async () => {
+  const { g, store } = gesture()
+  const live = store.held.get('Fx')
+  store.run = 1
+  live.facets.meta.run = 1
+  store.rev++
+  assert.equal(g.rw.value, true)
+  live.facets.meta.run = 2
+  store.rev++
+  assert.equal(g.rw.value, false)
+  store.run = 2
+  assert.equal(g.rw.value, true)
 })

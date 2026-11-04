@@ -187,7 +187,8 @@ test(
       )
       follow.kill('SIGINT')
       await follow.exited
-      assert.deepEqual(follow.lines().at(-1), { end: 'interrupted' })
+      // Node's Windows kill terminates the process without delivering a catchable SIGINT.
+      if (process.platform !== 'win32') assert.deepEqual(follow.lines().at(-1), { end: 'interrupted' })
       agent.close()
     } finally {
       await s.stop()
