@@ -2,9 +2,9 @@
 
 Installed-host checks against an explicitly supplied candidate VSIX and a fully built checkout. This runner installs into temporary extensions and user-data directories, creates scratch copies of Demo and Badge, launches a separate Code process, and cleans up only its own session PIDs and directories.
 
-## Default: headless Linux pipeline
+## Local headless Linux verification
 
-Use the **VS Code acceptance** workflow in `.github/workflows/vscode.yml` for routine verification. It runs on pull requests and pushes to main/beta2, and supports manual dispatch. It builds the workspace and VSIX, downloads stable VS Code from Microsoft, then runs the complete suite in a private Xvfb display with Openbox and D-Bus. No computer-control tools, owner desktop or unlocked Mac are required. This follows [VS Code's CI guidance](https://code.visualstudio.com/api/working-with-extensions/continuous-integration).
+Installed-host acceptance runs locally, not in GitHub Actions. The Linux runner executes the complete suite in a private Xvfb display with Openbox and D-Bus. No computer-control tools, owner desktop or unlocked Mac are required.
 
 On a Linux machine with Node, Xvfb, xauth, Openbox, D-Bus and VS Code's desktop libraries installed:
 
@@ -15,11 +15,11 @@ npm run package -w @pcbjs/vscode
 npm run test:vscode:headless -- --code /path/to/VSCode-linux-x64/code --repo "$PWD" --vsix "$PWD/packages/cli/vscode/vscode-pcbjs.vsix" --out /tmp/pcbjs-vscode-report
 ```
 
-Pass the Electron executable to `--code`; its sibling `bin/code` is used for installation, or supply `--cli` explicitly. Node is taken from the running test process. Headless mode rejects diagnostic subsets and requires full-suite completion. It uses software rendering and the isolated-runner sandbox flags used by Microsoft's extension test runner; use a disposable CI runner or dedicated test environment.
+Pass the Electron executable to `--code`; its sibling `bin/code` is used for installation, or supply `--cli` explicitly. Node is taken from the running test process. Headless mode rejects diagnostic subsets and requires full-suite completion. It uses software rendering and the isolated-runner sandbox flags used by Microsoft's extension test runner; use a dedicated local test environment.
 
-CI retains `host-results.json`, VS Code version, candidate SHA256, screenshots, copied Markdown, session logs and cleanup records, including on failure. The stable VS Code version is resolved on each run and recorded so failures can be reproduced with that version. A failed assertion or incomplete suite fails the job.
+The chosen output directory retains `host-results.json`, VS Code version, candidate SHA256, screenshots, copied Markdown, session logs and cleanup records, including on failure. Supply the VS Code installation to test; its version is recorded so failures can be reproduced. A failed assertion or incomplete suite exits nonzero.
 
-This is real Linux Electron and extension-host coverage, including Ctrl+Z/Ctrl+Shift+Z, clipboard and focus. It does not certify macOS Cmd shortcuts, macOS window-manager behavior, Windows, or hardware GPU rendering. Keep focused native checks for OS-specific changes. Initial Linux execution is pending CI; the existing macOS full-suite baseline passed 24/24 before this portability change.
+This is real Linux Electron and extension-host coverage, including Ctrl+Z/Ctrl+Shift+Z, clipboard and focus. It does not certify macOS Cmd shortcuts, macOS window-manager behavior, Windows, or hardware GPU rendering. Keep focused native checks for OS-specific changes. Record the candidate revision, VS Code version and result for each run.
 
 ## Optional: macOS desktop acceptance
 

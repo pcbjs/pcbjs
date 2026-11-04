@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ "$(uname -s)" != Linux ]]; then
-  echo 'Headless VS Code acceptance requires Linux. Use the VS Code acceptance CI workflow; no Mac desktop is needed.' >&2
+  echo 'Headless VS Code acceptance requires a local Linux environment. See tests/installed-host/README.md for Linux prerequisites and optional macOS desktop checks.' >&2
   exit 2
 fi
 

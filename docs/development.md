@@ -27,7 +27,7 @@ Tests set `PCBJS_FREEZE=1`, design.md, and `scripts/test-watchdog.mjs` fails a t
 
 `site/` renders these topics, one page each; `pages.yml` deploys `main` to https://pcbjs.dev and the last train's docs to https://pcbjs.dev/stable/, site/README.md has the rest.
 
-For routine installed VS Code verification, use the **VS Code acceptance** workflow in `.github/workflows/vscode.yml`. It builds the VSIX and runs the full acceptance suite under a private Linux virtual display, without computer-control tools or an unlocked desktop. The local Linux entry is `npm run test:vscode:headless -- --code /path/to/VSCode-linux-x64/code --repo "$PWD" --vsix "$PWD/packages/cli/vscode/vscode-pcbjs.vsix" --out /tmp/pcbjs-vscode-report` after building and packaging. Reports, screenshots and logs are retained by CI even on failure. See `packages/vscode/tests/installed-host/README.md` for prerequisites and coverage; macOS and Windows behavior still need their own acceptance.
+Installed VS Code acceptance is local-only. On Linux, run `npm run test:vscode:headless -- --code /path/to/VSCode-linux-x64/code --repo "$PWD" --vsix "$PWD/packages/cli/vscode/vscode-pcbjs.vsix" --out /tmp/pcbjs-vscode-report` after building and packaging. The suite uses a private virtual display without computer-control tools or an unlocked desktop. Reports, screenshots and logs stay in the chosen output directory. See `packages/vscode/tests/installed-host/README.md` for prerequisites and coverage; ordinary extension unit and integration tests still run in the shared CI suite.
 
 ## Formatting
 
