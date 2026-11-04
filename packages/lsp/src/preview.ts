@@ -191,7 +191,7 @@ function renderBoard(site: SiteData, spec: PreviewSpec): Preview | undefined {
 
   // a crop with many items starts coarser, so it is drawn once
   const many = ix.items.reduce((n, x) => n + (hits(x.box, crop) ? 1 : 0), 0)
-  for (let level = many > 900 ? 3 : many > 600 ? 2 : many > 300 ? 1 : 0; level < 4; level++) {
+  for (let level = many > 900 ? 3 : many > 400 ? 2 : many > 300 ? 1 : 0; level < 4; level++) {
     const svg = drawBoard(site, ix, crop, { hl, sel, crt, netIds, lit, dim, top, spec, level })
     if (svg.length <= BUDGET || level === 3) return finish(svg, crop)
   }
@@ -213,10 +213,14 @@ interface DrawState {
 function drawBoard(site: SiteData, ix: SiteIndex, crop: Box, st: DrawState): string {
   const t = transform(crop)
   const tol = [0.6, 1.2, 2.5, 4][st.level]
+  const clip = pad(crop, 1)
   const paths = new Map<number, string>()
   const itemPath = (x: Indexed) => {
     let d = paths.get(x.it.id)
-    if (d === undefined) paths.set(x.it.id, (d = x.rings.map((r, i) => t.ring(clipRing(r, pad(crop, 1), x.boxes[i]), tol)).join('')))
+    if (d === undefined) {
+      const inside = encloses(clip, x.box)
+      paths.set(x.it.id, (d = x.rings.map((r, i) => t.ring(inside ? r : clipRing(r, clip, x.boxes[i]), tol)).join('')))
+    }
     return d
   }
   const minSize = [0, 1, 2, 3][st.level]
@@ -509,7 +513,7 @@ const num = (v: number) => (v < 0 ? `${v}` : ` ${v}`)
 
 /** A ring clipped to a box, Sutherland-Hodgman: inside the box a point is inside the result exactly when it is inside the ring. */
 function clipRing(r: Ring, b: Box, rb = boxOf(r)): Ring {
-  if (rb.x0 >= b.x0 && rb.x1 <= b.x1 && rb.y0 >= b.y0 && rb.y1 <= b.y1) return r
+  if (encloses(b, rb)) return r
   let pts = r
   const edges: [(p: Pt) => boolean, (p: Pt, q: Pt) => Pt][] = [
     [p => p[0] >= b.x0, (p, q) => [b.x0, p[1] + ((q[1] - p[1]) * (b.x0 - p[0])) / (q[0] - p[0])]],
@@ -532,6 +536,8 @@ function clipRing(r: Ring, b: Box, rb = boxOf(r)): Ring {
   }
   return pts
 }
+
+const encloses = (outer: Box, inner: Box) => inner.x0 >= outer.x0 && inner.x1 <= outer.x1 && inner.y0 >= outer.y0 && inner.y1 <= outer.y1
 
 /** Labels in the stroke font, centred on their points, white over a dark casing. `size` is the cap height in mm. */
 function labels(ls: { at: Pt; text: string }[], t: Transform, size: number): string {
