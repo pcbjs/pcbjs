@@ -29,7 +29,8 @@ test('release: a tagged recovery uses that train even after main moves, and neve
   const tag = { ref: 'train-sha', version: '0.1.0', subject: 'pcbjs 0.1.0', ancestor: true }
   const next = { ...state, version: '0.2.0', subject: 'More development', pending: true, resume: '0.1.0', tag }
   assert.deepEqual(releaseTarget(next), { mode: 'resume', ref: 'train-sha', publish: false, tagged: true })
-  for (const bad of [{ version: '0.1.1' }, { subject: 'Other commit' }, { ancestor: false }]) assert.throws(() => releaseTarget({ ...next, tag: { ...tag, ...bad } }), /release tag/)
+  for (const bad of [{ version: '0.1.1' }, { subject: 'Other commit' }, { ancestor: false }])
+    assert.throws(() => releaseTarget({ ...next, tag: { ...tag, ...bad } }), /release tag/)
 })
 
 test('release: the command resolves actual git tags and writes only the selected train outputs', () => {
@@ -64,7 +65,15 @@ test('release: dry runs validate the versioned tree before any push, and resumed
   const wf = parse(readFileSync(join(REPO, '.github/workflows/release.yml'), 'utf8'))
   const steps = wf.jobs.release.steps
   const push = steps.findIndex(s => s.name === 'Push the version commit to main')
-  for (const command of ['npm run build', 'npm run package -w @pcbjs/vscode', 'npm test', 'node scripts/check-examples.mjs', 'node scripts/stage-equality.mjs', 'npm run demo:build', 'node scripts/pack-smoke.mjs']) {
+  for (const command of [
+    'npm run build',
+    'npm run package -w @pcbjs/vscode',
+    'npm test',
+    'node scripts/check-examples.mjs',
+    'node scripts/stage-equality.mjs',
+    'npm run demo:build',
+    'node scripts/pack-smoke.mjs',
+  ]) {
     const index = steps.findIndex(s => s.run === command)
     assert.ok(index >= 0 && index < push, `${command} must pass before push`)
     assert.equal(steps[index].if, undefined, `${command} must also run in a dry run`)

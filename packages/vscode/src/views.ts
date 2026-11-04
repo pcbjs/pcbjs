@@ -28,4 +28,8 @@ export function boardPath(page: string, name: string, target?: string | null): s
   return `${scope}board/${encodeURIComponent(name)}${target ? `/${encodeURIComponent(targetSlug(target))}` : ''}`
 }
 
-export const targetSlug = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+export const targetSlug = (name: string): string =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')

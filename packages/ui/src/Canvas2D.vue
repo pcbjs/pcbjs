@@ -297,7 +297,7 @@ onMounted(() => {
     if (!prev.w) {
       size.value = { w, h }
       stopAnimation()
-      vb.value = remembered ? savedBox(remembered) : fitBox(restored ?? props.board.viewBox as Box)
+      vb.value = remembered ? savedBox(remembered) : fitBox(restored ?? (props.board.viewBox as Box))
       syncFocus()
       return
     }
@@ -337,7 +337,7 @@ function savedBox(saved: FocusView): Box {
   if (saved.size[0] === w && saved.size[1] === h) return [...saved.box] as Box
   const [x, y, width, height] = saved.box
   const scale = width / saved.size[0]
-  return [x + width / 2 - w * scale / 2, y + height / 2 - h * scale / 2, w * scale, h * scale]
+  return [x + width / 2 - (w * scale) / 2, y + height / 2 - (h * scale) / 2, w * scale, h * scale]
 }
 function restoreFocus(saved: FocusView) {
   stopAnimation()
@@ -901,7 +901,11 @@ const EASE_OUT_SPLINE = EASE_OUT_CSS.replace(/^cubic-bezier\((.*)\)$/, '$1').rep
     <Bubble v-if="dotTip && dotTipAt" :x="dotTipAt[0]" :y="dotTipAt[1]" :severity="dotTip.severity">
       {{ dotTip.text }}
     </Bubble>
-    <Bubble v-if="hoverInfo && !dotTip && !tl.drag.value && !as.on.value" :x="pointer[0]" :y="pointer[1]"><b>{{ hoverRef ? displayRef(board, hoverRef) : hoverInfo.kind }}</b><span v-if="hoverInfo.net"> · {{ hoverInfo.net }}</span><span> · {{ hoverInfo.layer }}</span></Bubble>
+    <Bubble v-if="hoverInfo && !dotTip && !tl.drag.value && !as.on.value" :x="pointer[0]" :y="pointer[1]"
+      ><b>{{ hoverRef ? displayRef(board, hoverRef) : hoverInfo.kind }}</b
+      ><span v-if="hoverInfo.net"> · {{ hoverInfo.net }}</span
+      ><span> · {{ hoverInfo.layer }}</span></Bubble
+    >
     <EditBar :tl="tl" :as="as" :chip="chipStyle" />
     <div class="bv-scale" aria-hidden="true"><span class="bar" :style="{ width: scale.width + 'px' }"></span>{{ scale.mm }} mm</div>
     <div class="bv-readout">

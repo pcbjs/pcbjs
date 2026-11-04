@@ -145,7 +145,6 @@ test('roundedRect: bbox matches w by h, centred', () => {
   assert.equal(roundedRect(4, 2, 0).length, 4)
 })
 
-
 test('geometry boundaries reject nonfinite tokens, radii and transforms', () => {
   assert.throws(() => parsePath('M0 0 L1e309 2'), /expected a number/)
   for (const value of [NaN, Infinity, -Infinity]) {

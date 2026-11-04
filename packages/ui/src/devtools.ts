@@ -28,16 +28,27 @@ export function uiTree(root: Element): UiNode[] {
     const attributes = Object.fromEntries([...el.attributes].filter(a => /^(aria-|data-ui|role$|title$|type$)/.test(a.name)).map(a => [a.name, a.value]))
     const control = el as HTMLInputElement
     const node: UiNode = {
-      id: `ui-${result.length}`, parent: parent?.id ?? null, depth: parent ? parent.depth + 1 : 0,
-      label: el.getAttribute('data-ui') ?? el.getAttribute('aria-label') ?? el.getAttribute('title') ?? (el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 64) || el.tagName.toLowerCase()),
-      component, source: el.closest('[data-ui-source]')?.getAttribute('data-ui-source') ?? null,
-      properties: { tag: el.tagName.toLowerCase(), classes: el.getAttribute('class'), ...attributes,
+      id: `ui-${result.length}`,
+      parent: parent?.id ?? null,
+      depth: parent ? parent.depth + 1 : 0,
+      label:
+        el.getAttribute('data-ui') ??
+        el.getAttribute('aria-label') ??
+        el.getAttribute('title') ??
+        (el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 64) || el.tagName.toLowerCase()),
+      component,
+      source: el.closest('[data-ui-source]')?.getAttribute('data-ui-source') ?? null,
+      properties: {
+        tag: el.tagName.toLowerCase(),
+        classes: el.getAttribute('class'),
+        ...attributes,
         ...('disabled' in el ? { disabled: control.disabled } : {}),
         ...('value' in el ? { value: control.value } : {}),
         ...('checked' in el ? { checked: control.checked } : {}),
         bounds: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
         style: { display: style.display, position: style.position, zIndex: style.zIndex, opacity: style.opacity },
-      }, element: el,
+      },
+      element: el,
     }
     parents.set(el, node)
     result.push(node)

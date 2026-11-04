@@ -152,7 +152,22 @@ test('preview views, finding panels and selected chips never render full diagnos
   const b = board()
   const detail = 'length-match match group DATA spreads 38.884 mm, full explanation belongs only in details'
   const base = { ...b.drc[0], rule: 'length-match', message: detail }
-  b.drc = [base, { ...base, id: 'drc:route-failed:test', rule: 'route-failed', witness: { segments: [[[1, 2], [3, 4]]] } }]
+  b.drc = [
+    base,
+    {
+      ...base,
+      id: 'drc:route-failed:test',
+      rule: 'route-failed',
+      witness: {
+        segments: [
+          [
+            [1, 2],
+            [3, 4],
+          ],
+        ],
+      },
+    },
+  ]
   b.erc = [{ ...base, id: 'erc:pin-type:test', rule: 'pin-type', layer: 'sch' }]
   const render = (component, props = {}) => renderToString(createSSRApp({ render: () => h(component, { board: b, ...props }) }))
   const panel = await render(ui.FindingsList, { kinds: ['drc', 'erc'] })

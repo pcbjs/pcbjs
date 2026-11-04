@@ -126,8 +126,8 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
   // a logo or a bare hole has no pins, so nothing to draw
   const parts = board.schematic.parts.filter(x => (x.placed || x.displayRef) && x.pins.length)
   const byRef = new Map(parts.map(x => [x.ref, x]))
-  const displayRefs = new Map(parts.flatMap(p => p.displayRef ? [[p.ref, p.displayRef] as const] : []))
-  const displayNets = new Map(board.schematic.nets.flatMap(n => n.displayName ? [[n.name, n.displayName] as const] : []))
+  const displayRefs = new Map(parts.flatMap(p => (p.displayRef ? [[p.ref, p.displayRef] as const] : [])))
+  const displayNets = new Map(board.schematic.nets.flatMap(n => (n.displayName ? [[n.name, n.displayName] as const] : [])))
   const padsOf = new Map<string, Pad[]>()
   for (const it of board.items) if (it.kind === 'pad' && it.ref !== undefined) padsOf.set(it.ref, [...(padsOf.get(it.ref) ?? []), it])
   const idOf = new Map(board.items.flatMap(it => (it.uid ? [[it.uid, it.id] as const] : [])))
@@ -878,7 +878,12 @@ function resolveRoot(v: unknown): PcbNode {
 }
 
 /** Where the ref and value of a symbol go, grid units, the start of the baseline, and the grid points they keep free of wires. */
-function textPlace(sym: SymbolDef, box: Box, pins: { side: PinSide; end: Pt }[], part: Pick<BoardSchematicPart, 'ref' | 'displayRef' | 'value'>): { ref: Pt; value: Pt; cells: Pt[] } {
+function textPlace(
+  sym: SymbolDef,
+  box: Box,
+  pins: { side: PinSide; end: Pt }[],
+  part: Pick<BoardSchematicPart, 'ref' | 'displayRef' | 'value'>,
+): { ref: Pt; value: Pt; cells: Pt[] } {
   const mode = textMode(sym, pins)
   const h = PIN_TEXT / 2.54
   const lr = textUnits(part.displayRef ?? part.ref),

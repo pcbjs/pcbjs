@@ -14,7 +14,8 @@ onMounted(() => {
     const bounds = stage.getBoundingClientRect()
     const left = stage.querySelector<HTMLElement>(':scope > .ide-tools, :scope > .seg.mode')
     const right = stage.querySelector<HTMLElement>('.view3d-buttons, .board-view .bv-tools, .sch-view .bv-tools')
-    const l = left?.getBoundingClientRect(), r = right?.getBoundingClientRect()
+    const l = left?.getBoundingClientRect(),
+      r = right?.getBoundingClientRect()
     const narrow = bounds.width < 720
     set('--badge-left', narrow ? '8px' : `${Math.max(8, (l?.right ?? bounds.left) - bounds.left + 12)}px`)
     set('--badge-right', narrow ? '8px' : `${Math.max(8, bounds.right - (r?.left ?? bounds.right) + 12)}px`)
@@ -35,7 +36,10 @@ onMounted(() => {
   mutations.observe(stage, { childList: true, subtree: true })
   observe()
 })
-onBeforeUnmount(() => { observer?.disconnect(); mutations?.disconnect() })
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  mutations?.disconnect()
+})
 </script>
 
 <template><span ref="marker" hidden aria-hidden="true"></span></template>

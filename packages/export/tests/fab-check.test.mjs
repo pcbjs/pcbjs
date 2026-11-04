@@ -19,17 +19,28 @@ test('required files: every copper layer and the profile must be present, even w
   const b = compileBoard(h(PCB, { name: 'Empty', stackup: fourLayer() }, h('path', { layer: 'Edge.Cuts', d: rect(20, 20) })))
   const layers = ['F.Cu', 'In1.Cu', 'In2.Cu', 'B.Cu', 'Edge.Cuts']
   const gerbers = layers.map(layer => gerberLayer(b, layer, DATE))
-  assert.ok(gerbers.slice(0, 4).every(g => g.empty), 'the writer represents unused copper layers as empty Gerbers')
+  assert.ok(
+    gerbers.slice(0, 4).every(g => g.empty),
+    'the writer represents unused copper layers as empty Gerbers',
+  )
   assert.deepEqual(checkFab(b, gerbers).findings, [])
   for (let missing = 0; missing < gerbers.length; missing++) {
-    const found = checkFab(b, gerbers.filter((_, i) => i !== missing)).findings
+    const found = checkFab(
+      b,
+      gerbers.filter((_, i) => i !== missing),
+    ).findings
     assert.equal(found.length, 1, layers[missing])
     assert.equal(found[0].layer, layers[missing])
     assert.equal(found[0].severity, 'error')
     assert.equal(found[0].rule, 'fab-mismatch')
     assert.match(found[0].message, /expected Gerber file is missing/)
   }
-  assert.deepEqual(checkFab(b, []).findings.map(f => f.layer).sort(), [...layers].sort())
+  assert.deepEqual(
+    checkFab(b, [])
+      .findings.map(f => f.layer)
+      .sort(),
+    [...layers].sort(),
+  )
   const fab = buildFab(b, DATE, { check: true })
   assert.deepEqual(mismatches(b), [])
   assert.match(fab.readme, /Gerber self check: passed/)
@@ -282,7 +293,6 @@ test('pieces: island removal keeps a piece joined to a pad through a track, drop
   assert.equal(dangling.unconnected, 1)
 })
 
-
 test('writer subset rejects truncated structure and residual open profile paths', () => {
   resetDefaults()
   const b = compileBoard(h(PCB, { name: 'Structure' }, h('path', { layer: 'Edge.Cuts', d: rect(20, 20) })))
@@ -297,15 +307,12 @@ test('writer subset rejects truncated structure and residual open profile paths'
     [2, t => t.replace('M02*', 'G36*\nM02*')],
     [2, t => t.replace(/^D\d+\*\n/gm, '')],
   ]) {
-    const corrupt = gs.map((g, i) => i === index ? { ...g, text: mutate(g.text) } : g)
+    const corrupt = gs.map((g, i) => (i === index ? { ...g, text: mutate(g.text) } : g))
     assert.ok(checkFab(b, corrupt).findings.some(f => f.layer === (index === 2 ? 'Edge.Cuts' : 'F.Cu')))
   }
-  for (const text of [
-    '%FSLAX46Y46*%\n%MOMM*%\nG36*\nX0Y0D02*\nX100Y0D01*\nX100Y100D01*\nG37*\nM02*',
-    '%FSLAX46Y46*%\n%MOMM*%\nX0Y0D03*\nM02*',
-  ]) assert.throws(() => readGerber(text), /region|aperture/)
+  for (const text of ['%FSLAX46Y46*%\n%MOMM*%\nG36*\nX0Y0D02*\nX100Y0D01*\nX100Y100D01*\nG37*\nM02*', '%FSLAX46Y46*%\n%MOMM*%\nX0Y0D03*\nM02*'])
+    assert.throws(() => readGerber(text), /region|aperture/)
 })
-
 
 test('writer subset retains arcs, polarity changes and empty copper', () => {
   const head = '%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.2*%\n'

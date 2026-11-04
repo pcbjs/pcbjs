@@ -7,7 +7,10 @@ const pose = (x, scale = 1) => ({ centre: [x, x + 1], scale })
 test('finding A to B and manual motion retain the original camera checkpoint', () => {
   const slots = new Map()
   const tx = focusTransaction(slots, 'board:target', '2d')
-  const original = pose(1, 4), a = pose(10), b = pose(20), manual = pose(30, 0.5)
+  const original = pose(1, 4),
+    a = pose(10),
+    b = pose(20),
+    manual = pose(30, 0.5)
   tx.save(original)
   tx.begin('finding', original)
   tx.save(a)
@@ -27,7 +30,9 @@ test('finding A to B and manual motion retain the original camera checkpoint', (
 test('nested frame and finding cancellation restores the frame, then the original camera', () => {
   const slots = new Map()
   const tx = focusTransaction(slots, 'board:target', '3d')
-  const original = pose(1, 4), isolated = pose(10, 2), finding = pose(20)
+  const original = pose(1, 4),
+    isolated = pose(10, 2),
+    finding = pose(20)
   tx.begin('frame', original)
   tx.save(isolated)
   tx.begin('finding', isolated)
@@ -44,7 +49,9 @@ test('nested frame and finding cancellation restores the frame, then the origina
 test('consecutive offscreen cancellations queue the outermost rollback for remount', () => {
   const slots = new Map()
   let tx = focusTransaction(slots, 'board:target', 'sch')
-  const original = pose(1, 4), framed = pose(10, 2), finding = pose(20)
+  const original = pose(1, 4),
+    framed = pose(10, 2),
+    finding = pose(20)
   tx.begin('frame', original)
   tx.save(framed)
   tx.begin('finding', framed)
@@ -62,7 +69,9 @@ test('consecutive offscreen cancellations queue the outermost rollback for remou
 test('a queued offscreen finding rollback can be consumed before another finding begins', () => {
   const slots = new Map()
   let tx = focusTransaction(slots, 'board:target', '2d')
-  const original = pose(1, 4), a = pose(10), b = pose(20)
+  const original = pose(1, 4),
+    a = pose(10),
+    b = pose(20)
   tx.begin('finding', original)
   tx.save(a)
   cancelFocus(slots, [])
@@ -77,10 +86,16 @@ test('a queued offscreen finding rollback can be consumed before another finding
 
 test('target, view and pane scopes keep independent checkpoints and displayed state', () => {
   const slots = new Map()
-  const specifications = [['board:target-a', '2d'], ['board:target-b', '2d'], ['board:target-a', '3d'], ['board:target-a', 'sch']]
+  const specifications = [
+    ['board:target-a', '2d'],
+    ['board:target-b', '2d'],
+    ['board:target-a', '3d'],
+    ['board:target-a', 'sch'],
+  ]
   const views = specifications.map(([scope, view], i) => {
     const tx = focusTransaction(slots, scope, view)
-    const original = pose(i + 1, 4), focused = pose(i + 10)
+    const original = pose(i + 1, 4),
+      focused = pose(i + 10)
     tx.begin('finding', original)
     tx.save(focused)
     return { tx, original, focused }
@@ -103,7 +118,9 @@ test('target, view and pane scopes keep independent checkpoints and displayed st
 test('canceling an outer frame rebases a still-active finding onto the original camera', () => {
   const slots = new Map()
   const tx = focusTransaction(slots, 'board:target', '3d')
-  const original = pose(1, 4), frame = pose(10, 2), finding = pose(20)
+  const original = pose(1, 4),
+    frame = pose(10, 2),
+    finding = pose(20)
   tx.begin('frame', original)
   tx.save(frame)
   tx.begin('finding', frame)

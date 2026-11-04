@@ -94,13 +94,14 @@ export function sameSelection(a: Selection, b: Selection): boolean {
 /** Normalize members and findings; clearing entity focus leaves the current instance editing context. */
 export function normalizeSelection(s: Selection, findings?: readonly { id?: string; refs?: readonly string[] }[], previous?: Selection): Selection {
   const refs = [...new Set(s.refs)]
-  const anchor = s.anchor && refs.includes(s.anchor) ? s.anchor : refs[refs.length - 1] ?? null
+  const anchor = s.anchor && refs.includes(s.anchor) ? s.anchor : (refs[refs.length - 1] ?? null)
   let finding = s.finding ?? null
   if (finding && anchor && anchor !== finding && findings) {
     const affected = findings.find(f => f.id === finding)?.refs ?? []
     if (!affected.some(ref => ref === anchor || ref.startsWith(anchor + '/') || anchor!.startsWith(ref + '/'))) finding = null
   }
-  const blurred = !refs.length && !previous?.finding && previous?.refs.length && previous.isolate?.mode === 'instance' && s.isolate?.mode === 'instance' && s.isolate.ref === previous.isolate.ref
+  const blurred =
+    !refs.length && !previous?.finding && previous?.refs.length && previous.isolate?.mode === 'instance' && s.isolate?.mode === 'instance' && s.isolate.ref === previous.isolate.ref
   return { ...s, refs, anchor, finding, ...(blurred ? { isolate: null, isolateChoice: null, level: null } : {}) }
 }
 
@@ -114,12 +115,37 @@ export function isSelection(value: unknown): value is Selection {
     if (v === null) return true
     if (!v || typeof v !== 'object') return false
     const i = v as Isolation
-    return typeof i.ref === 'string' && typeof i.context === 'string' && strings(i.instances) && typeof i.preview === 'boolean' && (i.mode === undefined || i.mode === 'instance' || i.mode === 'library')
+    return (
+      typeof i.ref === 'string' &&
+      typeof i.context === 'string' &&
+      strings(i.instances) &&
+      typeof i.preview === 'boolean' &&
+      (i.mode === undefined || i.mode === 'instance' || i.mode === 'library')
+    )
   }
-  if (typeof s.board !== 'string' || !nullable(s.target) || typeof s.snapshot !== 'string' || !strings(s.refs) || !nullable(s.anchor) || !nullable(s.level) || !isolation(s.isolate) || (s.isolateChoice !== undefined && !isolation(s.isolateChoice)) || (s.finding !== undefined && !nullable(s.finding))) return false
+  if (
+    typeof s.board !== 'string' ||
+    !nullable(s.target) ||
+    typeof s.snapshot !== 'string' ||
+    !strings(s.refs) ||
+    !nullable(s.anchor) ||
+    !nullable(s.level) ||
+    !isolation(s.isolate) ||
+    (s.isolateChoice !== undefined && !isolation(s.isolateChoice)) ||
+    (s.finding !== undefined && !nullable(s.finding))
+  )
+    return false
   if (s.marks !== undefined) {
     const m = s.marks
-    if (!m || typeof m !== 'object' || (m.reference !== undefined && typeof m.reference !== 'string') || (m.sch !== undefined && !strings(m.sch)) || (m.points !== undefined && (!Array.isArray(m.points) || !m.points.every(p => Array.isArray(p) && p.length === 2 && p.every(n => typeof n === 'number' && Number.isFinite(n)))))) return false
+    if (
+      !m ||
+      typeof m !== 'object' ||
+      (m.reference !== undefined && typeof m.reference !== 'string') ||
+      (m.sch !== undefined && !strings(m.sch)) ||
+      (m.points !== undefined &&
+        (!Array.isArray(m.points) || !m.points.every(p => Array.isArray(p) && p.length === 2 && p.every(n => typeof n === 'number' && Number.isFinite(n)))))
+    )
+      return false
   }
   return Number.isSafeInteger(s.seq) && s.seq >= 0 && ['editor', 'viewer', 'tree', 'url', 'sync', 'agent'].includes(s.by)
 }

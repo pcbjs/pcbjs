@@ -197,7 +197,10 @@ export function chainCallAt(sf: ts.SourceFile, offset: number): ChainCall | null
   const visit = (n: ts.Node): void => {
     if (out || offset < n.pos || offset >= n.end) return
     if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.getStart(sf) === offset) {
-      const dot = n.expression.getChildren(sf).find(child => child.kind === ts.SyntaxKind.DotToken)?.getStart(sf)
+      const dot = n.expression
+        .getChildren(sf)
+        .find(child => child.kind === ts.SyntaxKind.DotToken)
+        ?.getStart(sf)
       if (dot === undefined) return
       out = {
         method: n.expression.name.text,
@@ -322,7 +325,7 @@ export function setGrid(el: Element, pitch: number): OffsetEdit | null {
     const statement = sf.statements[0]
     const object = statement && ts.isExpressionStatement(statement) ? unwrap(statement.expression) : null
     const last = object && ts.isObjectLiteralExpression(object) ? object.properties.at(-1) : undefined
-    if (last && ts.isPropertyAssignment(last) && ((ts.isIdentifier(last.name) || ts.isStringLiteral(last.name)) && last.name.text === 'snap')) {
+    if (last && ts.isPropertyAssignment(last) && (ts.isIdentifier(last.name) || ts.isStringLiteral(last.name)) && last.name.text === 'snap') {
       value = expr.slice(0, last.initializer.getStart(sf) - 1) + pitch + expr.slice(last.initializer.end - 1)
     } else value = `{ ...(${expr}), snap: ${pitch} }`
   }

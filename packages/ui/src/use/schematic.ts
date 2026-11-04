@@ -87,7 +87,9 @@ export function useCircuit(ctx: PaneContext) {
   const t = useTree(ctx)
   const circuit = computed(() => (store.activeCircuit ? (t.instanceByKey.value.get(store.activeCircuit) ?? null) : null))
   const placed = (r: string) => !!store.site?.footprints.some(f => f.ref === r)
-  const circuitParts = computed(() => (circuit.value?.refs ?? []).map(r => schematicPart(t.sch.value, r) ?? { ref: r, displayRef: undefined, value: '', local: r, placed: placed(r) }))
+  const circuitParts = computed(() =>
+    (circuit.value?.refs ?? []).map(r => schematicPart(t.sch.value, r) ?? { ref: r, displayRef: undefined, value: '', local: r, placed: placed(r) }),
+  )
   const circuitNets = computed(() => instanceNets(t.sch.value, circuit.value?.circuit.path))
   const circuitPlaced = computed(() => !!circuit.value?.refs.some(placed))
   return { ...t, circuit, circuitParts, circuitNets, circuitPlaced }
@@ -97,10 +99,10 @@ export function useCircuit(ctx: PaneContext) {
 export function usePart(ctx: PaneContext) {
   const { board: store } = ctx
   const t = useTree(ctx)
-  const sourceSite = computed(() => ctx.pane.mode !== 'checks' ? store.layoutSite : store.site)
+  const sourceSite = computed(() => (ctx.pane.mode !== 'checks' ? store.layoutSite : store.site))
   const part = computed(() => sourceSite.value?.footprints.find(f => f.ref === store.activeRef) ?? null)
   const schPart = computed(() => schematicPart(t.sch.value, store.activeRef))
-  const partPath = computed(() => schPart.value?.displayRef ? null : partPathLinks(schPart.value))
+  const partPath = computed(() => (schPart.value?.displayRef ? null : partPathLinks(schPart.value)))
   const partPlace = computed(() => (sourceSite.value && part.value ? sourceTarget(sourceSite.value, { ref: part.value.ref }, 'placement') : null))
   const partDef = computed<SourceTarget | null>(() => {
     const d = sourceSite.value && part.value ? sourceTarget(sourceSite.value, { ref: part.value.ref }, 'definition') : null

@@ -24,16 +24,24 @@ export interface CameraSnapshot {
 
 export function snapshotCamera(camera: PerspectiveCamera, controls: OrbitCameraControls, fitRadius: number): CameraSnapshot {
   return {
-    position: camera.position.clone(), target: controls.target.clone(), cursor: controls.cursor.clone(),
-    up: camera.up.clone(), quaternion: camera.quaternion.clone(),
-    near: camera.near, far: camera.far, fov: camera.fov, zoom: camera.zoom, fitRadius,
+    position: camera.position.clone(),
+    target: controls.target.clone(),
+    cursor: controls.cursor.clone(),
+    up: camera.up.clone(),
+    quaternion: camera.quaternion.clone(),
+    near: camera.near,
+    far: camera.far,
+    fov: camera.fov,
+    zoom: camera.zoom,
+    fitRadius,
   }
 }
 
 /** Stop every automatic move before draining orbit inertia, so the next frame cannot overwrite the restored pose. */
 export function restoreCamera(camera: PerspectiveCamera, controls: OrbitCameraControls, pose: CameraSnapshot, stop: () => void): number {
   stop()
-  const damping = controls.enableDamping, autoRotate = controls.autoRotate
+  const damping = controls.enableDamping,
+    autoRotate = controls.autoRotate
   controls.enableDamping = false
   controls.autoRotate = false
   controls.update()

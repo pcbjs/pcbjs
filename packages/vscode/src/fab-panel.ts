@@ -149,8 +149,7 @@ export class FabPanel implements vscode.Disposable {
         return
       }
       await this.h.openFinding(a, { root: c.root, session: c.session })
-    }
-    else if (a.kind === 'findings') await vscode.commands.executeCommand('pcbjs.findings.focus')
+    } else if (a.kind === 'findings') await vscode.commands.executeCommand('pcbjs.findings.focus')
     else if (a.kind === 'scm') await vscode.commands.executeCommand('workbench.view.scm')
     else if (a.kind === 'open') await vscode.window.showTextDocument(vscode.Uri.file(a.file), { preview: true })
     else if (a.kind === 'save') {

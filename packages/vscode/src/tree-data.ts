@@ -197,7 +197,8 @@ export function carryState(prev: Node[], next: Node[], state: TreeState): TreeSt
 
 /** The nodes with `expanded` set from a carried state, for the ids the state names. */
 export function withExpanded(nodes: Node[], expanded: readonly string[], collapsed: readonly string[] = []): Node[] {
-  const open = new Set(expanded), closed = new Set(collapsed)
+  const open = new Set(expanded),
+    closed = new Set(collapsed)
   return nodes.map(n => (n.children ? { ...n, expanded: !closed.has(n.id) && (!!n.expanded || open.has(n.id)), children: withExpanded(n.children, expanded, collapsed) } : n))
 }
 
@@ -258,8 +259,10 @@ export function bomNodes(site: Site, root: string): Node[] {
 export const entryJump = (board: string, project?: string) => ({ board, refs: [`board:${board}`], focus: true, ...(project ? { project } : {}) })
 
 /** A row's source jump keeps its session across asynchronous navigation and compile waits. */
-export const entryJumper = (link: Pick<SessionLink, 'open' | 'request'> | undefined, project?: string) => (board: string): Promise<unknown> =>
-  link?.open ? link.request('session/select', entryJump(board, project)) : Promise.resolve()
+export const entryJumper =
+  (link: Pick<SessionLink, 'open' | 'request'> | undefined, project?: string) =>
+  (board: string): Promise<unknown> =>
+    link?.open ? link.request('session/select', entryJump(board, project)) : Promise.resolve()
 
 export type BoardRow = { name: string; title?: string; entry?: string; status?: string; targets?: string[] }
 
@@ -286,8 +289,8 @@ export function boardNodes(
   const roots = scopes?.scopes.length ? scopes.scopes : info ? [{ root: info.root ?? '', route: '/', displayed: true, boards: info.boards, status: 'ok' }] : []
   return roots.map(scope => {
     const on = scope.displayed
-    const boards = on ? info?.boards ?? scope.boards ?? [] : scope.boards ?? []
-    const entries = [...new Set(declared[scope.root] ?? boards.flatMap(b => b.entry ? [path.resolve(scope.root, b.entry)] : []))]
+    const boards = on ? (info?.boards ?? scope.boards ?? []) : (scope.boards ?? [])
+    const entries = [...new Set(declared[scope.root] ?? boards.flatMap(b => (b.entry ? [path.resolve(scope.root, b.entry)] : [])))]
     const config = configs[scope.root] ?? path.join(scope.root, 'pcb.config.ts')
     const row = (b: BoardRow) => boardRow(b, on ? shown : undefined, on && b.name === shown ? parts : [], scope.route, scope.root)
     const children = boards.filter(b => b.entry && entries.includes(path.resolve(scope.root, b.entry))).map(row)

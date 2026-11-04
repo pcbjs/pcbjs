@@ -116,7 +116,10 @@ test('ref:at controls a rotated back-side label and retains its attribute source
   const src = { file: 'pcb.tsx', line: 5, col: 24, endLine: 5, endCol: 42, hash: '123456789abc' }
   const b = board({}, h(R1, { at: '15 10 90', side: 'B', 'ref:at': '2 -3 30', __refSrc: src }))
   const t = refText(b, 'R1')
-  assert.deepEqual(t.at.map(n => Math.round(n * 1e6) / 1e6), [12, 12])
+  assert.deepEqual(
+    t.at.map(n => Math.round(n * 1e6) / 1e6),
+    [12, 12],
+  )
   assert.equal(t.layer, 'B.SilkS')
   assert.equal(t.mirrored, true)
   assert.equal(t.generated, 'reference')

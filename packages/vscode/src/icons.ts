@@ -37,9 +37,10 @@ export async function findEntries(dirs: string[]): Promise<string[]> {
   return out
 }
 
-const git = (root: string, args: string[]): Promise<string> => new Promise((resolve, reject) => {
-  execFile('git', ['-C', root, ...args], { encoding: 'utf8' }, (error, stdout) => error ? reject(error) : resolve(stdout))
-})
+const git = (root: string, args: string[]): Promise<string> =>
+  new Promise((resolve, reject) => {
+    execFile('git', ['-C', root, ...args], { encoding: 'utf8' }, (error, stdout) => (error ? reject(error) : resolve(stdout)))
+  })
 export const configFile = (root: string): string => CONFIG_NAMES.map(n => path.join(root, n)).find(f => fs.existsSync(f)) ?? path.join(root, CONFIG_NAMES[0])
 
 /** Board navigation excludes untracked scratch entries inside Git; icon discovery remains unchanged. */
@@ -49,9 +50,18 @@ export async function boardEntries(root: string): Promise<string[]> {
     const stdout = await git(root, ['ls-files', '--full-name', '-z'])
     const top = (await git(root, ['rev-parse', '--show-toplevel'])).trim()
     const canonical = (file: string): string => {
-      try { return fs.realpathSync.native(file) } catch { return path.resolve(file) }
+      try {
+        return fs.realpathSync.native(file)
+      } catch {
+        return path.resolve(file)
+      }
     }
-    const tracked = new Set(stdout.split('\0').filter(Boolean).map(f => canonical(path.resolve(top, f))))
+    const tracked = new Set(
+      stdout
+        .split('\0')
+        .filter(Boolean)
+        .map(f => canonical(path.resolve(top, f))),
+    )
     return entries.filter(e => tracked.has(canonical(e)))
   } catch {
     return entries

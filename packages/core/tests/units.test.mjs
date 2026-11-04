@@ -123,7 +123,6 @@ test('grammar: angles, positions and the spaced unit hint', () => {
   assert.equal(formatNum(-0.00001), '0')
 })
 
-
 test('numeric geometry units reject nonfinite values and conversion overflow', () => {
   for (const v of [NaN, Infinity, -Infinity, '1e309', '-1e309', '1e308m']) assert.throws(() => mm(v), /finite/)
   for (const v of [NaN, Infinity, -Infinity, '1e309deg', '1e308rad']) assert.throws(() => deg(v), /finite/)

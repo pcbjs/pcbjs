@@ -21,20 +21,26 @@ export function cancelFocus(slots: Map<string, FocusSlot>, active: readonly Focu
 export function focusTransaction<T>(slots: Map<string, FocusSlot>, scope: string, view: '2d' | '3d' | 'sch') {
   const key = `${scope}:${view}`
   let slot = slots.get(key)
-  if (!slot) slots.set(key, slot = { frames: [] })
+  if (!slot) slots.set(key, (slot = { frames: [] }))
   const state = slot
   return {
     begin(kind: FocusKind, snapshot: T): void {
       if (!state.frames.some(frame => frame.kind === kind)) state.frames.push({ kind, value: snapshot })
     },
-    cancel(active: readonly FocusKind[]): void { cancel(state, active) },
+    cancel(active: readonly FocusKind[]): void {
+      cancel(state, active)
+    },
     takeRestore(): T | undefined {
       const value = state.pending as T | undefined
       delete state.pending
       if (value !== undefined) state.current = value
       return value
     },
-    save(snapshot: T): void { state.current = snapshot },
-    current(): T | undefined { return state.current as T | undefined },
+    save(snapshot: T): void {
+      state.current = snapshot
+    },
+    current(): T | undefined {
+      return state.current as T | undefined
+    },
   }
 }

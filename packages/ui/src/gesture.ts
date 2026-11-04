@@ -88,10 +88,11 @@ export function useGesture(d: GestureInput) {
   const rw = computed(() => on.value && t.mode?.mode === 'rw' && !(d.board().variant && d.board().variant!.index !== 0))
   const node = computed<SiteEditNode | null>(() => editNodeOf(d.board(), d.sel().anchor))
   /** an isolation writes the definition, which a part with an own placement in the instance does not follow */
-  const isolated = computed(() => d.sel().isolate?.mode === 'instance' ? null : d.sel().isolate?.ref ?? null)
-  const instanceWhy = (n: SiteEditNode | null) => d.sel().isolate?.mode === 'instance' && n?.def && !n.layout && !n.owned && reachOf(d.board().schematic.circuits, n.def).length > 1
-    ? 'this shared element has no instance override; choose Edit library layout'
-    : null
+  const isolated = computed(() => (d.sel().isolate?.mode === 'instance' ? null : (d.sel().isolate?.ref ?? null)))
+  const instanceWhy = (n: SiteEditNode | null) =>
+    d.sel().isolate?.mode === 'instance' && n?.def && !n.layout && !n.owned && reachOf(d.board().schematic.circuits, n.def).length > 1
+      ? 'this shared element has no instance override; choose Edit library layout'
+      : null
   const tools = computed<Tool[]>(() => (rw.value && node.value ? toolsOf(node.value.caps).filter(tool => targets(tool.id).refs.length) : []))
   /** why the anchor takes no tools, said under the chip */
   const why = computed(() => {
@@ -114,21 +115,33 @@ export function useGesture(d: GestureInput) {
   })
   const gridPitch = shallowRef<number | null>(null)
   const snapOverride = shallowRef<boolean | null>(null)
-  watch(() => node.value?.ref, () => { gridPitch.value = null; snapOverride.value = null })
+  watch(
+    () => node.value?.ref,
+    () => {
+      gridPitch.value = null
+      snapOverride.value = null
+    },
+  )
   const originalGrid = computed(() => {
     const name = node.value?.grid ?? (t.assist?.board === d.board().name ? t.assist.grid : null)
-    return name ? d.board().grids?.find(g => g.name === name) ?? MM_GRID : MM_GRID
+    return name ? (d.board().grids?.find(g => g.name === name) ?? MM_GRID) : MM_GRID
   })
   const sourceGrid = computed<SnapGrid>(() => {
-    const original = originalGrid.value, snap = node.value?.snap
+    const original = originalGrid.value,
+      snap = node.value?.snap
     return snap ? { ...original, pitch: snap.pitch, ...(snap.maxLevel !== undefined ? { maxLevel: snap.maxLevel } : {}) } : original
   })
-  const chosenGrid = computed<SnapGrid>(() => gridPitch.value ? { ...sourceGrid.value, pitch: gridPitch.value } : sourceGrid.value)
-  const alignment = computed(() => node.value?.at ? alignedLevel(chosenGrid.value, [node.value.at[0], node.value.at[1]]) : 0)
+  const chosenGrid = computed<SnapGrid>(() => (gridPitch.value ? { ...sourceGrid.value, pitch: gridPitch.value } : sourceGrid.value))
+  const alignment = computed(() => (node.value?.at ? alignedLevel(chosenGrid.value, [node.value.at[0], node.value.at[1]]) : 0))
   const snapEnabled = computed(() => snapOverride.value ?? alignment.value !== null)
   const paintGrid = computed<SnapGrid>(() => ({ ...chosenGrid.value, ...(alignment.value !== null ? { level: Math.max(levelOf(chosenGrid.value, false), alignment.value) } : {}) }))
-  watch(() => [node.value?.ref, sourceGrid.value.pitch, sourceGrid.value.maxLevel, sourceGrid.value.minor.join(',')], () => { snapOverride.value = null })
-  const grid = computed<SnapGrid | null>(() => snapEnabled.value ? paintGrid.value : null)
+  watch(
+    () => [node.value?.ref, sourceGrid.value.pitch, sourceGrid.value.maxLevel, sourceGrid.value.minor.join(',')],
+    () => {
+      snapOverride.value = null
+    },
+  )
+  const grid = computed<SnapGrid | null>(() => (snapEnabled.value ? paintGrid.value : null))
   /** the grid an editor hover lit, drawn as lines in its own frame */
   const shown = computed<SnapGrid | null>(() => (t.lit?.board === d.board().name ? (d.board().grids?.find(g => g.name === t.lit!.grid) ?? null) : null))
   const route = computed(() => (node.value?.caps.includes('chain') ? (d.board().routes?.find(r => r.id === node.value!.ref) ?? null) : null))
@@ -137,17 +150,23 @@ export function useGesture(d: GestureInput) {
   const targets = (mode: ToolId) => {
     const needs = mode === 'point' ? 'chain' : mode === 'layer' ? 'layered' : 'placed'
     const refs = mode === 'point' ? [node.value?.ref].filter((r): r is string => !!r) : d.sel().refs
-    const nodes = [...new Map(refs.flatMap(ref => {
-      const n = editNodeOf(d.board(), ref)
-      return n && !instanceWhy(n) && n.caps.includes(needs) && (mode === 'point' || (n.at && !n.auto?.length && !(isolated.value && n.owned))) ? [[n.ref, n] as const] : []
-    })).values()]
+    const nodes = [
+      ...new Map(
+        refs.flatMap(ref => {
+          const n = editNodeOf(d.board(), ref)
+          return n && !instanceWhy(n) && n.caps.includes(needs) && (mode === 'point' || (n.at && !n.auto?.length && !(isolated.value && n.owned))) ? [[n.ref, n] as const] : []
+        }),
+      ).values(),
+    ]
     const members = nodes.map(n => n.ref)
-    const drawn = drawnOf(d.board(), { ...d.sel(), refs: members, anchor: members.includes(node.value?.ref ?? '') ? node.value!.ref : members[0] ?? null })
+    const drawn = drawnOf(d.board(), { ...d.sel(), refs: members, anchor: members.includes(node.value?.ref ?? '') ? node.value!.ref : (members[0] ?? null) })
     const poses = nodes.filter(n => n.at)
-    const xs = poses.map(n => n.at![0]), ys = poses.map(n => n.at![1])
-    const pivot: Pt = poses.length === 1 && poses[0].pivot ? poses[0].pivot : poses.length ? [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2] : [0, 0]
+    const xs = poses.map(n => n.at![0]),
+      ys = poses.map(n => n.at![1])
+    const pivot: Pt =
+      poses.length === 1 && poses[0].pivot ? poses[0].pivot : poses.length ? [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2] : [0, 0]
     const ids = new Set((d.board().items ?? []).filter(it => drawn.ids.has(it.id) && !it.ref).map(it => it.id))
-    const anchor = members.includes(node.value?.ref ?? '') ? node.value!.ref : members[0] ?? null
+    const anchor = members.includes(node.value?.ref ?? '') ? node.value!.ref : (members[0] ?? null)
     return { refs: members, anchor, node: nodes.find(n => n.ref === anchor) ?? null, parts: drawn.parts, ids, pivot }
   }
   const box = computed<Box | null>(() => {
@@ -309,10 +328,20 @@ export function useGesture(d: GestureInput) {
     const ready = () => node.value?.ref === ref && node.value.steps?.length === count
     if (ready()) return Promise.resolve(true)
     return new Promise(resolve => {
-      const timer = setTimeout(() => { stop(); resolve(false) }, 10000)
-      const stop = watch(() => node.value, () => {
-        if (ready()) { clearTimeout(timer); stop(); resolve(true) }
-      })
+      const timer = setTimeout(() => {
+        stop()
+        resolve(false)
+      }, 10000)
+      const stop = watch(
+        () => node.value,
+        () => {
+          if (ready()) {
+            clearTimeout(timer)
+            stop()
+            resolve(true)
+          }
+        },
+      )
     })
   }
   /** One step at once: `R`, the side, a deleted or inserted point: a begin, an update and a commit. */
@@ -321,7 +350,7 @@ export function useGesture(d: GestureInput) {
     if (!rw.value || !n) return
     const affected = targets(tool)
     if (!affected.anchor) return
-    const txn = begin(tool, affected.refs, tool === 'point' ? anchor ?? n.ref : affected.anchor)
+    const txn = begin(tool, affected.refs, tool === 'point' ? (anchor ?? n.ref) : affected.anchor)
     txn.started.catch(failed)
     txn.update(u)
     return finish(txn)
@@ -338,8 +367,7 @@ export function useGesture(d: GestureInput) {
     if (kind === 'ring') {
       if (!affected.refs.length) return false
       drag.value = { ...base, kind: 'ring', parts: affected.parts, ids: affected.ids, anchor: affected.anchor!, refs: affected.refs, tool: 'rotate' }
-    }
-    else if (kind === 'pt' || kind === 'leg') {
+    } else if (kind === 'pt' || kind === 'leg') {
       // a control point locks to an axis through where it is, a leg handle through the press
       const own = kind === 'pt' ? route.value?.pts?.[hit.k ?? -1] : undefined
       drag.value = { ...base, kind, origin: own ? [own[0], own[1]] : start, parts: new Set(), anchor: `${n.ref}/${kind}:${hit.k}`, refs: [n.ref], tool: 'point' }
@@ -347,13 +375,21 @@ export function useGesture(d: GestureInput) {
       if (hit.id == null || d.board().items?.find(it => it.id === hit.id)?.route !== n.ref) return false
       const focused = /\/pt:(\d+)$/.exec(d.sel().anchor ?? '')
       if (!focused) return false
-      const j = +focused[1] - 1, pts = route.value?.pts
+      const j = +focused[1] - 1,
+        pts = route.value?.pts
       if (!pts?.[j + 1] || !/^[LlHhVvAaZ]$/.test(n.steps?.[j]?.op ?? '')) return false
-      const a = pts[j], b = pts[j + 1], length = Math.hypot(b[0] - a[0], b[1] - a[1])
+      const a = pts[j],
+        b = pts[j + 1],
+        length = Math.hypot(b[0] - a[0], b[1] - a[1])
       const curved = /^[Aa]$/.test(n.steps![j].op)
       const arc = curved ? arcHit(localPoint(n.m, a), localPoint(n.m, b), n.steps![j].angle ?? 0, localPoint(n.m, start)) : null
       const distance = arc ? arc.distance * Math.hypot(n.m[0], n.m[1]) : toSegment(start, a, b)
-      if ((curved && !arc) || distance > MAGNET_PX * d.px() || Math.min(Math.hypot(start[0] - a[0], start[1] - a[1]), Math.hypot(start[0] - b[0], start[1] - b[1])) < Math.min(length / 4, MAGNET_PX * d.px())) return false
+      if (
+        (curved && !arc) ||
+        distance > MAGNET_PX * d.px() ||
+        Math.min(Math.hypot(start[0] - a[0], start[1] - a[1]), Math.hypot(start[0] - b[0], start[1] - b[1])) < Math.min(length / 4, MAGNET_PX * d.px())
+      )
+        return false
       drag.value = { ...base, kind: 'track', origin: start, parts: new Set(), anchor: n.ref, refs: [n.ref], tool: 'point' }
     } else if (tool.value === 'move' && n.caps.includes('placed')) {
       const own = affected.ids
@@ -388,7 +424,7 @@ export function useGesture(d: GestureInput) {
       const r = ringMods(e)
       const heading = angleAt(g.origin, p)
       const previous = g.heading ?? angleAt(g.origin, g.start)
-      g.turn = (g.turn ?? 0) + ((heading - previous + 540) % 360 - 180)
+      g.turn = (g.turn ?? 0) + (((heading - previous + 540) % 360) - 180)
       g.heading = heading
       u = { angle: snapAngle(g.turn, r, g.rot, grid.value?.angle ?? 0), free: r.free }
     } else {
@@ -446,14 +482,16 @@ export function useGesture(d: GestureInput) {
       if (!arc) return
       at = worldPoint(n.m, arc.point)
     }
-    const local = localPoint(n.m, at), start = localPoint(n.m, pts[best])
+    const local = localPoint(n.m, at),
+      start = localPoint(n.m, pts[best])
     if (/^[Hh]$/.test(n.steps[best].op)) local[1] = start[1]
     if (/^[Vv]$/.test(n.steps[best].op)) local[0] = start[0]
     at = worldPoint(n.m, local)
     if (Math.hypot(at[0] - pts[best][0], at[1] - pts[best][1]) < 1e-6 || Math.hypot(at[0] - pts[best + 1][0], at[1] - pts[best + 1][1]) < 1e-6) return
-    const endpoint = best + 2, count = n.steps.length
+    const endpoint = best + 2,
+      count = n.steps.length
     void oneShot('point', { point: { at }, insert: true }, `${n.ref}/pt:${best}`)?.then(async result => {
-      if (!result?.written.some(w => w.applied) || !await waitForSteps(n.ref, count + 1)) return
+      if (!result?.written.some(w => w.applied) || !(await waitForSteps(n.ref, count + 1))) return
       const anchor = `${n.ref}/pt:${endpoint}`
       d.store.setSel({ ...d.sel(), refs: [anchor], anchor })
     })

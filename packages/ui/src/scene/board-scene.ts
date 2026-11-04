@@ -923,7 +923,8 @@ export class BoardScene {
     for (const bt of items.batches) {
       const name = bt.group.name,
         dimmed = layerDimmed(name, this.layer)
-      for (const m of bt.paint(u => this.itemState(u, c, dimmed, name), c.keep, this.variants)) this.seen(m, isMaskGroup(name) || m.userData.hl === 'fade' || m.userData.hl === 'see')
+      for (const m of bt.paint(u => this.itemState(u, c, dimmed, name), c.keep, this.variants))
+        this.seen(m, isMaskGroup(name) || m.userData.hl === 'fade' || m.userData.hl === 'see')
     }
     const dimmed = layerDimmed('barrels', this.layer)
     for (const m of items.barrels?.paint(u => this.itemState(u, c, dimmed), c.keep, this.variants) ?? []) this.seen(m, m.userData.hl === 'fade' || m.userData.hl === 'see')
@@ -1015,7 +1016,8 @@ export class BoardScene {
         boardIndex(this.b)
           .byRef(r)
           .forEach(id => ids.add(id))
-    for (const id of ids) for (const mem of items.members.get(id) ?? []) if (!this.poseIds.has(id) && own(mem.info, c.kept) && !(iso && isoOut(mem.info, iso) && !iso.fade)) shown.set(mem, 'rim')
+    for (const id of ids)
+      for (const mem of items.members.get(id) ?? []) if (!this.poseIds.has(id) && own(mem.info, c.kept) && !(iso && isoOut(mem.info, iso) && !iso.fade)) shown.set(mem, 'rim')
     if (iso)
       for (const list of items.members.values())
         for (const mem of list) {
@@ -1025,7 +1027,10 @@ export class BoardScene {
     if (this.poseIds.size)
       for (const [id, list] of items.members)
         for (const mem of list) {
-          if (this.poseIds.has(id)) { shown.delete(mem); continue }
+          if (this.poseIds.has(id)) {
+            shown.delete(mem)
+            continue
+          }
           const under = mem.batch.info(mem.info.under.id)
           if (!under?.items?.some(i => this.poseIds.has(i.id))) continue
           const st = this.itemState(mem.info, c, layerDimmed(mem.info.layer, this.layer))

@@ -9,10 +9,13 @@ const distance = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1])
 /** A route A/a arc: positive degrees turn counter-clockwise in y-down coordinates. */
 export function chainArc(from: Pt, to: Pt, angle: number): Arc | null {
   if (!finite(from) || !finite(to) || !Number.isFinite(angle) || Math.abs(angle) < 1e-7 || Math.abs(angle) >= 360) return null
-  const x = to[0] - from[0], y = to[1] - from[1], chord = Math.hypot(x, y)
+  const x = to[0] - from[0],
+    y = to[1] - from[1],
+    chord = Math.hypot(x, y)
   if (chord < 1e-9) return null
-  const sweep = angle * Math.PI / 180, d = chord / 2 / Math.tan(sweep / 2)
-  const center: Pt = [(from[0] + to[0]) / 2 + y / chord * d, (from[1] + to[1]) / 2 - x / chord * d]
+  const sweep = (angle * Math.PI) / 180,
+    d = chord / 2 / Math.tan(sweep / 2)
+  const center: Pt = [(from[0] + to[0]) / 2 + (y / chord) * d, (from[1] + to[1]) / 2 - (x / chord) * d]
   return { from: [...from], to: [...to], center, radius: distance(from, center), start: Math.atan2(-(from[1] - center[1]), from[0] - center[0]), sweep }
 }
 
@@ -35,9 +38,10 @@ export function arcHit(from: Pt, to: Pt, angle: number, point: Pt): { point: Pt;
   const arc = chainArc(from, to, angle)
   if (!arc || !finite(point)) return null
   const a = Math.atan2(-(point[1] - arc.center[1]), point[0] - arc.center[0])
-  const progress = turn(arc.sweep > 0 ? a - arc.start : arc.start - a), span = Math.abs(arc.sweep)
+  const progress = turn(arc.sweep > 0 ? a - arc.start : arc.start - a),
+    span = Math.abs(arc.sweep)
   const fraction = distance(point, arc.center) < 1e-9 ? 0.5 : progress <= span + 1e-12 ? Math.min(1, progress / span) : distance(point, from) <= distance(point, to) ? 0 : 1
-  const projected = fraction === 0 ? [...from] as Pt : fraction === 1 ? [...to] as Pt : pointAt(arc, fraction)
+  const projected = fraction === 0 ? ([...from] as Pt) : fraction === 1 ? ([...to] as Pt) : pointAt(arc, fraction)
   return { point: projected, fraction, distance: distance(point, projected) }
 }
 

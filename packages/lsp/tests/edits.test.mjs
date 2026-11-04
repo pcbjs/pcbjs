@@ -2,7 +2,22 @@
 // call's arguments with the relative call after it compensated, an automatic waypoint and a call deleted.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addChild, chainCallAt, chainEndOf, deleteCall, diffEdit, elementAt, insertWaypoint, movePoint, routeLayer, setAt, setSide, setGrid, textDoc, writeAt } from '../dist/edits.js'
+import {
+  addChild,
+  chainCallAt,
+  chainEndOf,
+  deleteCall,
+  diffEdit,
+  elementAt,
+  insertWaypoint,
+  movePoint,
+  routeLayer,
+  setAt,
+  setSide,
+  setGrid,
+  textDoc,
+  writeAt,
+} from '../dist/edits.js'
 import { docOf, parse } from '../dist/doc.js'
 
 const offsetOf = (text, line, col) => textDoc(text).span({ line, col }).start
@@ -85,7 +100,6 @@ test('diffEdit: the one span that differs', () => {
   assert.deepEqual(diffEdit('', 'new'), { start: 0, end: 0, newText: 'new' })
 })
 
-
 test('placement grid writes preserve named grids, limits and coordinates, without nesting on repeated edits', () => {
   const edit = (text, pitch) => apply(text, [setGrid(elementAt(parse(text, 'pcb.tsx'), 0), pitch)])
   assert.equal(edit('<R1 at="1.23 4.56" />', 0.25), '<R1 at="1.23 4.56" grid={{ snap: 0.25 }} />')
@@ -97,7 +111,6 @@ test('placement grid writes preserve named grids, limits and coordinates, withou
   const spread = '<R1 grid={{ snap: 1, ...options }} />'
   assert.equal(edit(spread, 0.25), '<R1 grid={{ ...({ snap: 1, ...options }), snap: 0.25 }} />')
 })
-
 
 test('grid writes refuse overriding an unknown props spread, but accept a final explicit grid', () => {
   for (const text of ['<R1 {...props} />', '<g grid={G} {...props} />']) assert.equal(setGrid(elementAt(parse(text, 'pcb.tsx'), 0), 0.5), null)

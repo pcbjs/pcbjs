@@ -4,12 +4,22 @@ import assert from 'node:assert/strict'
 import { dragTxn } from '../src/edit-client.ts'
 
 function controlled() {
-  const log = [], pending = []
-  let open = 0, most = 0
+  const log = [],
+    pending = []
+  let open = 0,
+    most = 0
   const request = (method, value, delta) => {
     log.push(delta ? `update ${delta.join(' ')}` : method)
     most = Math.max(most, ++open)
-    return new Promise(resolve => pending.push({ method, answer() { open--; resolve(value) } }))
+    return new Promise(resolve =>
+      pending.push({
+        method,
+        answer() {
+          open--
+          resolve(value)
+        },
+      }),
+    )
   }
   return {
     log,
@@ -29,7 +39,8 @@ const turn = () => new Promise(resolve => setImmediate(resolve))
 const begin = { board: 'B', tool: 'move', refs: ['R1'], anchor: 'R1' }
 
 test('a drag coalesces waiting updates, sends them serially and commits only after the final reply', async () => {
-  const c = controlled(), plans = []
+  const c = controlled(),
+    plans = []
   const d = dragTxn(c, begin, p => plans.push(p.delta[0]))
   d.update({ delta: [1, 0] })
   c.reply('begin')
@@ -56,7 +67,8 @@ test('a drag coalesces waiting updates, sends them serially and commits only aft
 })
 
 test('duplicate updates send once and cancel suppresses waiting and later moves', async () => {
-  const c = controlled(), plans = []
+  const c = controlled(),
+    plans = []
   const d = dragTxn(c, begin, p => plans.push(p.delta[0]))
   c.reply('begin')
   await d.started

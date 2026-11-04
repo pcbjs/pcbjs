@@ -16,18 +16,31 @@ exports.run = async () => {
     throw new Error(`Timed out: ${name}`)
   }
   const check = async (name, fn) => {
-    try { await fn(); result.checks.push(name) }
-    catch (error) { result.failures.push({ name, error: error.stack }); throw error }
-    finally { report() }
+    try {
+      await fn()
+      result.checks.push(name)
+    } catch (error) {
+      result.failures.push({ name, error: error.stack })
+      throw error
+    } finally {
+      report()
+    }
   }
-  const tabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs.map(t => ({ label: t.label, column: g.viewColumn, type: t.input?.constructor?.name, active: t.isActive && g.isActive })))
+  const tabs = () =>
+    vscode.window.tabGroups.all.flatMap(g => g.tabs.map(t => ({ label: t.label, column: g.viewColumn, type: t.input?.constructor?.name, active: t.isActive && g.isActive })))
   const panes = () => tabs().filter(t => / \| (2D|3D|Schematic)/.test(t.label))
   const root = vscode.workspace.workspaceFolders[0].uri.fsPath
   const source = path.join(root, 'quad.pcb.tsx')
   const doc = await vscode.workspace.openTextDocument(source)
   const sourceChanges = []
   const changes = vscode.workspace.onDidChangeTextDocument(e => {
-    if (e.document.uri.toString() === doc.uri.toString()) sourceChanges.push({ version: e.document.version, reason: e.reason, head: e.document.getText().slice(0, 120), changes: e.contentChanges.map(c => ({ range: c.range, text: c.text.slice(0, 120) })) })
+    if (e.document.uri.toString() === doc.uri.toString())
+      sourceChanges.push({
+        version: e.document.version,
+        reason: e.reason,
+        head: e.document.getText().slice(0, 120),
+        changes: e.contentChanges.map(c => ({ range: c.range, text: c.text.slice(0, 120) })),
+      })
   })
   result.sourceChanges = sourceChanges
   const showSource = async () => {
@@ -35,18 +48,18 @@ exports.run = async () => {
     await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup')
     return editor
   }
-    const probe = async (kind, files, redo = false, extra = {}) => {
-      const id = `${kind}-${Date.now()}`
-      result.probe = { id, kind, files, redo, ...extra }
-      report()
-      const response = await wait(kind + ' webview dispatch', () => {
-        if (!fs.existsSync(process.env.PCBJS_HOST_ACK)) return null
-        const ack = JSON.parse(fs.readFileSync(process.env.PCBJS_HOST_ACK, 'utf8'))
-        return ack.id === id ? ack : null
-      })
-      if (response.error) throw new Error(response.error)
-      return response.evidence
-    }
+  const probe = async (kind, files, redo = false, extra = {}) => {
+    const id = `${kind}-${Date.now()}`
+    result.probe = { id, kind, files, redo, ...extra }
+    report()
+    const response = await wait(kind + ' webview dispatch', () => {
+      if (!fs.existsSync(process.env.PCBJS_HOST_ACK)) return null
+      const ack = JSON.parse(fs.readFileSync(process.env.PCBJS_HOST_ACK, 'utf8'))
+      return ack.id === id ? ack : null
+    })
+    if (response.error) throw new Error(response.error)
+    return response.evidence
+  }
   const devtoolsCheck = async () => {
     await check('installed devtools commands target the active 2D pane without changing source or selection', async () => {
       await vscode.workspace.getConfiguration('pcbjs').update('development', true, vscode.ConfigurationTarget.Global)
@@ -136,15 +149,20 @@ exports.run = async () => {
       await vscode.commands.executeCommand('pcbjs.open2D')
       await wait('Quad preview title', () => panes().some(t => t.active && t.label.startsWith('Quad |')), 120000)
       await vscode.commands.executeCommand('pcbjs.sidebar.open', { kind: 'board', name: 'Badge', project: other, entry: path.join(other, 'pcb.tsx') })
-      await wait('cross-project board row selects captured Badge source', () => vscode.window.activeTextEditor?.document.uri.fsPath === path.join(other, 'pcb.tsx') && !vscode.window.activeTextEditor.selection.isEmpty)
+      await wait(
+        'cross-project board row selects captured Badge source',
+        () => vscode.window.activeTextEditor?.document.uri.fsPath === path.join(other, 'pcb.tsx') && !vscode.window.activeTextEditor.selection.isEmpty,
+      )
       assert.ok(!vscode.window.activeTextEditor.selection.isEmpty)
       await vscode.commands.executeCommand('pcbjs.sidebar.open', { kind: 'board', name: 'Quad', project: root, entry: source })
-      await wait('cross-project board row selects captured Quad source', () => vscode.window.activeTextEditor?.document.uri.fsPath === source && !vscode.window.activeTextEditor.selection.isEmpty)
+      await wait(
+        'cross-project board row selects captured Quad source',
+        () => vscode.window.activeTextEditor?.document.uri.fsPath === source && !vscode.window.activeTextEditor.selection.isEmpty,
+      )
       // The following checks target Quad. Do not leave a Badge tab to become
       // active and legitimately switch projects when a checks pane closes.
       const badgeTabs = vscode.window.tabGroups.all.flatMap(g => g.tabs).filter(t => t.input instanceof vscode.TabInputText && t.input.uri.fsPath === badge.uri.fsPath)
       await vscode.window.tabGroups.close(badgeTabs, true)
-
     })
     if (!process.env.PCBJS_HOST_PAD_API) await probe('activate-workbench', [])
     const padBefore = doc.getText()
@@ -167,23 +185,34 @@ exports.run = async () => {
       fs.writeFileSync(path.join(path.dirname(process.env.PCBJS_HOST_REPORT), 'pad-signature.md'), markdown)
       result.padSignature = { label: hint.label, parameters: hint.parameters.map(p => p.label), caret: padAt, version: doc.version }
     })
-    if (!process.env.PCBJS_HOST_PAD_API) await check('caret automatically opens a loaded footprint hint and leaving the index dismisses it', async () => {
-      const before = doc.getText(), caret = padEditor.selection
-      await probe('pad-hint-state', [], false, { visible: true })
-      assert.equal(vscode.window.activeTextEditor, padEditor)
-      assert.ok(padEditor.selection.isEqual(caret))
-      assert.equal(doc.getText(), before)
-      const outside = doc.positionAt(0)
-      padEditor.selection = new vscode.Selection(outside, outside)
-      await probe('pad-hint-state', [], false, { visible: false })
-      assert.equal(vscode.window.activeTextEditor, padEditor)
-      assert.equal(doc.getText(), before)
-    })
+    if (!process.env.PCBJS_HOST_PAD_API)
+      await check('caret automatically opens a loaded footprint hint and leaving the index dismisses it', async () => {
+        const before = doc.getText(),
+          caret = padEditor.selection
+        await probe('pad-hint-state', [], false, { visible: true })
+        assert.equal(vscode.window.activeTextEditor, padEditor)
+        assert.ok(padEditor.selection.isEqual(caret))
+        assert.equal(doc.getText(), before)
+        const outside = doc.positionAt(0)
+        padEditor.selection = new vscode.Selection(outside, outside)
+        await probe('pad-hint-state', [], false, { visible: false })
+        assert.equal(vscode.window.activeTextEditor, padEditor)
+        assert.equal(doc.getText(), before)
+      })
     result.padSignatures = [{ syntax: 'R1[1]', ...result.padSignature }]
-    for (const [name, expression, delta] of [['empty', 'R1[]', 1], ['quoted', "R1['1']", 2]]) {
+    for (const [name, expression, delta] of [
+      ['empty', 'R1[]', 1],
+      ['quoted', "R1['1']", 2],
+    ]) {
       await check(`installed pad signature provider handles ${name} index through source repair and injection`, async () => {
         const text = `\nvoid ${expression}\n`
-        assert.equal(await padEditor.edit(b => b.replace(new vscode.Range(doc.positionAt(padStart), doc.positionAt(doc.getText().length)), text), { undoStopBefore: true, undoStopAfter: true }), true)
+        assert.equal(
+          await padEditor.edit(b => b.replace(new vscode.Range(doc.positionAt(padStart), doc.positionAt(doc.getText().length)), text), {
+            undoStopBefore: true,
+            undoStopAfter: true,
+          }),
+          true,
+        )
         const position = doc.positionAt(padStart + text.indexOf('[') + delta)
         padEditor.selection = new vscode.Selection(position, position)
         const before = doc.getText()
@@ -202,7 +231,10 @@ exports.run = async () => {
         result.padSignatures.push({ syntax: expression, label: hint.label, parameters: hint.parameters.map(p => p.label), caret: position, version: doc.version })
       })
     }
-    assert.equal(await padEditor.edit(b => b.replace(new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), padBefore), { undoStopBefore: true, undoStopAfter: true }), true)
+    assert.equal(
+      await padEditor.edit(b => b.replace(new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), padBefore), { undoStopBefore: true, undoStopAfter: true }),
+      true,
+    )
     await devtoolsCheck()
     if (process.env.PCBJS_HOST_PAD_API) {
       result.stage = 'pad-api-complete'
@@ -216,122 +248,154 @@ exports.run = async () => {
     await vscode.workspace.applyEdit(edit)
     const first = doc.getText()
     const editor = await showSource()
-    assert.equal(await editor.edit(builder => builder.insert(new vscode.Position(0, 0), '// pane history later editor insertion\n'), { undoStopBefore: true, undoStopAfter: true }), true)
+    assert.equal(
+      await editor.edit(builder => builder.insert(new vscode.Position(0, 0), '// pane history later editor insertion\n'), { undoStopBefore: true, undoStopAfter: true }),
+      true,
+    )
     await wait('pane history insertion applied', () => doc.getText() !== first)
     const second = doc.getText()
     await vscode.commands.executeCommand('pcbjs.open2D')
-    if (!process.env.PCBJS_HOST_DIAGNOSE) await check('installed pane refuses multi-document native undo without mutating either buffer', async () => {
-      const otherFile = path.join(root, 'blinky.pcb.tsx')
-      const other = await vscode.workspace.openTextDocument(otherFile)
-      const before = other.getText()
-      await probe('pane-multi-document', [source, otherFile])
-      await new Promise(r => setTimeout(r, 500))
-      assert.equal(doc.getText(), second)
-      assert.equal(other.getText(), before)
-    })
+    if (!process.env.PCBJS_HOST_DIAGNOSE)
+      await check('installed pane refuses multi-document native undo without mutating either buffer', async () => {
+        const otherFile = path.join(root, 'blinky.pcb.tsx')
+        const other = await vscode.workspace.openTextDocument(otherFile)
+        const before = other.getText()
+        await probe('pane-multi-document', [source, otherFile])
+        await new Promise(r => setTimeout(r, 500))
+        assert.equal(doc.getText(), second)
+        assert.equal(other.getText(), before)
+      })
     if (process.env.PCBJS_HOST_DIAGNOSE) {
       result.diagnostics = []
       const stage = async name => {
-        const state = {name,closed:doc.isClosed,currentSame:vscode.window.activeTextEditor?.document === doc,currentFirst:vscode.window.activeTextEditor?.document.getText() === first,currentSecond:vscode.window.activeTextEditor?.document.getText() === second,openSources:vscode.workspace.textDocuments.filter(d=>d.uri.toString()===doc.uri.toString()).map(d=>({same:d===doc,closed:d.isClosed,version:d.version,head:d.getText().slice(0,100)})),active:vscode.window.activeTextEditor?.document.uri.fsPath,column:vscode.window.activeTextEditor?.viewColumn,tabs:tabs(),isFirst:doc.getText()===first,isSecond:doc.getText()===second,head:doc.getText().slice(0,100)}
+        const state = {
+          name,
+          closed: doc.isClosed,
+          currentSame: vscode.window.activeTextEditor?.document === doc,
+          currentFirst: vscode.window.activeTextEditor?.document.getText() === first,
+          currentSecond: vscode.window.activeTextEditor?.document.getText() === second,
+          openSources: vscode.workspace.textDocuments
+            .filter(d => d.uri.toString() === doc.uri.toString())
+            .map(d => ({ same: d === doc, closed: d.isClosed, version: d.version, head: d.getText().slice(0, 100) })),
+          active: vscode.window.activeTextEditor?.document.uri.fsPath,
+          column: vscode.window.activeTextEditor?.viewColumn,
+          tabs: tabs(),
+          isFirst: doc.getText() === first,
+          isSecond: doc.getText() === second,
+          head: doc.getText().slice(0, 100),
+        }
         result.diagnostics.push(state)
         report()
-        await probe('diagnostic-'+name,[source])
+        await probe('diagnostic-' + name, [source])
       }
-      if(process.env.PCBJS_HOST_DIAGNOSE==='focus-command') {
-        await check('unbroken source show, explicit group focus and native undo restore the exact prior buffer',async()=>{
-          await vscode.window.showTextDocument(doc,{preview:false,preserveFocus:false,viewColumn:vscode.ViewColumn.One})
+      if (process.env.PCBJS_HOST_DIAGNOSE === 'focus-command') {
+        await check('unbroken source show, explicit group focus and native undo restore the exact prior buffer', async () => {
+          await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false, viewColumn: vscode.ViewColumn.One })
           await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup')
           await vscode.commands.executeCommand('undo')
-          await wait('unbroken focus-command native undo',()=>doc.getText()===first)
+          await wait('unbroken focus-command native undo', () => doc.getText() === first)
         })
         await stage('after-unbroken-native-undo')
-        result.stage='diagnostic-complete'
+        result.stage = 'diagnostic-complete'
         report()
         return
       }
-      await probe('diagnostic-handler',[source])
+      await probe('diagnostic-handler', [source])
       await stage('before-show')
-      await vscode.window.showTextDocument(doc,{preview:false,preserveFocus:false,viewColumn:vscode.ViewColumn.One})
+      await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false, viewColumn: vscode.ViewColumn.One })
       await stage('after-show')
       await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup')
       await stage('after-focus-group')
       await vscode.commands.executeCommand('undo')
-      await new Promise(r=>setTimeout(r,300))
+      await new Promise(r => setTimeout(r, 300))
       await stage('after-native-undo')
       await vscode.commands.executeCommand('undo')
-      await new Promise(r=>setTimeout(r,300))
+      await new Promise(r => setTimeout(r, 300))
       await stage('after-second-native-undo')
       await vscode.commands.executeCommand('default:undo')
-      await new Promise(r=>setTimeout(r,300))
+      await new Promise(r => setTimeout(r, 300))
       await stage('after-default-native-undo')
       await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup')
       await vscode.commands.executeCommand('undo')
-      await new Promise(r=>setTimeout(r,300))
+      await new Promise(r => setTimeout(r, 300))
       await stage('after-first-column-native-undo')
-      result.stage='diagnostic-complete'
+      result.stage = 'diagnostic-complete'
       report()
       return
     }
     if (!process.env.PCBJS_HOST_FINDING_GROUPS) {
-    await check('installed pane undo action uses native chronological history and restores pane focus', async () => {
-      await probe('pane-undo', [source])
-      await wait('pane undo source buffer', () => doc.getText() === first)
-      await wait('pane focus restored after undo', () => panes().some(t => t.active))
-      assert.equal(fs.readFileSync(source, 'utf8'), disk)
-    })
-    await check('installed pane redo action restores the same source buffer without saving', async () => {
-      await probe('pane-redo', [source], true)
-      await wait('pane redo source buffer', () => doc.getText() === second)
-      await wait('pane focus restored after redo', () => panes().some(t => t.active))
-      assert.equal(fs.readFileSync(source, 'utf8'), disk)
-    })
-    await check('successive keyboard undo and redo use native history from a reloaded preview', async () => {
-      await vscode.commands.executeCommand('pcbjs.preview.reload')
-      await probe('pane-undo', [source])
-      await wait('reloaded pane undo source history', () => doc.getText() === first)
-      await probe('pane-undo', [source])
-      await wait('second native undo source history', () => doc.getText() === disk)
-      await probe('pane-redo', [source], true)
-      await wait('first native redo source history', () => doc.getText() === first)
-      await probe('pane-redo', [source], true)
-      await wait('second native redo source history', () => doc.getText() === second)
-    })
-    await check('physical preview selection and R edit undo and redo through native source history', async () => {
-      await probe('pane-rotate', [source])
-      await wait('preview rotation edits source', () => doc.getText() !== second)
-      const rotated = doc.getText()
-      await probe('pane-undo', [source])
-      await wait('keyboard undo preview rotation', () => doc.getText() === second)
-      await probe('pane-redo', [source], true)
-      await wait('keyboard redo preview rotation', () => doc.getText() === rotated)
-      await probe('pane-undo', [source])
-      await wait('rotation restored before remaining checks', () => doc.getText() === second)
-    })
-    await check('actual modal Mod+P opens native Quick Input without changing the source buffer',async()=>{
-      const before=doc.getText()
-      await probe('modal-quickopen',[source])
-      assert.equal(doc.getText(),before)
-    })
+      await check('installed pane undo action uses native chronological history and restores pane focus', async () => {
+        await probe('pane-undo', [source])
+        await wait('pane undo source buffer', () => doc.getText() === first)
+        await wait('pane focus restored after undo', () => panes().some(t => t.active))
+        assert.equal(fs.readFileSync(source, 'utf8'), disk)
+      })
+      await check('installed pane redo action restores the same source buffer without saving', async () => {
+        await probe('pane-redo', [source], true)
+        await wait('pane redo source buffer', () => doc.getText() === second)
+        await wait('pane focus restored after redo', () => panes().some(t => t.active))
+        assert.equal(fs.readFileSync(source, 'utf8'), disk)
+      })
+      await check('successive keyboard undo and redo use native history from a reloaded preview', async () => {
+        await vscode.commands.executeCommand('pcbjs.preview.reload')
+        await probe('pane-undo', [source])
+        await wait('reloaded pane undo source history', () => doc.getText() === first)
+        await probe('pane-undo', [source])
+        await wait('second native undo source history', () => doc.getText() === disk)
+        await probe('pane-redo', [source], true)
+        await wait('first native redo source history', () => doc.getText() === first)
+        await probe('pane-redo', [source], true)
+        await wait('second native redo source history', () => doc.getText() === second)
+      })
+      await check('physical preview selection and R edit undo and redo through native source history', async () => {
+        await probe('pane-rotate', [source])
+        await wait('preview rotation edits source', () => doc.getText() !== second)
+        const rotated = doc.getText()
+        await probe('pane-undo', [source])
+        await wait('keyboard undo preview rotation', () => doc.getText() === second)
+        await probe('pane-redo', [source], true)
+        await wait('keyboard redo preview rotation', () => doc.getText() === rotated)
+        await probe('pane-undo', [source])
+        await wait('rotation restored before remaining checks', () => doc.getText() === second)
+      })
+      await check('actual modal Mod+P opens native Quick Input without changing the source buffer', async () => {
+        const before = doc.getText()
+        await probe('modal-quickopen', [source])
+        assert.equal(doc.getText(), before)
+      })
     }
     await showSource()
     await vscode.commands.executeCommand('workbench.action.files.revert')
     const WebSocket = require('ws')
     const info = JSON.parse(fs.readFileSync(path.join(root, '.pcbjs/dev.json'), 'utf8'))
     const socket = new WebSocket(`ws://127.0.0.1:${new URL(info.url).port}/__pcbjs/session`)
-    await new Promise((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject) })
-    const waits = new Map(), events = []
+    await new Promise((resolve, reject) => {
+      socket.once('open', resolve)
+      socket.once('error', reject)
+    })
+    const waits = new Map(),
+      events = []
     let rpcId = 0
     socket.on('message', raw => {
       const m = JSON.parse(String(raw))
       if (m.event) events.push({ event: m.event, ...m.data })
       const w = waits.get(m.id)
-      if (w) { waits.delete(m.id); m.error ? w.reject(new Error(m.error.message)) : w.resolve(m.result) }
+      if (w) {
+        waits.delete(m.id)
+        m.error ? w.reject(new Error(m.error.message)) : w.resolve(m.result)
+      }
     })
-    socket.send(JSON.stringify({ event: 'pcbjs:ide:hello', data: { name: 'installed acceptance', version: '0', protocol: 6, major: 1, capabilities: ['finding'], role: 'agent', project: root } }))
-    const request = (method, params = {}) => new Promise((resolve, reject) => {
-      waits.set(++rpcId, { resolve, reject })
-      socket.send(JSON.stringify({ jsonrpc: '2.0', id: rpcId, method, params }))
-    })
+    socket.send(
+      JSON.stringify({
+        event: 'pcbjs:ide:hello',
+        data: { name: 'installed acceptance', version: '0', protocol: 6, major: 1, capabilities: ['finding'], role: 'agent', project: root },
+      }),
+    )
+    const request = (method, params = {}) =>
+      new Promise((resolve, reject) => {
+        waits.set(++rpcId, { resolve, reject })
+        socket.send(JSON.stringify({ jsonrpc: '2.0', id: rpcId, method, params }))
+      })
     let nativeFinding
     const isChecks = t => t?.input instanceof vscode.TabInputWebview && t.input.viewType.endsWith('pcbjs.preview') && / \| DRC\/ERC(?: \(\d+\))?$/.test(t.label)
     const findingTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs).filter(isChecks)
@@ -386,7 +450,10 @@ exports.run = async () => {
         result.findingFrames = focused.frames
         assert.ok(focused.frames.some(f => f.url.includes('/board/Quad') && new URL(f.url).searchParams.get('view') === '2d'))
         assert.ok(focused.frames.some(f => f.url.includes('/board/Quad') && new URL(f.url).searchParams.get('view') === '3d'))
-        assert.ok(focused.frames.filter(f => f.url.includes('/board/Quad')).every(f => new URL(f.url).searchParams.get('focus') === finding.id), 'finding focus is mirrored in the canonical URLs of every Quad pane')
+        assert.ok(
+          focused.frames.filter(f => f.url.includes('/board/Quad')).every(f => new URL(f.url).searchParams.get('focus') === finding.id),
+          'finding focus is mirrored in the canonical URLs of every Quad pane',
+        )
 
         const rendered = await probe('finding-html', [])
         assert.match(rendered.heading, /Unconnected/i)
@@ -401,7 +468,9 @@ exports.run = async () => {
         const ref = finding.refs[1] ?? finding.refs[0]
         const entityFrom = events.length
         await probe('finding-entity', [], false, { ref })
-        await wait('HTML entity click updates canonical selection', () => events.slice(entityFrom).some(e => e.event === 'pcbjs:ide:finding' && e.anchor === ref && e.finding?.id === finding.id))
+        await wait('HTML entity click updates canonical selection', () =>
+          events.slice(entityFrom).some(e => e.event === 'pcbjs:ide:finding' && e.anchor === ref && e.finding?.id === finding.id),
+        )
         const previousClipboard = await vscode.env.clipboard.readText()
         try {
           const marker = `finding-copy-${Date.now()}`
@@ -417,7 +486,9 @@ exports.run = async () => {
           fs.writeFileSync(path.join(path.dirname(process.env.PCBJS_HOST_REPORT), 'finding-copy.md'), markdown)
           result.findingCopy = { format: 'Markdown', references: finding.refs, length: markdown.length }
           assert.equal(findingTabs().length, 1, 'copy keeps the HTML pane open')
-        } finally { await vscode.env.clipboard.writeText(previousClipboard) }
+        } finally {
+          await vscode.env.clipboard.writeText(previousClipboard)
+        }
         const tab = await activateFinding()
         await showSource()
         assert.equal(findingTabs()[0], tab, 'source focus keeps the persistent checks tab')
@@ -485,10 +556,14 @@ exports.run = async () => {
         const closedFrom = events.length
         await vscode.window.tabGroups.close(tab, true)
         await wait('closing navigation viewer clears focus', () => events.slice(closedFrom).some(e => e.event === 'pcbjs:ide:finding' && e.finding === null))
-
       })
       const isPreview = tab => tab?.input instanceof vscode.TabInputWebview && tab.input.viewType.includes('pcbjs.preview') && !isChecks(tab)
-      const previewLabels = () => vscode.window.tabGroups.all.flatMap(g => g.tabs).filter(isPreview).map(t => t.label).sort()
+      const previewLabels = () =>
+        vscode.window.tabGroups.all
+          .flatMap(g => g.tabs)
+          .filter(isPreview)
+          .map(t => t.label)
+          .sort()
       const findingGroup = () => vscode.window.tabGroups.all.find(g => g.tabs.some(t => findingTabs().includes(t)))
       const openFinding = async () => {
         if (findingTabs().length) await vscode.window.tabGroups.close(findingTabs(), true)
@@ -509,7 +584,10 @@ exports.run = async () => {
         const sourceGroup = vscode.window.tabGroups.all.find(g => g.activeTab?.input instanceof vscode.TabInputText && g.activeTab.input.uri.fsPath === source)
         assert.ok(sourceGroup)
         await vscode.commands.executeCommand('pcbjs.open2D')
-        await wait('active Quad preview', () => isPreview(vscode.window.tabGroups.activeTabGroup.activeTab) && vscode.window.tabGroups.activeTabGroup.activeTab.label === 'Quad | 2D')
+        await wait(
+          'active Quad preview',
+          () => isPreview(vscode.window.tabGroups.activeTabGroup.activeTab) && vscode.window.tabGroups.activeTabGroup.activeTab.label === 'Quad | 2D',
+        )
         const active = vscode.window.tabGroups.activeTabGroup
         const preview = active.activeTab
         const labels = previewLabels()
@@ -531,7 +609,13 @@ exports.run = async () => {
         await vscode.window.tabGroups.close(textTabs, true)
         await vscode.commands.executeCommand('vscode.setEditorLayout', { groups: [{}] })
         await vscode.commands.executeCommand('pcbjs.open2D')
-        await wait('one group containing only previews', () => vscode.window.tabGroups.all.length === 1 && vscode.window.tabGroups.all[0].tabs.every(isPreview) && vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Quad | 2D')
+        await wait(
+          'one group containing only previews',
+          () =>
+            vscode.window.tabGroups.all.length === 1 &&
+            vscode.window.tabGroups.all[0].tabs.every(isPreview) &&
+            vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Quad | 2D',
+        )
         await vscode.commands.executeCommand('workbench.action.newGroupRight')
         await vscode.commands.executeCommand('pcbjs.open3D')
         await wait('3D preview ready to move', () => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Quad | 3D')
@@ -554,7 +638,13 @@ exports.run = async () => {
       await check('finding editor creates a split for a sole active preview and leaves that preview focused', async () => {
         await vscode.commands.executeCommand('vscode.setEditorLayout', { groups: [{}] })
         await vscode.commands.executeCommand('pcbjs.open2D')
-        await wait('sole preview group', () => vscode.window.tabGroups.all.length === 1 && isPreview(vscode.window.tabGroups.activeTabGroup.activeTab) && vscode.window.tabGroups.activeTabGroup.activeTab.label === 'Quad | 2D')
+        await wait(
+          'sole preview group',
+          () =>
+            vscode.window.tabGroups.all.length === 1 &&
+            isPreview(vscode.window.tabGroups.activeTabGroup.activeTab) &&
+            vscode.window.tabGroups.activeTabGroup.activeTab.label === 'Quad | 2D',
+        )
         const active = vscode.window.tabGroups.activeTabGroup
         const preview = active.activeTab
         const labels = previewLabels()
@@ -566,10 +656,21 @@ exports.run = async () => {
         assert.deepEqual(previewLabels(), labels)
         result.findingGroupChecks.solePreview = recordGroups()
         const from = events.length
-        const findingEvents = () => events.filter(e => e.event === 'pcbjs:ide:finding').slice(-6).map(e => ({ finding: e.finding?.id ?? null, refs: e.refs, anchor: e.anchor }))
-        const closedDocuments = [], closedTabs = []
+        const findingEvents = () =>
+          events
+            .filter(e => e.event === 'pcbjs:ide:finding')
+            .slice(-6)
+            .map(e => ({ finding: e.finding?.id ?? null, refs: e.refs, anchor: e.anchor }))
+        const closedDocuments = [],
+          closedTabs = []
         const closeDoc = vscode.workspace.onDidCloseTextDocument(d => closedDocuments.push(d.uri.toString()))
-        const closeTab = vscode.window.tabGroups.onDidChangeTabs(e => closedTabs.push(...e.closed.map(t => t.input instanceof vscode.TabInputText ? t.input.uri.toString() : t.input instanceof vscode.TabInputWebview ? `${t.input.viewType}:${t.label}` : t.label)))
+        const closeTab = vscode.window.tabGroups.onDidChangeTabs(e =>
+          closedTabs.push(
+            ...e.closed.map(t =>
+              t.input instanceof vscode.TabInputText ? t.input.uri.toString() : t.input instanceof vscode.TabInputWebview ? `${t.input.viewType}:${t.label}` : t.label,
+            ),
+          ),
+        )
         result.findingSplitClose = { before: findingEvents(), closedDocuments, closedTabs }
         report()
         try {
@@ -580,7 +681,10 @@ exports.run = async () => {
             return events.slice(from).some(e => e.event === 'pcbjs:ide:finding' && e.finding === null)
           })
           assert.equal(active.activeTab, preview)
-        } finally { closeDoc.dispose(); closeTab.dispose() }
+        } finally {
+          closeDoc.dispose()
+          closeTab.dispose()
+        }
       })
       await check('openAllViews includes the persistent DRC/ERC fourth viewer', async () => {
         await vscode.commands.executeCommand('pcbjs.openAllViews')
@@ -588,7 +692,9 @@ exports.run = async () => {
         assert.equal(findingTabs().length, 1)
         result.allViewerTabs = tabs()
       })
-    } finally { socket.close() }
+    } finally {
+      socket.close()
+    }
     await showSource()
     await vscode.commands.executeCommand('workbench.action.files.revert')
     result.tabs = tabs()

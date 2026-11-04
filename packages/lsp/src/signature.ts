@@ -15,7 +15,11 @@ export function padAccessor(sf: ts.SourceFile, offset: number): { receiver: ts.E
       const bracket = /^\s*\[/.exec(tail)
       if (bracket) {
         const open = node.expression.getEnd() + bracket[0].length - 1
-        const close = node.getChildren(sf).find(n => n.kind === ts.SyntaxKind.CloseBracketToken)?.getStart(sf) ?? node.getEnd()
+        const close =
+          node
+            .getChildren(sf)
+            .find(n => n.kind === ts.SyntaxKind.CloseBracketToken)
+            ?.getStart(sf) ?? node.getEnd()
         if (offset > open && offset <= close) {
           const value = sf.text.slice(open + 1, close).trim()
           if (/^(?:\d*|"(?:[^"\\\r\n]|\\.)*"?|'(?:[^'\\\r\n]|\\.)*'?)$/.test(value)) {
@@ -40,7 +44,9 @@ export function padSignature(program: ts.Program, file: string, offset: number, 
   for (const candidate of boards) {
     const rel = relative(candidate.root, file)
     const inside = !isAbsolute(rel) && rel !== '..' && !rel.startsWith('..' + sep)
-    const recordsFile = Object.keys(candidate.site.sources ?? {}).some(path => resolve(candidate.root, path) === file) || candidate.site.schematic.parts.some(part => part.src && resolve(candidate.root, part.src.file) === file)
+    const recordsFile =
+      Object.keys(candidate.site.sources ?? {}).some(path => resolve(candidate.root, path) === file) ||
+      candidate.site.schematic.parts.some(part => part.src && resolve(candidate.root, part.src.file) === file)
     if (!inside && !recordsFile) continue
     const target = partTarget(program, accessor.receiver, [candidate])
     const ref = target?.boards[0]?.parts[0]
@@ -54,7 +60,14 @@ export function padSignature(program: ts.Program, file: string, offset: number, 
     const choices = [...new Set(fp.pads.map(p => p.num))]
     const details = [`![Footprint pads](${preview.uri})`, `**Footprint orientation** · ${ref} · pads: ${choices.map(p => `\`${p.replace(/`/g, '')}\``).join(', ')}`].join('\n\n')
     return {
-      signatures: [{ label: `${receiver}[pad]`, documentation: { kind: 'markdown', value: details }, parameters: [{ label: [receiver.length + 1, receiver.length + 4], documentation: 'Pad number or pin name on this footprint.' }], activeParameter: 0 }],
+      signatures: [
+        {
+          label: `${receiver}[pad]`,
+          documentation: { kind: 'markdown', value: details },
+          parameters: [{ label: [receiver.length + 1, receiver.length + 4], documentation: 'Pad number or pin name on this footprint.' }],
+          activeParameter: 0,
+        },
+      ],
       activeSignature: 0,
       activeParameter: 0,
     }

@@ -23,19 +23,41 @@ function checkout(name) {
 const root = checkout('source')
 const project = join(root, 'examples/demo')
 mkdirSync(project, { recursive: true })
-const calls = ['save', 'disconnect', 'stop', 'npm run clean', 'npm run build', `pcbjs cache clear --models ${root}`, 'npm run package -w @pcbjs/vscode', 'pcbjs ide install', 'reload']
+const calls = [
+  'save',
+  'disconnect',
+  'stop',
+  'npm run clean',
+  'npm run build',
+  `pcbjs cache clear --models ${root}`,
+  'npm run package -w @pcbjs/vscode',
+  'pcbjs ide install',
+  'reload',
+]
 function host(over = {}) {
   const seen = []
-  const note = label => { seen.push(label) }
+  const note = label => {
+    seen.push(label)
+  }
   return {
     seen,
     development: () => true,
     folders: () => [project],
     projects: () => [project, tmp],
-    save: async () => { note('save'); return true },
+    save: async () => {
+      note('save')
+      return true
+    },
     disconnect: async () => note('disconnect'),
-    stop: async (r, dirs) => { assert.equal(r, root); assert.deepEqual(dirs, [root, project]); note('stop') },
-    run: async (tool, args, r) => { assert.equal(r, root); note(`${tool} ${args.join(' ')}`) },
+    stop: async (r, dirs) => {
+      assert.equal(r, root)
+      assert.deepEqual(dirs, [root, project])
+      note('stop')
+    },
+    run: async (tool, args, r) => {
+      assert.equal(r, root)
+      note(`${tool} ${args.join(' ')}`)
+    },
     reload: async () => note('reload'),
     progress() {},
     ...over,
@@ -58,24 +80,32 @@ test('failed save and disabled dev mode have no destructive steps', async () => 
   assert.deepEqual(disabled.seen, [])
 })
 
-for (const failing of calls.slice(1, -1)) test(`purge stops after failure at ${failing} and can be retried`, async () => {
-  const h = host()
-  const guard = fn => async (...args) => {
-    await fn(...args)
-    if (h.seen.at(-1) === failing) throw new Error('injected failure')
-  }
-  for (const key of ['disconnect', 'stop', 'run']) h[key] = guard(h[key])
-  const suite = new DevSuite()
-  await assert.rejects(suite.run(h), /injected failure/)
-  assert.deepEqual(h.seen, calls.slice(0, calls.indexOf(failing) + 1))
-  const retry = host()
-  assert.equal(await suite.run(retry), true)
-  assert.deepEqual(retry.seen, calls)
-})
+for (const failing of calls.slice(1, -1))
+  test(`purge stops after failure at ${failing} and can be retried`, async () => {
+    const h = host()
+    const guard =
+      fn =>
+      async (...args) => {
+        await fn(...args)
+        if (h.seen.at(-1) === failing) throw new Error('injected failure')
+      }
+    for (const key of ['disconnect', 'stop', 'run']) h[key] = guard(h[key])
+    const suite = new DevSuite()
+    await assert.rejects(suite.run(h), /injected failure/)
+    assert.deepEqual(h.seen, calls.slice(0, calls.indexOf(failing) + 1))
+    const retry = host()
+    assert.equal(await suite.run(retry), true)
+    assert.deepEqual(retry.seen, calls)
+  })
 
 test('concurrent invocations share one maintenance pipeline', async () => {
   let release
-  const h = host({ save: () => new Promise(done => { release = done }) })
+  const h = host({
+    save: () =>
+      new Promise(done => {
+        release = done
+      }),
+  })
   const suite = new DevSuite()
   const first = suite.run(h)
   assert.equal(suite.run(h), first)
@@ -96,14 +126,29 @@ test('source checkout selection rejects arbitrary or ambiguous workspaces and ex
 
 test('purge verifies the connected session identity before requesting shutdown', async () => {
   const r = checkout('identity')
-  const ready = { port: 5301, host: '127.0.0.1', urls: ['http://127.0.0.1:5301/'], root: r, pid: process.pid, version: '0.0.1', protocol: PROTOCOL, major: MAJOR, capabilities: [], session: 'replaced-session', mode: 'rw', projects: [] }
+  const ready = {
+    port: 5301,
+    host: '127.0.0.1',
+    urls: ['http://127.0.0.1:5301/'],
+    root: r,
+    pid: process.pid,
+    version: '0.0.1',
+    protocol: PROTOCOL,
+    major: MAJOR,
+    capabilities: [],
+    session: 'replaced-session',
+    mode: 'rw',
+    projects: [],
+  }
   const s = await mockSession(ready)
   mkdirSync(join(r, '.pcbjs'))
   writeFileSync(join(r, '.pcbjs/dev.json'), JSON.stringify(s.dev))
   try {
     await assert.rejects(stopSuite(r, [r]), /record changed/)
     assert.ok(!s.frames.some(f => f.method === 'session/stop'))
-  } finally { await s.close() }
+  } finally {
+    await s.close()
+  }
 })
 
 test('window closure during packaging prevents subsequent installation and reload', async () => {

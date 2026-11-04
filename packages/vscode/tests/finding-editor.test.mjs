@@ -21,4 +21,3 @@ test('finding editor groups: visible source, non-preview, inactive preview, then
     assert.equal(findingColumn(c.source, '/p'), c.column)
   }
 })
-

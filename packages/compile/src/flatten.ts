@@ -763,7 +763,10 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
   let nextId = 1
   const localObjects = new WeakSet<object>()
   const inLibrary = (ctx: Ctx) => !!opts.library && ctx.levels.some(l => l.path === opts.library || l.path.startsWith(opts.library + '/'))
-  const local = <T extends object>(value: T, ctx: Ctx): T => { if (inLibrary(ctx)) localObjects.add(value); return value }
+  const local = <T extends object>(value: T, ctx: Ctx): T => {
+    if (inLibrary(ctx)) localObjects.add(value)
+    return value
+  }
   const add = <T extends Item>(it: Omit<T, 'id'>, ctx: Ctx): T => {
     const full = { ...(it as any), id: nextId++ } as T
     flat.items.push(local(full, ctx))
@@ -1465,25 +1468,28 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
         const layersOut = layersIn.map(l => layer(n, l, flipped))
         if (p.net !== undefined) throw new CompileError(`<pad ${num} net> is not taken; a part's pads get their nets from .connect()${where(n)}`, srcOf(n))
         if (p.nc !== undefined && typeof p.nc !== 'boolean') throw new CompileError(`<pad ${num}> nc must be true or false${where(n)}`, srcOf(n))
-        const pad = add<Pad>({
-          kind: 'pad',
-          layer: layersOut[0] ?? 'F.Cu',
-          ref: ctx.fp?.rec.ref,
-          ...origin,
-          num,
-          name,
-          at: apply(m, [0, 0]),
-          rot: rotationOf(m),
-          shape,
-          size: [w, h],
-          drill,
-          type,
-          layers: layersOut,
-          poly: applyRing(m, ring),
-          maskExpansion: p.maskExpansion !== undefined ? mm(p.maskExpansion) : undefined,
-          paste: p.paste === undefined ? type === 'smd' : p.paste !== false,
-          mirrored: isMirrored(m),
-        }, ctx)
+        const pad = add<Pad>(
+          {
+            kind: 'pad',
+            layer: layersOut[0] ?? 'F.Cu',
+            ref: ctx.fp?.rec.ref,
+            ...origin,
+            num,
+            name,
+            at: apply(m, [0, 0]),
+            rot: rotationOf(m),
+            shape,
+            size: [w, h],
+            drill,
+            type,
+            layers: layersOut,
+            poly: applyRing(m, ring),
+            maskExpansion: p.maskExpansion !== undefined ? mm(p.maskExpansion) : undefined,
+            paste: p.paste === undefined ? type === 'smd' : p.paste !== false,
+            mirrored: isMirrored(m),
+          },
+          ctx,
+        )
         if (p.nc) markNcPad(pad)
         if (p.thermal !== undefined) padThermal(pad, p.thermal, `<pad ${num}> thermal`, where(n), srcOf(n))
         if (p.clearance !== undefined || p.holeClearance !== undefined || p.pasteShrink !== undefined) {
@@ -1546,21 +1552,25 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
       }
       case 'via': {
         const [x, y] = parseAt(p.at)
-        const drill = mm(p.drill, viaDrill), size = mm(p.size, viaSize)
+        const drill = mm(p.drill, viaDrill),
+          size = mm(p.size, viaSize)
         if (!(drill > 0)) throw new CompileError(`<via> drill must be positive${where(n)}`, srcOf(n))
         if (!(size > 0)) throw new CompileError(`<via> size must be positive${where(n)}`, srcOf(n))
         const ls = (p.layers ?? ['F.Cu', 'B.Cu']).map((q: string) => layer(n, q, ctx.flipped)) as [string, string]
-        add<Via>({
-          kind: 'via',
-          layer: ls[0],
-          net: net(p.net),
-          ref: ctx.fp?.rec.ref,
-          ...origin,
-          at: apply(ctx.m, [x, y]),
-          drill,
-          size,
-          layers: ls,
-        }, ctx)
+        add<Via>(
+          {
+            kind: 'via',
+            layer: ls[0],
+            net: net(p.net),
+            ref: ctx.fp?.rec.ref,
+            ...origin,
+            at: apply(ctx.m, [x, y]),
+            drill,
+            size,
+            layers: ls,
+          },
+          ctx,
+        )
         return
       }
       case 'zone': {
@@ -1568,21 +1578,24 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
         const subs = parsePath(String(p.d)).filter(s => s.pts.length >= 3)
         const rings = subs.map(s => applyRing(ctx.m, s.pts))
         const prims = subs.some(s => hasArc(s.prims)) ? subs.map(s => applyPrims(ctx.m, s.prims)) : undefined
-        add<Zone>({
-          kind: 'zone',
-          layer: l,
-          net: net(p.net),
-          ref: ctx.fp?.rec.ref,
-          ...origin,
-          outline: rings,
-          priority: p.priority ?? 0,
-          clearance: p.clearance !== undefined ? mm(p.clearance) : undefined,
-          minWidth: p.minWidth !== undefined ? mm(p.minWidth) : undefined,
-          fill: [],
-          ...(prims?.some(hasArc) ? { prims } : {}),
-          ...(p.connect !== undefined ? { connect: thermalConnection(p.connect, 'pour() connect', where(n), srcOf(n)) } : {}),
-          ...(p.islands !== undefined ? { islands: islandsOf(p.islands, n) } : {}),
-        }, ctx)
+        add<Zone>(
+          {
+            kind: 'zone',
+            layer: l,
+            net: net(p.net),
+            ref: ctx.fp?.rec.ref,
+            ...origin,
+            outline: rings,
+            priority: p.priority ?? 0,
+            clearance: p.clearance !== undefined ? mm(p.clearance) : undefined,
+            minWidth: p.minWidth !== undefined ? mm(p.minWidth) : undefined,
+            fill: [],
+            ...(prims?.some(hasArc) ? { prims } : {}),
+            ...(p.connect !== undefined ? { connect: thermalConnection(p.connect, 'pour() connect', where(n), srcOf(n)) } : {}),
+            ...(p.islands !== undefined ? { islands: islandsOf(p.islands, n) } : {}),
+          },
+          ctx,
+        )
         return
       }
       case 'keepout': {
@@ -1620,16 +1633,21 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
             }),
           ),
         ]
-        flat.keepouts.push(local({
-          layers: cu.filter(l => ls.includes(l)),
-          outline: rings,
-          tracks: flag('tracks'),
-          vias: flag('vias'),
-          pours: flag('pours'),
-          ...(except.length ? { except } : {}),
-          ...(ctx.fp ? { ref: ctx.fp.rec.ref } : {}),
-          ...origin,
-        }, ctx))
+        flat.keepouts.push(
+          local(
+            {
+              layers: cu.filter(l => ls.includes(l)),
+              outline: rings,
+              tracks: flag('tracks'),
+              vias: flag('vias'),
+              pours: flag('pours'),
+              ...(except.length ? { except } : {}),
+              ...(ctx.fp ? { ref: ctx.fp.rec.ref } : {}),
+              ...origin,
+            },
+            ctx,
+          ),
+        )
         return
       }
       case 'stitch': {
@@ -1674,20 +1692,25 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
             fail(`origin: ${(e as Error).message}`)
           }
         }
-        flat.stitches.push(local({
-          net: name!,
-          pitch,
-          ...(ls ? { layers: ls } : {}),
-          ...(padClearance !== undefined ? { padClearance } : {}),
-          drill,
-          size,
-          silk: !!p.avoid?.silk,
-          courtyard: !!p.avoid?.courtyard,
-          ...(grid !== undefined ? { grid } : {}),
-          ...(at0 ? { origin: at0 } : {}),
-          ...(area ? { area } : {}),
-          ...origin,
-        }, ctx))
+        flat.stitches.push(
+          local(
+            {
+              net: name!,
+              pitch,
+              ...(ls ? { layers: ls } : {}),
+              ...(padClearance !== undefined ? { padClearance } : {}),
+              drill,
+              size,
+              silk: !!p.avoid?.silk,
+              courtyard: !!p.avoid?.courtyard,
+              ...(grid !== undefined ? { grid } : {}),
+              ...(at0 ? { origin: at0 } : {}),
+              ...(area ? { area } : {}),
+              ...origin,
+            },
+            ctx,
+          ),
+        )
         return
       }
       case 'patch':
@@ -1700,7 +1723,9 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
         const [x, y, r] = parseAt(p.at)
         const flip = sideFlip(p.side)
         const m = mul(ctx.m, placement(x, y, r, flip))
-        flat.mates.push(local({ name: mateName(p.name, fail), at: apply(m, [0, 0]), rot: rotationOf(m), side: ctx.flipped !== flip ? 'B' : 'F', ...(self ? { src: self } : {}) }, ctx))
+        flat.mates.push(
+          local({ name: mateName(p.name, fail), at: apply(m, [0, 0]), rot: rotationOf(m), side: ctx.flipped !== flip ? 'B' : 'F', ...(self ? { src: self } : {}) }, ctx),
+        )
         return
       }
       case 'reference':
@@ -1748,18 +1773,21 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
           if (rx > 0) prims.push(applyPrims([1, 0, 0, 1, x + w / 2, y + h / 2], roundedRectPrims(w, h, rx)))
         }
         const arcs = prims.some(hasArc) ? prims.map(q => applyPrims(ctx.m, q)) : undefined
-        add<Graphic>({
-          kind: 'graphic',
-          layer: l,
-          net: net(p.net),
-          ref: ctx.fp?.rec.ref,
-          ...origin,
-          paths: paths.map(r => applyRing(ctx.m, r)),
-          closed,
-          width,
-          fill: !!p.fill,
-          ...(arcs?.some(hasArc) ? { prims: arcs } : {}),
-        }, ctx)
+        add<Graphic>(
+          {
+            kind: 'graphic',
+            layer: l,
+            net: net(p.net),
+            ref: ctx.fp?.rec.ref,
+            ...origin,
+            paths: paths.map(r => applyRing(ctx.m, r)),
+            closed,
+            width,
+            fill: !!p.fill,
+            ...(arcs?.some(hasArc) ? { prims: arcs } : {}),
+          },
+          ctx,
+        )
         return
       }
       case 'text': {
@@ -1776,7 +1804,17 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
         const font = fontOf(p.font, n)
         const size = mm(p.size, 1)
         const placeText = (it: Text) => {
-          if (!ctx.fp) flat.placements.push({ text: it, m: ctx.m, grid: null, ...(p.grid !== undefined ? { snap: placementSnap(p.grid) } : {}), ...(self ? { src: self } : {}), at: [x, y, r], ...defOf(ctx.levels), within: withinOf(ctx.levels) })
+          if (!ctx.fp)
+            flat.placements.push({
+              text: it,
+              m: ctx.m,
+              grid: null,
+              ...(p.grid !== undefined ? { snap: placementSnap(p.grid) } : {}),
+              ...(self ? { src: self } : {}),
+              at: [x, y, r],
+              ...defOf(ctx.levels),
+              within: withinOf(ctx.levels),
+            })
         }
         const silk = l.endsWith('.SilkS')
         if (font) {
@@ -1812,24 +1850,27 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
             ...(font.licenseURL ? { licenseURL: font.licenseURL } : {}),
           }
           placeText(
-            add<Text>({
-              kind: 'text',
-              layer: l,
-              net: net(p.net),
-              ref: ctx.fp?.rec.ref,
-              ...origin,
-              at: apply(m, [0, 0]),
-              rot: rotationOf(m),
-              size,
-              thickness: 0,
-              ...(width !== undefined && width !== size ? { width } : {}),
-              text,
-              anchor,
-              mirrored,
-              strokes: [],
-              font: `${font.family} ${font.style}`,
-              polys,
-            }, ctx),
+            add<Text>(
+              {
+                kind: 'text',
+                layer: l,
+                net: net(p.net),
+                ref: ctx.fp?.rec.ref,
+                ...origin,
+                at: apply(m, [0, 0]),
+                rot: rotationOf(m),
+                size,
+                thickness: 0,
+                ...(width !== undefined && width !== size ? { width } : {}),
+                text,
+                anchor,
+                mirrored,
+                strokes: [],
+                font: `${font.family} ${font.style}`,
+                polys,
+              },
+              ctx,
+            ),
           )
           return
         }
@@ -1850,23 +1891,26 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
           ).map(([a, b]) => [nm(a), nm(b)] as [number, number]),
         )
         placeText(
-          add<Text>({
-            kind: 'text',
-            layer: l,
-            net: net(p.net),
-            ref: ctx.fp?.rec.ref,
-            ...origin,
-            at: apply(m, [0, 0]),
-            rot: rotationOf(m),
-            size,
-            thickness,
-            ...(width !== undefined && width !== size ? { width } : {}),
-            text,
-            anchor,
-            mirrored,
-            strokes,
-            ...(stroke === 'newstroke' ? { font: 'newstroke' } : {}),
-          }, ctx),
+          add<Text>(
+            {
+              kind: 'text',
+              layer: l,
+              net: net(p.net),
+              ref: ctx.fp?.rec.ref,
+              ...origin,
+              at: apply(m, [0, 0]),
+              rot: rotationOf(m),
+              size,
+              thickness,
+              ...(width !== undefined && width !== size ? { width } : {}),
+              text,
+              anchor,
+              mirrored,
+              strokes,
+              ...(stroke === 'newstroke' ? { font: 'newstroke' } : {}),
+            },
+            ctx,
+          ),
         )
         return
       }
@@ -2374,10 +2418,11 @@ function schematicPass(
     owners.set(r, b.st)
     refs.set(b.st, r)
   }
-  if (s.library) for (const st of unplaced) {
-    const ref = named(st)
-    if (ref) refs.set(st, ref)
-  }
+  if (s.library)
+    for (const st of unplaced) {
+      const ref = named(st)
+      if (ref) refs.set(st, ref)
+    }
   const nameless = s.bindings.find(b => !refs.has(b.st))
   if (nameless) {
     const st = nameless.st
@@ -2452,20 +2497,32 @@ function schematicPass(
       )
     }
   }
-  if (s.library) for (const st of unplaced) {
-    const path = st.owner ? instancePath(st.owner).join('/') : ''
-    if (path !== s.library && !path.startsWith(s.library + '/')) continue
-    const ref = refs.get(st)
-    if (!ref) continue
-    flat.partRefs.set(st, ref)
-    const pins = st.pins.map(pin => ({ name: pin, ...netOf(st, pin) }))
-    for (const pin of pins) if (pin.net) {
-      addPin(pin.net, `${ref}.${pin.name}`)
-      const info = netInfo(st.conn.get(pin.name)!)!
-      if (!s.netObjs.has(info.name)) s.netObjs.set(info.name, { ...info, classes: new Set(info.class ? [info.class] : []) })
+  if (s.library)
+    for (const st of unplaced) {
+      const path = st.owner ? instancePath(st.owner).join('/') : ''
+      if (path !== s.library && !path.startsWith(s.library + '/')) continue
+      const ref = refs.get(st)
+      if (!ref) continue
+      flat.partRefs.set(st, ref)
+      const pins = st.pins.map(pin => ({ name: pin, ...netOf(st, pin) }))
+      for (const pin of pins)
+        if (pin.net) {
+          addPin(pin.net, `${ref}.${pin.name}`)
+          const info = netInfo(st.conn.get(pin.name)!)!
+          if (!s.netObjs.has(info.name)) s.netObjs.set(info.name, { ...info, classes: new Set(info.class ? [info.class] : []) })
+        }
+      parts.push({
+        ref,
+        value: st.value ?? '',
+        footprint: st.footprintId,
+        prefix: st.prefix,
+        pins,
+        placed: false,
+        ...hier(st, ref),
+        ...exported(st),
+        ...(st.src ? { src: st.src } : {}),
+      })
     }
-    parts.push({ ref, value: st.value ?? '', footprint: st.footprintId, prefix: st.prefix, pins, placed: false, ...hier(st, ref), ...exported(st), ...(st.src ? { src: st.src } : {}) })
-  }
   parts.sort((a, c) => byRef(a.ref, c.ref))
 
   const declared = [...s.netObjs.values()].sort((a, c) => a.seq - c.seq)
@@ -2803,7 +2860,7 @@ function scopeLibrary(flat: Flat, ref: string, local: WeakSet<object>): void {
   flat.items = kept
   flat.footprints = flat.footprints.filter(f => parts.has(f.ref))
   const members = flat.schematic.parts.filter(p => parts.has(p.ref))
-  const localName = (p: typeof members[number]) => [...p.path, p.local ?? p.ref].join('/').slice(ref.length + 1)
+  const localName = (p: (typeof members)[number]) => [...p.path, p.local ?? p.ref].join('/').slice(ref.length + 1)
   const counts = new Map<string, number>()
   const labels = new Map<string, string>()
   for (const p of [...members].sort((a, b) => localName(a).localeCompare(localName(b), 'en', { numeric: true }))) {
@@ -2811,26 +2868,28 @@ function scopeLibrary(flat: Flat, ref: string, local: WeakSet<object>): void {
     labels.set(p.ref, `${p.prefix}${index}`)
     counts.set(p.prefix, index + 1)
   }
-  flat.schematic.parts = flat.schematic.parts.map(p => labels.has(p.ref) ? { ...p, displayRef: labels.get(p.ref)! } : p)
+  flat.schematic.parts = flat.schematic.parts.map(p => (labels.has(p.ref) ? { ...p, displayRef: labels.get(p.ref)! } : p))
   for (const fp of flat.footprints) {
     fp.displayRef = labels.get(fp.ref)
     const src = flat.placements.find(p => p.fp === fp)?.src
     if (src) fp.src = src
   }
-  for (const fp of flat.footprints) fp.pads = fp.pads.flatMap(id => ids.has(id) ? [ids.get(id)!] : [])
+  for (const fp of flat.footprints) fp.pads = fp.pads.flatMap(id => (ids.has(id) ? [ids.get(id)!] : []))
   const endpoint = (p: RouteEnd | undefined) => {
     if (!isPinRef(p)) return true
     const st = partOf(p.part)
     return !!st && parts.has(flat.partRefs.get(st) ?? '')
   }
-  flat.autoRoutes = flat.autoRoutes.filter(r => !!r.route && flat.routeScopes[r.route]?.within.some(inside) && endpoint(r.from) && endpoint(r.to) && endpoint(r.root) && endpoint(r.pair?.fromN) && endpoint(r.pair?.toN))
-  const routes = new Set(flat.autoRoutes.flatMap(r => r.route ? [r.route] : []))
+  flat.autoRoutes = flat.autoRoutes.filter(
+    r => !!r.route && flat.routeScopes[r.route]?.within.some(inside) && endpoint(r.from) && endpoint(r.to) && endpoint(r.root) && endpoint(r.pair?.fromN) && endpoint(r.pair?.toN),
+  )
+  const routes = new Set(flat.autoRoutes.flatMap(r => (r.route ? [r.route] : [])))
   flat.routeScopes = Object.fromEntries(Object.entries(flat.routeScopes).filter(([id]) => routes.has(id)))
   flat.placeJobs = flat.placeJobs.filter(j => parts.has(j.fp.ref))
-  flat.placements = flat.placements.filter(p => p.within.some(inside) || !!p.fp && parts.has(p.fp.ref) || !!p.group && inside(p.group) || !!p.inst && inside(p.inst))
+  flat.placements = flat.placements.filter(p => p.within.some(inside) || (!!p.fp && parts.has(p.fp.ref)) || (!!p.group && inside(p.group)) || (!!p.inst && inside(p.inst)))
   flat.keepouts = flat.keepouts.filter(k => local.has(k) || parts.has(k.ref ?? ''))
   flat.stitches = flat.stitches.filter(k => local.has(k))
-  flat.mates = flat.mates.filter(k => local.has(k) || 'fp' in k && parts.has(k.fp.ref))
+  flat.mates = flat.mates.filter(k => local.has(k) || ('fp' in k && parts.has(k.fp.ref)))
   flat.references = []
   flat.patches = []
   flat.sch = undefined
@@ -2839,7 +2898,13 @@ function scopeLibrary(flat: Flat, ref: string, local: WeakSet<object>): void {
   flat.schematic = {
     ...flat.schematic,
     parts: flat.schematic.parts.filter(p => parts.has(p.ref)),
-    nets: flat.schematic.nets.map(n => ({ ...n, ...(n.path && inside(n.path.join('/')) ? { displayName: n.name.slice(ref.length + 1) } : {}), pins: n.pins.filter(p => [...parts].some(ref => p.startsWith(ref + '.'))) })).filter(n => n.pins.length),
+    nets: flat.schematic.nets
+      .map(n => ({
+        ...n,
+        ...(n.path && inside(n.path.join('/')) ? { displayName: n.name.slice(ref.length + 1) } : {}),
+        pins: n.pins.filter(p => [...parts].some(ref => p.startsWith(ref + '.'))),
+      }))
+      .filter(n => n.pins.length),
     circuits: flat.schematic.circuits.filter(c => inside(c.path.join('/'))).map(c => ({ ...c, parts: c.parts.filter(p => parts.has(p)) })),
   }
   flat.netNames = new Set(flat.schematic.nets.map(n => n.name))

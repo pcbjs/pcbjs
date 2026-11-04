@@ -119,7 +119,7 @@ watch(
             ><span v-else class="rule">{{ d.rule }}</span
             ><span v-if="d.layer" class="dim">{{ d.layer }}</span></span
           >
-            <span v-if="d.refs?.length" class="refs">{{ d.refs.join(', ') }}</span>
+          <span v-if="d.refs?.length" class="refs">{{ d.refs.join(', ') }}</span>
           <span v-if="d.at" class="at">{{ mm(d.at[0]) }}, {{ mm(d.at[1]) }} mm</span>
         </button>
       </template>

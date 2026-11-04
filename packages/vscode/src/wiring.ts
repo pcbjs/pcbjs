@@ -64,13 +64,20 @@ export class Wiring {
     if (this.disposal) return this.disposal
     this.closing = true
     this.sync.dispose()
-    const pending = this.server.links.flatMap(l => l.lsp ? [this.disposeLanguage(l.lsp)] : [])
+    const pending = this.server.links.flatMap(l => (l.lsp ? [this.disposeLanguage(l.lsp)] : []))
     this.disposal = (async () => {
       await this.server.dispose()
       let timer: NodeJS.Timeout | undefined
       try {
-        await Promise.race([Promise.all(pending), new Promise<void>(done => { timer = setTimeout(done, timeoutMs) })])
-      } finally { clearTimeout(timer) }
+        await Promise.race([
+          Promise.all(pending),
+          new Promise<void>(done => {
+            timer = setTimeout(done, timeoutMs)
+          }),
+        ])
+      } finally {
+        clearTimeout(timer)
+      }
     })()
     return this.disposal
   }
@@ -78,7 +85,11 @@ export class Wiring {
   private disposeLanguage(lsp: Lsp): Promise<void> {
     let pending = this.disposed.get(lsp)
     if (!pending) {
-      pending = Promise.resolve().then(() => lsp.dispose()).catch(e => { this.o.output?.(`[lsp] shutdown: ${String(e)}`) })
+      pending = Promise.resolve()
+        .then(() => lsp.dispose())
+        .catch(e => {
+          this.o.output?.(`[lsp] shutdown: ${String(e)}`)
+        })
       this.disposed.set(lsp, pending)
     }
     return pending
@@ -120,7 +131,9 @@ export class Wiring {
     let lsp: Lsp | undefined
     try {
       lsp = link.info && offers(link.info, 'lsp') ? await this.o.language(link, owns, this.holders) : undefined
-    } catch (e) { this.o.output?.(`[lsp] initialize: ${String(e)}`) }
+    } catch (e) {
+      this.o.output?.(`[lsp] initialize: ${String(e)}`)
+    }
     if (this.closing || !link.open) {
       if (lsp) void this.disposeLanguage(lsp)
       return

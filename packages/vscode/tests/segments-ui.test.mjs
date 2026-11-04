@@ -14,10 +14,16 @@ test('native value choices and text accept once, cancellation never writes, auto
   writeFileSync(file, '10')
   const { doc } = openDoc(file, '10')
   let applies = 0
-  const segment = { value: '10', label: 'width', range: { start: { line: 0, character: 0 }, end: { line: 0, character: 2 } }, widget: { typed: true }, presentations: [{ label: '20', value: '20' }] }
+  const segment = {
+    value: '10',
+    label: 'width',
+    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 2 } },
+    widget: { typed: true },
+    presentations: [{ label: '20', value: '20' }],
+  }
   const session = {
     segmentAt: async () => segment,
-    typed: async (_uri, _pos, value) => value === 'bad' ? { error: 'invalid width', presentations: [] } : { presentations: [{ value }] },
+    typed: async (_uri, _pos, value) => (value === 'bad' ? { error: 'invalid width', presentations: [] } : { presentations: [{ value }] }),
     apply: async (_uri, p) => {
       applies++
       doc.type(p.value)
@@ -35,11 +41,17 @@ test('native value choices and text accept once, cancellation never writes, auto
     assert.equal(applies, 0)
     assert.equal(doc.text, '10')
     assert.equal(readFileSync(file, 'utf8'), '10')
-    ui.answers.push(['pick', c => c.items[0]], ['input', async c => {
-      assert.equal(await c.validateInput('bad'), 'invalid width')
-      assert.equal(await c.validateInput('30'), undefined)
-      return '30'
-    }])
+    ui.answers.push(
+      ['pick', c => c.items[0]],
+      [
+        'input',
+        async c => {
+          assert.equal(await c.validateInput('bad'), 'invalid width')
+          assert.equal(await c.validateInput('30'), undefined)
+          return '30'
+        },
+      ],
+    )
     ui.autoSave = false
     await edit()
     assert.equal(applies, 1)
@@ -50,10 +62,16 @@ test('native value choices and text accept once, cancellation never writes, auto
     await edit()
     assert.equal(applies, 2)
     assert.equal(readFileSync(file, 'utf8'), '20')
-    ui.answers.push(['pick', c => c.items[0]], ['input', async c => {
-      await c.validateInput('30')
-      return 'bad'
-    }])
+    ui.answers.push(
+      ['pick', c => c.items[0]],
+      [
+        'input',
+        async c => {
+          await c.validateInput('30')
+          return 'bad'
+        },
+      ],
+    )
     await edit()
     assert.equal(applies, 2, 'accepted text is revalidated even if a previous callback was valid')
     assert.equal(readFileSync(file, 'utf8'), '20')

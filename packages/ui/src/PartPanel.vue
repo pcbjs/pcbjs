@@ -158,7 +158,18 @@ const { part, schPart, selectCircuit, partPath, partPlace, partDef, partRepoUrl,
             @mouseleave="hover.net = null"
           >
             <td>{{ p.name }}</td>
-            <td><button v-if="p.net && !p.nc" type="button" :aria-pressed="ctx.board.sel.refs.includes(`net:${p.net}`)" @focus="hover.net = p.net" @blur="hover.net = null" @click="pin(p.net)">{{ p.net }}</button><span v-else>{{ p.nc ? 'NC' : 'none' }}</span></td>
+            <td>
+              <button
+                v-if="p.net && !p.nc"
+                type="button"
+                :aria-pressed="ctx.board.sel.refs.includes(`net:${p.net}`)"
+                @focus="hover.net = p.net"
+                @blur="hover.net = null"
+                @click="pin(p.net)"
+              >
+                {{ p.net }}</button
+              ><span v-else>{{ p.nc ? 'NC' : 'none' }}</span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -183,7 +194,18 @@ const { part, schPart, selectCircuit, partPath, partPlace, partDef, partRepoUrl,
           >
             <td>{{ p.num }}</td>
             <td>{{ p.name }}</td>
-            <td><button v-if="p.net" type="button" :aria-pressed="ctx.board.sel.refs.includes(`net:${p.net}`)" @focus="hover.net = p.net" @blur="hover.net = null" @click="pin(p.net)">{{ p.net }}</button><span v-else>none</span></td>
+            <td>
+              <button
+                v-if="p.net"
+                type="button"
+                :aria-pressed="ctx.board.sel.refs.includes(`net:${p.net}`)"
+                @focus="hover.net = p.net"
+                @blur="hover.net = null"
+                @click="pin(p.net)"
+              >
+                {{ p.net }}</button
+              ><span v-else>none</span>
+            </td>
           </tr>
         </tbody>
       </table>

@@ -80,7 +80,7 @@ export class StackLabels {
     }
     for (const p of planes) {
       const outline = wireLines(outlineSegs(rings), p.z, p.color, WIRE.outline),
-        grid = wireLines([], p.z, "#999999", WIRE.grid)
+        grid = wireLines([], p.z, '#999999', WIRE.grid)
       outline.visible = grid.visible = false
       groups.get(p.group)?.add(outline, grid)
       this.wires.push({ group: p.group, outline, grid, z: p.z })

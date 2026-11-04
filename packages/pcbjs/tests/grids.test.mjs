@@ -154,7 +154,9 @@ test('group rotation pivot is its attached grid origin after nested placement ro
   const G = defineGrid('pivot', { pitch: 1, origin: '2 3' })
   const src = { file: 'pcb.tsx', line: 7, col: 3 }
   for (const side of ['F', 'B']) {
-    const b = compileBoard(board({}, h('g', { name: 'Outer', at: '20 15 90', side }, h('g', { name: 'Inner', at: '4 1 90', grid: G, __src: src }, h(resistor('R1'), { at: '0 0' })))))
+    const b = compileBoard(
+      board({}, h('g', { name: 'Outer', at: '20 15 90', side }, h('g', { name: 'Inner', at: '4 1 90', grid: G, __src: src }, h(resistor('R1'), { at: '0 0' })))),
+    )
     const node = b.edit.find(n => n.ref === 'Outer/Inner')
     assert.deepEqual(node.pivot, b.grids[0].origin)
     assert.deepEqual(node.pivot, at(b, 'R1'))
@@ -162,12 +164,22 @@ test('group rotation pivot is its attached grid origin after nested placement ro
   }
 })
 
-
 test('placement grid persists editing pitch and bounds without changing geometry or named group contents', () => {
   const G = defineGrid('inside', { pitch: 2.54, minor: [2, 5], maxLevel: 1 })
   const R1 = resistor('R1')
-  const build = snap => compileBoard(board({}, h('g', { name: 'Bank', at: '10 10 90', side: 'B', grid: { ...G, ...(snap ? { snap: 0.5, maxLevel: 0 } : {}) } }, h(R1, { at: '2 3', ...(snap ? { grid: { snap: '0.25mm', maxLevel: 3 } } : {}) }))))
-  const before = build(false), after = build(true)
+  const build = snap =>
+    compileBoard(
+      board(
+        {},
+        h(
+          'g',
+          { name: 'Bank', at: '10 10 90', side: 'B', grid: { ...G, ...(snap ? { snap: 0.5, maxLevel: 0 } : {}) } },
+          h(R1, { at: '2 3', ...(snap ? { grid: { snap: '0.25mm', maxLevel: 3 } } : {}) }),
+        ),
+      ),
+    )
+  const before = build(false),
+    after = build(true)
   assert.deepEqual(at(after, 'R1'), at(before, 'R1'))
   assert.equal(rot(after, 'R1'), rot(before, 'R1'))
   assert.deepEqual(after.edit.find(n => n.ref === 'Bank').snap, { pitch: 0.5, maxLevel: 0 })

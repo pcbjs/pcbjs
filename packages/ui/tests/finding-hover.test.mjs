@@ -6,12 +6,16 @@ import { compileTemplate } from 'vue/compiler-sfc'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 
-registerHooks({ resolve: (spec, ctx, next) => {
-  try { return next(spec, ctx) } catch (error) {
-    if (spec.startsWith('.') && !spec.endsWith('.ts')) return next(spec + '.ts', ctx)
-    throw error
-  }
-} })
+registerHooks({
+  resolve: (spec, ctx, next) => {
+    try {
+      return next(spec, ctx)
+    } catch (error) {
+      if (spec.startsWith('.') && !spec.endsWith('.ts')) return next(spec + '.ts', ctx)
+      throw error
+    }
+  },
+})
 const { dotTitle } = await import('../src/finding-marks.ts')
 const { findingTitle } = await import('../src/use/findings.ts')
 const detail = 'length-match match group DATA spreads 38.884 mm, full diagnostic explanation'
@@ -38,8 +42,14 @@ test('finding hover formatters expose the rule and retain no diagnostic message'
 
 test('2D finding lines render concise native titles while retaining the finding model', async () => {
   const html = await renderFinding('Canvas2D.vue', '<g v-if="findLines.length"', '<g v-if="dots.length"', {
-    findLines: [{ from: [0, 0], to: [2, 3], findings: [finding, finding] }], ratsVars: {}, lineClass: () => [], shown: new Set([0]), px: 1,
-    labelAt: () => '', labelRow: () => ({ broken: false, start: 0, icon: 0, text: 'clearance' }), dotTitle,
+    findLines: [{ from: [0, 0], to: [2, 3], findings: [finding, finding] }],
+    ratsVars: {},
+    lineClass: () => [],
+    shown: new Set([0]),
+    px: 1,
+    labelAt: () => '',
+    labelRow: () => ({ broken: false, start: 0, icon: 0, text: 'clearance' }),
+    dotTitle,
   })
   assert.match(html, /<title>clearance<\/title>/)
   assert.doesNotMatch(html, /length-match match group|full diagnostic|clearance\nclearance/)
@@ -50,7 +60,11 @@ test('3D hovered line labels show the rule instead of expanding to the full mess
   const n = { ...finding, key: 'one', check: 'DRC', text: 'R1', line: 0, broken: false }
   for (const noteHover of [null, 'one']) {
     const html = await renderFinding('Canvas3D.vue', '<div v-if="visibleNotes.length"', '<Bubble v-if="dotTip', {
-      visibleNotes: [n], isStale: () => false, finding: n.id, noteHover, dotTitle,
+      visibleNotes: [n],
+      isStale: () => false,
+      finding: n.id,
+      noteHover,
+      dotTitle,
     })
     assert.match(html, /title="clearance"/)
     assert.doesNotMatch(html, /length-match match group|full diagnostic/)
@@ -60,7 +74,10 @@ test('3D hovered line labels show the rule instead of expanding to the full mess
 
 test('schematic finding markers render only the rule in native hover titles', async () => {
   const html = await renderFinding('CanvasSch.vue', '<g v-if="!hidden.has(\'findings\')"', '<circle v-if="pulse"', {
-    hidden: new Set(), findings: [finding], px: 1, dotTitle,
+    hidden: new Set(),
+    findings: [finding],
+    px: 1,
+    dotTitle,
   })
   assert.match(html, /<title>clearance<\/title>/)
   assert.doesNotMatch(html, /length-match match group|full diagnostic/)
@@ -76,7 +93,21 @@ test('assist overlays reduce diagnostics and router errors to concise finding ty
   b.dev = { snapshot: 'finding-hover' }
   const store = createViewer({ boards: [facetSet(b)], single: true, path: '/', baseUrl: '/' }).board(b.name)
   store.edit.mode = { mode: 'rw', editor: true }
-  store.edit.assist = { board: b.name, command: 'H', relative: false, ref: 'route:1', start: [10, 7], pad: null, layer: 'F.Cu', net: 'S1', side: 'F', grid: null, width: 0.2, typed: [], open: true }
+  store.edit.assist = {
+    board: b.name,
+    command: 'H',
+    relative: false,
+    ref: 'route:1',
+    start: [10, 7],
+    pad: null,
+    layer: 'F.Cu',
+    net: 'S1',
+    side: 'F',
+    grid: null,
+    width: 0.2,
+    typed: [],
+    open: true,
+  }
   store.edit.client = {
     begin: async () => ({ txn: 'concise', tools: [] }),
     update: async () => ({ files: [], notes: [], preview: { command: 'H', tracks: [], vias: [], findings: [`clearance: ${detail}`, detail], error: detail, ms: 0 } }),

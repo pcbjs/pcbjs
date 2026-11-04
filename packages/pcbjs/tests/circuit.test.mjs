@@ -186,7 +186,8 @@ test('layout: an instance laid out twice is a compile error naming both sites', 
 
 test('layout methods preserve placement, overrides, definition keys and instance restrictions', () => {
   const { VCC, SW } = nets()
-  const A = channel({ VCC, SW }, 'A1'), B = channel({ VCC, SW }, 'B2')
+  const A = channel({ VCC, SW }, 'A1'),
+    B = channel({ VCC, SW }, 'B2')
   const render = (g, { at }) => h('g', { at }, h(g.R, { at: '-3 0' }), h(g.D, { at: '3 0' }))
   const Shared = channel.layout(render, 'Shared')
   const OnlyB = B.layout(render, 'OnlyB')
@@ -201,7 +202,10 @@ test('layout methods preserve placement, overrides, definition keys and instance
   assert.equal(refAt(b, 13, 10), 'D1')
   assert.equal(refAt(b, 17, 20), 'R2')
   const here = fileURLToPath(import.meta.url).slice(1)
-  assert.deepEqual(site(b).schematic.circuits.map(c => c.layout), [`${here}#Shared`, `${here}#OnlyB`])
+  assert.deepEqual(
+    site(b).schematic.circuits.map(c => c.layout),
+    [`${here}#Shared`, `${here}#OnlyB`],
+  )
   const invalid = circuit('invalid', () => ({ layout: R0603('1k') }))
   assert.throws(() => invalid({}, 1), /key "layout" is reserved/)
   settle()

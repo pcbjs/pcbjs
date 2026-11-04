@@ -123,7 +123,8 @@ export function paneEffects(board: BoardStore, pane: PaneState): void {
     () => [board.findingN, board.site] as const,
     ([n], previous) => {
       const id = board.finding?.id
-      let focus: Focus | null = null, schFocus: Focus | null = null
+      let focus: Focus | null = null,
+        schFocus: Focus | null = null
       const atFocus = (old: Focus | null, at: [number, number], r: number): Focus =>
         n === previous?.[0] && old?.r === r && old.at[0] === at[0] && old.at[1] === at[1] ? old : focusAt(at, r, true)
       if (id && board.site) {
@@ -134,7 +135,10 @@ export function paneEffects(board: BoardStore, pane: PaneState): void {
         const sch = board.site.erc.find(m => m.id === id && schematicFinding(m))
         if (sch?.at) schFocus = atFocus(pane.schFocus, sch.at, 2)
       }
-      if (id || n !== previous?.[0]) { pane.focus = focus; pane.schFocus = schFocus }
+      if (id || n !== previous?.[0]) {
+        pane.focus = focus
+        pane.schFocus = schFocus
+      }
     },
   )
 }

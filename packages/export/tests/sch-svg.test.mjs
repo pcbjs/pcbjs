@@ -87,7 +87,8 @@ test('an automatic sheet box draws no name; a <Sheet> the author wrote keeps its
 })
 
 test('library symbol and private-net labels render local text with canonical probe attributes', () => {
-  const b = board(), drawing = b.schematic.drawing
+  const b = board(),
+    drawing = b.schematic.drawing
   const symbol = { ...drawing.symbols[0], displayRef: 'R0' }
   const label = { id: 'label:local', net: 'CH200/private', displayName: 'private', at: [20, 20], side: 'right', kind: 'label', auto: true }
   const local = { ...drawing, symbols: [symbol], labels: [label] }

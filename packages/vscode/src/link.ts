@@ -164,7 +164,11 @@ export class SessionLink {
   /** Disconnect: the session sees the connection close and keeps serving its other clients. */
   close(): void {
     if (this.closed) return
-    try { this.end() } finally { this.closed_() }
+    try {
+      this.end()
+    } finally {
+      this.closed_()
+    }
   }
 
   private frame(msg: unknown): boolean {
@@ -255,7 +259,8 @@ const helloFrame = (o: LinkOptions, token?: string) =>
 function handshake(o: LinkOptions, dev: DevInfo, start: (settle: { ready(l: SessionLink): void; fail(e: Error): void }) => () => void): Promise<SessionLink> {
   return new Promise((ok, fail) => {
     let done = false
-    let cancel: (() => void) | undefined, failed = false
+    let cancel: (() => void) | undefined,
+      failed = false
     const t = setTimeout(() => settle.fail(new Error(`the session at ${dev.socket || dev.url} did not answer hello`)), o.timeoutMs ?? 10000)
     const settle = {
       ready(l: SessionLink) {
@@ -281,7 +286,9 @@ function handshake(o: LinkOptions, dev: DevInfo, start: (settle: { ready(l: Sess
     try {
       cancel = start(settle)
       if (failed) cancel()
-    } catch (e) { settle.fail(e as Error) }
+    } catch (e) {
+      settle.fail(e as Error)
+    }
   })
 }
 

@@ -15,14 +15,16 @@ test('every contributed editor command, menu action and key has a behavior famil
   const registered = new Set(catalog.operations.flatMap(o => o.commands))
   const commands = manifest.commands.map(c => c.command)
   assert.deepEqual([...registered].sort(), [...commands].sort(), 'new commands require a behavior row')
-  for (const menu of Object.values(manifest.menus)) for (const item of menu) {
-    assert.ok(registered.has(item.command), item.command)
-    if (item.alt) assert.ok(registered.has(item.alt), item.alt)
-  }
+  for (const menu of Object.values(manifest.menus))
+    for (const item of menu) {
+      assert.ok(registered.has(item.command), item.command)
+      if (item.alt) assert.ok(registered.has(item.alt), item.alt)
+    }
   for (const key of manifest.keybindings) assert.ok(registered.has(key.command), key.command)
   for (const welcome of manifest.viewsWelcome) for (const match of welcome.contents.matchAll(/command:(pcbjs\.[\w.]+)/g)) assert.ok(registered.has(match[1]), match[1])
   for (const operation of catalog.operations) {
-    for (const field of ['preconditions', 'result', 'writes', 'cancelUndo', 'unavailable', 'support', 'coverage', 'missingAcceptance']) assert.ok(operation[field], `${operation.id} ${field}`)
+    for (const field of ['preconditions', 'result', 'writes', 'cancelUndo', 'unavailable', 'support', 'coverage', 'missingAcceptance'])
+      assert.ok(operation[field], `${operation.id} ${field}`)
     for (const p of [...operation.sources, ...operation.tests]) assert.ok(existsSync(resolve(root, p)), `${operation.id}: ${p}`)
   }
 })

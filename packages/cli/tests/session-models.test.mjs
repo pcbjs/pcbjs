@@ -28,7 +28,10 @@ for (const workspace of [false, true]) {
     const source = board('Shared')
     const from = source.indexOf('const TestPad =')
     const to = source.indexOf('const { V }')
-    writeFileSync(join(lib, 'parts.tsx'), `import { defineFootprint, type FootprintProps } from '@pcbjs/core'\n${source.slice(from, to).replace('const TestPad =', 'export const TestPad =').replace('<footprint value="V"', '<footprint model={{ file: "./pin.step" }} value="V"')}`)
+    writeFileSync(
+      join(lib, 'parts.tsx'),
+      `import { defineFootprint, type FootprintProps } from '@pcbjs/core'\n${source.slice(from, to).replace('const TestPad =', 'export const TestPad =').replace('<footprint value="V"', '<footprint model={{ file: "./pin.step" }} value="V"')}`,
+    )
     const expected = []
     for (const [i, root] of projects.entries()) {
       mkdirSync(root, { recursive: true })
@@ -40,15 +43,20 @@ for (const workspace of [false, true]) {
         const [c] = await compileEntry(viteLoader(server), cfg, cfg.entries[0], { draft: true })
         assert.equal(c.board.footprints[0].model.path, join(lib, 'pin.step'))
         expected.push(c.site.footprints.find(f => f.step?.mesh).step.mesh)
-      } finally { await server.close() }
+      } finally {
+        await server.close()
+      }
     }
-    assert.ok(expected.every(hash => hash === expected[0]), 'shared model content has one hash across projects')
+    assert.ok(
+      expected.every(hash => hash === expected[0]),
+      'shared model content has one hash across projects',
+    )
     const args = ['session', 'serve', '-p', '0', '--host', '127.0.0.1', ...(workspace ? ['--workspace', top] : [])]
     const env = { ...process.env, XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR ?? '/tmp/pcbjs-5252', PCBJS_CACHE_DIR: join(top, '.user-cache') }
     const child = spawn(process.execPath, [BIN, ...args], { cwd: workspace ? top : projects[0], env, stdio: ['ignore', 'pipe', 'pipe'] })
     let log = ''
-    child.stdout.on('data', d => log += d)
-    child.stderr.on('data', d => log += d)
+    child.stdout.on('data', d => (log += d))
+    child.stderr.on('data', d => (log += d))
     try {
       const sessionRoot = workspace ? top : projects[0]
       const until = Date.now() + 60000

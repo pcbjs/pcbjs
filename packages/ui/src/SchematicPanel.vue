@@ -64,7 +64,8 @@ const { selectCircuit, schFilter, schView, hasSch, treeView, isOpen, toggleOpen,
             </tr>
             <tr v-else :class="{ on: activeRef === node.part.ref }">
               <td class="ref" :style="depth ? { paddingLeft: depth * 14 + 18 + 'px' } : undefined">
-                <button class="link" :title="node.part.placed ? 'Select and zoom' : 'Select'" @click="selectRef(node.part.ref, true, true)">{{ node.part.displayRef ?? node.part.ref }}</button
+                <button class="link" :title="node.part.placed ? 'Select and zoom' : 'Select'" @click="selectRef(node.part.ref, true, true)">
+                  {{ node.part.displayRef ?? node.part.ref }}</button
                 ><span v-if="node.part.local && node.part.local !== node.part.ref" class="dim local">{{ node.part.local }}</span>
               </td>
               <td class="body">

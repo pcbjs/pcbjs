@@ -29,7 +29,7 @@ export function endItems(doc: DocModel, contexts: ProjectAssist[]): CompletionIt
       end: {
         file: doc.file,
         handle: c.handle,
-        projects: contexts.flatMap(a => a.ends?.candidates.some(k => k.handle === c.handle) ? [{ project: a.project, board: a.board }] : []),
+        projects: contexts.flatMap(a => (a.ends?.candidates.some(k => k.handle === c.handle) ? [{ project: a.project, board: a.board }] : [])),
       } satisfies EndData,
     },
   }))

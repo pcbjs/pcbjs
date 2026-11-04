@@ -119,7 +119,8 @@ export function gridAt(v: string, pitch: number): string {
 /** The optional placement snapping pitch, independent of a named grid's coordinate units. */
 export function placementSnap(value: unknown): { pitch: number; maxLevel?: number } | undefined {
   if (value === undefined) return undefined
-  if (!value || typeof value !== 'object' || (!isGrid(value) && (Object.keys(value).some(k => !['snap', 'maxLevel'].includes(k)) || !('snap' in value)))) throw new TypeError('placement grid needs { snap: length } or a named grid')
+  if (!value || typeof value !== 'object' || (!isGrid(value) && (Object.keys(value).some(k => !['snap', 'maxLevel'].includes(k)) || !('snap' in value))))
+    throw new TypeError('placement grid needs { snap: length } or a named grid')
   const snap = (value as { snap?: Length }).snap
   if (snap === undefined) return undefined
   const pitch = mm(snap)

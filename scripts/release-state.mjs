@@ -12,7 +12,8 @@ export function releaseTarget({ pending, exiting, version, head, subject, resume
   if (!versionPattern.test(resume)) throw new Error('resume_version must be an exact package version.')
   const expected = `pcbjs ${resume}`
   if (tag) {
-    if (tag.version !== resume || tag.subject !== expected || !tag.ancestor) throw new Error('The release tag must name a version commit on main with the requested package version.')
+    if (tag.version !== resume || tag.subject !== expected || !tag.ancestor)
+      throw new Error('The release tag must name a version commit on main with the requested package version.')
     return { mode: 'resume', ref: tag.ref, publish: false, tagged: true }
   }
   if (version !== resume || subject !== expected || pending || exiting) throw new Error('An untagged resume must name the version commit at main, with no pending changesets.')
@@ -52,7 +53,13 @@ export function currentRelease(resume = '') {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const target = currentRelease(process.env.RESUME_VERSION ?? '')
-    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, Object.entries(target).map(([k, v]) => `${k}=${v}\n`).join(''))
+    if (process.env.GITHUB_OUTPUT)
+      appendFileSync(
+        process.env.GITHUB_OUTPUT,
+        Object.entries(target)
+          .map(([k, v]) => `${k}=${v}\n`)
+          .join(''),
+      )
     console.log(JSON.stringify(target))
   } catch (error) {
     console.error(error.message)

@@ -32,7 +32,14 @@ export class PadHints implements vscode.Disposable {
     clearTimeout(this.timer)
     const generation = ++this.generation
     const editor = vscode.window.activeTextEditor
-    if (!editor || editor.document.isClosed || editor.document.uri.scheme !== 'file' || !['typescript', 'typescriptreact'].includes(editor.document.languageId) || editor.selections.length !== 1 || !editor.selection.isEmpty) {
+    if (
+      !editor ||
+      editor.document.isClosed ||
+      editor.document.uri.scheme !== 'file' ||
+      !['typescript', 'typescriptreact'].includes(editor.document.languageId) ||
+      editor.selections.length !== 1 ||
+      !editor.selection.isEmpty
+    ) {
       this.close()
       return
     }
@@ -42,7 +49,8 @@ export class PadHints implements vscode.Disposable {
       return
     }
     if ((this.lastSession && this.lastSession !== session) || (this.opened && this.opened !== editor)) this.close()
-    const document = editor.document, version = document.version
+    const document = editor.document,
+      version = document.version
     const position = editor.selection.active
     const key = `${document.uri}:${version}:${position.line}:${position.character}`
     if (key === this.last && session === this.lastSession) return
@@ -57,7 +65,17 @@ export class PadHints implements vscode.Disposable {
     try {
       eligible = await session.signature(editor.document.uri.toString(), position, version)
     } catch {}
-    if (this.disposed || generation !== this.generation || vscode.window.activeTextEditor !== editor || editor.document.isClosed || editor.document.version !== version || this.sessionFor(editor.document) !== session || !editor.selection.isEmpty || !editor.selection.active.isEqual(position)) return
+    if (
+      this.disposed ||
+      generation !== this.generation ||
+      vscode.window.activeTextEditor !== editor ||
+      editor.document.isClosed ||
+      editor.document.version !== version ||
+      this.sessionFor(editor.document) !== session ||
+      !editor.selection.isEmpty ||
+      !editor.selection.active.isEqual(position)
+    )
+      return
     this.last = key
     this.lastSession = session
     if (!eligible) return this.close()

@@ -81,7 +81,9 @@ export async function mockSession(ready, onFrame = () => {}) {
   await new Promise(r => server.listen(socket, r))
   return {
     socket,
-    get connections() { return conns.size },
+    get connections() {
+      return conns.size
+    },
     frames,
     send,
     dev: { session: 'mock0001', pid: process.pid, root: ready?.root ?? '/work/p', url: 'http://127.0.0.1:1/', socket },

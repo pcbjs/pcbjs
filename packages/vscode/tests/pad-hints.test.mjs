@@ -21,16 +21,22 @@ const editorAt = (text, character) => {
 
 function fixture(t) {
   let active, owner
-  const events = {}, calls = [], requests = []
+  const events = {},
+    calls = [],
+    requests = []
   const descriptors = []
   const patch = (object, key, value) => {
     const descriptor = Object.getOwnPropertyDescriptor(object, key)
-    descriptors.push(() => descriptor ? Object.defineProperty(object, key, descriptor) : delete object[key])
+    descriptors.push(() => (descriptor ? Object.defineProperty(object, key, descriptor) : delete object[key]))
     Object.defineProperty(object, key, { configurable: true, value })
   }
   const event = name => callback => {
     events[name] = callback
-    return { dispose() { delete events[name] } }
+    return {
+      dispose() {
+        delete events[name]
+      },
+    }
   }
   const activeDescriptor = Object.getOwnPropertyDescriptor(vscode.window, 'activeTextEditor')
   Object.defineProperty(vscode.window, 'activeTextEditor', { configurable: true, get: () => active })
@@ -39,21 +45,47 @@ function fixture(t) {
   patch(vscode.window, 'onDidChangeActiveTextEditor', event('active'))
   patch(vscode.workspace, 'onDidChangeTextDocument', event('change'))
   patch(vscode.workspace, 'onDidCloseTextDocument', event('close'))
-  patch(vscode.commands, 'executeCommand', async (...args) => { calls.push(args) })
-  const session = { clearSignature() {}, signature: async (uri, p) => { requests.push({ uri, position: p }); return true } }
+  patch(vscode.commands, 'executeCommand', async (...args) => {
+    calls.push(args)
+  })
+  const session = {
+    clearSignature() {},
+    signature: async (uri, p) => {
+      requests.push({ uri, position: p })
+      return true
+    },
+  }
   owner = session
   const hints = new PadHints(() => owner)
-  t.after(() => { hints.dispose(); descriptors.reverse().forEach(restore => restore()) })
+  t.after(() => {
+    hints.dispose()
+    descriptors.reverse().forEach(restore => restore())
+  })
   return {
-    calls, requests, events, hints, session,
-    setActive(e) { active = e; events.active(e) },
-    owner(s) { owner = s },
-    move(character) { const p = position(character); active.selection = { isEmpty: true, active: p }; active.selections = [active.selection]; events.selection({ textEditor: active }) },
+    calls,
+    requests,
+    events,
+    hints,
+    session,
+    setActive(e) {
+      active = e
+      events.active(e)
+    },
+    owner(s) {
+      owner = s
+    },
+    move(character) {
+      const p = position(character)
+      active.selection = { isEmpty: true, active: p }
+      active.selections = [active.selection]
+      events.selection({ textEditor: active })
+    },
   }
 }
 
 test('typing a pad bracket or moving into an existing index automatically triggers native hints without changing editor or text', async t => {
-  const f = fixture(t), e = editorAt('R1[', 3)
+  const f = fixture(t),
+    e = editorAt('R1[', 3)
   f.setActive(e)
   await until(() => f.calls.length === 1)
   assert.deepEqual(f.calls, [['editor.action.triggerParameterHints']])
@@ -63,7 +95,11 @@ test('typing a pad bracket or moving into an existing index automatically trigge
   f.events.selection({ textEditor: e })
   await sleep(30)
   assert.equal(f.calls.length, 1, 'duplicate typing and caret events do not reopen the widget')
-  for (const [text, at] of [['R1[12]', 4], ["R1['1']", 5], ['R1["', 4]]) {
+  for (const [text, at] of [
+    ['R1[12]', 4],
+    ["R1['1']", 5],
+    ['R1["', 4],
+  ]) {
     e.document.text = text
     ++e.document.version
     f.move(at)
@@ -75,7 +111,8 @@ test('typing a pad bracket or moving into an existing index automatically trigge
 })
 
 test('semantic ineligibility dismisses owned pad hints but does not dismiss unrelated TypeScript hints', async t => {
-  const f = fixture(t), e = editorAt('array[0]', 7)
+  const f = fixture(t),
+    e = editorAt('array[0]', 7)
   f.session.signature = async () => false
   f.setActive(e)
   await sleep(35)
@@ -93,7 +130,8 @@ test('semantic ineligibility dismisses owned pad hints but does not dismiss unre
 })
 
 test('leaving the source, selecting text and losing ownership close hints without stealing focus', async t => {
-  const f = fixture(t), e = editorAt('R1[1]', 4)
+  const f = fixture(t),
+    e = editorAt('R1[1]', 4)
   f.setActive(e)
   await until(() => f.calls.length === 1)
   f.setActive(undefined)
@@ -113,7 +151,8 @@ test('leaving the source, selecting text and losing ownership close hints withou
 })
 
 test('stale eligibility cannot reopen a hint after caret, version, editor, ownership or disposal changes', async t => {
-  const f = fixture(t), e = editorAt('R1[1]', 4)
+  const f = fixture(t),
+    e = editorAt('R1[1]', 4)
   const pending = []
   f.session.signature = () => new Promise(resolve => pending.push(resolve))
   f.setActive(e)
@@ -148,8 +187,11 @@ test('stale eligibility cannot reopen a hint after caret, version, editor, owner
 })
 
 test('server failure and multiple carets produce no hint or source mutation', async t => {
-  const f = fixture(t), e = editorAt('R1[1]', 4)
-  f.session.signature = async () => { throw new Error('session disconnected') }
+  const f = fixture(t),
+    e = editorAt('R1[1]', 4)
+  f.session.signature = async () => {
+    throw new Error('session disconnected')
+  }
   f.setActive(e)
   await sleep(35)
   assert.deepEqual(f.calls, [])
@@ -164,7 +206,13 @@ test('signature eligibility uses standard LSP requests and provider ownership ex
   const { PcbjsSession, ownedMiddleware } = createRequire(import.meta.url)('../dist/lsp-client.cjs')
   const requests = []
   let response = { signatures: [{ label: 'R1[pad]' }] }
-  const rpc = { onNotification: () => ({ dispose() {} }), sendRequest: async (method, params) => { requests.push({ method, params }); return response } }
+  const rpc = {
+    onNotification: () => ({ dispose() {} }),
+    sendRequest: async (method, params) => {
+      requests.push({ method, params })
+      return response
+    },
+  }
   const session = new PcbjsSession(rpc, {})
   assert.equal(await session.signature('file:///work/pcb.tsx', { line: 2, character: 4 }), true)
   assert.deepEqual(requests[0], { method: 'textDocument/signatureHelp', params: { textDocument: { uri: 'file:///work/pcb.tsx' }, position: { line: 2, character: 4 } } })
@@ -174,7 +222,10 @@ test('signature eligibility uses standard LSP requests and provider ownership ex
   assert.equal(await session.signature('file:///work/pcb.tsx', { line: 0, character: 0 }), false)
   const middleware = ownedMiddleware(uri => uri === 'file:///work/pcb.tsx')
   let calls = 0
-  const next = () => { ++calls; return 'owned' }
+  const next = () => {
+    ++calls
+    return 'owned'
+  }
   assert.equal(middleware.provideSignatureHelp({ uri: 'file:///other/pcb.tsx' }, {}, {}, {}, next), undefined)
   assert.equal(calls, 0)
   assert.equal(middleware.provideSignatureHelp({ uri: 'file:///work/pcb.tsx' }, {}, {}, {}, next), 'owned')
@@ -183,11 +234,18 @@ test('signature eligibility uses standard LSP requests and provider ownership ex
 })
 
 test('reconnected client at the same source version and caret is checked again', async t => {
-  const f = fixture(t), e = editorAt('R1[1]', 4)
+  const f = fixture(t),
+    e = editorAt('R1[1]', 4)
   f.setActive(e)
   await until(() => f.calls.length === 1)
   let queried = 0
-  f.owner({ clearSignature() {}, signature: async () => { ++queried; return true } })
+  f.owner({
+    clearSignature() {},
+    signature: async () => {
+      ++queried
+      return true
+    },
+  })
   f.hints.refresh()
   await until(() => queried === 1 && f.calls.length === 3)
   assert.deepEqual(f.calls, [['editor.action.triggerParameterHints'], ['closeParameterHints'], ['editor.action.triggerParameterHints']])
@@ -197,7 +255,9 @@ test('reconnected client at the same source version and caret is checked again',
 })
 
 test('an older ineligible reply cannot dismiss a newer accepted pad hint', async t => {
-  const f = fixture(t), e = editorAt('R1[12]', 3), pending = []
+  const f = fixture(t),
+    e = editorAt('R1[12]', 3),
+    pending = []
   f.session.signature = () => new Promise(resolve => pending.push(resolve))
   f.setActive(e)
   await until(() => pending.length === 1)
@@ -210,13 +270,13 @@ test('an older ineligible reply cannot dismiss a newer accepted pad hint', async
   assert.deepEqual(f.calls, [['editor.action.triggerParameterHints']])
 })
 
-
 test('native pad provider consumes the versioned preflight once; stale or failed requests cannot replace it', async () => {
   const { PcbjsSession } = createRequire(import.meta.url)('../dist/lsp-client.cjs')
   const pending = []
   const rpc = { onNotification: () => ({ dispose() {} }), sendRequest: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) }
   const session = new PcbjsSession(rpc, {})
-  const uri = 'file:///work/pcb.tsx', at = { line: 0, character: 3 }
+  const uri = 'file:///work/pcb.tsx',
+    at = { line: 0, character: 3 }
   const help = { signatures: [{ label: 'R1[pad]' }] }
   const preflight = session.signature(uri, at, 1)
   pending[0].resolve(help)
@@ -224,7 +284,11 @@ test('native pad provider consumes the versioned preflight once; stale or failed
   assert.equal(await session.takeSignature(uri, at, 1), help)
   assert.equal(pending.length, 1, 'the provider reuses the preflight response')
   assert.equal(session.takeSignature(uri, at, 1), undefined, 'one use, not a persistent result cache')
-  for (const [otherUri, otherAt, version] of [[uri, at, 2], [uri, { line: 0, character: 4 }, 1], ['file:///other.tsx', at, 1]]) {
+  for (const [otherUri, otherAt, version] of [
+    [uri, at, 2],
+    [uri, { line: 0, character: 4 }, 1],
+    ['file:///other.tsx', at, 1],
+  ]) {
     const p = session.signature(uri, at, 1)
     pending.at(-1).resolve(help)
     await p

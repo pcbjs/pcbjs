@@ -3,7 +3,12 @@ import type { SiteFinding } from '@pcbjs/core/site-data'
 
 type Finding = SiteFinding
 const plain = (value: unknown) => String(value).replace(/\s+/g, ' ')
-const escape = (value: unknown) => plain(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/[\\`*_[\]#|~]/g, '\\$&')
+const escape = (value: unknown) =>
+  plain(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/[\\`*_[\]#|~]/g, '\\$&')
 const code = (value: unknown) => {
   const text = plain(value)
   const fence = '`'.repeat(Math.max(0, ...[...text.matchAll(/`+/g)].map(m => m[0].length)) + 1)
@@ -24,14 +29,19 @@ function details(value: unknown, depth = 0): string {
 function geometry(witness: NonNullable<Finding['witness']>): string {
   let text = '\n## Geometry\n\n'
   if (witness.layer) text += `- **Layer:** ${code(witness.layer)}\n\n`
-  const points = (title: string, rows: [number, number][]) => `### ${title}\n\n| Point | X (mm) | Y (mm) |\n| --- | --- | --- |\n${rows.map((p, i) => `| ${i + 1} | ${p[0]} | ${p[1]} |\n`).join('')}\n`
+  const points = (title: string, rows: [number, number][]) =>
+    `### ${title}\n\n| Point | X (mm) | Y (mm) |\n| --- | --- | --- |\n${rows.map((p, i) => `| ${i + 1} | ${p[0]} | ${p[1]} |\n`).join('')}\n`
   if (witness.points?.length) text += points('Points', witness.points)
   if (witness.segments?.length) {
     text += '### Segments\n\n| Segment | From X (mm) | From Y (mm) | To X (mm) | To Y (mm) |\n| --- | --- | --- | --- | --- |\n'
-    witness.segments.forEach(([a, b], i) => { text += `| ${i + 1} | ${a[0]} | ${a[1]} | ${b[0]} | ${b[1]} |\n` })
+    witness.segments.forEach(([a, b], i) => {
+      text += `| ${i + 1} | ${a[0]} | ${a[1]} | ${b[0]} | ${b[1]} |\n`
+    })
     text += '\n'
   }
-  witness.rings?.forEach((ring, i) => { text += points(`Overlap boundary ${i + 1}`, ring) })
+  witness.rings?.forEach((ring, i) => {
+    text += points(`Overlap boundary ${i + 1}`, ring)
+  })
   return text
 }
 

@@ -29,7 +29,7 @@ export function editorSelection(f: FileFacts, ranges: Range[], targetOf: (p: Pos
     const t = empty ? targetOf(r.start) : undefined
     const code = t?.kind === 'point' ? rangeMembers(f, r, empty, out) : undefined
     const target = t ? targetMembers(f, t, out) : undefined
-    const found = code?.size ? code : target ?? rangeMembers(f, r, empty, out)
+    const found = code?.size ? code : (target ?? rangeMembers(f, r, empty, out))
     for (const [board, refs] of found) {
       const m = out.get(board)
       if (!m) continue
@@ -62,8 +62,11 @@ export function libraryAt(f: FileFacts, board: string, range: Range, doc: DocMod
     }
   }
   if (!keys.size) return
-  const sf = doc.sf(), start = doc.offset(range.start), end = doc.offset(range.end)
-  const factories = new Map<string, 'circuit' | 'layout'>(), namespaces = new Set<string>()
+  const sf = doc.sf(),
+    start = doc.offset(range.start),
+    end = doc.offset(range.end)
+  const factories = new Map<string, 'circuit' | 'layout'>(),
+    namespaces = new Set<string>()
   for (const statement of sf.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.moduleSpecifier.text !== '@pcbjs/core') continue
     const clause = statement.importClause
@@ -99,7 +102,11 @@ export function libraryAt(f: FileFacts, board: string, range: Range, doc: DocMod
   const circuitName = (expression: ts.Expression, seen = new Set<string>()): string | undefined => {
     if (ts.isCallExpression(expression)) {
       const callee = expression.expression
-      if (ts.isIdentifier(callee) && factories.get(callee.text) === 'circuit' || ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && namespaces.has(callee.expression.text) && callee.name.text === 'circuit') return runtimeName(expression)
+      if (
+        (ts.isIdentifier(callee) && factories.get(callee.text) === 'circuit') ||
+        (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && namespaces.has(callee.expression.text) && callee.name.text === 'circuit')
+      )
+        return runtimeName(expression)
       return circuitName(callee, seen)
     }
     if (!ts.isIdentifier(expression) || seen.has(expression.text)) return
@@ -114,9 +121,12 @@ export function libraryAt(f: FileFacts, board: string, range: Range, doc: DocMod
     }
     return b.site.schematic.circuits?.find(c => c.binding === expression.text || c.circuit === expression.text)?.circuit
   }
-  let found: string | undefined, span = Infinity
+  let found: string | undefined,
+    span = Infinity
   const visit = (node: ts.Node) => {
-    let name: string | undefined, runtime: string | undefined, owner = node
+    let name: string | undefined,
+      runtime: string | undefined,
+      owner = node
     if (ts.isFunctionDeclaration(node) && node.body) name = node.name?.text
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
       name = node.name.text
@@ -234,7 +244,7 @@ export function codeMembers(f: FileFacts, r: Range, empty: boolean): Map<string,
 
 /** How the selection names an item no part of its range owns: its route, else its part, else its uid; the one place a new reference kind goes. */
 export function memberOf(it: SiteItem): string | undefined {
-  return it.generated === 'reference' ? it.uid : it.route ?? (it.ref && it.kind !== 'pad' ? it.ref : it.uid)
+  return it.generated === 'reference' ? it.uid : (it.route ?? (it.ref && it.kind !== 'pad' ? it.ref : it.uid))
 }
 
 /** A source range a viewer selects in the editor, 1-based with an inclusive end. */

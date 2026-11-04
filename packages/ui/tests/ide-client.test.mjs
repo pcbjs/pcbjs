@@ -185,7 +185,6 @@ test('host identity-only view switches context without specifying a view', () =>
   assert.deepEqual(parseIdeRequest({ type: 'pcbjs:view', board: 'Gx', target: null }), { kind: 'view', board: 'Gx', target: null, view: null, side: null, mirror: null })
 })
 
-
 test('the dedicated checks view parses in browser and IDE host messages', () => {
   assert.equal(parseIdeQuery('?ide=1&view=checks').view, 'checks')
   assert.deepEqual(parseIdeRequest({ type: 'pcbjs:view', view: 'checks' }), { kind: 'view', view: 'checks', side: null, mirror: null })

@@ -391,10 +391,20 @@ export const vscode = {
     registerCodeActionsProvider: () => ({ dispose() {} }),
     registerDocumentLinkProvider: (selector, provider) => (linkProviders.set(selector.scheme, provider), { dispose: () => linkProviders.delete(selector.scheme) }),
   },
-  DocumentLink: class { constructor(range, target) { this.range = range; this.target = target } },
+  DocumentLink: class {
+    constructor(range, target) {
+      this.range = range
+      this.target = target
+    }
+  },
   CodeActionKind: { Empty: '' },
   EventEmitter,
-  Uri: { parse: uri, from: parts => ({ ...parts, toString: () => `${parts.scheme}:${parts.path}?${encodeURIComponent(parts.query)}` }), file: p => uri(pathToFileURL(p).toString()), joinPath: (u, ...p) => uri(`${u}/${p.join('/')}`) },
+  Uri: {
+    parse: uri,
+    from: parts => ({ ...parts, toString: () => `${parts.scheme}:${parts.path}?${encodeURIComponent(parts.query)}` }),
+    file: p => uri(pathToFileURL(p).toString()),
+    joinPath: (u, ...p) => uri(`${u}/${p.join('/')}`),
+  },
   ViewColumn: { Active: -1, One: 1, Beside: BESIDE },
   TabInputText,
   TabInputWebview,

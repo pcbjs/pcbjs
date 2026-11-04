@@ -74,7 +74,13 @@ const searchOf = (q: URLSearchParams): string => {
 }
 
 /** A search string with `select` set to a comma list of references and `isolate` to one, each removed for null. */
-export function selectSearch(search: string, select: string | null, isolate: string | null = null, focus: string | null = null, mode: 'instance' | 'library' | null = null): string {
+export function selectSearch(
+  search: string,
+  select: string | null,
+  isolate: string | null = null,
+  focus: string | null = null,
+  mode: 'instance' | 'library' | null = null,
+): string {
   const q = new URLSearchParams(search)
   if (select) q.set('select', select)
   else q.delete('select')

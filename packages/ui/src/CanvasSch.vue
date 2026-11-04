@@ -83,8 +83,8 @@ const page = computed(() => {
   const [x0, y0, x1, y1] = props.drawing.page
   return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
 })
-const libraryRef = computed(() => ctx.board.sel.isolate?.mode === 'library' ? ctx.board.sel.isolate.ref : null)
-const frameBox = () => libraryRef.value ? drawnBox(props.drawing) : (props.frameRef ? symbolFrame(props.drawing, props.frameRef) : null)
+const libraryRef = computed(() => (ctx.board.sel.isolate?.mode === 'library' ? ctx.board.sel.isolate.ref : null))
+const frameBox = () => (libraryRef.value ? drawnBox(props.drawing) : props.frameRef ? symbolFrame(props.drawing, props.frameRef) : null)
 
 let readyRaf = 0
 function signalReady() {
@@ -139,7 +139,7 @@ function savedBox(saved: FocusView): Box {
   if (saved.size[0] === w && saved.size[1] === h) return [...saved.box] as Box
   const [x, y, width, height] = saved.box
   const scale = width / saved.size[0]
-  return [x + width / 2 - w * scale / 2, y + height / 2 - h * scale / 2, w * scale, h * scale]
+  return [x + width / 2 - (w * scale) / 2, y + height / 2 - (h * scale) / 2, w * scale, h * scale]
 }
 function restoreFocus(saved: FocusView) {
   stopAnimation()
@@ -343,7 +343,7 @@ onBeforeUnmount(() => clearTimeout(pulseTimer))
 const EASE_OUT_SPLINE = EASE_OUT_CSS.replace(/^cubic-bezier\((.*)\)$/, '$1').replace(/,/g, '')
 
 const units = (v: number) => +(v / props.drawing.grid).toFixed(2)
-const hoverLabel = computed(() => hoverRef.value ? displayRef(props.board, hoverRef.value) : null)
+const hoverLabel = computed(() => (hoverRef.value ? displayRef(props.board, hoverRef.value) : null))
 const hoverText = computed(() => {
   const h = hover.value
   if (!h) return null
@@ -416,7 +416,11 @@ const hoverText = computed(() => {
       </button>
       <button class="text" :class="{ on: split }" :aria-pressed="split" title="Show the 2D board beside the schematic" @click="emit('update:split', !split)">Board</button>
     </div>
-    <Bubble v-if="hoverText" :x="pointer[0]" :y="pointer[1]"><b>{{ hoverLabel ?? hoverText.name ?? hoverText.kind }}</b><span v-if="hoverText.net"> · {{ hoverText.net }}</span><span> · {{ hoverText.kind }}</span></Bubble>
+    <Bubble v-if="hoverText" :x="pointer[0]" :y="pointer[1]"
+      ><b>{{ hoverLabel ?? hoverText.name ?? hoverText.kind }}</b
+      ><span v-if="hoverText.net"> · {{ hoverText.net }}</span
+      ><span> · {{ hoverText.kind }}</span></Bubble
+    >
     <div class="bv-readout">
       <template v-if="hoverText">
         <span v-if="hoverLabel" class="v">{{ hoverLabel }}</span>

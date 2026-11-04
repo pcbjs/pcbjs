@@ -7,8 +7,11 @@ import { harness, skip, click, centre, screenOf, ev, ed, page, until, compiles, 
 harness()
 
 async function change(label, value, expected) {
-  const applied = ed.applied.length, compiled = compiles()
-  await ev(`(() => { const field = document.querySelector('[aria-label=${JSON.stringify(label)}]'); field.value=${JSON.stringify(value)}; field.dispatchEvent(new Event('change', {bubbles:true})); })()`)
+  const applied = ed.applied.length,
+    compiled = compiles()
+  await ev(
+    `(() => { const field = document.querySelector('[aria-label=${JSON.stringify(label)}]'); field.value=${JSON.stringify(value)}; field.dispatchEvent(new Event('change', {bubbles:true})); })()`,
+  )
   await until(`${label} source edit`, () => ed.applied.length === applied + 1 && expected.test(ed.doc.getText()))
   await until(`${label} compile`, () => compiles() > compiled)
   await sleep(400)
@@ -37,7 +40,9 @@ test('trace toolbar selects its primitive, converts coordinates and changes its 
   await until('previous segment selected', () => ev(`document.querySelector('[aria-label="Trace primitive"]')?.value === 'H'`))
   await click(await screenOf(5, 6.23))
   await until('midpoint inserted in focused segment', () => /\.L\('5 6\.23'\)\.H\(7\.905\)/.test(ed.doc.getText()))
-  await until('remaining segment focused after insertion', () => ev(`document.querySelector('[aria-label="Trace primitive"]')?.value === 'H' && document.querySelector('[aria-label="Previous trace segment"]')?.disabled === false`))
+  await until('remaining segment focused after insertion', () =>
+    ev(`document.querySelector('[aria-label="Trace primitive"]')?.value === 'H' && document.querySelector('[aria-label="Previous trace segment"]')?.disabled === false`),
+  )
   await click(await centre('[aria-label="Previous trace segment"]'))
   await until('inserted segment selected', () => ev(`document.querySelector('[aria-label="Trace primitive"]')?.value === 'L'`))
   await click(await centre('[aria-label="Delete trace segment"]'))
@@ -64,7 +69,9 @@ test('placement toolbar edits local coordinates, side and grid, and resets a zoo
   assert.match(ed.doc.getText(), /<g name="Divider" at="17 7\.5 90" side="B" grid=\{\{ snap: 1 \}\}/)
   await ev('window.__beforeGridReload = true')
   await page.send('Page.reload')
-  await until('persisted grid after preview reload', () => ev(`!window.__beforeGridReload && document.querySelector('[aria-label="Editing grid"]')?.value === '1'`).catch(() => false))
+  await until('persisted grid after preview reload', () =>
+    ev(`!window.__beforeGridReload && document.querySelector('[aria-label="Editing grid"]')?.value === '1'`).catch(() => false),
+  )
   assert.equal(await ev(`document.querySelector('.bv-edit input[type=checkbox]').checked`), true)
   const snap = '.bv-edit input[type=checkbox]'
   const before = await ev(`document.querySelector(${JSON.stringify(snap)}).checked`)
@@ -73,10 +80,12 @@ test('placement toolbar edits local coordinates, side and grid, and resets a zoo
   await click(await centre('[aria-label="Reset view"]'))
   await sleep(700)
   const fitted = await ev(`document.querySelector('svg.board-svg').getAttribute('viewBox')`)
-  await ev(`(() => {const e=document.querySelector('svg.board-svg'),r=e.getBoundingClientRect();e.dispatchEvent(new WheelEvent('wheel',{clientX:r.x+r.width/2,clientY:r.y+r.height/2,deltaY:-300,bubbles:true,cancelable:true}));})()`)
-  await until('zoom changed', async () => await ev(`document.querySelector('svg.board-svg').getAttribute('viewBox')`) !== fitted)
+  await ev(
+    `(() => {const e=document.querySelector('svg.board-svg'),r=e.getBoundingClientRect();e.dispatchEvent(new WheelEvent('wheel',{clientX:r.x+r.width/2,clientY:r.y+r.height/2,deltaY:-300,bubbles:true,cancelable:true}));})()`,
+  )
+  await until('zoom changed', async () => (await ev(`document.querySelector('svg.board-svg').getAttribute('viewBox')`)) !== fitted)
   await click(await centre('[aria-label="Reset view"]'))
-  await until('reset fitted frame', async () => await ev(`document.querySelector('svg.board-svg').getAttribute('viewBox')`) === fitted)
+  await until('reset fitted frame', async () => (await ev(`document.querySelector('svg.board-svg').getAttribute('viewBox')`)) === fitted)
   await shot('placement-focus-toolbar')
 })
 

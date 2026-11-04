@@ -84,7 +84,7 @@ const facetsOf = (s, hash = 'h') => [
   { board: s.name, facet: 'fab', hash, data: { bom: s.bom } },
 ]
 
-const boardRows = nodes => nodes.flatMap(n => n.action?.kind === 'board' ? [n] : boardRows(n.children ?? []))
+const boardRows = nodes => nodes.flatMap(n => (n.action?.kind === 'board' ? [n] : boardRows(n.children ?? [])))
 const plain = nodes => nodes.map(n => [n.label, n.description, ...(n.children ? [plain(n.children)] : [])])
 
 test('the trees from a boards message and the site data of each board', async () => {
@@ -109,7 +109,8 @@ test('the trees from a boards message and the site data of each board', async ()
   ])
   assert.deepEqual(boardRows(p.boards.nodes)[0].children[0].action, {
     kind: 'ref',
-    project: '/work/demo', target: null,
+    project: '/work/demo',
+    target: null,
     board: 'Blinky',
     ref: 'R1',
     source: { file: '/work/demo/blinky.pcb.tsx', line: 30, col: 5, endLine: 30, endCol: 20 },
@@ -136,7 +137,8 @@ test('the trees from a boards message and the site data of each board', async ()
   assert.equal(clearance.id, 'finding:Blinky:drc:clearance:000000000002')
   assert.deepEqual(clearance.action, {
     kind: 'finding',
-    project: '/work/demo', target: null,
+    project: '/work/demo',
+    target: null,
     board: 'Blinky',
     id: 'drc:clearance:000000000002',
     source: { file: '/work/demo/blinky.pcb.tsx', line: 12, col: 3, endLine: 12, endCol: 40 },
@@ -213,19 +215,33 @@ test('a workspace server lists its projects, the shown one open with its boards'
   }
   await bar.update({ ...server, scopes }, boardsMessage.boards[0])
   const configs = bar.providers.boards.nodes
-  assert.deepEqual(configs.map(n => n.label), ['demo', 'usb-hub'])
+  assert.deepEqual(
+    configs.map(n => n.label),
+    ['demo', 'usb-hub'],
+  )
   const relativePath = vscode.workspace.asRelativePath
   try {
     vscode.workspace.asRelativePath = file => file.replace('/work/', 'examples/')
     await bar.update({ ...server, scopes }, boardsMessage.boards[0])
-    assert.deepEqual(bar.providers.boards.nodes.map(n => n.label), ['examples/demo', 'examples/usb-hub'])
+    assert.deepEqual(
+      bar.providers.boards.nodes.map(n => n.label),
+      ['examples/demo', 'examples/usb-hub'],
+    )
     vscode.workspace.asRelativePath = () => 'pcb.config.ts'
     await bar.update(server, boardsMessage.boards[0])
     assert.equal(bar.providers.boards.nodes[0].label, 'demo')
-  } finally { vscode.workspace.asRelativePath = relativePath }
+  } finally {
+    vscode.workspace.asRelativePath = relativePath
+  }
   assert.ok(configs.every(n => n.action === undefined))
-  assert.deepEqual(configs[0].children.map(n => n.label), ['Blinky', 'Coin cell'])
-  assert.deepEqual(boardRows(configs).map(n => n.action.name), ['Blinky', 'Coin'])
+  assert.deepEqual(
+    configs[0].children.map(n => n.label),
+    ['Blinky', 'Coin cell'],
+  )
+  assert.deepEqual(
+    boardRows(configs).map(n => n.action.name),
+    ['Blinky', 'Coin'],
+  )
   assert.deepEqual(bar.providers.findings.nodes, [])
 })
 
@@ -250,7 +266,6 @@ test('session/state: a held facet whose hash moved reloads the facets; the same 
   assert.equal(loads, 2, 'in sync again')
 })
 
-
 test('sidebar actions explicitly select the first target instead of preserving divergent viewer target', async () => {
   const first = site('Blinky')
   const bar = new Sidebar(async () => [{ board: 'Blinky', target: 'first', facet: 'meta', hash: 'first', data: first }], false)
@@ -269,17 +284,42 @@ test('sidebar actions explicitly select the first target instead of preserving d
 
 test('expanding a config resolves all entries directly to boards without selection or navigation', async () => {
   const calls = []
-  const source = { ...server, session: 'A', request: async (method, params) => {
-    calls.push([method, params])
-    return { value: { boards: [{ entry: 'pcb.tsx', name: 'Remote', current: true, targets: [null] }, { entry: 'second.tsx', name: 'Second', current: true, targets: [null] }] } }
-  }, scopes: { single: false, scopes: [{ root: '/work/demo', route: '/demo/', displayed: true }, { root: '/work/other', route: '/other/', displayed: false }] } }
-  const bar = new Sidebar(async () => [], false, async () => ({ '/work/demo': ['/work/demo/blinky.pcb.tsx', '/work/demo/coin.tsx'], '/work/other': ['/work/other/pcb.tsx', '/work/other/second.tsx'] }))
+  const source = {
+    ...server,
+    session: 'A',
+    request: async (method, params) => {
+      calls.push([method, params])
+      return {
+        value: {
+          boards: [
+            { entry: 'pcb.tsx', name: 'Remote', current: true, targets: [null] },
+            { entry: 'second.tsx', name: 'Second', current: true, targets: [null] },
+          ],
+        },
+      }
+    },
+    scopes: {
+      single: false,
+      scopes: [
+        { root: '/work/demo', route: '/demo/', displayed: true },
+        { root: '/work/other', route: '/other/', displayed: false },
+      ],
+    },
+  }
+  const bar = new Sidebar(
+    async () => [],
+    false,
+    async () => ({ '/work/demo': ['/work/demo/blinky.pcb.tsx', '/work/demo/coin.tsx'], '/work/other': ['/work/other/pcb.tsx', '/work/other/second.tsx'] }),
+  )
   await bar.update(source, boardsMessage.boards[0])
   const config = bar.providers.boards.nodes[1]
   assert.equal(bar.providers.boards.getTreeItem(config).command, undefined)
   const [board, second] = await bar.providers.boards.getChildren(config)
   assert.deepEqual(calls, [['session/boards', { project: '/work/other', entries: ['/work/other/pcb.tsx', '/work/other/second.tsx'] }]])
-  assert.deepEqual(config.children.map(n => n.label), ['Remote', 'Second'])
+  assert.deepEqual(
+    config.children.map(n => n.label),
+    ['Remote', 'Second'],
+  )
   assert.equal(second.action.entry, '/work/other/second.tsx')
   assert.equal(bar.providers.boards.getParent(second), config)
   assert.equal(board.action.project, '/work/other')
@@ -302,12 +342,24 @@ test('an explicitly collapsed config stays collapsed across sidebar refresh', as
 
 test('slower config discovery cannot replace a newer same-link same-board tree', async () => {
   let release, entered
-  const started = new Promise(resolve => { entered = resolve })
-  let count = 0
-  const bar = new Sidebar(async () => [], false, async () => {
-    if (++count === 1) { entered(); await new Promise(resolve => { release = resolve }); return { '/work/demo': ['/work/demo/old.tsx'] } }
-    return { '/work/demo': ['/work/demo/new.tsx', '/work/demo/second.tsx'] }
+  const started = new Promise(resolve => {
+    entered = resolve
   })
+  let count = 0
+  const bar = new Sidebar(
+    async () => [],
+    false,
+    async () => {
+      if (++count === 1) {
+        entered()
+        await new Promise(resolve => {
+          release = resolve
+        })
+        return { '/work/demo': ['/work/demo/old.tsx'] }
+      }
+      return { '/work/demo': ['/work/demo/new.tsx', '/work/demo/second.tsx'] }
+    },
+  )
   const first = bar.update(server, boardsMessage.boards[0])
   await started
   const second = bar.update(server, boardsMessage.boards[0])
@@ -320,13 +372,23 @@ test('slower config discovery cannot replace a newer same-link same-board tree',
 })
 
 test('facets from a shared entry keep board identity and first-target data separate', async () => {
-  const a = site('A', { nets: ['A_NET'] }), b = site('B', { nets: ['B_NET'] })
-  const bar = new Sidebar(async () => [
-    ...facetsOf(a).map(f => ({ ...f, target: 'first' })),
-    ...facetsOf(b).map(f => ({ ...f, target: 'first' })),
-    ...facetsOf(site('A', { nets: ['WRONG_TARGET'] })).map(f => ({ ...f, target: 'second' })),
-  ], false)
-  const info = { ...boardsMessage, boards: [{ name: 'A', entry: 'shared.tsx' }, { name: 'B', entry: 'shared.tsx' }] }
+  const a = site('A', { nets: ['A_NET'] }),
+    b = site('B', { nets: ['B_NET'] })
+  const bar = new Sidebar(
+    async () => [
+      ...facetsOf(a).map(f => ({ ...f, target: 'first' })),
+      ...facetsOf(b).map(f => ({ ...f, target: 'first' })),
+      ...facetsOf(site('A', { nets: ['WRONG_TARGET'] })).map(f => ({ ...f, target: 'second' })),
+    ],
+    false,
+  )
+  const info = {
+    ...boardsMessage,
+    boards: [
+      { name: 'A', entry: 'shared.tsx' },
+      { name: 'B', entry: 'shared.tsx' },
+    ],
+  }
   await bar.update({ ...server, boards: info }, info.boards[0])
   assert.equal(bar.providers.nets.nodes[0].label, 'A_NET')
   await bar.update({ ...server, boards: info }, info.boards[1])
@@ -339,26 +401,48 @@ test('workspace-root configs resolve automatically to top-level boards while nes
   const previous = ui.folders
   ui.folders = ['/work/demo', '/work/other']
   const calls = []
-  const source = { ...server, session: 'A', scopes: { single: false, scopes: [
-    { root: '/work/demo', route: '/demo/', displayed: true },
-    { root: '/work/demo/nested', route: '/nested/', displayed: false },
-    { root: '/work/other', route: '/other/', displayed: false },
-  ] }, request: async (method, params) => {
-    calls.push([method, params])
-    return { value: { boards: params.project === '/work/demo' ? [
-      { name: 'Blinky', entry: 'blinky.pcb.tsx', current: true, targets: [null] },
-      { name: 'Extra', entry: 'second.tsx', current: true, targets: [null] },
-    ] : [{ name: 'Blinky', entry: 'pcb.tsx', current: true, targets: [null] }] } }
-  } }
-  const bar = new Sidebar(async () => facetsOf(sites.Blinky), false, async () => ({
-    '/work/demo': ['/work/demo/blinky.pcb.tsx', '/work/demo/second.tsx'],
-    '/work/demo/nested': ['/work/demo/nested/pcb.tsx'],
-    '/work/other': ['/work/other/pcb.tsx'],
-  }))
+  const source = {
+    ...server,
+    session: 'A',
+    scopes: {
+      single: false,
+      scopes: [
+        { root: '/work/demo', route: '/demo/', displayed: true },
+        { root: '/work/demo/nested', route: '/nested/', displayed: false },
+        { root: '/work/other', route: '/other/', displayed: false },
+      ],
+    },
+    request: async (method, params) => {
+      calls.push([method, params])
+      return {
+        value: {
+          boards:
+            params.project === '/work/demo'
+              ? [
+                  { name: 'Blinky', entry: 'blinky.pcb.tsx', current: true, targets: [null] },
+                  { name: 'Extra', entry: 'second.tsx', current: true, targets: [null] },
+                ]
+              : [{ name: 'Blinky', entry: 'pcb.tsx', current: true, targets: [null] }],
+        },
+      }
+    },
+  }
+  const bar = new Sidebar(
+    async () => facetsOf(sites.Blinky),
+    false,
+    async () => ({
+      '/work/demo': ['/work/demo/blinky.pcb.tsx', '/work/demo/second.tsx'],
+      '/work/demo/nested': ['/work/demo/nested/pcb.tsx'],
+      '/work/other': ['/work/other/pcb.tsx'],
+    }),
+  )
   try {
     await bar.update(source, boardsMessage.boards[0])
     const nodes = bar.providers.boards.nodes
-    assert.deepEqual(nodes.map(n => n.label), ['Blinky', 'Extra', 'nested', 'Blinky'])
+    assert.deepEqual(
+      nodes.map(n => n.label),
+      ['Blinky', 'Extra', 'nested', 'Blinky'],
+    )
     assert.deepEqual(calls, [
       ['session/boards', { project: '/work/demo', entries: ['/work/demo/blinky.pcb.tsx', '/work/demo/second.tsx'] }],
       ['session/boards', { project: '/work/other', entries: ['/work/other/pcb.tsx'] }],
@@ -373,41 +457,82 @@ test('workspace-root configs resolve automatically to top-level boards while nes
     assert.equal(nodes[0].children[0].action.project, '/work/demo')
     assert.equal(bar.providers.boards.getParent(nodes[0].children[0]), nodes[0])
     assert.equal(bar.providers.boards.getTreeItem(nodes[2]).command, undefined)
-  } finally { bar.dispose(); ui.folders = previous }
+  } finally {
+    bar.dispose()
+    ui.folders = previous
+  }
 })
 
 test('a failed root config remains visible with its resolution error', async () => {
   const { ui } = await import('./vscode.mjs')
   const previous = ui.folders
   ui.folders = ['/work/demo']
-  const bar = new Sidebar(async () => [], false, async () => ({ '/work/demo': ['/work/demo/blinky.pcb.tsx'] }))
+  const bar = new Sidebar(
+    async () => [],
+    false,
+    async () => ({ '/work/demo': ['/work/demo/blinky.pcb.tsx'] }),
+  )
   try {
-    await bar.update({ ...server, request: async () => { throw new Error('Invalid config') } }, undefined)
+    await bar.update(
+      {
+        ...server,
+        request: async () => {
+          throw new Error('Invalid config')
+        },
+      },
+      undefined,
+    )
     const [node] = bar.providers.boards.nodes
     assert.equal(node.id, 'config:/work/demo/pcb.config.ts')
     assert.equal(node.description, 'Unable to resolve: Invalid config')
     assert.equal(node.load.root, '/work/demo', 'expansion can retry')
-  } finally { bar.dispose(); ui.folders = previous }
+  } finally {
+    bar.dispose()
+    ui.folders = previous
+  }
 })
 
 test('a stale root resolution cannot replace the latest board tree', async () => {
   const { ui } = await import('./vscode.mjs')
   const previous = ui.folders
   ui.folders = ['/work/demo']
-  let release, entered, count = 0
-  const started = new Promise(resolve => { entered = resolve })
-  const source = { ...server, request: async () => {
-    const first = ++count === 1
-    if (first) { entered(); await new Promise(resolve => { release = resolve }) }
-    return { value: { boards: [{ name: first ? 'Old' : 'New', entry: 'blinky.pcb.tsx', current: true }] } }
-  } }
-  const bar = new Sidebar(async () => [], false, async () => ({ '/work/demo': ['/work/demo/blinky.pcb.tsx'] }))
+  let release,
+    entered,
+    count = 0
+  const started = new Promise(resolve => {
+    entered = resolve
+  })
+  const source = {
+    ...server,
+    request: async () => {
+      const first = ++count === 1
+      if (first) {
+        entered()
+        await new Promise(resolve => {
+          release = resolve
+        })
+      }
+      return { value: { boards: [{ name: first ? 'Old' : 'New', entry: 'blinky.pcb.tsx', current: true }] } }
+    },
+  }
+  const bar = new Sidebar(
+    async () => [],
+    false,
+    async () => ({ '/work/demo': ['/work/demo/blinky.pcb.tsx'] }),
+  )
   try {
     const first = bar.update(source, undefined)
     await started
     await bar.update(source, undefined)
     release()
     await first
-    assert.deepEqual(bar.providers.boards.nodes.map(n => n.label), ['New'])
-  } finally { release?.(); bar.dispose(); ui.folders = previous }
+    assert.deepEqual(
+      bar.providers.boards.nodes.map(n => n.label),
+      ['New'],
+    )
+  } finally {
+    release?.()
+    bar.dispose()
+    ui.folders = previous
+  }
 })

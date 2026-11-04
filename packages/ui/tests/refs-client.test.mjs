@@ -4,12 +4,16 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { registerHooks } from 'node:module'
 
-registerHooks({ resolve: (spec, ctx, next) => {
-  try { return next(spec, ctx) } catch (error) {
-    if (spec.startsWith('.') && !spec.endsWith('.ts')) return next(spec + '.ts', ctx)
-    throw error
-  }
-} })
+registerHooks({
+  resolve: (spec, ctx, next) => {
+    try {
+      return next(spec, ctx)
+    } catch (error) {
+      if (spec.startsWith('.') && !spec.endsWith('.ts')) return next(spec + '.ts', ctx)
+      throw error
+    }
+  },
+})
 const { boxOf, displayRef, fromWire, partRef, refocus, siteTarget, targetBox, toWire } = await import('../src/refs.ts')
 import { parseViewQuery, selectSearch } from '../src/query.ts'
 import { shapeOf } from '@pcbjs/core/site-shapes'
@@ -148,7 +152,6 @@ test('a group frame includes the whole compass about its actual grid pivot, even
   assert.ok(b[0] < -5 - r && b[0] + b[2] > -5 + r)
   assert.ok(b[1] < 8 - r && b[1] + b[3] > 8 + r)
 })
-
 
 test('library labels are local while part and pad targets retain source identities', async () => {
   const s = site()

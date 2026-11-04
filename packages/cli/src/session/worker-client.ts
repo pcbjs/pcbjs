@@ -243,7 +243,8 @@ export function workerCompiler(o: WorkerOptions): Compiler {
       return p as Promise<Compiled[K]>
     },
     sketch: (entry, job) => ask<Sketch | null>({ t: 'sketch', id: ++seq, entry: { file: entry.file, rel: entry.rel }, ...job }),
-    layout: (entry, board, target, ref) => ask<{ site: SiteData; board: Uint8Array }>({ t: 'layout', id: ++seq, entry, board, target, ref }).then(v => ({ site: v.site, board: deserialize(v.board) as Board })),
+    layout: (entry, board, target, ref) =>
+      ask<{ site: SiteData; board: Uint8Array }>({ t: 'layout', id: ++seq, entry, board, target, ref }).then(v => ({ site: v.site, board: deserialize(v.board) as Board })),
     preview: (file, rel) => ask<Preview | null>({ t: 'preview', id: ++seq, file, rel }),
     graph: () => graph,
     imported: file => graph.imported(file),

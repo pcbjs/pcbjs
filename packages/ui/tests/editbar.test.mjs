@@ -7,23 +7,54 @@ import ts from 'typescript'
 import { createSSRApp, h, ref } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 
-registerHooks({ resolve: (spec, ctx, next) => {
-  try { return next(spec, ctx) } catch (error) {
-    if (spec.startsWith('.') && !spec.endsWith('.ts')) return next(spec + '.ts', ctx)
-    throw error
-  }
-} })
+registerHooks({
+  resolve: (spec, ctx, next) => {
+    try {
+      return next(spec, ctx)
+    } catch (error) {
+      if (spec.startsWith('.') && !spec.endsWith('.ts')) return next(spec + '.ts', ctx)
+      throw error
+    }
+  },
+})
 const file = new URL('../src/EditBar.vue', import.meta.url)
 const { descriptor } = parse(readFileSync(file, 'utf8'), { filename: file.pathname })
 const compiled = compileScript(descriptor, { id: 'editbar-test', inlineTemplate: true, templateOptions: { ssr: true } })
 const js = ts.transpileModule(compiled.content, { compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext } }).outputText
-const code = js.replace(/import Bubble from ['"]\.\/Bubble\.vue['"];?/, 'const Bubble = {}').replace(/from (["'])([^"']+)\1/g, (_, quote, spec) => `from ${JSON.stringify(spec.startsWith('.') ? new URL(spec + '.ts', file).href : import.meta.resolve(spec))}`)
+const code = js
+  .replace(/import Bubble from ['"]\.\/Bubble\.vue['"];?/, 'const Bubble = {}')
+  .replace(/from (["'])([^"']+)\1/g, (_, quote, spec) => `from ${JSON.stringify(spec.startsWith('.') ? new URL(spec + '.ts', file).href : import.meta.resolve(spec))}`)
 const { default: EditBar } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
 
 const render = async node => {
-  const tl = { rw: ref(true), tools: ref([{ id: node.caps.includes('chain') ? 'point' : 'move' }]), targets: () => ({ refs: [node.ref], node }), node: ref(node), banner: ref(null), why: ref(null), grid: ref({ pitch: 1 }), sourceGrid: ref({ pitch: 1, minor: [] }), gridPitch: ref(null), snapOverride: ref(null), snapEnabled: ref(true), oneShot() {} }
+  const tl = {
+    rw: ref(true),
+    tools: ref([{ id: node.caps.includes('chain') ? 'point' : 'move' }]),
+    targets: () => ({ refs: [node.ref], node }),
+    node: ref(node),
+    banner: ref(null),
+    why: ref(null),
+    grid: ref({ pitch: 1 }),
+    sourceGrid: ref({ pitch: 1, minor: [] }),
+    gridPitch: ref(null),
+    snapOverride: ref(null),
+    snapEnabled: ref(true),
+    oneShot() {},
+  }
   const app = createSSRApp({ render: () => h(EditBar, { tl, as: { on: ref(false), ends: ref(null), chip: ref(null) }, chip: {} }) })
-  app.provide(Symbol.for('pcbjs:pane'), { commands: { run() {} }, board: { sel: { refs: [node.ref], anchor: node.caps.includes('chain') ? `${node.ref}/pt:1` : node.ref }, site: { layers: [{ id: 'F.Cu', kind: 'copper' }, { id: 'B.Cu', kind: 'copper' }] }, edit: {} } })
+  app.provide(Symbol.for('pcbjs:pane'), {
+    commands: { run() {} },
+    board: {
+      sel: { refs: [node.ref], anchor: node.caps.includes('chain') ? `${node.ref}/pt:1` : node.ref },
+      site: {
+        layers: [
+          { id: 'F.Cu', kind: 'copper' },
+          { id: 'B.Cu', kind: 'copper' },
+        ],
+      },
+      edit: {},
+    },
+  })
   return renderToString(app)
 }
 

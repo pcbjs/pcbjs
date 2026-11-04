@@ -26,7 +26,12 @@ function runPage(html) {
   const frames = []
   const received = []
   const makeFrame = () => {
-    const frame = { contentWindow: { postMessage: (data, origin) => received.push({ frame, data, origin }) }, src: 'http://127.0.0.1:5301/board/Blinky', cloneNode: () => makeFrame(), replaceWith() {} }
+    const frame = {
+      contentWindow: { postMessage: (data, origin) => received.push({ frame, data, origin }) },
+      src: 'http://127.0.0.1:5301/board/Blinky',
+      cloneNode: () => makeFrame(),
+      replaceWith() {},
+    }
     frames.push(frame)
     return frame
   }
@@ -80,7 +85,6 @@ test('a chord from the viewer is dispatched again on the pane page, unhandled, f
   page.message({ type: 'pcbjs:key', key: 'p', metaKey: true }, {})
   assert.equal(page.dispatched.length, 2, 'a key from another window is ignored')
 })
-
 
 test('project navigation queues selection for the new frame and rejects an old duplicate-board ready', async () => {
   panels.length = 0

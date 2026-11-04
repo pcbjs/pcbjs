@@ -19,7 +19,10 @@ declare global {
 }
 
 /** What a page needs of @pcbjs/ui, which every one of its entries exports. */
-export type Ui = Pick<typeof UI, 'STORE' | 'afterMount' | 'configure' | 'connect' | 'createViewer' | 'parseIdeQuery' | 'parseViewQuery' | 'scopeOfPath' | 'sessionSocket' | 'sessionUrl'>
+export type Ui = Pick<
+  typeof UI,
+  'STORE' | 'afterMount' | 'configure' | 'connect' | 'createViewer' | 'parseIdeQuery' | 'parseViewQuery' | 'scopeOfPath' | 'sessionSocket' | 'sessionUrl'
+>
 
 /** Start the page with `root` as its app, given `props`. */
 export async function start(ui: Ui, root: Component, props: Record<string, unknown> = {}) {

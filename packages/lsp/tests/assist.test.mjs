@@ -81,9 +81,19 @@ test('assist: an empty H after the first end starts on its pad, F.Cu, with the b
 test('assist: duplicate board names retain each originating project for a shared source file', () => {
   const text = head + '    {route(J1[1], R1[1]).H()}' + tail
   const spot = assistSpot(parse(text, file), text.indexOf('.H()') + 3)
-  const a = site(text), b = { ...site(text), sources: { '../pcb.tsx': [] } }
-  const contexts = assistContexts(spot, docOf(file, text), [{ root, site: a }, { root: `${root}/nested`, site: b }])
-  assert.deepEqual(contexts.map(c => [c.project, c.board, c.file]), [[root, 'Fix', file], [`${root}/nested`, 'Fix', file]])
+  const a = site(text),
+    b = { ...site(text), sources: { '../pcb.tsx': [] } }
+  const contexts = assistContexts(spot, docOf(file, text), [
+    { root, site: a },
+    { root: `${root}/nested`, site: b },
+  ])
+  assert.deepEqual(
+    contexts.map(c => [c.project, c.board, c.file]),
+    [
+      [root, 'Fix', file],
+      [`${root}/nested`, 'Fix', file],
+    ],
+  )
 })
 
 for (const [cmd, relative] of [
@@ -176,7 +186,10 @@ test('assist: divergent variant geometry cannot replace the first target context
   const first = { ...site(text), variant: { name: 'First', index: 0, names: ['First', 'Second'] } }
   const second = { ...site(text), variant: { name: 'Second', index: 1, names: ['First', 'Second'] } }
   second.footprints[0].pads[0].at = [90, 80]
-  const contexts = assistContexts(spot, docOf(file, text), [{ root, site: first }, { root, site: second }])
+  const contexts = assistContexts(spot, docOf(file, text), [
+    { root, site: first },
+    { root, site: second },
+  ])
   assert.equal(contexts.length, 1)
   assert.deepEqual(contexts[0].start, [3, 7])
 })

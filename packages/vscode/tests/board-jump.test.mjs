@@ -77,11 +77,30 @@ test('config rows expand directly to boards from every entry', async () => {
   const demo = { root: '/work/demo', route: '/demo/', displayed: true }
   const solo = { root, route: '/solo/', displayed: false, boards: [] }
   const declared = { '/work/demo': ['/work/demo/a.tsx', '/work/demo/b.tsx'], [root]: [join(root, 'blinky.pcb.tsx')] }
-  const rows = boardNodes({ ...info, root: '/work/demo', boards: [{ name: 'A', entry: 'a.tsx' }, { name: 'B', entry: 'b.tsx' }] }, { scopes: [demo, solo], single: false }, 'A', [], declared)
-  assert.deepEqual(rows.map(r => r.label), ['demo', basename(root)])
+  const rows = boardNodes(
+    {
+      ...info,
+      root: '/work/demo',
+      boards: [
+        { name: 'A', entry: 'a.tsx' },
+        { name: 'B', entry: 'b.tsx' },
+      ],
+    },
+    { scopes: [demo, solo], single: false },
+    'A',
+    [],
+    declared,
+  )
+  assert.deepEqual(
+    rows.map(r => r.label),
+    ['demo', basename(root)],
+  )
   assert.equal(rows[0].action, undefined)
   assert.equal(rows[0].children[0].action.kind, 'board')
-  assert.deepEqual(rows[0].children.map(r => r.label), ['A', 'B'])
+  assert.deepEqual(
+    rows[0].children.map(r => r.label),
+    ['A', 'B'],
+  )
   assert.deepEqual(rows[0].load.entries, ['/work/demo/a.tsx', '/work/demo/b.tsx'])
   assert.deepEqual(rows[1].load, { root, entries: [join(root, 'blinky.pcb.tsx')], route: '/solo/' })
   const calls = []
@@ -89,11 +108,12 @@ test('config rows expand directly to boards from every entry', async () => {
   assert.deepEqual(calls, ['config:solo'])
 })
 
-for (const close of [false, true]) test(`board jump retains exact project while compile waits, closed=${close}`, async () => {
-  const sent = []
-  const a = { open: true, request: async (method, params) => sent.push({ method, params }) }
-  const jump = entryJumper(a, '/project/A')
-  if (close) a.open = false
-  await jump('Board')
-  assert.deepEqual(sent, close ? [] : [{ method: 'session/select', params: entryJump('Board', '/project/A') }])
-})
+for (const close of [false, true])
+  test(`board jump retains exact project while compile waits, closed=${close}`, async () => {
+    const sent = []
+    const a = { open: true, request: async (method, params) => sent.push({ method, params }) }
+    const jump = entryJumper(a, '/project/A')
+    if (close) a.open = false
+    await jump('Board')
+    assert.deepEqual(sent, close ? [] : [{ method: 'session/select', params: entryJump('Board', '/project/A') }])
+  })

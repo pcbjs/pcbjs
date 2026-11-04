@@ -68,7 +68,17 @@ function onKey(e: KeyboardEvent) {
 <template>
   <div v-if="ui.palette" class="palette-back" @pointerdown.self="ui.palette = false">
     <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
-      <input ref="input" v-model="q" placeholder="Search commands" :aria-controls="listId" :aria-activedescendant="found[at] ? `${listId}-${at}` : undefined" role="combobox" aria-expanded="true" aria-autocomplete="list" aria-label="Search commands" />
+      <input
+        ref="input"
+        v-model="q"
+        placeholder="Search commands"
+        :aria-controls="listId"
+        :aria-activedescendant="found[at] ? `${listId}-${at}` : undefined"
+        role="combobox"
+        aria-expanded="true"
+        aria-autocomplete="list"
+        aria-label="Search commands"
+      />
       <ul :id="listId" role="listbox">
         <li v-for="(d, i) in found" :key="d.id" :id="`${listId}-${i}`" role="option" :aria-selected="i === at" :class="{ on: i === at }" @pointerenter="at = i" @click="run(d.id)">
           <span class="title">{{ d.title }}</span>

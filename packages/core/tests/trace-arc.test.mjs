@@ -7,14 +7,19 @@ const pointClose = (a, b) => a.forEach((v, i) => close(v, b[i]))
 
 for (const angle of [30, 90, 180, 270, -30, -90, -180, -270]) {
   test(`splitting an exact ${angle} degree arc preserves its circle and total sweep`, () => {
-    const from = [-2, 4], to = [13, -1], original = chainArc(from, to, angle)
+    const from = [-2, 4],
+      to = [13, -1],
+      original = chainArc(from, to, angle)
     for (const fraction of [0.1, 0.35, 0.5, 0.8]) {
-      const point = arcPoint(from, to, angle, fraction), hit = arcHit(from, to, angle, point), split = splitArc(from, to, angle, point)
+      const point = arcPoint(from, to, angle, fraction),
+        hit = arcHit(from, to, angle, point),
+        split = splitArc(from, to, angle, point)
       close(hit.distance, 0)
       close(hit.fraction, fraction)
       close(split.first + split.second, angle)
       pointClose(split.projected, point)
-      const first = chainArc(from, point, split.first), second = chainArc(point, to, split.second)
+      const first = chainArc(from, point, split.first),
+        second = chainArc(point, to, split.second)
       pointClose(first.center, original.center)
       pointClose(second.center, original.center)
       close(first.radius, original.radius)
@@ -45,8 +50,15 @@ test('snapping may change the shared point but retains final endpoint and total 
 })
 
 test('local arc fractions are unchanged by rotating or mirroring the surrounding route frame', () => {
-  const from = [1, 2], to = [8, 6], angle = 120, point = arcPoint(from, to, angle, 0.4)
-  for (const m of [[0, -1, 1, 0, 20, 30], [-1, 0, 0, 1, 15, -3], [0, -1, -1, 0, 50, 20]]) {
+  const from = [1, 2],
+    to = [8, 6],
+    angle = 120,
+    point = arcPoint(from, to, angle, 0.4)
+  for (const m of [
+    [0, -1, 1, 0, 20, 30],
+    [-1, 0, 0, 1, 15, -3],
+    [0, -1, -1, 0, 50, 20],
+  ]) {
     const world = p => [m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p[0] + m[3] * p[1] + m[5]]
     const det = m[0] * m[3] - m[1] * m[2]
     const local = p => [(m[3] * (p[0] - m[4]) - m[2] * (p[1] - m[5])) / det, (-m[1] * (p[0] - m[4]) + m[0] * (p[1] - m[5])) / det]

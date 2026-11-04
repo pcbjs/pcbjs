@@ -17,9 +17,7 @@ export function modelMiddleware(projects: () => Iterable<{ root: string; compile
     const url = (req.url ?? '').split('?')[0]
     if (!url.startsWith('/__pcbjs/model/')) return next()
     const hash = url.slice('/__pcbjs/model/'.length)
-    const model = isMeshHash(hash)
-      ? [...projects()].map(p => ({ root: p.root, path: usedModels(p.compiled).get(hash) })).find(p => p.path)
-      : undefined
+    const model = isMeshHash(hash) ? [...projects()].map(p => ({ root: p.root, path: usedModels(p.compiled).get(hash) })).find(p => p.path) : undefined
     if (!model?.path) {
       res.statusCode = 404
       res.end('no such model')

@@ -61,14 +61,14 @@ test('host selection chooses its explicit first target before selecting, and rej
   store.selectTarget('Gx', 'fab')
   await store.applyRequest({ kind: 'select', board: 'Gx', target: 'missing', refs: ['D1'], frame: false, by: 'tree' })
   assert.equal(store.current.value.variant.name, 'fab')
-  assert.match(store.page.toast.text, /Board action unavailable/ )
+  assert.match(store.page.toast.text, /Board action unavailable/)
   assert.equal(store.board('Gx').sel.anchor, 'R1')
   await store.applyRequest({ kind: 'select', board: 'missing', target: null, refs: ['D1'], frame: false, by: 'tree' })
   assert.equal(store.current.value.name, 'Gx')
   assert.equal(store.board('Gx').sel.anchor, 'R1')
 })
 
- test('host target-only navigation preserves the current view', async () => {
+test('host target-only navigation preserves the current view', async () => {
   const { store } = page(false)
   store.chooseBoard('Gx')
   store.selectTarget('Gx', 'fab')
@@ -80,7 +80,8 @@ test('host selection chooses its explicit first target before selecting, and rej
 
 test('canonical target replay reconciles an explicit target route before applying focus', async () => {
   const { createSync } = await import('../src/sync.ts')
-  const { store } = page(false), sent = []
+  const { store } = page(false),
+    sent = []
   store.chooseBoard('Gx')
   store.selectTarget('Gx', 'house')
   assert.equal(store.current.value.variant.name, 'house')

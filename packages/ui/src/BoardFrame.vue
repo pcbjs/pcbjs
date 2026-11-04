@@ -54,7 +54,12 @@ const reload = () => location.reload()
     <component :is="rails.left" v-if="board && (!ide.on || view.drawer === 'layers')" />
   </aside>
 
-  <main class="stage" data-ui="BoardFrame" data-ui-source="packages/ui/src/BoardFrame.vue" :class="{ checks: view.mode === 'checks', split: view.mode === 'sch' && view.split && drawing }">
+  <main
+    class="stage"
+    data-ui="BoardFrame"
+    data-ui-source="packages/ui/src/BoardFrame.vue"
+    :class="{ checks: view.mode === 'checks', split: view.mode === 'sch' && view.split && drawing }"
+  >
     <ClientOnly><PreviewLayout /><DevToolsOverlay v-if="board?.dev && view.devtools" /></ClientOnly>
     <ClientOnly v-if="!embed.on"><Palette /></ClientOnly>
     <template v-if="board">
@@ -75,7 +80,14 @@ const reload = () => location.reload()
         </template>
       </ClientOnly>
       <div v-if="ide.on" class="bv-tools ide-tools" role="toolbar" aria-label="Pane">
-        <button v-if="board.dev" class="icon" aria-label="Toggle preview dev tools" title="Inspect preview UI" :aria-pressed="view.devtools" @click="view.devtools = !view.devtools">
+        <button
+          v-if="board.dev"
+          class="icon"
+          aria-label="Toggle preview dev tools"
+          title="Inspect preview UI"
+          :aria-pressed="view.devtools"
+          @click="view.devtools = !view.devtools"
+        >
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2H2v4M10 2h4v4M14 10v4h-4M6 14H2v-4M6 6l6 2-3 1-1 3z" /></svg>
         </button>
         <span v-if="status" class="load-status" role="status"><i class="status-spin" aria-hidden="true"></i>{{ status }}</span>
@@ -104,7 +116,13 @@ const reload = () => location.reload()
         <button class="icon" aria-label="Reload" title="Reload the pane" @click="reload">
           <svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 11-1.5-3.5M13 2.5v3h-3" /></svg>
         </button>
-        <button v-if="ide.panel && view.mode !== 'checks'" class="icon only-narrow" aria-label="Details" title="DRC, BOM, nets and part" @click="view.drawer = view.drawer === 'panel' ? null : 'panel'">
+        <button
+          v-if="ide.panel && view.mode !== 'checks'"
+          class="icon only-narrow"
+          aria-label="Details"
+          title="DRC, BOM, nets and part"
+          @click="view.drawer = view.drawer === 'panel' ? null : 'panel'"
+        >
           <svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10" /></svg>
         </button>
       </div>

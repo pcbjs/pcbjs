@@ -34,9 +34,16 @@ test('retained fabrication finding keeps root, session and divergent target afte
   assert.equal(actionOwner({ ...blocker, project: '/a' }, [b], b), undefined)
 })
 
-
 test('duplicate board IDs within one session resolve the captured project route, never the currently shown scope', () => {
-  const link = { root: '/workspace', scopes: { scopes: [{ root: '/a', route: '/a/' }, { root: '/b', route: '/b/' }] } }
+  const link = {
+    root: '/workspace',
+    scopes: {
+      scopes: [
+        { root: '/a', route: '/a/' },
+        { root: '/b', route: '/b/' },
+      ],
+    },
+  }
   assert.equal(actionPage('/a', 'Same', link), '/a/board/Same')
   assert.equal(actionPage('/b', 'Same', link), '/b/board/Same')
   assert.equal(actionPage('/gone', 'Same', link), undefined)
@@ -44,8 +51,13 @@ test('duplicate board IDs within one session resolve the captured project route,
 
 test('fabrication uses the exact checked session identity even when checking starts a detached session', async () => {
   const panel = new FabPanel({
-    projects: () => ['/a'], origin: () => undefined,
-    check: async () => ({ session: 'started-A', report: { boards: [{ name: 'Same', target: null, findings: [], counts: null }], diagnostics: [] }, sets: [{ name: 'Same', target: null, rev: '1', entry: '/a/pcb.tsx', dir: '/a/out', zip: null, files: [] }] }),
+    projects: () => ['/a'],
+    origin: () => undefined,
+    check: async () => ({
+      session: 'started-A',
+      report: { boards: [{ name: 'Same', target: null, findings: [], counts: null }], diagnostics: [] },
+      sets: [{ name: 'Same', target: null, rev: '1', entry: '/a/pcb.tsx', dir: '/a/out', zip: null, files: [] }],
+    }),
     repo: async () => null,
     read: () => ({ zip: null, size: 0, sha256: null, mtime: 0, date: null, rev: null, stale: null, selfCheck: null }),
   })

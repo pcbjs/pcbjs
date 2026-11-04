@@ -1,6 +1,10 @@
 import type { SiteFinding } from '@pcbjs/core/site-data'
 
-export const diagnosticLabel = (key: string): string => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ').replace(/^./, c => c.toUpperCase())
+export const diagnosticLabel = (key: string): string =>
+  key
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[-_]/g, ' ')
+    .replace(/^./, c => c.toUpperCase())
 export const diagnosticUnit = (value: string): string => ({ mm2: 'mm²', deg: '°', ohm: 'Ω' })[value] ?? value
 
 /** Optional evidence sections shared by the HTML and Markdown presentations. */

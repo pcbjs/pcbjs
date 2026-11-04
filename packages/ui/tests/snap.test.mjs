@@ -76,7 +76,6 @@ test('a component on a grid snaps on the lattice through its own origin, as its 
   assert.deepEqual(snapFrom(null, [10.2, 7.5], [11.4567, 7.6], m), [11.457, 7.6])
 })
 
-
 test('alignment checks bounded subdivisions in rotated mirrored grids without moving the point', async () => {
   const { alignedLevel, fromGrid, levelOf, stepOf } = await import('../src/snap.ts')
   const g = { name: 'test', pitch: 1, minor: [], origin: [12, -7], angle: 35, mirror: true }

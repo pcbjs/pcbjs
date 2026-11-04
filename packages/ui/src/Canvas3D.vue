@@ -427,7 +427,9 @@ function restorePose(pose: CameraSnapshot, animate = false) {
 }
 const frameActive = () => !!(props.frameRef || props.frameArea || props.iso)
 const focusedNote = () => notes.value.find(n => n.id === props.finding && n.layer !== 'sch')
-let lastFrameKey = '', lastFindingKey = '', cameraHadFocus = false
+let lastFrameKey = '',
+  lastFindingKey = '',
+  cameraHadFocus = false
 /** Cancel before fitting: clearing a nested finding restores its frame without refitting it. */
 function syncCameraFocus(force = false) {
   if (!camera || !fitted) return
@@ -444,7 +446,7 @@ function syncCameraFocus(force = false) {
   // Roll back the old finding before fitting and checkpointing the new frame.
   if (frameKey && frameKey !== lastFrameKey) transaction.cancel(['frame'])
   const restore = transaction.takeRestore()
-  const refit = frameKey && (force || frameKey !== lastFrameKey) || n && (force || findingKey !== lastFindingKey || frameKey !== lastFrameKey)
+  const refit = (frameKey && (force || frameKey !== lastFrameKey)) || (n && (force || findingKey !== lastFindingKey || frameKey !== lastFrameKey))
   if (restore) restorePose(restore, !refit)
   if (frameKey && (force || frameKey !== lastFrameKey)) {
     transaction.begin('frame', cameraPose())
@@ -692,7 +694,16 @@ function outlineStyles(): Record<OutlineState, OutlineStyle> {
 
 // critically damped: a move settles in about 350 ms and a new preset retargets mid-flight
 const CAM = { response: 0.28, damping: 1 }
-const cam = { tx: new Spring(0, CAM), ty: new Spring(0, CAM), tz: new Spring(0, CAM), r: new Spring(1, CAM), polar: new Spring(0, CAM), azimuth: new Spring(0, CAM), fov: new Spring(35, CAM), zoom: new Spring(1, CAM) }
+const cam = {
+  tx: new Spring(0, CAM),
+  ty: new Spring(0, CAM),
+  tz: new Spring(0, CAM),
+  r: new Spring(1, CAM),
+  polar: new Spring(0, CAM),
+  azimuth: new Spring(0, CAM),
+  fov: new Spring(35, CAM),
+  zoom: new Spring(1, CAM),
+}
 let camMoving = false
 let camRestore: CameraSnapshot | null = null
 const stackFit = new StackFit()
@@ -1559,59 +1570,88 @@ onBeforeUnmount(() => {
             <circle cx="10.5" cy="8" r="4" stroke-dasharray="1.5 1.5" />
           </svg>
         </button>
-
       </span>
       <span class="view3d-anchor">
         <button class="icon" :class="{ on: ui.explode }" :aria-pressed="ui.explode" title="Explode the layers" aria-label="Explode" @click="toggleExplode">
           <svg viewBox="0 0 16 16"><path d="M2.5 3.5l5.5-2 5.5 2-5.5 2zM2.5 8.5l5.5-2 5.5 2-5.5 2zM2.5 13l5.5-2 5.5 2" /></svg>
         </button>
-
       </span>
     </div>
     <div v-if="focusOn || ui.explode" class="view3d-options" data-ui="Canvas3D.Appearance">
-        <section v-if="focusOn" class="view3d-look" aria-label="Focus appearance"><h3>Focus</h3>
-          <div class="view3d-row"><span class="view3d-label">Opacity</span>
-            <input
-              class="view3d-range"
-              type="range"
-              min="0.05"
-              max="1"
-              step="0.05"
-              :value="look.opacity"
-              :title="`Out of focus at ${Math.round(look.opacity * 100)}% opacity`"
-              aria-label="Opacity out of focus"
-              @input="onOpacity"
-            />
-            <span class="view3d-val">{{ Math.round(look.opacity * 100) }}%</span>
-            <button
-              class="icon"
-              :class="{ on: look.mono }"
-              :aria-pressed="look.mono"
-              title="Monochrome: grey out everything out of focus"
-              aria-label="Monochrome"
-              @click="setLook('mono', !look.mono)"
-            >
-              <svg viewBox="0 0 16 16">
-                <circle cx="8" cy="8" r="5.5" />
-                <path d="M8 2.5v11a5.5 5.5 0 0 0 0-11z" fill="currentColor" />
-              </svg>
+      <section v-if="focusOn" class="view3d-look" aria-label="Focus appearance">
+        <h3>Focus</h3>
+        <div class="view3d-row">
+          <span class="view3d-label">Opacity</span>
+          <input
+            class="view3d-range"
+            type="range"
+            min="0.05"
+            max="1"
+            step="0.05"
+            :value="look.opacity"
+            :title="`Out of focus at ${Math.round(look.opacity * 100)}% opacity`"
+            aria-label="Opacity out of focus"
+            @input="onOpacity"
+          />
+          <span class="view3d-val">{{ Math.round(look.opacity * 100) }}%</span>
+          <button
+            class="icon"
+            :class="{ on: look.mono }"
+            :aria-pressed="look.mono"
+            title="Monochrome: grey out everything out of focus"
+            aria-label="Monochrome"
+            @click="setLook('mono', !look.mono)"
+          >
+            <svg viewBox="0 0 16 16">
+              <circle cx="8" cy="8" r="5.5" />
+              <path d="M8 2.5v11a5.5 5.5 0 0 0 0-11z" fill="currentColor" />
+            </svg>
+          </button>
+        </div>
+        <div class="view3d-row">
+          <span class="view3d-seg" @keydown="onOptionKey" role="radiogroup" aria-label="Out of focus drawn as">
+            <button :class="{ on: !look.edges }" role="radio" :aria-checked="!look.edges" :tabindex="!look.edges ? 0 : -1" title="Shaded faces" @click="setLook('edges', false)">
+              Shaded
             </button>
-          </div>
-          <div class="view3d-row">
-            <span class="view3d-seg" @keydown="onOptionKey" role="radiogroup" aria-label="Out of focus drawn as">
-              <button :class="{ on: !look.edges }" role="radio" :aria-checked="!look.edges" :tabindex="!look.edges ? 0 : -1" title="Shaded faces" @click="setLook('edges', false)">Shaded</button>
-              <button :class="{ on: look.edges }" role="radio" :aria-checked="look.edges" :tabindex="look.edges ? 0 : -1" title="Edges only, no faces" @click="setLook('edges', true)">Edges</button>
-            </span>
-            <span class="view3d-seg" @keydown="onOptionKey" role="radiogroup" aria-label="Transparency">
-              <button :class="{ on: look.grouped }" role="radio" :aria-checked="look.grouped" :tabindex="look.grouped ? 0 : -1" title="Grouped: one body, its hidden faces stay hidden" @click="setLook('grouped', true)">
-                Grouped
-              </button>
-              <button :class="{ on: !look.grouped }" role="radio" :aria-checked="!look.grouped" :tabindex="!look.grouped ? 0 : -1" title="Stacked: every surface shows through" @click="setLook('grouped', false)">Stacked</button>
-            </span>
-          </div>
-        </section>
-        <section v-if="ui.explode" class="view3d-explosion" aria-label="Layer separation"
-          ><h3>Layer gap</h3><div class="view3d-row"><input
+            <button
+              :class="{ on: look.edges }"
+              role="radio"
+              :aria-checked="look.edges"
+              :tabindex="look.edges ? 0 : -1"
+              title="Edges only, no faces"
+              @click="setLook('edges', true)"
+            >
+              Edges
+            </button>
+          </span>
+          <span class="view3d-seg" @keydown="onOptionKey" role="radiogroup" aria-label="Transparency">
+            <button
+              :class="{ on: look.grouped }"
+              role="radio"
+              :aria-checked="look.grouped"
+              :tabindex="look.grouped ? 0 : -1"
+              title="Grouped: one body, its hidden faces stay hidden"
+              @click="setLook('grouped', true)"
+            >
+              Grouped
+            </button>
+            <button
+              :class="{ on: !look.grouped }"
+              role="radio"
+              :aria-checked="!look.grouped"
+              :tabindex="!look.grouped ? 0 : -1"
+              title="Stacked: every surface shows through"
+              @click="setLook('grouped', false)"
+            >
+              Stacked
+            </button>
+          </span>
+        </div>
+      </section>
+      <section v-if="ui.explode" class="view3d-explosion" aria-label="Layer separation">
+        <h3>Layer gap</h3>
+        <div class="view3d-row">
+          <input
             class="view3d-range"
             type="range"
             min="0"
@@ -1621,7 +1661,9 @@ onBeforeUnmount(() => {
             :title="`${ui.separation} mm between layers`"
             aria-label="Layer separation in mm"
             @input="onSeparation"
-        /><span class="view3d-val">{{ ui.separation }} mm</span></div></section>
+          /><span class="view3d-val">{{ ui.separation }} mm</span>
+        </div>
+      </section>
     </div>
     <div v-if="endMarks.length" ref="endLayer" class="view3d-ends">
       <button
@@ -1653,8 +1695,7 @@ onBeforeUnmount(() => {
       >
         <span class="ring"></span
         ><span class="lbl"
-          ><svg v-if="n.broken" class="broken" viewBox="0 0 12 12" aria-label="unconnected"><path :d="BROKEN_ICON" /></svg
-          >{{ noteHover === n.key ? dotTitle(n) : n.text }}</span
+          ><svg v-if="n.broken" class="broken" viewBox="0 0 12 12" aria-label="unconnected"><path :d="BROKEN_ICON" /></svg>{{ noteHover === n.key ? dotTitle(n) : n.text }}</span
         >
       </button>
     </div>
@@ -1977,11 +2018,38 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
 }
-.view3d-row + .view3d-row { margin-top: 8px; flex-wrap: wrap; }
-.view3d-label { font-size: 11px; color: var(--canvas-dim); }
-.view3d-range { min-width: 0; width: 100%; flex: 1; margin: 0; accent-color: var(--accent); cursor: pointer; }
-.view3d-val { min-width: 40px; font: 11px/1 var(--mono); color: var(--canvas-fg); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.view3d-seg { display: flex; flex: 1; padding: 2px; gap: 2px; border: 1px solid var(--canvas-line); border-radius: 6px; }
+.view3d-row + .view3d-row {
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.view3d-label {
+  font-size: 11px;
+  color: var(--canvas-dim);
+}
+.view3d-range {
+  min-width: 0;
+  width: 100%;
+  flex: 1;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.view3d-val {
+  min-width: 40px;
+  font: 11px/1 var(--mono);
+  color: var(--canvas-fg);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.view3d-seg {
+  display: flex;
+  flex: 1;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--canvas-line);
+  border-radius: 6px;
+}
 .view3d-seg button {
   flex: 1;
   border: 0;
@@ -1992,10 +2060,34 @@ onBeforeUnmount(() => {
   font: 11px/1.2 var(--sans);
   cursor: pointer;
 }
-.view3d-seg button.on { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
-.view3d-options .icon { display: grid; place-items: center; flex: 0 0 26px; width: 26px; height: 26px; padding: 4px; border: 1px solid var(--canvas-line); border-radius: 5px; background: transparent; color: var(--canvas-dim); cursor: pointer; }
-.view3d-options .icon.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
-.view3d-options svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.3; }
+.view3d-seg button.on {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+.view3d-options .icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  padding: 4px;
+  border: 1px solid var(--canvas-line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--canvas-dim);
+  cursor: pointer;
+}
+.view3d-options .icon.on {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+.view3d-options svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+}
 .view3d-detail {
   opacity: 0.75;
 }

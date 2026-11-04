@@ -13,15 +13,19 @@ export const schematic = circuit('ldo', ({ VIN, VOUT, GND }: Ports<'VIN' | 'VOUT
 }))
 
 /** The regulator with a capacitor either side, below its pins. */
-export const layout = defineLayout(schematic, (g, { at }) => (
-  <g at={at}>
-    <g.U01 at="0 -2" />
-    <g.C01 at="-4.5 4.5 90deg" />
-    <g.C02 at="4.5 4.5 90deg" />
-    {route(g.U01.VIN, g.C01[1]).width(0.5)}
-    {route(g.U01[2], g.C02[1]).width(0.5)}
-    {route(g.U01[4], g.C02[1]).width(0.5)}
-    {route(g.U01.GND, g.C01[2]).width(0.5)}
-    {route(g.C01[2], g.C02[2]).width(0.5)}
-  </g>
-), 'ldoLayout')
+export const layout = defineLayout(
+  schematic,
+  (g, { at }) => (
+    <g at={at}>
+      <g.U01 at="0 -2" />
+      <g.C01 at="-4.5 4.5 90deg" />
+      <g.C02 at="4.5 4.5 90deg" />
+      {route(g.U01.VIN, g.C01[1]).width(0.5)}
+      {route(g.U01[2], g.C02[1]).width(0.5)}
+      {route(g.U01[4], g.C02[1]).width(0.5)}
+      {route(g.U01.GND, g.C01[2]).width(0.5)}
+      {route(g.C01[2], g.C02[2]).width(0.5)}
+    </g>
+  ),
+  'ldoLayout',
+)

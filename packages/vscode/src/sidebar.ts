@@ -108,7 +108,18 @@ const ROW_CONTEXT = new Set(['board', 'ref', 'finding'])
 const ICON_COLORS: Record<string, string> = { error: 'list.errorForeground', warning: 'list.warningForeground' }
 
 export class Sidebar implements vscode.Disposable {
-  readonly providers = Object.fromEntries(TREES.map(t => [t, new Provider(t === 'boards' ? async node => { await this.resolveConfig(node) } : undefined)])) as Record<Tree, Provider>
+  readonly providers = Object.fromEntries(
+    TREES.map(t => [
+      t,
+      new Provider(
+        t === 'boards'
+          ? async node => {
+              await this.resolveConfig(node)
+            }
+          : undefined,
+      ),
+    ]),
+  ) as Record<Tree, Provider>
   private readonly views = new Map<Tree, vscode.TreeView<Node>>()
   private loaded: unknown
   private loading?: { boards: unknown; link: Source; promise: Promise<{ sites: Site[]; held: Map<string, string> }> }
@@ -235,11 +246,13 @@ export class Sidebar implements vscode.Disposable {
       return folder === '.' || path.isAbsolute(folder) ? path.basename(path.dirname(file)) : folder
     })
     const workspaceRoots = new Set(vscode.workspace.workspaceFolders?.map(f => path.resolve(f.uri.fsPath)))
-    const resolved = await Promise.all(nodes.map(async node => {
-      if (!node.load || !workspaceRoots.has(path.resolve(node.load.root))) return [node]
-      const ready = await this.resolveConfig(node)
-      return ready && node.children?.length ? node.children : [node]
-    }))
+    const resolved = await Promise.all(
+      nodes.map(async node => {
+        if (!node.load || !workspaceRoots.has(path.resolve(node.load.root))) return [node]
+        const ready = await this.resolveConfig(node)
+        return ready && node.children?.length ? node.children : [node]
+      }),
+    )
     if (gen !== this.gen || this.last.link !== link || this.last.board !== board) return
     this.boardsShown = resolved.flat()
     this.show('boards', [...this.boardsShown, ...this.worktrees])
@@ -265,7 +278,19 @@ export class Sidebar implements vscode.Disposable {
     try {
       const result = await link.request('session/boards', { project: load.root, entries: load.entries })
       if (gen !== this.gen || this.last.link !== link) return false
-      node.children = result.value.boards.flatMap(b => b.name ? [boardRow({ name: b.name, entry: b.entry, status: b.current ? 'ok' : 'error', targets: b.targets?.filter((t): t is string => t !== null) }, load.root === this.last.root ? this.last.board?.name : undefined, [], load.route, load.root)] : [])
+      node.children = result.value.boards.flatMap(b =>
+        b.name
+          ? [
+              boardRow(
+                { name: b.name, entry: b.entry, status: b.current ? 'ok' : 'error', targets: b.targets?.filter((t): t is string => t !== null) },
+                load.root === this.last.root ? this.last.board?.name : undefined,
+                [],
+                load.route,
+                load.root,
+              ),
+            ]
+          : [],
+      )
       const current = this.sites.find(s => s.name === this.last.board?.name)
       for (const child of node.children) {
         if (child.action) child.action.session = link.session
@@ -280,7 +305,7 @@ export class Sidebar implements vscode.Disposable {
           stamp(child.children)
         }
       }
-      node.description = node.children.length ? undefined : result.value.boards[0]?.reason ?? 'No boards registered'
+      node.description = node.children.length ? undefined : (result.value.boards[0]?.reason ?? 'No boards registered')
       return true
     } catch (error) {
       if (gen !== this.gen || this.last.link !== link) return false

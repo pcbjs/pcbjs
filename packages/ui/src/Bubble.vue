@@ -27,7 +27,12 @@ onBeforeUnmount(() => {
 })
 const style = computed(() => {
   const [x, y] = bubbleAt(props.x, props.y, ...size.value, bounds.value)
-  return { left: `${x}px`, top: `${y}px`, maxWidth: `${Math.max(0, bounds.value[2] - bounds.value[0] - 16)}px`, maxHeight: `${Math.max(0, bounds.value[3] - bounds.value[1] - 16)}px` }
+  return {
+    left: `${x}px`,
+    top: `${y}px`,
+    maxWidth: `${Math.max(0, bounds.value[2] - bounds.value[0] - 16)}px`,
+    maxHeight: `${Math.max(0, bounds.value[3] - bounds.value[1] - 16)}px`,
+  }
 })
 </script>
 

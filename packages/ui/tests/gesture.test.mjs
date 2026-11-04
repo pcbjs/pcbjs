@@ -111,7 +111,6 @@ test('a flip is no pose: it writes the side and the facets draw it', async () =>
   assert.equal(g.pose.value, null)
 })
 
-
 test('a nondefault target exposes its read-only reason and cannot start a drag', () => {
   const b = board()
   b.variant = { name: 'Different', index: 1, names: ['Default', 'Different'] }
@@ -129,7 +128,11 @@ test('multi-selection placement tools dispatch eligible members and leave other 
   const selected = { refs: ['CH1', 'net:GND', 'CH2'], anchor: 'CH1' }
   const { g, calls } = gesture(b, selected)
   assert.deepEqual(g.targets('move').refs, ['CH1', 'CH2'])
-  for (const [tool, update] of [['move', { delta: [1, 2] }], ['rotate', { angle: 90 }], ['layer', { side: 'B' }]]) {
+  for (const [tool, update] of [
+    ['move', { delta: [1, 2] }],
+    ['rotate', { angle: 90 }],
+    ['layer', { side: 'B' }],
+  ]) {
     g.oneShot(tool, update)
     await tick()
     const begin = calls.filter(c => c[0] === 'begin').at(-1)[1]
@@ -142,7 +145,16 @@ test('multi-selection placement tools dispatch eligible members and leave other 
 })
 
 test('a multi-placement ring previews about the session midpoint, including a rotated isolation frame', async () => {
-  for (const [a, bpos] of [[[1, 5, 0], [5, 5, 0]], [[10, 20, 90], [10, 24, 90]]]) {
+  for (const [a, bpos] of [
+    [
+      [1, 5, 0],
+      [5, 5, 0],
+    ],
+    [
+      [10, 20, 90],
+      [10, 24, 90],
+    ],
+  ]) {
     const b = board()
     b.edit[0].at = a
     b.edit.push({ ...b.edit[0], ref: 'CH2', at: bpos, m: [0, 1, -1, 0, 10, 20] })
@@ -173,23 +185,41 @@ test('a multi-placement ring previews about the session midpoint, including a ro
 
 test('multi-instance previews include each instance route and text, excluding automatic and isolated own placements', async () => {
   const b = board()
-  const item = (id, path, kind, route) => ({ ...b.items.find(i => i.id === 9), id, uid: `item:${id.toString(16).padStart(12, '0')}`, path, kind, ...(route ? { route } : { route: undefined }) })
+  const item = (id, path, kind, route) => ({
+    ...b.items.find(i => i.id === 9),
+    id,
+    uid: `item:${id.toString(16).padStart(12, '0')}`,
+    path,
+    kind,
+    ...(route ? { route } : { route: undefined }),
+  })
   b.items.push(item(12, 'CH1', 'text'), item(13, 'CH2', 'track', 'route:2'), item(14, 'CH2', 'text'), item(15, undefined, 'text'))
   b.routes.push({ ...b.routes[0], id: 'route:2', path: 'CH2' })
   const node = b.edit[0]
-  b.edit.push({ ...node, ref: 'CH2', at: [5, 5, 0] }, { ...node, ref: 'R1', auto: ['x'] }, { ...node, ref: 'R2', owned: 'CH1' }, { ...node, ref: 'item:00000000000f', caps: ['placed'], at: [8, 5, 0] })
+  b.edit.push(
+    { ...node, ref: 'CH2', at: [5, 5, 0] },
+    { ...node, ref: 'R1', auto: ['x'] },
+    { ...node, ref: 'R2', owned: 'CH1' },
+    { ...node, ref: 'item:00000000000f', caps: ['placed'], at: [8, 5, 0] },
+  )
   const selected = { refs: ['CH1', 'CH2', 'R1', 'R2', 'item:00000000000f', 'net:GND'], anchor: 'CH1', isolate: { ref: 'CH1' } }
   const { g, calls } = gesture(b, selected)
   const move = g.targets('move')
   assert.deepEqual(move.refs, ['CH1', 'CH2', 'item:00000000000f'])
   assert.deepEqual([...move.parts], ['R101', 'R201'])
-  assert.deepEqual([...move.ids].sort((a, b) => a - b), [9, 12, 13, 14, 15])
+  assert.deepEqual(
+    [...move.ids].sort((a, b) => a - b),
+    [9, 12, 13, 14, 15],
+  )
   assert.deepEqual(g.targets('layer').refs, ['CH1', 'CH2'], 'text without layered capability is not flipped')
   const before = JSON.stringify(b)
   assert.equal(g.down(ev([1, 5]), { ref: 'R101' }), true)
   g.move(ev([3, 5]))
   assert.deepEqual([...g.pose.value.parts], ['R101', 'R201'])
-  assert.deepEqual([...g.pose.value.ids].sort((a, b) => a - b), [9, 12, 13, 14, 15])
+  assert.deepEqual(
+    [...g.pose.value.ids].sort((a, b) => a - b),
+    [9, 12, 13, 14, 15],
+  )
   g.cancel()
   await tick()
   assert.equal(g.pose.value, null)
@@ -250,12 +280,15 @@ test('default mm grid snaps drags by whole millimetres and shift remains free', 
   assert.deepEqual(g.pose.value.delta, [2, 0])
   assert.ok(g.gridDots.value.length)
   g.move(ev([2.68, 5.28], { shiftKey: true }))
-  assert.deepEqual(g.pose.value.delta.map(x => +x.toFixed(3)), [1.68, 0.28])
+  assert.deepEqual(
+    g.pose.value.delta.map(x => +x.toFixed(3)),
+    [1.68, 0.28],
+  )
 })
 
 test('the ring passes its angle seam continuously in either direction', () => {
   const { g } = gesture()
-  const at = angle => [1 + 3 * Math.cos(angle * Math.PI / 180), 5 - 3 * Math.sin(angle * Math.PI / 180)]
+  const at = angle => [1 + 3 * Math.cos((angle * Math.PI) / 180), 5 - 3 * Math.sin((angle * Math.PI) / 180)]
   g.down(ev(at(170)), { tool: 'ring' })
   for (const a of [179, 190, 270, 350, 430]) g.move(ev(at(a)))
   assert.equal(g.pose.value.angle, 255)
@@ -272,12 +305,17 @@ test('an off-grid placement starts unsnapped and can explicitly enable its editi
   g.down(ev([1.2, 5.3]), { ref: 'R101' })
   g.move(ev([2.6, 5.4]))
   assert.equal(g.snapEnabled.value, false)
-  assert.deepEqual(g.pose.value.delta.map(x => +x.toFixed(3)), [1.4, 0.1])
+  assert.deepEqual(
+    g.pose.value.delta.map(x => +x.toFixed(3)),
+    [1.4, 0.1],
+  )
   g.snapOverride.value = true
   g.move(ev([2.6, 5.4]))
-  assert.deepEqual(g.pose.value.delta.map(x => +x.toFixed(3)), [1.8, -0.3])
+  assert.deepEqual(
+    g.pose.value.delta.map(x => +x.toFixed(3)),
+    [1.8, -0.3],
+  )
 })
-
 
 test('persisted placement pitch derives snap and the usable subdivision from unchanged coordinates', () => {
   const b = board()

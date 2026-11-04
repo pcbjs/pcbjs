@@ -7,9 +7,16 @@ test('library response contains only shared selected layout geometry and origina
   resetDefaults()
   const Pad = defineFootprint(props => h('footprint', { ...props, bom: false }, h('pad', { num: 1, size: 1 })), { pins: ['1'], prefix: 'TP' })
   const chan = circuit('channel', () => ({ R: Pad().connect({ 1: NC }) }))
-  const CH1 = chan({}, 'CH1'), CH2 = chan({}, 'CH2')
+  const CH1 = chan({}, 'CH1'),
+    CH2 = chan({}, 'CH2')
   const Row = layout(chan, (g, { at, gap }) => h('g', { at }, h(g.R, { at: `${gap} 0` })), 'Row')
-  const root = h(PCB, { name: 'B' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 80, h: 30 }), h(Row, { g: CH1, at: '10 10', gap: 3 }, h(CH1.R, { at: '20 0' })), h(Row, { g: CH2, at: '40 10', gap: 7 }))
+  const root = h(
+    PCB,
+    { name: 'B' },
+    h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 80, h: 30 }),
+    h(Row, { g: CH1, at: '10 10', gap: 3 }, h(CH1.R, { at: '20 0' })),
+    h(Row, { g: CH2, at: '40 10', gap: 7 }),
+  )
   const loader = { load: async () => ({ default: root }), imported: () => new Set() }
   const { site: result } = await compileLayout(loader, { root: '/tmp' }, { file: '/tmp/pcb.tsx', rel: 'pcb.tsx' }, 'B', null, 'CH1')
   assert.equal(result.name, 'B')
@@ -20,7 +27,10 @@ test('library response contains only shared selected layout geometry and origina
   assert.equal(result.schematic.drawing.symbols[0].displayRef, 'TP0')
   assert.equal(result.schematic.parts[0].displayRef, 'TP0', 'library labels survive site serialization')
   assert.ok(result.schematic.svg.markup.includes('data-ref=\"' + result.footprints[0].ref + '\"'))
-  assert.deepEqual(result.schematic.circuits.map(c => c.path.join('/')), ['CH1'])
+  assert.deepEqual(
+    result.schematic.circuits.map(c => c.path.join('/')),
+    ['CH1'],
+  )
   assert.notEqual(result.footprints[0].ref, 'TP0', 'source identity is preserved')
   assert.equal(result.footprints[0].at[0], 13)
   assert.deepEqual(result.outline, [])

@@ -14,5 +14,10 @@ export function hostPaths({ platform = process.platform, code, cli, node = proce
 /** CDP uses Meta=4 and Control=2. Native scan codes are OS-specific. */
 export function inputKey(letter, { platform = process.platform, command = false, shift = false } = {}) {
   const upper = letter.toUpperCase()
-  return { key: shift ? upper : letter.toLowerCase(), code: `Key${upper}`, windowsVirtualKeyCode: upper.charCodeAt(0), modifiers: (command ? (platform === 'darwin' ? 4 : 2) : 0) | (shift ? 8 : 0) }
+  return {
+    key: shift ? upper : letter.toLowerCase(),
+    code: `Key${upper}`,
+    windowsVirtualKeyCode: upper.charCodeAt(0),
+    modifiers: (command ? (platform === 'darwin' ? 4 : 2) : 0) | (shift ? 8 : 0),
+  }
 }

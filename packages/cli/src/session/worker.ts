@@ -195,7 +195,8 @@ async function artifact(m: Extract<ToWorker, { t: 'artifact' }>): Promise<void> 
 
 async function handle(m: ToWorker): Promise<void> {
   if (m.t === 'compile') return compile(m.id, m.entry, m.draft, m.dev ?? true, m.formats, m.want)
-  if (m.t === 'layout') return answer(m.id, (cfg, vite) => reply(compileLayout(viteLoader(vite), cfg, m.entry, m.board, m.target, m.ref).then(v => ({ site: v.site, board: serialize(v.board) }))))
+  if (m.t === 'layout')
+    return answer(m.id, (cfg, vite) => reply(compileLayout(viteLoader(vite), cfg, m.entry, m.board, m.target, m.ref).then(v => ({ site: v.site, board: serialize(v.board) }))))
   if (m.t === 'preview') return answer(m.id, (cfg, vite) => reply(compilePreview(viteLoader(vite), cfg, m.file, m.rel)))
   if (m.t === 'sketch') {
     const { t: _t, id, entry, ...job } = m

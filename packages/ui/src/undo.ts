@@ -3,7 +3,6 @@ import type { EditResult, ScopesMsg } from '@pcbjs/core/protocol'
 
 export interface EditStep {
   txn: string
-
 }
 export interface Steps {
   done: EditStep[]

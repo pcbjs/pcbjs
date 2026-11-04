@@ -237,7 +237,11 @@ test('restored previews finish loading when scope changes while the external URL
     }
     const html = panels.map(p => p.webview.html)
     await preview.update()
-    assert.deepEqual(panels.map(p => p.webview.html), html, 'settled panels are not reloaded')
+    assert.deepEqual(
+      panels.map(p => p.webview.html),
+      html,
+      'settled panels are not reloaded',
+    )
   } finally {
     vscode.env.asExternalUri = external
     preview.dispose()
@@ -260,7 +264,10 @@ test('a panel restored after the first resume participates in the pending attach
     await sleep(0)
     for (const done of pending.splice(0)) done()
     await Promise.all([first, second])
-    assert.ok(panels.every(p => iframe(p)), 'both restored views leave the status screen')
+    assert.ok(
+      panels.every(p => iframe(p)),
+      'both restored views leave the status screen',
+    )
   } finally {
     vscode.env.asExternalUri = external
     preview.dispose()
@@ -271,7 +278,10 @@ test('an obsolete pending viewer cannot replace a newer attachment failure scree
   reset()
   const external = vscode.env.asExternalUri
   let finish
-  vscode.env.asExternalUri = uri => new Promise(resolve => { finish = () => resolve(uri) })
+  vscode.env.asExternalUri = uri =>
+    new Promise(resolve => {
+      finish = () => resolve(uri)
+    })
   const { preview } = makePreview()
   const server = fakeServer()
   try {
@@ -382,56 +392,71 @@ test('the manifest: beside actions on a pane, an entry and a board row, Alt and 
   )
 })
 
-for (const duplicate of [false, true]) test(`pane URL and sidebar source share the owning session (${duplicate ? 'duplicate' : 'distinct'} board routes)`, async () => {
-  const { Sidebar } = require('../dist/sidebar.cjs')
-  panels.length = 0
-  const links = ['alpha', 'beta'].map((session, i) => {
-    const root = `/work/${session}`
-    const name = duplicate ? 'Board' : session
-    const route = duplicate ? '/project/' : `/${session}/`
-    return {
-      session, root, open: true,
-      dev: { url: `http://127.0.0.1:${5301 + i}/` },
-      info: { urls: [`http://127.0.0.1:${5301 + i}/`] },
-      scope: { root, url: route },
-      boards: { root, boards: [{ name, entry: 'pcb.tsx' }] },
+for (const duplicate of [false, true])
+  test(`pane URL and sidebar source share the owning session (${duplicate ? 'duplicate' : 'distinct'} board routes)`, async () => {
+    const { Sidebar } = require('../dist/sidebar.cjs')
+    panels.length = 0
+    const links = ['alpha', 'beta'].map((session, i) => {
+      const root = `/work/${session}`
+      const name = duplicate ? 'Board' : session
+      const route = duplicate ? '/project/' : `/${session}/`
+      return {
+        session,
+        root,
+        open: true,
+        dev: { url: `http://127.0.0.1:${5301 + i}/` },
+        info: { urls: [`http://127.0.0.1:${5301 + i}/`] },
+        scope: { root, url: route },
+        boards: { root, boards: [{ name, entry: 'pcb.tsx' }] },
+      }
+    })
+    let owner = links[0]
+    const server = fakeServer()
+    const { preview } = makePreview({ link: () => owner, board: () => owner.boards.boards[0] })
+    const sidebar = new Sidebar(
+      async link => [
+        {
+          board: link.boards.boards[0].name,
+          facet: 'layers',
+          hash: link.session,
+          data: {
+            name: link.boards.boards[0].name,
+            nets: [],
+            bom: [],
+            footprints: [{ ref: 'R1', src: { file: 'pcb.tsx', line: 4, col: 1 } }],
+          },
+        },
+      ],
+      false,
+    )
+    try {
+      await preview.open(server, '2d')
+      for (const link of [links[0], links[1], links[0]]) {
+        owner = link
+        panels[0].posted.length = 0
+        await preview.update()
+        await sidebar.update(link, link.boards.boards[0])
+        await preview.showBoard(server, link.boards.boards[0].name)
+        const src = new URL(panels[0].posted.findLast(m => m.type === 'src')?.src ?? iframe(panels[0]))
+        assert.equal(src.origin, new URL(link.dev.url).origin)
+        assert.equal(panels[0].posted.at(-1).data.board, link.boards.boards[0].name)
+        const row = sidebar.node('boards', `board:${link.root}:${link.boards.boards[0].name}`)
+        assert.equal(row?.action.session, link.session)
+        assert.equal(row.children[0].action.source.file, `${link.root}/pcb.tsx`)
+        assert.equal(row.children[0].action.session, link.session)
+        const stale = links.find(l => l !== link)
+        preview.follow(server, '/wrong/', stale)
+        await preview.reload(server)
+        assert.equal(new URL(iframe(panels[0])).origin, new URL(link.dev.url).origin)
+        assert.equal(new URL(iframe(panels[0])).pathname, `${link.scope.url}board/${link.boards.boards[0].name}`)
+      }
+    } finally {
+      preview.dispose()
+      sidebar.dispose()
     }
   })
-  let owner = links[0]
-  const server = fakeServer()
-  const { preview } = makePreview({ link: () => owner, board: () => owner.boards.boards[0] })
-  const sidebar = new Sidebar(async link => [{ board: link.boards.boards[0].name, facet: 'layers', hash: link.session, data: {
-    name: link.boards.boards[0].name, nets: [], bom: [],
-    footprints: [{ ref: 'R1', src: { file: 'pcb.tsx', line: 4, col: 1 } }],
-  } }], false)
-  try {
-    await preview.open(server, '2d')
-    for (const link of [links[0], links[1], links[0]]) {
-      owner = link
-      panels[0].posted.length = 0
-      await preview.update()
-      await sidebar.update(link, link.boards.boards[0])
-      await preview.showBoard(server, link.boards.boards[0].name)
-      const src = new URL(panels[0].posted.findLast(m => m.type === 'src')?.src ?? iframe(panels[0]))
-      assert.equal(src.origin, new URL(link.dev.url).origin)
-      assert.equal(panels[0].posted.at(-1).data.board, link.boards.boards[0].name)
-      const row = sidebar.node('boards', `board:${link.root}:${link.boards.boards[0].name}`)
-      assert.equal(row?.action.session, link.session)
-      assert.equal(row.children[0].action.source.file, `${link.root}/pcb.tsx`)
-      assert.equal(row.children[0].action.session, link.session)
-      const stale = links.find(l => l !== link)
-      preview.follow(server, '/wrong/', stale)
-      await preview.reload(server)
-      assert.equal(new URL(iframe(panels[0])).origin, new URL(link.dev.url).origin)
-      assert.equal(new URL(iframe(panels[0])).pathname, `${link.scope.url}board/${link.boards.boards[0].name}`)
-    }
-  } finally {
-    preview.dispose()
-    sidebar.dispose()
-  }
-})
 
- test('same-board navigation keeps frames and repeated source focus retains the chosen board of a shared entry', async () => {
+test('same-board navigation keeps frames and repeated source focus retains the chosen board of a shared entry', async () => {
   panels.length = 0
   const { preview } = makePreview()
   const server = fakeServer()
@@ -442,11 +467,16 @@ for (const duplicate of [false, true]) test(`pane URL and sidebar source share t
   await preview.showBoard(server, 'Coin')
   assert.equal(panels[0].webview.html, html)
   assert.equal(panels[0].posted.filter(p => p.type === 'src' || p.type === 'post').length, 0)
-  const boards = { root: '/p', boards: [{ name: 'A', entry: 'both.tsx' }, { name: 'B', entry: 'both.tsx' }] }
+  const boards = {
+    root: '/p',
+    boards: [
+      { name: 'A', entry: 'both.tsx' },
+      { name: 'B', entry: 'both.tsx' },
+    ],
+  }
   assert.equal(shownBoard(boards, 'B', '/p/both.tsx').name, 'B')
   preview.dispose()
 })
-
 
 test('checks reuse the live pane across findings, preserve preview focus and clear focus only when closed', async () => {
   panels.length = 0
@@ -455,9 +485,13 @@ test('checks reuse the live pane across findings, preserve preview focus and cle
   const calls = []
   const server = fakeServer()
   const link = {
-    root: '/work/demo', open: true, info: { root: '/work/demo', port: 5301 },
+    root: '/work/demo',
+    open: true,
+    info: { root: '/work/demo', port: 5301 },
     scopes: { scopes: [{ root: '/work/demo', route: '/demo/', boards: [{ name: 'Blinky', entry: 'custom.tsx' }] }] },
-    request: async (...args) => { calls.push(args) },
+    request: async (...args) => {
+      calls.push(args)
+    },
   }
   const preview = makePreview({ link: () => link }).preview
   const event = { project: '/work/demo', board: 'Blinky', finding: { id: 'drc:a', rule: 'clearance', message: 'detail', refs: ['R1/1'] }, refs: ['drc:a'], anchor: 'drc:a' }
@@ -492,19 +526,31 @@ test('checks reuse the live pane across findings, preserve preview focus and cle
 })
 
 const ownedLink = (root, port, calls) => ({
-  root, roots: [root], open: true, info: { root, port },
+  root,
+  roots: [root],
+  open: true,
+  info: { root, port },
   scope: { root, url: '/project/' },
-  boards: { root, boards: [{ name: 'Board', entry: 'pcb.tsx' }, { name: 'Other', entry: 'other.tsx' }] },
+  boards: {
+    root,
+    boards: [
+      { name: 'Board', entry: 'pcb.tsx' },
+      { name: 'Other', entry: 'other.tsx' },
+    ],
+  },
   request: async (...args) => calls.push(args),
 })
 const findingEvent = (link, target) => ({ project: link.root, board: 'Board', target, finding: { id: 'drc:a', refs: ['R1'] }, refs: ['drc:a'], anchor: 'drc:a' })
 
 test('retarget checks to another server and close only the displayed owner, rejecting old-server findings', async () => {
   reset()
-  const callsA = [], callsB = []
-  const a = ownedLink('/work/a', 5301, callsA), b = ownedLink('/work/b', 5302, callsB)
-  const serverA = fakeServer(), serverB = { ...fakeServer(), root: b.root }
-  const preview = makePreview({ link: server => server === serverA ? a : b, board: () => ({ name: 'Board' }) }).preview
+  const callsA = [],
+    callsB = []
+  const a = ownedLink('/work/a', 5301, callsA),
+    b = ownedLink('/work/b', 5302, callsB)
+  const serverA = fakeServer(),
+    serverB = { ...fakeServer(), root: b.root }
+  const preview = makePreview({ link: server => (server === serverA ? a : b), board: () => ({ name: 'Board' }) }).preview
   await preview.finding(serverA, findingEvent(a), a)
   const checks = panels[0]
   await preview.open(serverB, '2d')
@@ -520,7 +566,8 @@ test('retarget checks to another server and close only the displayed owner, reje
 
 test('checks navigation replaces finding ownership and manual checks participate in last-pane close', async () => {
   reset()
-  const calls = [], link = ownedLink('/work/a', 5301, calls)
+  const calls = [],
+    link = ownedLink('/work/a', 5301, calls)
   const server = fakeServer()
   const preview = makePreview({ link: () => link, board: () => ({ name: 'Board' }) }).preview
   await preview.finding(server, findingEvent(link, 'assembled'), link)
@@ -545,7 +592,8 @@ test('checks navigation replaces finding ownership and manual checks participate
 
 test('checks close preserves target identity and disconnected panes never mutate old sessions', async () => {
   reset()
-  const calls = [], link = ownedLink('/work/a', 5301, calls)
+  const calls = [],
+    link = ownedLink('/work/a', 5301, calls)
   const server = fakeServer()
   const preview = makePreview({ link: () => link, board: () => ({ name: 'Board' }) }).preview
   await preview.finding(server, findingEvent(link, 'assembled'), link)
@@ -558,10 +606,10 @@ test('checks close preserves target identity and disconnected panes never mutate
   preview.dispose()
 })
 
-
 test('cleared finding reconciles existing checks target without opening a closed pane', async () => {
   reset()
-  const calls = [], link = ownedLink('/work/a', 5301, calls)
+  const calls = [],
+    link = ownedLink('/work/a', 5301, calls)
   const server = fakeServer()
   const preview = makePreview({ link: () => link, board: () => ({ name: 'Board' }) }).preview
   await preview.finding(server, { ...findingEvent(link, 'Bare PCB'), finding: null }, link)
@@ -586,7 +634,10 @@ test('development inspector targets only active pane, keeps reload state, and re
   panels[0].focus()
   assert.equal(preview.devtools(), true)
   assert.deepEqual(panels[0].posted.at(-1), { type: 'post', data: { type: 'pcbjs:devtools', enabled: true } })
-  assert.equal(panels[1].posted.some(p => p.data?.type === 'pcbjs:devtools'), false)
+  assert.equal(
+    panels[1].posted.some(p => p.data?.type === 'pcbjs:devtools'),
+    false,
+  )
   panels[0].webview.receive({ type: 'ready' })
   assert.equal(panels[0].posted.at(-1).data.enabled, true)
   panels[0].webview.receive({ type: 'devtools', enabled: false })

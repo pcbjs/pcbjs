@@ -44,7 +44,8 @@ export async function stopSuite(root: string, folders: string[]): Promise<void> 
   for (const dir of suiteFolders(root, folders)) {
     const info = readDevInfo(dir)
     if (!info || !alive(info.pid)) continue
-    if (!within(root, fs.realpathSync(info.root)) || (info.checkout && fs.realpathSync(info.checkout) !== root)) throw new Error(`A session from outside this checkout serves ${dir}; detach it before purging.`)
+    if (!within(root, fs.realpathSync(info.root)) || (info.checkout && fs.realpathSync(info.checkout) !== root))
+      throw new Error(`A session from outside this checkout serves ${dir}; detach it before purging.`)
     sessions.set(info.session, info)
   }
   for (const info of sessions.values()) {
@@ -52,8 +53,9 @@ export async function stopSuite(root: string, folders: string[]): Promise<void> 
     try {
       if (link.info?.session !== info.session || link.info.pid !== info.pid) throw new Error('The session record changed; rerun purge to refresh it.')
       await link.request('session/stop', undefined, 5000)
+    } finally {
+      link.close()
     }
-    finally { link.close() }
     const deadline = Date.now() + 10000
     while (alive(info.pid) && Date.now() < deadline) await new Promise(done => setTimeout(done, 100))
     if (alive(info.pid)) throw new Error(`Session ${info.session} did not stop; no caches were removed.`)
@@ -81,13 +83,22 @@ export class DevSuite {
     if (this.pending) return this.pending
     const pending = this.purge(host)
     this.pending = pending
-    void pending.finally(() => { if (this.pending === pending) this.pending = undefined }).catch(() => {})
+    void pending
+      .finally(() => {
+        if (this.pending === pending) this.pending = undefined
+      })
+      .catch(() => {})
     return pending
   }
 
   private async purge(h: SuiteHost): Promise<boolean> {
-    const check = () => { if (h.signal?.aborted) throw new Error('The window closed during development maintenance.') }
-    const progress = (message: string) => { check(); h.progress(message) }
+    const check = () => {
+      if (h.signal?.aborted) throw new Error('The window closed during development maintenance.')
+    }
+    const progress = (message: string) => {
+      check()
+      h.progress(message)
+    }
     check()
     if (!h.development()) throw new Error('Purge Reload Dev Suite is available only in development mode.')
     const root = suiteRoot(h.folders())

@@ -470,7 +470,10 @@ const coinAt = (port, view) => `http://127.0.0.1:${port}/board/Coin?ide=1&theme=
 test('restartServer twice, onto a new port and then the same one: each pane shows restarting, then its view and board on the new session', async () => {
   const { server, preview, seen, close } = await restartRig([5301, 5302, 5302])
   try {
-    assert.deepEqual(panels.map(p => p.posted.findLast(m => m.type === 'post')?.data), ['2d', '3d'].map(() => ({ type: 'pcbjs:view', board: 'Coin' })))
+    assert.deepEqual(
+      panels.map(p => p.posted.findLast(m => m.type === 'post')?.data),
+      ['2d', '3d'].map(() => ({ type: 'pcbjs:view', board: 'Coin' })),
+    )
     for (const port of [5302, 5302]) {
       seen.length = 0
       await server.restartServer()

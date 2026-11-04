@@ -158,8 +158,7 @@ export function targetBox(site: Site, t: SiteTarget): Box | null {
     b = boxOf(fps(t.kind === 'part' ? [t.ref] : t.refs))
     const n = t.kind === 'group' ? site.edit?.find(n => n.ref === t.key) : null
     if (b && n?.at) b = compassBox(n.pivot ?? [n.at[0], n.at[1]], b)
-  }
-  else if (t.kind === 'pad' || t.kind === 'item') b = boxOf(items.filter(x => x.id === t.id).flatMap(cornersOf))
+  } else if (t.kind === 'pad' || t.kind === 'item') b = boxOf(items.filter(x => x.id === t.id).flatMap(cornersOf))
   else if (t.kind === 'route' || t.kind === 'leg' || t.kind === 'plane') b = boxOf(items.filter(x => t.ids.includes(x.id)).flatMap(cornersOf))
   else if (t.kind === 'pt') b = [t.at[0], t.at[1], 0, 0]
   else if (t.kind === 'net' || t.kind === 'pair') b = boxOf(items.filter(x => x.net === t.net && x.kind !== 'zone').flatMap(cornersOf))

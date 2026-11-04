@@ -18,5 +18,7 @@ test('board entries exclude untracked Git files but retain declared files outsid
     execFileSync('git', ['init', '-q', root])
     execFileSync('git', ['-C', root, 'add', 'pcb.config.ts', 'a.tsx'])
     assert.deepEqual(await boardEntries(root), [join(root, 'a.tsx')])
-  } finally { rmSync(root, { recursive: true, force: true }) }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

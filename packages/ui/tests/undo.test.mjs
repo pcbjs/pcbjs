@@ -36,7 +36,19 @@ test('edit ownership is captured before asynchronous begin and never follows lat
   let resolveBegin
   let project = '/workspace/first'
   const commits = []
-  const client = editClient({ request: (method, p) => method.endsWith('/begin') ? new Promise(resolve => { resolveBegin = resolve }) : Promise.resolve({ txn: p.txn, written: [{ file: '/workspace/first/source.tsx', via: 'editor', applied: true }] }) }, (result, owner) => commits.push({ result, owner }), undefined, board => ({ board, project }))
+  const client = editClient(
+    {
+      request: (method, p) =>
+        method.endsWith('/begin')
+          ? new Promise(resolve => {
+              resolveBegin = resolve
+            })
+          : Promise.resolve({ txn: p.txn, written: [{ file: '/workspace/first/source.tsx', via: 'editor', applied: true }] }),
+    },
+    (result, owner) => commits.push({ result, owner }),
+    undefined,
+    board => ({ board, project }),
+  )
   const pending = client.begin({ board: 'Fx', refs: ['R1'], tool: 'move' })
   project = '/workspace/second'
   resolveBegin({ txn: 'edit1' })
@@ -53,11 +65,21 @@ test('standalone successful undo and redo move session steps; a new commit clear
   pushStep(s, commit('edit2', ['/p/pcb.tsx', 'disk']))
   await undoStep(s, false, ports)
   await undoStep(s, true, ports)
-  assert.deepEqual(s.done.map(step => step.txn), ['edit1', 'edit2'])
+  assert.deepEqual(
+    s.done.map(step => step.txn),
+    ['edit1', 'edit2'],
+  )
   await undoStep(s, false, ports)
-  assert.deepEqual(s.undone.map(step => step.txn), ['edit2'])
+  assert.deepEqual(
+    s.undone.map(step => step.txn),
+    ['edit2'],
+  )
   pushStep(s, commit('edit3', ['/p/pcb.tsx', 'disk']))
   assert.deepEqual(s.undone, [])
   assert.equal(undoStep(s, true, ports), false)
-  assert.deepEqual(calls, [{ txn: 'edit2', redo: false }, { txn: 'edit2', redo: true }, { txn: 'edit2', redo: false }])
+  assert.deepEqual(calls, [
+    { txn: 'edit2', redo: false },
+    { txn: 'edit2', redo: true },
+    { txn: 'edit2', redo: false },
+  ])
 })

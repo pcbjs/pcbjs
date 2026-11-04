@@ -297,8 +297,12 @@ export const sizeText = (n: number): string => (n >= 1024 * 1024 ? `${(n / 1024 
 /** Preserve the card's captured owner when a blocker opens the preview and source. */
 export function fabFindingAction(a: Extract<FabAction, { kind: 'finding' }>, origin: { root: string; session?: string }): Action {
   return {
-    kind: 'finding', session: origin.session ?? 'disconnected', project: origin.root,
-    board: a.board, target: a.target, id: a.id,
+    kind: 'finding',
+    session: origin.session ?? 'disconnected',
+    project: origin.root,
+    board: a.board,
+    target: a.target,
+    id: a.id,
     ...(a.file ? { source: { file: a.file, line: a.line ?? 1, col: a.col ?? 1, endLine: a.endLine ?? a.line ?? 1, endCol: a.endCol ?? a.col ?? 1 } } : {}),
   }
 }

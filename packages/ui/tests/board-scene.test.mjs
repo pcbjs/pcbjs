@@ -313,8 +313,13 @@ test('a pose draws its parts’ pads and its items of no part again where it goe
   for (const p of hidden) assert.equal(st(s, p.id), 'gone', 'original copper hidden per piece')
   for (const p of batchOf(s, 'F.Cu').pieces.filter(p => !hidden.includes(p))) assert.notEqual(st(s, p.id), 'gone', 'unrelated batch pieces retained')
   const members = shownMembers(s)
-  for (const p of hidden) for (const i of p.items ?? [])
-    if (!pads.includes(i.id) && i.id !== 9 && i.id !== 20) assert.ok(members.some(([id]) => id === i.id), `unrelated merged member ${i.id} retained`)
+  for (const p of hidden)
+    for (const i of p.items ?? [])
+      if (!pads.includes(i.id) && i.id !== 9 && i.id !== 20)
+        assert.ok(
+          members.some(([id]) => id === i.id),
+          `unrelated merged member ${i.id} retained`,
+        )
   const track = s.ghosts.children.find(g => g.userData.id === 9)
   track.geometry.computeBoundingBox()
   const at = track.geometry.boundingBox.getCenter(new THREE.Vector3())

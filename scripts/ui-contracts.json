@@ -10,26 +10,11 @@
       "result": "one active drawing or checks view, matching pressed button, ready signal cleared then restored",
       "boundary": "V; retain per-board state",
       "unavailable": "no schematic drawing message; 3D local failure/loading",
-      "commands": [
-        "view",
-        "open2DBeside",
-        "open2DNew",
-        "open3DBeside",
-        "open3DNew",
-        "openSchematicBeside",
-        "openSchematicNew",
-        "openChecksBeside",
-        "openChecksNew"
-      ],
+      "commands": ["view", "open2DBeside", "open2DNew", "open3DBeside", "open3DNew", "openSchematicBeside", "openSchematicNew", "openChecksBeside", "openChecksNew"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/BoardFrame.vue",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/components.test.mjs"
-      ],
+      "sources": ["packages/ui/src/BoardFrame.vue", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/components.test.mjs"],
       "missingAcceptance": "components, sch-view; installed pane view parity"
     },
     {
@@ -39,18 +24,11 @@
       "result": "board/sheet framed, 3D exploded extent included",
       "boundary": "V; no source undo",
       "unavailable": "empty view safe no-op",
-      "commands": [
-        "fit"
-      ],
+      "commands": ["fit"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/viewbox.ts",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/fit.test.mjs"
-      ],
+      "sources": ["packages/ui/src/viewbox.ts", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/fit.test.mjs"],
       "missingAcceptance": "fit, explode-fit; actual viewport screenshot"
     },
     {
@@ -60,19 +38,11 @@
       "result": "zoom around defined cursor/center, readout and grid adapt",
       "boundary": "V",
       "unavailable": "clamp at limits",
-      "commands": [
-        "zoomIn",
-        "zoomOut"
-      ],
+      "commands": ["zoomIn", "zoomOut"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/viewbox.ts",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/fit.test.mjs"
-      ],
+      "sources": ["packages/ui/src/viewbox.ts", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/fit.test.mjs"],
       "missingAcceptance": "fit; trackpad/wheel/keyboard across views"
     },
     {
@@ -85,12 +55,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/viewbox.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/gesture.test.mjs"
-      ],
+      "sources": ["packages/ui/src/viewbox.ts"],
+      "tests": ["packages/ui/tests/gesture.test.mjs"],
       "missingAcceptance": "tools3d, gesture; exact mouse-button/trackpad/drag-threshold public table missing"
     },
     {
@@ -100,18 +66,11 @@
       "result": "grid visibility changes in mounted views",
       "boundary": "V, distinct from placement grid/snapping",
       "unavailable": "no edit capability implied",
-      "commands": [
-        "grid"
-      ],
+      "commands": ["grid"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/Canvas2D.vue",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/grid.test.mjs"
-      ],
+      "sources": ["packages/ui/src/Canvas2D.vue", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/grid.test.mjs"],
       "missingAcceptance": "grid, snap; hidden grid still predictable snapping"
     },
     {
@@ -121,18 +80,11 @@
       "result": "connection indicators and ratsnest toggle",
       "boundary": "V",
       "unavailable": "schematic relevance must be explicit",
-      "commands": [
-        "ratsnest"
-      ],
+      "commands": ["ratsnest"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/Canvas2D.vue",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/indicators.test.mjs"
-      ],
+      "sources": ["packages/ui/src/Canvas2D.vue", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/indicators.test.mjs"],
       "missingAcceptance": "indicators; all-view N feedback"
     },
     {
@@ -145,12 +97,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/Canvas2D.vue"
-      ],
-      "tests": [
-        "packages/ui/tests/sides.test.mjs"
-      ],
+      "sources": ["packages/ui/src/Canvas2D.vue"],
+      "tests": ["packages/ui/tests/sides.test.mjs"],
       "missingAcceptance": "sides; B view vs B source flip acceptance"
     },
     {
@@ -163,12 +111,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/LayersPanel.vue"
-      ],
-      "tests": [
-        "packages/ui/tests/sides.test.mjs"
-      ],
+      "sources": ["packages/ui/src/LayersPanel.vue"],
+      "tests": ["packages/ui/tests/sides.test.mjs"],
       "missingAcceptance": "sides, paint; double-click intermediate toggle and hidden selection"
     },
     {
@@ -181,12 +125,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/CanvasSch.vue"
-      ],
-      "tests": [
-        "packages/ui/tests/sch-view.test.mjs"
-      ],
+      "sources": ["packages/ui/src/CanvasSch.vue"],
+      "tests": ["packages/ui/tests/sch-view.test.mjs"],
       "missingAcceptance": "sch-view; split and hidden hit testing"
     },
     {
@@ -199,12 +139,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/Canvas3D.vue"
-      ],
-      "tests": [
-        "packages/ui/tests/focus-look.test.mjs"
-      ],
+      "sources": ["packages/ui/src/Canvas3D.vue"],
+      "tests": ["packages/ui/tests/focus-look.test.mjs"],
       "missingAcceptance": "focus-look, intensity, components; visual material acceptance"
     },
     {
@@ -217,12 +153,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/Canvas3D.vue"
-      ],
-      "tests": [
-        "packages/ui/tests/explode-fit.test.mjs"
-      ],
+      "sources": ["packages/ui/src/Canvas3D.vue"],
+      "tests": ["packages/ui/tests/explode-fit.test.mjs"],
       "missingAcceptance": "explode-fit, board-scene; picking at exploded heights"
     },
     {
@@ -232,18 +164,11 @@
       "result": "theme immediate, reload recovers current pane",
       "boundary": "V; reload must not write or lose editor buffer",
       "unavailable": "failure/reconnect state",
-      "commands": [
-        "restartClean"
-      ],
+      "commands": ["restartClean"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/BoardFrame.vue",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/components.test.mjs"
-      ],
+      "sources": ["packages/ui/src/BoardFrame.vue", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/components.test.mjs"],
       "missingAcceptance": "components, sync; installed reload preservation"
     },
     {
@@ -256,12 +181,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/selection.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/hover-focus.test.mjs"
-      ],
+      "sources": ["packages/ui/src/selection.ts"],
+      "tests": ["packages/ui/tests/hover-focus.test.mjs"],
       "missingAcceptance": "interaction, hover-focus, paint; modifier pointer refresh across all three views"
     },
     {
@@ -274,12 +195,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/selection.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/interaction.test.mjs"
-      ],
+      "sources": ["packages/ui/src/selection.ts"],
+      "tests": ["packages/ui/tests/interaction.test.mjs"],
       "missingAcceptance": "interaction, selection; actual editor range/focus"
     },
     {
@@ -289,18 +206,11 @@
       "result": "whole instance including routes/silk; enter definition with clicked member",
       "boundary": "V",
       "unavailable": "eligibility/reach explained",
-      "commands": [
-        "enter"
-      ],
+      "commands": ["enter"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/selection.ts",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/interaction.test.mjs"
-      ],
+      "sources": ["packages/ui/src/selection.ts", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/interaction.test.mjs"],
       "missingAcceptance": "interaction, isolation-chip; nested/B-side/lone-part coordinates"
     },
     {
@@ -313,12 +223,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/selection.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/interaction.test.mjs"
-      ],
+      "sources": ["packages/ui/src/selection.ts"],
+      "tests": ["packages/ui/tests/interaction.test.mjs"],
       "missingAcceptance": "interaction, route-ends; 3D nearest/depth/end picking"
     },
     {
@@ -331,12 +237,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/paint.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/merged-highlight.test.mjs"
-      ],
+      "sources": ["packages/ui/src/paint.ts"],
+      "tests": ["packages/ui/tests/merged-highlight.test.mjs"],
       "missingAcceptance": "interaction, merged-highlight; overlapping pour/text hit precedence"
     },
     {
@@ -349,15 +251,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/selection.ts",
-        "packages/ui/src/board-store.ts",
-        "packages/ui/src/pane.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/finding-marks.test.mjs",
-        "packages/cli/tests/finding-focus.test.mjs"
-      ],
+      "sources": ["packages/ui/src/selection.ts", "packages/ui/src/board-store.ts", "packages/ui/src/pane.ts"],
+      "tests": ["packages/ui/tests/finding-marks.test.mjs", "packages/cli/tests/finding-focus.test.mjs"],
       "missingAcceptance": "finding-marks, indicators, sch-view; schematic label hover and click agreement"
     },
     {
@@ -367,20 +262,11 @@
       "result": "ordered members/anchor; no ancestor+descendant; Alt keeps selection and reveals definition",
       "boundary": "V",
       "unavailable": "absent definition reported",
-      "commands": [
-        "extend",
-        "deep",
-        "definition"
-      ],
+      "commands": ["extend", "deep", "definition"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/selection.ts",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/selection.test.mjs"
-      ],
+      "sources": ["packages/ui/src/selection.ts", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/selection.test.mjs"],
       "missingAcceptance": "selection, interaction; combinations across physical OS modifiers"
     },
     {
@@ -390,18 +276,11 @@
       "result": "empty clears members keeps isolation; Escape first cancels then ascends/leaves",
       "boundary": "V; no design undo",
       "unavailable": "no current state safe no-op",
-      "commands": [
-        "up"
-      ],
+      "commands": ["up"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/selection.ts",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/selection.test.mjs"
-      ],
+      "sources": ["packages/ui/src/selection.ts", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/selection.test.mjs"],
       "missingAcceptance": "selection, isolation-chip; nested Escape precedence with assist/modal"
     },
     {
@@ -411,18 +290,11 @@
       "result": "explicit instance or library layout; choice mirrored in 2D/3D and ignored by schematic; local frame and reach count",
       "boundary": "V until W edit",
       "unavailable": "own placement/shared loop reason",
-      "commands": [
-        "isolate"
-      ],
+      "commands": ["isolate"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/use/chip.ts",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/isolation-chip.test.mjs"
-      ],
+      "sources": ["packages/ui/src/use/chip.ts", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/isolation-chip.test.mjs"],
       "missingAcceptance": "isolation-chip and finding-focus cover synchronized choice/cancel; edit-path-isolate; B side and single placement context"
     },
     {
@@ -435,16 +307,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/gesture.ts",
-        "packages/ui/src/EditBar.vue",
-        "packages/cli/src/session/edit.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/gesture.test.mjs",
-        "packages/ui/tests/editbar.test.mjs",
-        "packages/cli/tests/session-edit.test.mjs"
-      ],
+      "sources": ["packages/ui/src/gesture.ts", "packages/ui/src/EditBar.vue", "packages/cli/src/session/edit.ts"],
+      "tests": ["packages/ui/tests/gesture.test.mjs", "packages/ui/tests/editbar.test.mjs", "packages/cli/tests/session-edit.test.mjs"],
       "missingAcceptance": "Installed browser multi-placement drag, ring, side, cancellation and chronological editor undo with mixed eligible selection"
     },
     {
@@ -454,16 +318,10 @@
       "result": "one transaction, source-frame fields and compass agree with world geometry",
       "boundary": "W placement at instantiation; instance isolation creates overrides, library isolation writes definition; Escape no write, undo one step",
       "unavailable": "edit-client reason and failed/stale message",
-      "commands": [
-        "move"
-      ],
+      "commands": ["move"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/gesture.ts",
-        "packages/ui/src/keys.ts",
-        "packages/ui/src/EditBar.vue"
-      ],
+      "sources": ["packages/ui/src/gesture.ts", "packages/ui/src/keys.ts", "packages/ui/src/EditBar.vue"],
       "tests": [
         "packages/ui/tests/drag-txn.test.mjs",
         "packages/pcbjs/tests/edit-path-toolbar.test.mjs",
@@ -479,19 +337,11 @@
       "result": "preview and written coordinates agree; no grid means unsnapped",
       "boundary": "W as EDIT01",
       "unavailable": "no shared literal overwrite",
-      "commands": [
-        "fine",
-        "free"
-      ],
+      "commands": ["fine", "free"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/snap.ts",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/snap.test.mjs"
-      ],
+      "sources": ["packages/ui/src/snap.ts", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/snap.test.mjs"],
       "missingAcceptance": "Installed pointer move and point drags: Shift free, Mod axis, both free plus axis; preview coordinates match source writes"
     },
     {
@@ -501,16 +351,10 @@
       "result": "shared grid pivot or placement origin; numeric source-frame rotation",
       "boundary": "W third at value; Escape ring cancel, one undo",
       "unavailable": "unsupported node explanation",
-      "commands": [
-        "rotate"
-      ],
+      "commands": ["rotate"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/gesture.ts",
-        "packages/ui/src/keys.ts",
-        "packages/ui/src/EditBar.vue"
-      ],
+      "sources": ["packages/ui/src/gesture.ts", "packages/ui/src/keys.ts", "packages/ui/src/EditBar.vue"],
       "tests": [
         "packages/ui/tests/ring.test.mjs",
         "packages/pcbjs/tests/edit-path-toolbar.test.mjs",
@@ -526,16 +370,10 @@
       "result": "physical side attribute; camera-side controls remain separate",
       "boundary": "W one undo; no transient preview currently",
       "unavailable": "no layered capability reason",
-      "commands": [
-        "side"
-      ],
+      "commands": ["side"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/gesture.ts",
-        "packages/ui/src/keys.ts",
-        "packages/ui/src/EditBar.vue"
-      ],
+      "sources": ["packages/ui/src/gesture.ts", "packages/ui/src/keys.ts", "packages/ui/src/EditBar.vue"],
       "tests": [
         "packages/ui/tests/gesture.test.mjs",
         "packages/pcbjs/tests/edit-path-toolbar.test.mjs",
@@ -551,16 +389,10 @@
       "result": "exact primitive source range; case preserves endpoints; insertion splits focused segment, snaps when enabled and preserves downstream endpoints",
       "boundary": "W; reroute patch only required non-source copper; Escape cancel",
       "unavailable": "no writable chain reason",
-      "commands": [
-        "points"
-      ],
+      "commands": ["points"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/gesture.ts",
-        "packages/ui/src/keys.ts",
-        "packages/ui/src/EditBar.vue"
-      ],
+      "sources": ["packages/ui/src/gesture.ts", "packages/ui/src/keys.ts", "packages/ui/src/EditBar.vue"],
       "tests": [
         "packages/ui/tests/gesture.test.mjs",
         "packages/pcbjs/tests/edit-path-toolbar.test.mjs",
@@ -576,16 +408,10 @@
       "result": "remove one primitive; skip modifiers and compensate following relative/axis commands without moving their endpoint",
       "boundary": "W; one undo",
       "unavailable": "cannot delete general part/net/graphic; make this discoverable",
-      "commands": [
-        "delete"
-      ],
+      "commands": ["delete"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/gesture.ts",
-        "packages/ui/src/keys.ts",
-        "packages/ui/src/EditBar.vue"
-      ],
+      "sources": ["packages/ui/src/gesture.ts", "packages/ui/src/keys.ts", "packages/ui/src/EditBar.vue"],
       "tests": [
         "packages/ui/tests/gesture.test.mjs",
         "packages/pcbjs/tests/edit-path-toolbar.test.mjs",
@@ -601,19 +427,11 @@
       "result": "Source document native chronological undo/redo with an editor, including later code and other-pane edits; standalone conflict-checked per-client history",
       "boundary": "W; editor request names one document, multiple distinct documents refused before undo; standalone refuses intervening source conflicts",
       "unavailable": "Explain multi-file refusal, conflict or disconnected holder; source editor available for individual histories",
-      "commands": [
-        "undo",
-        "redo"
-      ],
+      "commands": ["undo", "redo"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/undo.ts",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/undo.test.mjs"
-      ],
+      "sources": ["packages/ui/src/undo.ts", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/undo.test.mjs"],
       "missingAcceptance": "undo; CLI session-edit; patches file creation/removal, editor grouping"
     },
     {
@@ -623,18 +441,11 @@
       "result": "typed preview, clearance, eligible endpoint, one argument/handle write, cursor advance",
       "boundary": "W versioned slot; Escape leaves without write",
       "unavailable": "scope and writable-slot reason",
-      "commands": [
-        "pick"
-      ],
+      "commands": ["pick"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/Canvas2D.vue",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/route-ends.test.mjs"
-      ],
+      "sources": ["packages/ui/src/Canvas2D.vue", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/route-ends.test.mjs"],
       "missingAcceptance": "dots, route-ends; LSP assist; actual installed 2D/3D route write including isolated mapped endpoint"
     },
     {
@@ -644,18 +455,11 @@
       "result": "expected l vs X choice shown, no accidental ordinary selection",
       "boundary": "W on pick only",
       "unavailable": "no slot no assist action",
-      "commands": [
-        "allDots"
-      ],
+      "commands": ["allDots"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/Canvas2D.vue",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/dots.test.mjs"
-      ],
+      "sources": ["packages/ui/src/Canvas2D.vue", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/dots.test.mjs"],
       "missingAcceptance": "dots, snap; completion clearing on Escape and part/pad/net slots"
     },
     {
@@ -668,9 +472,7 @@
       "commands": [],
       "support": "unsupported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/EditBar.vue"
-      ],
+      "sources": ["packages/ui/src/EditBar.vue"],
       "tests": [],
       "missingAcceptance": "source inventory only; acceptance must assert unsupported commands absent"
     },
@@ -684,9 +486,7 @@
       "commands": [],
       "support": "unsupported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/keys.ts"
-      ],
+      "sources": ["packages/ui/src/keys.ts"],
       "tests": [],
       "missingAcceptance": "no dedicated test; do not invent shortcut or tool"
     },
@@ -700,12 +500,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/BoardPanel.vue"
-      ],
-      "tests": [
-        "packages/ui/tests/components.test.mjs"
-      ],
+      "sources": ["packages/ui/src/BoardPanel.vue"],
+      "tests": ["packages/ui/tests/components.test.mjs"],
       "missingAcceptance": "components, board-index; actual target identity"
     },
     {
@@ -718,12 +514,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/PartPanel.vue"
-      ],
-      "tests": [
-        "packages/ui/tests/components.test.mjs"
-      ],
+      "sources": ["packages/ui/src/PartPanel.vue"],
+      "tests": ["packages/ui/tests/components.test.mjs"],
       "missingAcceptance": "interaction, circuit-client, THIRD native-button harness; hidden-layer selection framing"
     },
     {
@@ -736,12 +528,7 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/ChecksView.vue",
-        "packages/ui/src/use/findings.ts",
-        "packages/ui/src/finding-details.ts",
-        "packages/ui/src/finding-markdown.ts"
-      ],
+      "sources": ["packages/ui/src/ChecksView.vue", "packages/ui/src/use/findings.ts", "packages/ui/src/finding-details.ts", "packages/ui/src/finding-markdown.ts"],
       "tests": [
         "packages/ui/tests/checks-view.test.mjs",
         "packages/ui/tests/checks-integration.test.mjs",
@@ -760,12 +547,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/use/chip.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/source-client.test.mjs"
-      ],
+      "sources": ["packages/ui/src/use/chip.ts"],
+      "tests": ["packages/ui/tests/source-client.test.mjs"],
       "missingAcceptance": "source-client, ide-client; edit-path-jumps; actual installed editor focus"
     },
     {
@@ -778,12 +561,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/PathChip.vue"
-      ],
-      "tests": [
-        "packages/ui/tests/agents-client.test.mjs"
-      ],
+      "sources": ["packages/ui/src/PathChip.vue"],
+      "tests": ["packages/ui/tests/agents-client.test.mjs"],
       "missingAcceptance": "agents-client; keyboard/context-menu focus and recipient ownership"
     },
     {
@@ -793,19 +572,11 @@
       "result": "modal owns focus; explicit command runs; focus restored",
       "boundary": "V except explicitly chosen W",
       "unavailable": "unavailable palette command must show eligibility",
-      "commands": [
-        "palette",
-        "help"
-      ],
+      "commands": ["palette", "help"],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/Palette.vue",
-        "packages/ui/src/keys.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/keys.test.mjs"
-      ],
+      "sources": ["packages/ui/src/Palette.vue", "packages/ui/src/keys.ts"],
+      "tests": ["packages/ui/tests/keys.test.mjs"],
       "missingAcceptance": "keys, THIRD modal harness; every edit command while overlay open"
     },
     {
@@ -818,12 +589,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/sync.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/sync.test.mjs"
-      ],
+      "sources": ["packages/ui/src/sync.ts"],
+      "tests": ["packages/ui/tests/sync.test.mjs"],
       "missingAcceptance": "live, transport, sync, source-client; late facet/failed edit/reconnect full matrix"
     },
     {
@@ -836,12 +603,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/BoardFrame.vue"
-      ],
-      "tests": [
-        "packages/ui/tests/components.test.mjs"
-      ],
+      "sources": ["packages/ui/src/BoardFrame.vue"],
+      "tests": ["packages/ui/tests/components.test.mjs"],
       "missingAcceptance": "components; keyboard focus, Escape and mobile screenshots missing"
     },
     {
@@ -854,12 +617,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/BoardFrame.vue"
-      ],
-      "tests": [
-        "packages/ui/tests/board-choice.test.mjs"
-      ],
+      "sources": ["packages/ui/src/BoardFrame.vue"],
+      "tests": ["packages/ui/tests/board-choice.test.mjs"],
       "missingAcceptance": "board-choice, variants-client; two-project two-target navigation/write refusal"
     },
     {
@@ -872,16 +631,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/refs.ts",
-        "packages/ui/src/ide.ts",
-        "packages/ui/src/shell.ts"
-      ],
-      "tests": [
-        "packages/ui/tests/refs-client.test.mjs",
-        "packages/ui/tests/ide-client.test.mjs",
-        "packages/ui/tests/board-choice.test.mjs"
-      ],
+      "sources": ["packages/ui/src/refs.ts", "packages/ui/src/ide.ts", "packages/ui/src/shell.ts"],
+      "tests": ["packages/ui/tests/refs-client.test.mjs", "packages/ui/tests/ide-client.test.mjs", "packages/ui/tests/board-choice.test.mjs"],
       "missingAcceptance": "refs-client, raw-boards; restore isolation frame, static parity"
     },
     {
@@ -894,14 +645,8 @@
       "commands": [],
       "support": "supported",
       "coverage": "source-only",
-      "sources": [
-        "packages/ui/src/DevToolsOverlay.vue",
-        "packages/ui/src/devtools.ts",
-        "packages/ui/src/BoardFrame.vue"
-      ],
-      "tests": [
-        "packages/ui/tests/devtools.test.mjs"
-      ],
+      "sources": ["packages/ui/src/DevToolsOverlay.vue", "packages/ui/src/devtools.ts", "packages/ui/src/BoardFrame.vue"],
+      "tests": ["packages/ui/tests/devtools.test.mjs"],
       "missingAcceptance": "Full installed-editor command invocation is a separate acceptance gate"
     }
   ]

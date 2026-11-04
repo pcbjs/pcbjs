@@ -76,10 +76,50 @@ test('drc rules: plated slots keep the minimum ring along the whole hole in eith
 
 test('drc rules: custom plated pads use their copper boundary, including offsets and concavities', () => {
   const cases = [
-    { drill: 1.4, points: [[-0.8, -1], [1.2, -1], [1.2, 1], [-0.8, 1]], ring: 0.1 },
-    { drill: 1, points: [[0.2, -1], [2, -1], [2, 1], [0.2, 1]], ring: -0.5 },
-    { drill: [2.4, 0.4], points: [[-2, -1], [2, -1], [2, 1], [0.2, 1], [0.2, -0.25], [-0.2, -0.25], [-0.2, 1], [-2, 1]], ring: -0.2 },
-    { drill: 1.4, points: [[-0.9, -1], [1.2, -1], [1.2, 1], [-0.9, 1]], ring: 0.2 },
+    {
+      drill: 1.4,
+      points: [
+        [-0.8, -1],
+        [1.2, -1],
+        [1.2, 1],
+        [-0.8, 1],
+      ],
+      ring: 0.1,
+    },
+    {
+      drill: 1,
+      points: [
+        [0.2, -1],
+        [2, -1],
+        [2, 1],
+        [0.2, 1],
+      ],
+      ring: -0.5,
+    },
+    {
+      drill: [2.4, 0.4],
+      points: [
+        [-2, -1],
+        [2, -1],
+        [2, 1],
+        [0.2, 1],
+        [0.2, -0.25],
+        [-0.2, -0.25],
+        [-0.2, 1],
+        [-2, 1],
+      ],
+      ring: -0.2,
+    },
+    {
+      drill: 1.4,
+      points: [
+        [-0.9, -1],
+        [1.2, -1],
+        [1.2, 1],
+        [-0.9, 1],
+      ],
+      ring: 0.2,
+    },
   ]
   for (const side of ['F', 'B'])
     for (const rot of [0, 37, 90])

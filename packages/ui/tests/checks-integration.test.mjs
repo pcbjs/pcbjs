@@ -4,12 +4,16 @@ import { registerHooks } from 'node:module'
 import { facetSet, facetsOf } from '@pcbjs/core/site-facets'
 import { fixture } from './fixture-board.mjs'
 
-registerHooks({ resolve: (spec, ctx, next) => {
-  try { return next(spec, ctx) } catch (error) {
-    if (spec.startsWith('.') && !spec.endsWith('.ts')) return next(spec + '.ts', ctx)
-    throw error
-  }
-} })
+registerHooks({
+  resolve: (spec, ctx, next) => {
+    try {
+      return next(spec, ctx)
+    } catch (error) {
+      if (spec.startsWith('.') && !spec.endsWith('.ts')) return next(spec + '.ts', ctx)
+      throw error
+    }
+  },
+})
 const { createViewer } = await import('../src/shell.ts')
 const { createPane, mountedViews } = await import('../src/pane.ts')
 const { parseViewQuery } = await import('../src/query.ts')
@@ -70,6 +74,12 @@ test('canonical finding-only changes relay without a second selection store', ()
 test('the fourth editor viewer has dedicated beside and new-pane shortcuts', async () => {
   const { vscodeKeybindings } = await import('../src/keys.ts')
   const bindings = vscodeKeybindings()
-  assert.deepEqual(bindings.find(x => x.command === 'pcbjs.openChecksBeside'), { command: 'pcbjs.openChecksBeside', key: 'ctrl+alt+4', mac: 'cmd+alt+4', when: 'pcbjs.active' })
-  assert.deepEqual(bindings.find(x => x.command === 'pcbjs.openChecksNew'), { command: 'pcbjs.openChecksNew', key: 'ctrl+alt+shift+4', mac: 'cmd+alt+shift+4', when: 'pcbjs.active' })
+  assert.deepEqual(
+    bindings.find(x => x.command === 'pcbjs.openChecksBeside'),
+    { command: 'pcbjs.openChecksBeside', key: 'ctrl+alt+4', mac: 'cmd+alt+4', when: 'pcbjs.active' },
+  )
+  assert.deepEqual(
+    bindings.find(x => x.command === 'pcbjs.openChecksNew'),
+    { command: 'pcbjs.openChecksNew', key: 'ctrl+alt+shift+4', mac: 'cmd+alt+shift+4', when: 'pcbjs.active' },
+  )
 })

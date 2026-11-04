@@ -15,12 +15,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "partial-tests-host-acceptance-pending",
-      "sources": [
-        "packages/vscode/src/sidebar.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/sidebar.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/sidebar.ts"],
+      "tests": ["packages/vscode/tests/sidebar.test.mjs"]
     },
     {
       "id": "X02",
@@ -31,17 +27,11 @@
       "cancelUndo": "Repeat closes",
       "unavailable": "need() project warning; boot failure pane",
       "missingAcceptance": "T panels; V duplicate-pane close identity",
-      "commands": [
-        "pcbjs.preview"
-      ],
+      "commands": ["pcbjs.preview"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/preview.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/panels.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/preview.ts"],
+      "tests": ["packages/vscode/tests/panels.test.mjs"]
     },
     {
       "id": "X03",
@@ -52,20 +42,11 @@
       "cancelUndo": "Close tab",
       "unavailable": "Startup status/error",
       "missingAcceptance": "S preview.open; T panels; docs ambiguity F4",
-      "commands": [
-        "pcbjs.open2D",
-        "pcbjs.open3D",
-        "pcbjs.openSchematic",
-        "pcbjs.openChecks"
-      ],
+      "commands": ["pcbjs.open2D", "pcbjs.open3D", "pcbjs.openSchematic", "pcbjs.openChecks"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/preview.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/panels.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/preview.ts"],
+      "tests": ["packages/vscode/tests/panels.test.mjs"]
     },
     {
       "id": "X04",
@@ -76,20 +57,11 @@
       "cancelUndo": "Close tab",
       "unavailable": "Same startup status",
       "missingAcceptance": "T panels/keys; V real group placement",
-      "commands": [
-        "pcbjs.open2DBeside",
-        "pcbjs.open3DBeside",
-        "pcbjs.openSchematicBeside",
-        "pcbjs.openChecksBeside"
-      ],
+      "commands": ["pcbjs.open2DBeside", "pcbjs.open3DBeside", "pcbjs.openSchematicBeside", "pcbjs.openChecksBeside"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/preview.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/panels.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/preview.ts"],
+      "tests": ["packages/vscode/tests/panels.test.mjs"]
     },
     {
       "id": "X05",
@@ -100,20 +72,11 @@
       "cancelUndo": "Close new tab",
       "unavailable": "Same startup status",
       "missingAcceptance": "T panels/keys; V host Alt action",
-      "commands": [
-        "pcbjs.open2DNew",
-        "pcbjs.open3DNew",
-        "pcbjs.openSchematicNew",
-        "pcbjs.openChecksNew"
-      ],
+      "commands": ["pcbjs.open2DNew", "pcbjs.open3DNew", "pcbjs.openSchematicNew", "pcbjs.openChecksNew"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/preview.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/panels.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/preview.ts"],
+      "tests": ["packages/vscode/tests/panels.test.mjs"]
     },
     {
       "id": "X06",
@@ -124,17 +87,11 @@
       "cancelUndo": "Close tabs",
       "unavailable": "Startup feedback",
       "missingAcceptance": "T panels; V repeated invocation across split groups",
-      "commands": [
-        "pcbjs.openAllViews"
-      ],
+      "commands": ["pcbjs.openAllViews"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/preview.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/panels.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/preview.ts"],
+      "tests": ["packages/vscode/tests/panels.test.mjs"]
     },
     {
       "id": "X07",
@@ -145,17 +102,11 @@
       "cancelUndo": "Escape no action",
       "unavailable": "need() warning if absent",
       "missingAcceptance": "S extension; T status; V picker cancel/no startup",
-      "commands": [
-        "pcbjs.pickView"
-      ],
+      "commands": ["pcbjs.pickView"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/extension.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/keys.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/extension.ts"],
+      "tests": ["packages/vscode/tests/keys.test.mjs"]
     },
     {
       "id": "X08",
@@ -166,17 +117,11 @@
       "cancelUndo": "No rollback required",
       "unavailable": "Boot status/error",
       "missingAcceptance": "T panels/start; V retains board/target/isolation",
-      "commands": [
-        "pcbjs.preview.reload"
-      ],
+      "commands": ["pcbjs.preview.reload"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/preview.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/panels.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/preview.ts"],
+      "tests": ["packages/vscode/tests/panels.test.mjs"]
     },
     {
       "id": "X09",
@@ -190,12 +135,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "partial-tests-host-acceptance-pending",
-      "sources": [
-        "packages/vscode/src/preview.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/panels.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/preview.ts"],
+      "tests": ["packages/vscode/tests/panels.test.mjs"]
     },
     {
       "id": "X10",
@@ -209,12 +150,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/owner.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/owner.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/owner.ts"],
+      "tests": ["packages/vscode/tests/owner.test.mjs"]
     },
     {
       "id": "X11",
@@ -225,17 +162,11 @@
       "cancelUndo": "Navigate back",
       "unavailable": "Stale row currently silently ignored",
       "missingAcceptance": "T board-jump deferred ownership, panels/sidebar; V host focus preservation",
-      "commands": [
-        "pcbjs.sidebar.open"
-      ],
+      "commands": ["pcbjs.sidebar.open"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/tree-data.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/board-jump.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/tree-data.ts"],
+      "tests": ["packages/vscode/tests/board-jump.test.mjs"]
     },
     {
       "id": "X12",
@@ -249,12 +180,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/tree-data.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/board-jump.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/tree-data.ts"],
+      "tests": ["packages/vscode/tests/board-jump.test.mjs"]
     },
     {
       "id": "X13",
@@ -268,12 +195,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/preview.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/panels.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/preview.ts"],
+      "tests": ["packages/vscode/tests/panels.test.mjs"]
     },
     {
       "id": "X14",
@@ -287,12 +210,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/tree-data.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/sidebar.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/tree-data.ts"],
+      "tests": ["packages/vscode/tests/sidebar.test.mjs"]
     },
     {
       "id": "X15",
@@ -306,17 +225,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/tree-data.ts",
-        "packages/vscode/src/preview.ts",
-        "packages/vscode/src/finding-column.ts",
-        "packages/ui/src/ChecksView.vue"
-      ],
-      "tests": [
-        "packages/vscode/tests/panels.test.mjs",
-        "packages/vscode/tests/finding-editor.test.mjs",
-        "packages/vscode/tests/installed-host/suite.cjs"
-      ]
+      "sources": ["packages/vscode/src/tree-data.ts", "packages/vscode/src/preview.ts", "packages/vscode/src/finding-column.ts", "packages/ui/src/ChecksView.vue"],
+      "tests": ["packages/vscode/tests/panels.test.mjs", "packages/vscode/tests/finding-editor.test.mjs", "packages/vscode/tests/installed-host/suite.cjs"]
     },
     {
       "id": "X16",
@@ -330,12 +240,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/tree-data.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/sidebar.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/tree-data.ts"],
+      "tests": ["packages/vscode/tests/sidebar.test.mjs"]
     },
     {
       "id": "X17",
@@ -349,12 +255,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/tree-data.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/sidebar.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/tree-data.ts"],
+      "tests": ["packages/vscode/tests/sidebar.test.mjs"]
     },
     {
       "id": "X18",
@@ -368,12 +270,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/sidebar.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/sidebar.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/sidebar.ts"],
+      "tests": ["packages/vscode/tests/sidebar.test.mjs"]
     },
     {
       "id": "X19",
@@ -384,19 +282,11 @@
       "cancelUndo": "Attach again",
       "unavailable": "Status/boot errors",
       "missingAcceptance": "T start/server/status; V detach leaves external client/session live",
-      "commands": [
-        "pcbjs.start",
-        "pcbjs.stop",
-        "pcbjs.restart"
-      ],
+      "commands": ["pcbjs.start", "pcbjs.stop", "pcbjs.restart"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/server.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/server.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/server.ts"],
+      "tests": ["packages/vscode/tests/server.test.mjs"]
     },
     {
       "id": "X20",
@@ -407,17 +297,11 @@
       "cancelUndo": "No undo",
       "unavailable": "Failure phase/log",
       "missingAcceptance": "T server/status; V precise served projects named, other client reconnect",
-      "commands": [
-        "pcbjs.restartServer"
-      ],
+      "commands": ["pcbjs.restartServer"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/server.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/server.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/server.ts"],
+      "tests": ["packages/vscode/tests/server.test.mjs"]
     },
     {
       "id": "X21",
@@ -428,17 +312,11 @@
       "cancelUndo": "Rebuild, no cache undo",
       "unavailable": "Warning + Show output on nonzero",
       "missingAcceptance": "T server/keys; V dirty editor untouched and exact roots shown",
-      "commands": [
-        "pcbjs.restartClean"
-      ],
+      "commands": ["pcbjs.restartClean"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/server.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/server.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/server.ts"],
+      "tests": ["packages/vscode/tests/server.test.mjs"]
     },
     {
       "id": "X22",
@@ -452,12 +330,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "partial-tests-host-acceptance-pending",
-      "sources": [
-        "packages/vscode/src/server.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/negotiation.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/server.ts"],
+      "tests": ["packages/vscode/tests/negotiation.test.mjs"]
     },
     {
       "id": "X23",
@@ -468,17 +342,11 @@
       "cancelUndo": "Close browser",
       "unavailable": "Startup errors",
       "missingAcceptance": "S opens s.url, not selected board URL; V expected board/project preservation must be decided",
-      "commands": [
-        "pcbjs.openInBrowser"
-      ],
+      "commands": ["pcbjs.openInBrowser"],
       "support": "supported-with-boundaries",
       "coverage": "partial-tests-host-acceptance-pending",
-      "sources": [
-        "packages/vscode/src/extension.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/keys.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/extension.ts"],
+      "tests": ["packages/vscode/tests/keys.test.mjs"]
     },
     {
       "id": "X24",
@@ -489,18 +357,11 @@
       "cancelUndo": "Close panel/tab",
       "unavailable": "Missing log info message",
       "missingAcceptance": "T status; V correct selected-session log",
-      "commands": [
-        "pcbjs.showOutput",
-        "pcbjs.openSessionLog"
-      ],
+      "commands": ["pcbjs.showOutput", "pcbjs.openSessionLog"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/extension.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/keys.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/extension.ts"],
+      "tests": ["packages/vscode/tests/keys.test.mjs"]
     },
     {
       "id": "X25",
@@ -511,17 +372,11 @@
       "cancelUndo": "Toggle again",
       "unavailable": "No design needed",
       "missingAcceptance": "S extension global ConfigurationTarget; T status/keys; V workspace-vs-global intent",
-      "commands": [
-        "pcbjs.toggleCursorSync"
-      ],
+      "commands": ["pcbjs.toggleCursorSync"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/extension.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/keys.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/extension.ts"],
+      "tests": ["packages/vscode/tests/keys.test.mjs"]
     },
     {
       "id": "X26",
@@ -535,12 +390,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "partial-tests-host-acceptance-pending",
-      "sources": [
-        "packages/vscode/src/status.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/status.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/status.ts"],
+      "tests": ["packages/vscode/tests/status.test.mjs"]
     },
     {
       "id": "X27",
@@ -554,12 +405,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/status.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/status.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/status.ts"],
+      "tests": ["packages/vscode/tests/status.test.mjs"]
     },
     {
       "id": "X28",
@@ -570,17 +417,11 @@
       "cancelUndo": "Close/cancel",
       "unavailable": "Setup errors below",
       "missingAcceptance": "S manifest; T setup; V cancellation must not falsely imply completed setup",
-      "commands": [
-        "pcbjs.walkthrough"
-      ],
+      "commands": ["pcbjs.walkthrough"],
       "support": "supported-with-boundaries",
       "coverage": "partial-tests-host-acceptance-pending",
-      "sources": [
-        "packages/vscode/src/extension.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/keys.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/extension.ts"],
+      "tests": ["packages/vscode/tests/keys.test.mjs"]
     },
     {
       "id": "X29",
@@ -591,17 +432,11 @@
       "cancelUndo": "Escape before terminal; terminal cancellation is partial install",
       "unavailable": "No-folder warning, offline packaged-version fallback",
       "missingAcceptance": "T version; V exact executed version equals shown version, failure recovery",
-      "commands": [
-        "pcbjs.install"
-      ],
+      "commands": ["pcbjs.install"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/install.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/version.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/install.ts"],
+      "tests": ["packages/vscode/tests/version.test.mjs"]
     },
     {
       "id": "X30",
@@ -612,17 +447,11 @@
       "cancelUndo": "Escape before execution; generated files remain after later failure",
       "unavailable": "Native validation, last error + Show output",
       "missingAcceptance": "T setup; V cancellation at every stage and partial install",
-      "commands": [
-        "pcbjs.createProject"
-      ],
+      "commands": ["pcbjs.createProject"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/setup.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/setup.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/setup.ts"],
+      "tests": ["packages/vscode/tests/setup.test.mjs"]
     },
     {
       "id": "X31",
@@ -633,17 +462,11 @@
       "cancelUndo": "Escape before create; no transactional deletion promised",
       "unavailable": "Input validation/setup errors",
       "missingAcceptance": "S wizard; T setup; V each cancel/default and generated values",
-      "commands": [
-        "pcbjs.newBoardWizard"
-      ],
+      "commands": ["pcbjs.newBoardWizard"],
       "support": "supported-with-boundaries",
       "coverage": "partial-tests-host-acceptance-pending",
-      "sources": [
-        "packages/vscode/src/wizard.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/setup.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/wizard.ts"],
+      "tests": ["packages/vscode/tests/setup.test.mjs"]
     },
     {
       "id": "X32",
@@ -654,17 +477,11 @@
       "cancelUndo": "Cancel picks; creation is filesystem operation",
       "unavailable": "Setup error/output",
       "missingAcceptance": "S examples; T setup; V all examples and overwrite refusal",
-      "commands": [
-        "pcbjs.newFromExample"
-      ],
+      "commands": ["pcbjs.newFromExample"],
       "support": "supported-with-boundaries",
       "coverage": "partial-tests-host-acceptance-pending",
-      "sources": [
-        "packages/vscode/src/examples.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/setup.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/examples.ts"],
+      "tests": ["packages/vscode/tests/setup.test.mjs"]
     },
     {
       "id": "X33",
@@ -675,17 +492,11 @@
       "cancelUndo": "Cancel before execute",
       "unavailable": "Missing matching board explained, CLI failure/output",
       "missingAcceptance": "T setup; V cancel/invalid/failed conversion leaves no misleading success",
-      "commands": [
-        "pcbjs.convertKicad"
-      ],
+      "commands": ["pcbjs.convertKicad"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/setup.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/setup.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/setup.ts"],
+      "tests": ["packages/vscode/tests/setup.test.mjs"]
     },
     {
       "id": "X34",
@@ -696,17 +507,11 @@
       "cancelUndo": "Cancel picker",
       "unavailable": "Missing runner/dependency recovery",
       "missingAcceptance": "T setup; V installed location and no unrelated root writes",
-      "commands": [
-        "pcbjs.installSkills"
-      ],
+      "commands": ["pcbjs.installSkills"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/setup.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/setup.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/setup.ts"],
+      "tests": ["packages/vscode/tests/setup.test.mjs"]
     },
     {
       "id": "X35",
@@ -717,17 +522,11 @@
       "cancelUndo": "CLI cancellation contract unspecified",
       "unavailable": "Failed command + output",
       "missingAcceptance": "T setup; V unsaved editor versus disk result explicitly identifiable",
-      "commands": [
-        "pcbjs.check"
-      ],
+      "commands": ["pcbjs.check"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/setup.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/setup.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/setup.ts"],
+      "tests": ["packages/vscode/tests/setup.test.mjs"]
     },
     {
       "id": "X36",
@@ -738,18 +537,11 @@
       "cancelUndo": "Revoke/restoration",
       "unavailable": "Information message",
       "missingAcceptance": "T auto-icons/icon-map; V prior user association preservation",
-      "commands": [
-        "pcbjs.icons.associate",
-        "pcbjs.icons.revoke"
-      ],
+      "commands": ["pcbjs.icons.associate", "pcbjs.icons.revoke"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/auto-icons.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/auto-icons.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/auto-icons.ts"],
+      "tests": ["packages/vscode/tests/auto-icons.test.mjs"]
     },
     {
       "id": "X37",
@@ -763,12 +555,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/hover.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/hover.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/hover.ts"],
+      "tests": ["packages/vscode/tests/hover.test.mjs"]
     },
     {
       "id": "X38",
@@ -782,12 +570,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "partial-tests-host-acceptance-pending",
-      "sources": [
-        "packages/vscode/src/language.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/lsp-client.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/language.ts"],
+      "tests": ["packages/vscode/tests/lsp-client.test.mjs"]
     },
     {
       "id": "X39",
@@ -798,17 +582,11 @@
       "cancelUndo": "Escape no edit; one-presentation case applies immediately; editor undo after apply",
       "unavailable": "No session/no segment information",
       "missingAcceptance": "Real installed VS Code focus/accessibility and cancellation",
-      "commands": [
-        "pcbjs.editValue"
-      ],
+      "commands": ["pcbjs.editValue"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/segments-ui.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/segments-ui.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/segments-ui.ts"],
+      "tests": ["packages/vscode/tests/segments-ui.test.mjs"]
     },
     {
       "id": "X40",
@@ -822,12 +600,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/drafts.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/drafts.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/drafts.ts"],
+      "tests": ["packages/vscode/tests/drafts.test.mjs"]
     },
     {
       "id": "X41",
@@ -841,12 +615,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/reveal.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/preview-undo.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/reveal.ts"],
+      "tests": ["packages/vscode/tests/preview-undo.test.mjs"]
     },
     {
       "id": "X42",
@@ -860,12 +630,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/wiring.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/lsp-client.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/wiring.ts"],
+      "tests": ["packages/vscode/tests/lsp-client.test.mjs"]
     },
     {
       "id": "X43",
@@ -879,12 +645,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/preview.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/preview-undo.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/preview.ts"],
+      "tests": ["packages/vscode/tests/preview-undo.test.mjs"]
     },
     {
       "id": "X44",
@@ -898,12 +660,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "partial-tests-host-acceptance-pending",
-      "sources": [
-        "packages/vscode/src/preview.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/preview-keys.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/preview.ts"],
+      "tests": ["packages/vscode/tests/preview-keys.test.mjs"]
     },
     {
       "id": "X45",
@@ -914,17 +672,11 @@
       "cancelUndo": "Close panel",
       "unavailable": "Check failure text",
       "missingAcceptance": "T fab; V keyboard/ARIA, no-project and reconnect",
-      "commands": [
-        "pcbjs.fab"
-      ],
+      "commands": ["pcbjs.fab"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/fab-panel.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/fab.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/fab-panel.ts"],
+      "tests": ["packages/vscode/tests/fab.test.mjs"]
     },
     {
       "id": "X46",
@@ -938,12 +690,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/fab-panel.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/fab.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/fab-panel.ts"],
+      "tests": ["packages/vscode/tests/fab.test.mjs"]
     },
     {
       "id": "X47",
@@ -957,12 +705,8 @@
       "commands": [],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/fab-panel.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/action-owner.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/fab-panel.ts"],
+      "tests": ["packages/vscode/tests/action-owner.test.mjs"]
     },
     {
       "id": "X48",
@@ -973,18 +717,11 @@
       "cancelUndo": "Escape before send; delivery no undo",
       "unavailable": "Disabled no-agent context and returned notice",
       "missingAcceptance": "T send/agents; V stale origin selection after session focus change",
-      "commands": [
-        "pcbjs.sendToAgent",
-        "pcbjs.agent.stopAndTell"
-      ],
+      "commands": ["pcbjs.sendToAgent", "pcbjs.agent.stopAndTell"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/send.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/send.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/send.ts"],
+      "tests": ["packages/vscode/tests/send.test.mjs"]
     },
     {
       "id": "X49",
@@ -995,19 +732,11 @@
       "cancelUndo": "Detach/reattach",
       "unavailable": "Warning on detach failure",
       "missingAcceptance": "T workspace/sidebar; V branch ownership and dirty buffer retained",
-      "commands": [
-        "pcbjs.worktree.openDiff",
-        "pcbjs.worktree.openBoard",
-        "pcbjs.worktree.detach"
-      ],
+      "commands": ["pcbjs.worktree.openDiff", "pcbjs.worktree.openBoard", "pcbjs.worktree.detach"],
       "support": "supported-with-boundaries",
       "coverage": "partial-tests-host-acceptance-pending",
-      "sources": [
-        "packages/vscode/src/worktrees.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/workspace.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/worktrees.ts"],
+      "tests": ["packages/vscode/tests/workspace.test.mjs"]
     },
     {
       "id": "X50",
@@ -1018,17 +747,11 @@
       "cancelUndo": "Cancel modal; git recovery, no automatic undo",
       "unavailable": "Detached HEAD warning, merge error/output",
       "missingAcceptance": "S extension 269-280; V actual conflict acceptance in scratch repository",
-      "commands": [
-        "pcbjs.worktree.merge"
-      ],
+      "commands": ["pcbjs.worktree.merge"],
       "support": "supported-with-boundaries",
       "coverage": "partial-tests-host-acceptance-pending",
-      "sources": [
-        "packages/vscode/src/worktrees.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/workspace.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/worktrees.ts"],
+      "tests": ["packages/vscode/tests/workspace.test.mjs"]
     },
     {
       "id": "X51",
@@ -1039,22 +762,11 @@
       "cancelUndo": "Close inspector or Disable command; no source history",
       "unavailable": "Commands hidden outside development mode; no active preview yields a message",
       "missingAcceptance": "Full installed-host command-palette acceptance remains separate from focused bridge/browser tests",
-      "commands": [
-        "pcbjs.devtools.toggle",
-        "pcbjs.devtools.enable",
-        "pcbjs.devtools.disable"
-      ],
+      "commands": ["pcbjs.devtools.toggle", "pcbjs.devtools.enable", "pcbjs.devtools.disable"],
       "support": "supported-with-boundaries",
       "coverage": "source-and-focused-tests",
-      "sources": [
-        "packages/vscode/src/extension.ts",
-        "packages/vscode/src/preview.ts",
-        "packages/ui/src/DevToolsOverlay.vue"
-      ],
-      "tests": [
-        "packages/vscode/tests/panels.test.mjs",
-        "packages/ui/tests/devtools.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/extension.ts", "packages/vscode/src/preview.ts", "packages/ui/src/DevToolsOverlay.vue"],
+      "tests": ["packages/vscode/tests/panels.test.mjs", "packages/ui/tests/devtools.test.mjs"]
     },
     {
       "id": "X52",
@@ -1065,34 +777,18 @@
       "cancelUndo": "Failed save cancels before teardown; no undo for generated caches; first failed step stops subsequent steps and can be retried",
       "unavailable": "Hidden outside development mode; rejects missing or ambiguous source checkout",
       "missingAcceptance": "Headless orchestration and transport tests; owner-window destructive end-to-end purge intentionally not run",
-      "commands": [
-        "pcbjs.dev.purgeReload"
-      ],
+      "commands": ["pcbjs.dev.purgeReload"],
       "support": "supported-with-boundaries",
       "coverage": "headless-tests-host-install-verified",
-      "sources": [
-        "packages/vscode/src/dev-suite.ts",
-        "packages/vscode/src/extension.ts"
-      ],
-      "tests": [
-        "packages/vscode/tests/dev-suite.test.mjs",
-        "packages/vscode/tests/lifecycle.test.mjs"
-      ]
+      "sources": ["packages/vscode/src/dev-suite.ts", "packages/vscode/src/extension.ts"],
+      "tests": ["packages/vscode/tests/dev-suite.test.mjs", "packages/vscode/tests/lifecycle.test.mjs"]
     }
   ],
   "dynamicLenses": {
     "source": "packages/lsp/src/lenses.ts",
-    "families": [
-      "routeLenses",
-      "instanceLenses",
-      "findingLenses"
-    ],
-    "commandIds": [
-      ""
-    ],
+    "families": ["routeLenses", "instanceLenses", "findingLenses"],
+    "commandIds": [""],
     "behavior": "Informational lenses with titles and empty command IDs; no executable lens action",
-    "tests": [
-      "packages/lsp/tests/facts.test.mjs"
-    ]
+    "tests": ["packages/lsp/tests/facts.test.mjs"]
   }
 }

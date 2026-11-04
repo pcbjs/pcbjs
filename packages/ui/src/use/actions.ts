@@ -17,7 +17,7 @@ export const narrow = () => typeof matchMedia === 'function' && matchMedia('(max
 export function useActions(ctx: PaneContext, view?: '2d' | '3d' | 'sch') {
   const { board: store, pane } = ctx
   const mode = () => view ?? pane.mode
-  const site = computed(() => mode() !== 'checks' ? store.layoutSite : store.site)
+  const site = computed(() => (mode() !== 'checks' ? store.layoutSite : store.site))
   const drawing = computed(() => site.value?.schematic.drawing ?? null)
   // the part ?select= frames in both views, until another part is selected; a net, finding, route or item frames its area in 2D
   const frameRef = computed(() => (site.value ? (store.frame?.ref ?? null) : null))
@@ -101,7 +101,7 @@ export function useActions(ctx: PaneContext, view?: '2d' | '3d' | 'sch') {
     const at = markAt(d)
     if (mode() === '2d' && !mods.shift && at) pane.focus = focusAt([at[0], at[1]], 2, true)
   }
-  const onEnter = (hit: Hit | null) => mode() === 'sch' ? onPick(hit, { deep: true, shift: false }) : store.enterAt(hit)
+  const onEnter = (hit: Hit | null) => (mode() === 'sch' ? onPick(hit, { deep: true, shift: false }) : store.enterAt(hit))
   return {
     site,
     drawing,

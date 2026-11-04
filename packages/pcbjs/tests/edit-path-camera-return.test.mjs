@@ -18,7 +18,9 @@ test('3D component isolation animates out as well as in and returns to the origi
   await sleep(1000)
   const focused = await ev(pose)
   assert.ok(distance(base.p, focused.p) > 1)
-  await ev(`window.__cameraFrames=[];(()=>{const sample=()=>{window.__cameraFrames.push(${pose});if(window.__cameraFrames.length<100)requestAnimationFrame(sample)};requestAnimationFrame(sample)})()`)
+  await ev(
+    `window.__cameraFrames=[];(()=>{const sample=()=>{window.__cameraFrames.push(${pose});if(window.__cameraFrames.length<100)requestAnimationFrame(sample)};requestAnimationFrame(sample)})()`,
+  )
   await key('Escape', 'Escape')
   await until('blur sampled', () => ev('window.__cameraFrames.length === 100'))
   const frames = await ev('window.__cameraFrames')

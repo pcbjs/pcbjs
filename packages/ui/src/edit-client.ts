@@ -41,7 +41,10 @@ export function writtenText(files: { file: string; via: 'editor' | 'disk' }[]): 
 
 type Written = { file: string; via: 'editor' | 'disk' }[]
 
-export interface EditOwner { board: string; project?: string }
+export interface EditOwner {
+  board: string
+  project?: string
+}
 
 /** The tools' requests; `onCommit` sees every commit's result, `onWritten` the files each commit, undo or redo wrote. */
 export function editClient(t: Transport, onCommit?: (r: EditResult, owner?: EditOwner) => void, onWritten?: (files: Written) => void, ownerOf?: (board: string) => EditOwner) {
@@ -54,7 +57,10 @@ export function editClient(t: Transport, onCommit?: (r: EditResult, owner?: Edit
   return {
     begin: (p: Params<'session/edit/begin'>) => {
       const owner = ownerOf?.(p.board) ?? { board: p.board }
-      return t.request('session/edit/begin', p.run ? p : { ...p, run: undefined }).then(r => { owners.set(r.txn, owner); return r })
+      return t.request('session/edit/begin', p.run ? p : { ...p, run: undefined }).then(r => {
+        owners.set(r.txn, owner)
+        return r
+      })
     },
     update: (txn: string, u: EditUpdate) => t.request('session/edit/update', { txn, ...u }),
     commit: (txn: string) =>
@@ -63,7 +69,10 @@ export function editClient(t: Transport, onCommit?: (r: EditResult, owner?: Edit
         owners.delete(txn)
         return wrote(r)
       }),
-    cancel: (txn: string) => { owners.delete(txn); return t.request('session/edit/cancel', { txn }) },
+    cancel: (txn: string) => {
+      owners.delete(txn)
+      return t.request('session/edit/cancel', { txn })
+    },
     /** the session's undo, or redo, of a commit this page made */
     undo: (txn: string, redo: boolean) => t.request(redo ? 'session/edit/redo' : 'session/edit/undo', { txn }).then(wrote),
     /** the board's entry in the editor, the cursor on its `<PCB` and focus kept in the page */

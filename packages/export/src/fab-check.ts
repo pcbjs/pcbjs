@@ -28,7 +28,9 @@ function disc(cx: number, cy: number, r: number): Ring {
 
 /** Read a Gerber that pcbjs wrote, in board mm, y down; throws on anything outside that subset. */
 export function readGerber(text: string): ReadGerber {
-  let format = false, units = false, ended = false
+  let format = false,
+    units = false,
+    ended = false
   let scale = 1e6,
     x = 0,
     y = 0,
@@ -95,16 +97,14 @@ export function readGerber(text: string): ReadGerber {
         if (m[1] !== m[3] || m[2] !== m[4]) throw new Error('inconsistent coordinate format')
         scale = 10 ** Number(m[2])
         format = true
-      }
-      else if (body === 'MOMM') {
+      } else if (body === 'MOMM') {
         units = true
       } else if (body === 'MOIN') throw new Error('inch Gerbers are not read')
       else if ((m = /^ADD(\d+)C,([\d.]+)$/.exec(body))) {
         const diameter = Number(m[2])
         if (!Number.isFinite(diameter) || diameter <= 0) throw new Error('invalid aperture diameter')
         apertures.set(Number(m[1]), diameter)
-      }
-      else if (/^ADD/.test(body)) throw new Error(`aperture ${body} is not one pcbjs writes`)
+      } else if (/^ADD/.test(body)) throw new Error(`aperture ${body} is not one pcbjs writes`)
       else if ((m = /^LP([DC])$/.exec(body))) {
         flushPath()
         polarity = m[1] as 'D' | 'C'

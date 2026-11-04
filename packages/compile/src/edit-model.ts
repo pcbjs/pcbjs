@@ -38,13 +38,27 @@ export function editNodes(board: Board, flat: Pick<Flat, 'placements' | 'placeJo
       const m = mul(p.m, placement(p.at[0], p.at[1], p.at[2], p.side === 'B'))
       const o = apply(m, [0, 0])
       const grid = board.grids?.find(g => g.name === p.rotationGrid)
-      out.push({ ref: p.group, caps: ['placed', 'layered'], ...base, ...(grid ? { pivot: grid.origin } : {}), at: [round(o[0]), round(o[1]), round(rotationOf(m))], side: p.side ?? 'F' })
+      out.push({
+        ref: p.group,
+        caps: ['placed', 'layered'],
+        ...base,
+        ...(grid ? { pivot: grid.origin } : {}),
+        at: [round(o[0]), round(o[1]), round(rotationOf(m))],
+        side: p.side ?? 'F',
+      })
     } else if (p.inst && p.computed) out.push({ ref: p.inst, caps: [], ...base, computed: true })
     else if (p.inst && p.at) {
       const m = mul(p.m, placement(p.at[0], p.at[1], p.at[2], p.side === 'B'))
       const o = apply(m, [0, 0])
       const grid = board.grids?.find(g => g.name === p.rotationGrid)
-      out.push({ ref: p.inst, caps: ['placed', 'layered'], ...base, ...(grid ? { pivot: grid.origin } : {}), at: [round(o[0]), round(o[1]), round(rotationOf(m))], side: isMirrored(m) ? 'B' : 'F' })
+      out.push({
+        ref: p.inst,
+        caps: ['placed', 'layered'],
+        ...base,
+        ...(grid ? { pivot: grid.origin } : {}),
+        at: [round(o[0]), round(o[1]), round(rotationOf(m))],
+        side: isMirrored(m) ? 'B' : 'F',
+      })
     } else if (p.text && uids.get(p.text.id) && p.at && p.src && texts.get(siteKey(p.src)) === 1) {
       // an element a layout renders for several instances draws one text each, and none of them has an element of its own
       const m = mul(p.m, placement(p.at[0], p.at[1], p.at[2], false))

@@ -268,12 +268,14 @@ test('through the dev server: hover images, the cursor target and a pad click', 
 
 test('pad signature resolves semantic receivers in incomplete accessors, preserves shadowing and excludes arrays', async () => {
   const { padSignature } = await import('../dist/signature.js')
-  const file = join(root, 'main.tsx'), original = readFileSync(file, 'utf8')
+  const file = join(root, 'main.tsx'),
+    original = readFileSync(file, 'utf8')
   const docs = new Map()
   const live = projects({ get: f => docs.get(f) })
   let version = 0
   const hint = (marked, snapshots = boards) => {
-    const start = original.length + 1, offset = marked.indexOf('|')
+    const start = original.length + 1,
+      offset = marked.indexOf('|')
     docs.set(file, { text: original + '\n' + marked.replace('|', ''), version: ++version })
     return padSignature(live.program(file), file, start + offset, snapshots)
   }
@@ -299,5 +301,7 @@ test('pad signature resolves semantic receivers in incomplete accessors, preserv
     const foreign = { root: join(root, 'unrelated-project'), site: { ...site, footprints: site.footprints.map(fp => ({ ...fp, pads: [{ ...fp.pads[0], num: 'FOREIGN' }] })) } }
     assert.doesNotMatch(hint('D1[|]', [foreign, ...boards]).signatures[0].documentation.value, /FOREIGN/, 'same-named boards from a different project cannot supply the footprint')
     for (const input of ['const list = [D1]; list[|]', 'function f(D1: number[]) { D1[|] }', 'D1[2]|', 'D1[1 + |2]']) assert.equal(hint(input), null, input)
-  } finally { live.dispose() }
+  } finally {
+    live.dispose()
+  }
 })
