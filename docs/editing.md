@@ -26,7 +26,7 @@ Available operations, by anchor capabilities:
 | `chain` | a route | primitive, relative form and layer |
 | `viaEnd` | a route with a chain via | the via's layer with its point |
 
-Editing pauses while streamed metadata is ahead of the committed board snapshot, then resumes when both revisions agree.
+Editing pauses while an invalidated board recompiles and resumes when the compile finishes, including view-only compiles without a new whole-board snapshot.
 
 Board `edit` holds capabilities, frame, coordinate grid, optional persisted `snap` pitch and subdivision limit, and sources. `def` names the literal's definition, schematic.md; `frames` lists enclosing instances/groups, outermost first, own frame last.
 

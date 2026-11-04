@@ -85,11 +85,7 @@ export interface ToolHit {
 export function useGesture(d: GestureInput) {
   const t = d.store.edit
   const on = computed(() => !!t.client && !!t.mode && !!d.board().dev)
-  const current = computed(() => {
-    void d.store.rev
-    const run = d.store.held.get(keyOfSite(d.board()))?.facets.meta?.run
-    return run == null || run === d.store.run
-  })
+  const current = computed(() => !Object.keys(d.store.invalid).length)
   const rw = computed(() => current.value && on.value && t.mode?.mode === 'rw' && !(d.board().variant && d.board().variant!.index !== 0))
   const node = computed<SiteEditNode | null>(() => editNodeOf(d.board(), d.sel().anchor))
   /** an isolation writes the definition, which a part with an own placement in the instance does not follow */

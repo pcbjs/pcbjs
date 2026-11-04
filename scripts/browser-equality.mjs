@@ -167,12 +167,25 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 /** Stop an owned, detached browser process group, including surviving children. */
 export async function stopChrome(proc) {
   if (!proc?.pid) return
+  const groupAlive = () => {
+    const groups = spawnSync('ps', ['-axo', 'pgid=,stat='], { encoding: 'utf8' })
+    return (
+      groups.status !== 0 ||
+      groups.stdout.split('\n').some(line => {
+        const [group, state] = line.trim().split(/\s+/)
+        return Number(group) === proc.pid && !state?.startsWith('Z') && !state?.includes('E')
+      })
+    )
+  }
   const signal = name => {
     try {
       if (process.platform === 'win32') proc.kill(name)
       else process.kill(-proc.pid, name)
     } catch (error) {
-      if (error.code !== 'ESRCH') throw error
+      if (error.code === 'ESRCH') return
+      // macOS reports EPERM for a group whose remaining members are already exiting.
+      if (error.code === 'EPERM' && process.platform !== 'win32' && (proc.exitCode !== null || proc.signalCode !== null) && !groupAlive()) return
+      throw error
     }
   }
   const exited = proc.exitCode !== null || proc.signalCode !== null ? Promise.resolve() : new Promise(resolve => proc.once('exit', resolve))
@@ -180,14 +193,6 @@ export async function stopChrome(proc) {
   try {
     signal('SIGTERM')
     await exited
-    if (process.platform !== 'win32') {
-      const groups = spawnSync('ps', ['-axo', 'pgid=,stat='], { encoding: 'utf8' })
-      const alive = groups.stdout?.split('\n').some(line => {
-        const [group, state] = line.trim().split(/\s+/)
-        return Number(group) === proc.pid && !state?.startsWith('Z')
-      })
-      if (groups.status === 0 && !alive) return
-    }
     signal('SIGKILL')
   } finally {
     clearTimeout(timer)

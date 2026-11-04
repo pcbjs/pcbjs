@@ -349,16 +349,16 @@ test('snap choice survives refreshed geometry and resets only when the source gr
   assert.equal(g.snapEnabled.value, false)
 })
 
-test('editing waits for the committed snapshot when streamed metadata arrives first', async () => {
+test('editing waits for compile completion, including view-only compiles without a new snapshot', async () => {
   const { g, store } = gesture()
-  const live = store.held.get('Fx')
   store.run = 1
-  live.facets.meta.run = 1
-  store.rev++
   assert.equal(g.rw.value, true)
-  live.facets.meta.run = 2
-  store.rev++
+  store.invalidate({ board: 'Fx', run: 1, refs: ['CH1'], uids: [], findings: [], edit: 1 })
   assert.equal(g.rw.value, false)
-  store.run = 2
-  assert.equal(g.rw.value, true)
+  store.held.get('Fx').facets.meta.run = 2
+  store.rev++
+  assert.equal(g.rw.value, false, 'new geometry alone does not finish the compile')
+  store.settle()
+  assert.equal(g.rw.value, true, 'a view-only compile can finish without a whole-board snapshot')
+  assert.equal(store.run, 1)
 })
