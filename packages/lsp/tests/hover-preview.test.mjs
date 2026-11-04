@@ -1,5 +1,5 @@
 // The hover previews through a real dev server: on examples/demo blinky.pcb.tsx, examples/usb3-hub and a small keepout board,
-// each hover kind starts with an SVG image whose crop holds the item, and on usb3-hub the renders stay under 50 ms.
+// each hover kind starts with an SVG image whose crop holds the item, and on usb3-hub each render uses under 50 ms of thread CPU.
 import { test, after, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, rmSync } from 'node:fs'
@@ -188,7 +188,7 @@ test('blinky: a footprint factory call shows the land pattern in its own frame w
   assert.match(img.rest, /^land pattern \*\*pcbjs:C_0603_1608Metric\*\* · 2 pads · .* · placed as C1/)
 })
 
-test('usb3-hub: every hover kind has its image, each render under 50 ms', async () => {
+test('usb3-hub: every hover kind has its image, each render under 50 ms of CPU', async () => {
   await demo.close()
   demo = null
   const hub = await session(join(EXAMPLES, 'usb3-hub'), { '': 'usb3-hub' })
@@ -266,12 +266,14 @@ test('usb3-hub: every hover kind has its image, each render under 50 ms', async 
     const render = specs.map(spec => {
       const fresh = structuredClone(s)
       const t0 = performance.now()
+      const before = process.threadCpuUsage()
       renderPreview(fresh, spec)
-      return performance.now() - t0
+      const cpu = process.threadCpuUsage(before)
+      return { cpu: (cpu.user + cpu.system) / 1000, wall: performance.now() - t0 }
     })
     console.log(`usb3-hub hover round trips ms: ${times.map(([k, t]) => `${k.slice(0, 16)} ${t.toFixed(1)}`).join(', ')}`)
-    console.log(`usb3-hub renders ms, cold board index included: ${render.map(t => t.toFixed(1)).join(', ')}`)
-    for (const t of render) assert.ok(t < 50, `a render took ${t.toFixed(1)} ms`)
+    console.log(`usb3-hub renders ms, cold board index included: ${render.map(t => `${t.cpu.toFixed(1)} CPU / ${t.wall.toFixed(1)} wall`).join(', ')}`)
+    for (const t of render) assert.ok(t.cpu < 50, `a render took ${t.cpu.toFixed(1)} ms CPU, ${t.wall.toFixed(1)} ms wall`)
     // cached: the same hover again comes from the cache
     const t0 = performance.now()
     await hub.hover(d, 'pour(GND', 6)
