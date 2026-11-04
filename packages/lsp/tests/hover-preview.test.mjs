@@ -27,6 +27,7 @@ async function session(from, boards) {
     const text = readFileSync(file, 'utf8'),
       uri = pathToFileURL(file).href
     await client.conn.sendNotification('textDocument/didOpen', { textDocument: { uri, languageId: 'typescriptreact', version: 1, text } })
+    await client.conn.sendRequest('session/check')
     return { text, uri }
   }
   // the image follows the session's first pass over the opened text, so a hover without one is asked again for a while

@@ -1,6 +1,7 @@
 // A language client for the tests: vscode-jsonrpc over the dev server's session WebSocket, /__pcbjs/session, one JSON-RPC
 // message per frame after a hello, the way the session's own connections carry it.
 import WebSocket from 'ws'
+import { pathToFileURL } from 'node:url'
 import { createMessageConnection } from 'vscode-jsonrpc'
 import { messageChannel } from '../../dist/channel.js'
 
@@ -24,7 +25,7 @@ export function initParams(root, pcbjs = { protocol: 5, major: 1, capabilities: 
   return {
     processId: null,
     rootUri: null,
-    workspaceFolders: [{ uri: `file://${root}`, name: 'fixture' }],
+    workspaceFolders: [{ uri: pathToFileURL(root).href, name: 'fixture' }],
     capabilities: { workspace: { codeLens: { refreshSupport: true }, inlayHint: { refreshSupport: true } } },
     ...(pcbjs ? { initializationOptions: { pcbjs } } : {}),
   }
