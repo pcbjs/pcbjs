@@ -135,6 +135,8 @@ All views share `--canvas` from style.css per theme, the board on `--substrate`,
 
 Viewers share hover and selection unless their URL has `select`. Hover is `{ uids, refs, net }` at most once a frame; the selection `pcbjs:select` `{ board, selection }`, last writer wins.
 
+While selection requests are pending, the initiating view keeps its latest local focus. Earlier click acknowledgments do not reset its toolbar or snapping choice. Once the requests finish, the view applies the newest server selection, including a newer change from another connected view.
+
 ## Embedding
 
 `/board/<name>?embed=1` fills an iframe, 3D unless `view` overrides; query, keys, hover and click work. `tools=0` hides toolbars, scale and readout. Components: ui.md.

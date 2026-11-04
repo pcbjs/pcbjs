@@ -224,6 +224,7 @@ test('target-only and snapshot-only changes relay once and remote target replay 
   sync.select('Fx', b.sel)
   sync.select('Fx', { ...b.sel, snapshot: 's.2' })
   assert.equal(sent.length, 3)
+  for (const [i, offer] of sent.entries()) sync.accept(offer, { ...offer.selection, seq: i + 1 })
   b.takeSel(sync.receive({ board: 'Fx', selection: { ...b.sel, target: null, snapshot: 's.3', seq: 4 } }))
   assert.equal(b.target, null)
   sync.select('Fx', b.sel)

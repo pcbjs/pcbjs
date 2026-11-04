@@ -37,6 +37,7 @@ export function createSync(out: SyncOut, frame: (cb: () => void) => void) {
   let last: Selection | null = null
   let accepted: Selection | null = null
   let seq = 0
+  const offers = new Set<Selection>()
   let hoverKey = keyOf('', null)
   let pending: HoverMsg | null = null
   return {
@@ -44,16 +45,28 @@ export function createSync(out: SyncOut, frame: (cb: () => void) => void) {
     select(board: string, selection: Selection, view?: ViewName) {
       if (last && sameSelection(last, selection)) return
       last = selection
+      if (out.select) offers.add(selection)
       out.select?.({ board, selection, base: seq, ...(view ? { view } : {}) })
     },
     /** A selection from the session: returned to apply, its seq kept as the base of the next change, and remembered so it is not sent back. */
     receive(m: SelectMsg): Selection {
-      accepted = last = m.selection
-      seq = Math.max(seq, m.selection.seq)
-      return m.selection
+      if (m.selection.seq >= seq) {
+        accepted = m.selection
+        seq = m.selection.seq
+      }
+      if (offers.size && last) return last
+      return (last = accepted!)
+    },
+    /** Keep the newest local intent visible until its requests settle, then apply the latest canonical state. */
+    accept(m: SelectOffer, selection: Selection | null): Selection | null {
+      if (!offers.delete(m.selection)) return null
+      if (selection) this.receive({ board: m.board, selection })
+      if (offers.size) return null
+      return (last = accepted ?? last ?? emptySelection(m.board))
     },
     /** Roll back only the rejected intent, never a newer local or server selection. */
     reject(m: SelectOffer): Selection | null {
+      if (!offers.delete(m.selection)) return null
       if (last !== m.selection) return null
       return (last = accepted ?? emptySelection(m.board))
     },
@@ -74,6 +87,8 @@ export function createSync(out: SyncOut, frame: (cb: () => void) => void) {
     /** The page switched board: whatever it selects there is news to the session. */
     reset() {
       accepted = last = null
+      offers.clear()
+      seq = 0
     },
   }
 }

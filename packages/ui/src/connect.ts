@@ -380,17 +380,25 @@ function live(t: Transport, l: Live, own = false) {
 // ---- the hover and selection relay between the viewers of a board ----
 
 function sync(shell: Shell, t: Transport) {
+  const apply = (board: string, selection: SelectMsg['selection'] | null) => {
+    if (!selection || shell.current.value?.name !== board) return
+    shell.selectTarget(board, selection.target)
+    shell.board(board).takeSel(selection)
+  }
   const relay = createSync(
     {
       select: m =>
-        void t.request('session/select', m).catch(error => {
-          const selection = relay.reject(m)
-          if (!selection || shell.current.value?.name !== m.board) return
-          shell.selectTarget(m.board, selection.target)
-          const board = shell.board(m.board)
-          board.takeSel(selection)
-          editNote(board.edit, error instanceof Error ? error.message : String(error), true)
-        }),
+        void t
+          .request('session/select', m)
+          .then(selection => apply(m.board, relay.accept(m, selection)))
+          .catch(error => {
+            const selection = relay.reject(m)
+            if (!selection || shell.current.value?.name !== m.board) return
+            shell.selectTarget(m.board, selection.target)
+            const board = shell.board(m.board)
+            board.takeSel(selection)
+            editNote(board.edit, error instanceof Error ? error.message : String(error), true)
+          }),
       hover: m => t.notify('session/hover', m),
     },
     cb => requestAnimationFrame(cb),

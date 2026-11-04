@@ -7,6 +7,8 @@ import { harness, skip, click, centre, screenOf, ev, ed, page, until, compiles, 
 harness()
 
 async function change(label, value, expected) {
+  const selector = `[aria-label=${JSON.stringify(label)}]`
+  await enabled(selector)
   const applied = ed.applied.length,
     compiled = compiles()
   await ev(
@@ -15,11 +17,19 @@ async function change(label, value, expected) {
   await until(`${label} source edit`, () => ed.applied.length === applied + 1 && expected.test(ed.doc.getText()))
   await until(`${label} compile`, () => compiles() > compiled)
   await sleep(400)
+  await enabled(selector)
+}
+
+const enabled = selector => until(`${selector} enabled`, () => ev(`document.querySelector(${JSON.stringify(selector)})?.disabled === false`))
+
+async function primitive(value) {
+  await until(`primitive ${value} compiled`, () => ev(`document.querySelector('[aria-label="Trace primitive"]')?.value === ${JSON.stringify(value)}`))
+  await enabled('.bv-edit input[type=checkbox]')
 }
 
 test('trace toolbar selects its primitive, converts coordinates and changes its actual copper layer', { skip }, async () => {
   await click(await screenOf(5, 6.23))
-  await until('trace primitive toolbar', () => ev(`document.querySelector('[aria-label="Trace primitive"]')?.value === 'H'`))
+  await primitive('H')
   await until('source primitive selected', () => ed.selects.length > 0)
   const source = ed.selects.at(-1)
   const range = source.items.find(item => item.uri === source.primary.uri).ranges[source.primary.index]
@@ -27,10 +37,11 @@ test('trace toolbar selects its primitive, converts coordinates and changes its 
   assert.match(line.slice(range.start.character, range.end.character), /\.H\(7\.905\)/)
   await click(await centre('.bv-edit input[type=checkbox]'))
   await until('relative coordinates written', () => /\.h\(4\.905\)/.test(ed.doc.getText()))
-  await sleep(600)
-  assert.equal(await ev(`document.querySelector('.bv-edit input[type=checkbox]').checked`), true)
+  await primitive('h')
+  await until('relative checkbox reflects compile', () => ev(`document.querySelector('.bv-edit input[type=checkbox]')?.checked === true`))
   await click(await centre('.bv-edit input[type=checkbox]'))
   await until('absolute coordinates restored', () => /\.H\(7\.905\)/.test(ed.doc.getText()))
+  await primitive('H')
   await until('absolute checkbox restored', () => ev(`document.querySelector('.bv-edit input[type=checkbox]')?.checked === false`))
   assert.equal(await ev(`document.querySelector('[aria-label="Previous trace segment"]').disabled`), true)
   await click(await centre('[aria-label="Next trace segment"]'))
@@ -70,9 +81,11 @@ test('placement toolbar edits local coordinates, side and grid, and resets a zoo
   await ev('window.__beforeGridReload = true')
   await page.send('Page.reload')
   await until('persisted grid after preview reload', () =>
-    ev(`!window.__beforeGridReload && document.querySelector('[aria-label="Editing grid"]')?.value === '1'`).catch(() => false),
+    ev(
+      `!window.__beforeGridReload && document.querySelector('[aria-label="Editing grid"]')?.value === '1' && document.querySelector('.bv-edit input[type=checkbox]')?.checked === true`,
+    ).catch(() => false),
   )
-  assert.equal(await ev(`document.querySelector('.bv-edit input[type=checkbox]').checked`), true)
+  await viewSettled()
   const snap = '.bv-edit input[type=checkbox]'
   const before = await ev(`document.querySelector(${JSON.stringify(snap)}).checked`)
   await click(await centre(snap))

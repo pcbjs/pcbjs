@@ -67,9 +67,58 @@ test('rejection restores authoritative selection without echo, but never rolls b
   sync.select('B', rejected.selection)
   sync.select('B', { ...S, refs: ['R3'], anchor: 'R3' })
   assert.equal(sync.reject(rejected), null)
-  sync.receive({ board: 'B', selection: { ...S, seq: 8 } })
-  assert.equal(sync.reject(sent.at(-1).data), null)
+  const remote = { ...S, seq: 8 }
+  sync.receive({ board: 'B', selection: remote })
+  assert.equal(sync.reject(sent.at(-1).data), remote)
   sync.reset()
   sync.select('C', { ...S, board: 'C' })
   assert.deepEqual(sync.reject(sent.at(-1).data).refs, [])
+})
+
+test('delayed acknowledgments keep the newest local focus and its toolbar state', () => {
+  const { sync, sent } = harness()
+  sync.receive({ board: 'B', selection: S })
+  const group = { ...S, refs: ['CH1'], anchor: 'CH1' }
+  const part = { ...S, refs: ['CH1/R1'], anchor: 'CH1/R1' }
+  sync.select('B', group)
+  sync.select('B', part)
+  const first = { ...group, seq: 8 },
+    second = { ...part, seq: 9 }
+  assert.equal(sync.receive({ board: 'B', selection: first }), part)
+  assert.equal(sync.accept(sent[0].data, first), null)
+  assert.equal(sync.receive({ board: 'B', selection: second }), part)
+  assert.equal(sync.accept(sent[1].data, second), second)
+  sync.select('B', second)
+  assert.equal(sent.length, 2, 'the final canonical selection is not echoed')
+})
+
+test('a newer remote selection wins when the local requests finish', () => {
+  const { sync, sent } = harness()
+  sync.select('B', S)
+  const own = { ...S, seq: 8 },
+    remote = { ...S, refs: ['R2'], anchor: 'R2', seq: 9 }
+  sync.receive({ board: 'B', selection: own })
+  assert.equal(sync.receive({ board: 'B', selection: remote }), S)
+  assert.equal(sync.accept(sent[0].data, own), remote)
+  assert.equal(sync.receive({ board: 'B', selection: own }), remote, 'an older sequence cannot restore old focus')
+})
+
+test('switching boards discards outstanding replies and resets the sequence', () => {
+  const { sync, sent } = harness()
+  sync.select('B', S)
+  const old = sent[0].data
+  sync.reset()
+  const next = { ...S, board: 'C', seq: 1 }
+  assert.equal(sync.receive({ board: 'C', selection: next }), next)
+  assert.equal(sync.accept(old, { ...S, seq: 20 }), null)
+  sync.select('C', { ...next, anchor: 'R1', refs: ['R1'] })
+  assert.equal(sent.at(-1).data.base, 1)
+})
+
+test('a reload keeps URL focus when the server already has it and sends no duplicate selection', () => {
+  const { sync, sent } = harness()
+  sync.select('B', S)
+  assert.equal(sync.accept(sent[0].data, null), S)
+  sync.select('B', S)
+  assert.equal(sent.length, 1)
 })
