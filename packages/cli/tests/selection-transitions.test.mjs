@@ -22,7 +22,8 @@ const make = target => ({
 })
 function fixture(boards = [make()], layout = boards[0]) {
   let release,
-    run = 1
+    run = 1,
+    recompile = false
   const pending = new Promise(r => (release = r))
   const events = [],
     viewer = { by: () => null, event: (name, data) => events.push({ name, data }) }
@@ -31,7 +32,12 @@ function fixture(boards = [make()], layout = boards[0]) {
     state: { slots: [{ entry: { file: '/p/pcb.tsx' }, compiled: boards.map(board => ({ board })) }] },
     stale: () => false,
     current: () => ({ run }),
-    compiledOnce: async () => {},
+    compiledOnce: async () => {
+      if (recompile) {
+        run++
+        recompile = false
+      }
+    },
     compiler: () => ({
       layout: async () => {
         await pending
@@ -40,7 +46,15 @@ function fixture(boards = [make()], layout = boards[0]) {
     }),
   }
   const tools = viewerTools({ shared: { session: { id: 'test' } }, sources: {}, runtimes: () => [rt], runtimeOfClient: () => rt, viewersOf: () => [viewer], lsp: () => null })
-  return { events, release, advance: () => run++, select: p => tools.views['session/select']({ board: 'B', ...p }, viewer) }
+  return {
+    events,
+    release,
+    recompile: () => {
+      recompile = true
+    },
+    advance: () => run++,
+    select: p => tools.views['session/select']({ board: 'B', ...p }, viewer),
+  }
 }
 const library = ref => ({
   ...emptySelection('B'),
@@ -65,8 +79,10 @@ for (const cancel of ['blur', 'unchanged blur', 'target', 'compile', 'refs blur'
     if (cancel === 'unchanged blur') f.select({ selection: emptySelection('B') })
     const pending = f.select({ selection: library('CH1/R') })
     if (cancel === 'target') await f.select({ target: 'Second', refs: ['D1'] })
-    else if (cancel === 'compile') f.advance()
-    else if (cancel === 'refs blur') await f.select({ refs: [] })
+    else if (cancel === 'compile') {
+      await Promise.resolve()
+      f.advance()
+    } else if (cancel === 'refs blur') await f.select({ refs: [] })
     else f.select({ selection: emptySelection('B') })
     f.release()
     assert.equal(await pending, null)
@@ -125,4 +141,14 @@ test('a reference selection waiting for library geometry cannot supersede blur',
   f.select({ selection: emptySelection('B') })
   assert.equal((await pending).anchor, null)
   assert.equal(f.events.at(-1).data.selection.isolate, null)
+})
+
+test('library selection survives the freshness compile needed to load its geometry', async () => {
+  const f = fixture()
+  f.recompile()
+  const pending = f.select({ selection: library('CH1/R') })
+  f.release()
+  const selected = await pending
+  assert.equal(selected.anchor, 'CH1/R')
+  assert.equal(selected.isolate.mode, 'library')
 })

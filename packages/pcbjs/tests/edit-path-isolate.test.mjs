@@ -26,6 +26,7 @@ import {
   skip,
   sleep,
   until,
+  viewSettled,
 } from './edit-path-harness.mjs'
 
 harness()
@@ -55,6 +56,7 @@ test('library editing isolates the template, edits its source and updates every 
       `document.querySelector('.layout-state')?.textContent.includes('Library layout') && !document.querySelector('.selection-status[role="status"]') && !!document.querySelector('svg.board-svg [data-ref="R1"]') && !document.querySelector('svg.board-svg [data-ref="R2"]')`,
     ),
   )
+  await viewSettled()
   const pad = 'svg.board-svg [data-ref="R1"][data-kind="pad"]'
   await click(await centre(pad))
   await until('local resistor selected', () => ev(`document.querySelector('.chip.path .seg')?.textContent.trim() === 'R0'`))

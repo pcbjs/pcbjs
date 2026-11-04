@@ -63,11 +63,25 @@ const COLORS = {
   scale: '#e3e6eb',
 }
 
-interface Indexed {
-  it: SiteItem
-  rings: Pt[][]
-  box: Box
-  boxes: Box[]
+class Indexed {
+  private shape?: Ring[]
+  private bounds?: Box[]
+  private extent?: Box
+  constructor(
+    private site: SiteData,
+    readonly it: SiteItem,
+  ) {
+    if (it.box) this.extent = { x0: it.box[0], y0: it.box[1], x1: it.box[2], y1: it.box[3] }
+  }
+  get rings(): Ring[] {
+    return (this.shape ??= shapeOf(this.site, this.it.id))
+  }
+  get boxes(): Box[] {
+    return (this.bounds ??= this.rings.map(boxOf))
+  }
+  get box(): Box {
+    return (this.extent ??= this.boxes.length ? this.boxes.reduce(union) : boxOf([]))
+  }
 }
 interface SiteIndex {
   items: Indexed[]
@@ -83,22 +97,7 @@ const caches = new WeakMap<SiteData, Map<string, Preview | null>>()
 function indexOf(site: SiteData): SiteIndex {
   let ix = indexes.get(site)
   if (ix) return ix
-  const items = (site.items ?? []).map(it => {
-    let rings: Ring[] | undefined, boxes: Box[] | undefined
-    let box = it.box ? { x0: it.box[0], y0: it.box[1], x1: it.box[2], y1: it.box[3] } : undefined
-    return {
-      it,
-      get rings() {
-        return (rings ??= shapeOf(site, it.id))
-      },
-      get boxes() {
-        return (boxes ??= this.rings.map(boxOf))
-      },
-      get box() {
-        return (box ??= this.boxes.length ? this.boxes.reduce(union) : boxOf([]))
-      },
-    }
-  })
+  const items = (site.items ?? []).map(it => new Indexed(site, it))
   ix = {
     items,
     byId: new Map(items.map(x => [x.it.id, x])),

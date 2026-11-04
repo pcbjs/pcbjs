@@ -55,7 +55,8 @@ test('library labels restart for each instance and local selection edits the sha
     ),
   )
   await viewSettled()
-  await ed.link.request('session/select', { board: 'Blinky', refs: ['R1'], anchor: 'R1' })
+  const picked = await ed.link.request('session/select', { board: 'Blinky', refs: ['R1'], anchor: 'R1' })
+  assert.equal(picked?.isolate?.mode, 'library', JSON.stringify(picked))
   await until('first instance also R0', async () => (await label()) === 'R0')
   await open('isolate=CH1&isolate-mode=library&select=R1', '3d')
   await until('3D uses local R0', async () => (await label()) === 'R0')

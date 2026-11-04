@@ -29,7 +29,7 @@ export async function until(what, fn, ms = 15000) {
     if (Date.now() > end) {
       if (process.env.PCBJS_E2E_LOG && S) writeFileSync(process.env.PCBJS_E2E_LOG, S.log.text)
       throw new Error(
-        `timed out waiting for ${what}${page ? `; chip: ${JSON.stringify(await confirmations().catch(() => []))}, toasts: ${JSON.stringify(await toasts().catch(() => []))}` : ''}`,
+        `timed out waiting for ${what}${page ? `; path: ${JSON.stringify(await chip().catch(() => null))}; chip: ${JSON.stringify(await confirmations().catch(() => []))}, toasts: ${JSON.stringify(await toasts().catch(() => []))}` : ''}`,
       )
     }
     await sleep(40)
@@ -436,6 +436,7 @@ export function harness() {
     children.push(chrome.proc)
     page = await cdp(chrome.socket)
     await page.send('Runtime.enable')
+    if (process.env.PCBJS_TEST_CPU_RATE) await page.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.PCBJS_TEST_CPU_RATE) })
     await page.send('Network.enable')
     page.on('Network.webSocketCreated', p => sockets.set(p.requestId, { url: p.url, pcbjs: 0 }))
     const seen = (dir, p) => {

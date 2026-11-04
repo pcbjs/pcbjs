@@ -1,3 +1,4 @@
+import { pulse } from './cancel.js'
 import type { Board, PairInfo, Pt, Track, Via } from '@pcbjs/core/model'
 import { routeLength } from './length.js'
 
@@ -79,6 +80,7 @@ export function coupledGap(p: PairCopper, target: number, pads: Pt[] = []): { ga
         cb = coupled(b)
       for (let i = 1; i < a.pts.length; i++)
         for (let j = 1; j < b.pts.length; j++) {
+          if ((j & 63) === 1) pulse()
           if (!ca[i] || !cb[j]) continue
           const a0 = a.pts[i - 1],
             a1 = a.pts[i],

@@ -304,6 +304,7 @@ export class ObstacleStore {
 
   /** Adds sign times an item's track obstacle: copper grown by the clearance plus w/2 when `cu`, hole grown by holeClearance plus w/2 when `hole`. */
   trackFill(g: Grid, it: Item, rec: Rec, layer: string, w: number, cn: number, arr: Uint16Array, sign: number, cu = true, hole = true, net?: string) {
+    pulse()
     if (cu) {
       const s = this.copper(it, rec, layer, this.gap(cn, it.net, it, net) + w / 2)
       if (s) fillAdd(g, s, arr, sign)

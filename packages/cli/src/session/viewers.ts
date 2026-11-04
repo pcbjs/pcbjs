@@ -94,7 +94,7 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
 
   // --- the selection, per project and board
 
-  const layouts = new Map<string, Promise<import('../project/project.js').Library>>()
+  const layouts = new Map<string, Promise<import('../project/project.js').Library & { run: Run | null }>>()
   const libraryBoards = new Map<string, Board>()
   const libraryKey = (rt: ProjectRuntime, board: string, target: string | null, ref: string) => JSON.stringify([rt.root, rt.current()?.run, board, target, ref])
   const loadLayout = async (rt: ProjectRuntime, board: string, target: string | null, ref: string) => {
@@ -103,6 +103,7 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
     if (!model || !model.schematic?.circuits.some(c => c.path.join('/') === ref)) throw new Error(`no layout ${ref} on ${board}`)
     const slot = liveSlots(rt.state.slots).find(sl => sl.compiled?.some(b => b.board === model))!
     const key = libraryKey(rt, board, target, ref)
+    const run = rt.current()?.run ?? null
     let pending = layouts.get(key)
     if (!pending) {
       for (const k of layouts.keys()) {
@@ -121,7 +122,7 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
             libraryBoards.set(key, v.board)
             if (libraryBoards.size > 16) libraryBoards.delete(libraryBoards.keys().next().value!)
           }
-          return v
+          return { ...v, run }
         })
       layouts.set(key, pending)
       if (layouts.size > 16) layouts.delete(layouts.keys().next().value!)
@@ -213,7 +214,7 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
     const commit = selectionsOf(rt).begin(c, p, by)
     if (!commit) return null
     const accept = (focused = model) => {
-      const selection = validateSelection(model, p.selection, focused)
+      const selection = validateSelection(boardModel(rt, p.board, p.selection.target) ?? model, p.selection, focused)
       const snapshot = parseSnapshot(selection.snapshot)
       if (snapshot && shared.session?.id && snapshot.session !== shared.session.id) throw new Error('selection belongs to another session; resync the view')
       const sel = commit(selection)
@@ -221,8 +222,7 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
       return sel
     }
     if (p.selection.isolate?.mode !== 'library') return accept()
-    const run = rt.current()?.run
-    return loadLayout(rt, p.board, p.selection.target, p.selection.isolate.ref).then(({ board }) => (run !== rt.current()?.run ? null : accept(board)))
+    return loadLayout(rt, p.board, p.selection.target, p.selection.isolate.ref).then(({ board, run }) => (run !== (rt.current()?.run ?? null) ? null : accept(board)))
   }
   /** `session/select`: a selection named by references, or with `board:<name>` alone a jump to the board's entry. */
   const select = async (p: any, by: By | null, setBy: SetBy, prefer: ProjectRuntime | null) => {

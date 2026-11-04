@@ -28,7 +28,7 @@ Available operations, by anchor capabilities:
 
 Editing controls stay visible but disabled while an invalidated board recompiles and resumes when the compile finishes, including view-only compiles without a new whole-board snapshot.
 
-Reference-based selection in library mode resolves against the isolated layout, preserving its local identities instead of adding an instance path. A newer selection supersedes an in-flight layout lookup.
+Reference-based selection in library mode resolves against the isolated layout, preserving its local identities instead of adding an instance path. Its required freshness compile may finish before validation; a newer selection or a compile after the layout lookup begins still cancels the pending selection.
 
 Board `edit` holds capabilities, frame, coordinate grid, optional persisted `snap` pitch and subdivision limit, and sources. `def` names the literal's definition, schematic.md; `frames` lists enclosing instances/groups, outermost first, own frame last.
 

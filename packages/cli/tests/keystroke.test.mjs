@@ -1,4 +1,4 @@
-// Typing through a real session and a fake editor: ten characters into Blinky's <text> label 50 ms apart each get the keystroke tier's
+// Typing after the initial editor diagnostics, through a real session and a fake editor: ten characters into Blinky's <text> label 50 ms apart each get the keystroke tier's
 // facet of the text, the median within 100 ms and every one within 300 ms, no facet of a run an edit made stale reaches the viewer, one full compile runs after the burst,
 // and the keystroke tier leaves the stage cache as it was.
 import { test, after } from 'node:test'
@@ -134,6 +134,9 @@ test('typing in a text block: the keystroke tier per key, nothing stale, one ful
     const view = await viewer(port)
     const ed = await editor(port, root, file, text)
     await ed.request('session/check')
+    const ready = performance.now()
+    await until(() => ed.frames.some(m => m.method === 'textDocument/publishDiagnostics' && m.params.uri === pathToFileURL(file).href))
+    t.diagnostic(`initial editor diagnostics ready after ${(performance.now() - ready).toFixed(0)} ms`)
     await until(() => view.got.some(m => m.event === 'pcbjs:status' && m.phase === 'idle'))
     let since = (await ed.request('session/events', {})).next
     const cache = cacheState(root)
