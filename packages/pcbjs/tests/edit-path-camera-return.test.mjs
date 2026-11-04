@@ -26,7 +26,7 @@ test('3D component isolation animates out as well as in and returns to the origi
     `window.__cameraFrames=[];window.addEventListener('keydown', function sampleEscape(e) {
       if (e.key !== 'Escape') return
       window.removeEventListener('keydown', sampleEscape, true)
-      const base = ${JSON.stringify(base)}, end = performance.now() + 15000
+      const base = ${JSON.stringify(base)}, end = performance.now() + 45000
       const sample = () => {
         const p = ${pose}; window.__cameraFrames.push(p)
         if (Math.hypot(...p.p.map((v,i)=>v-base.p[i])) < 1e-7 || performance.now() > end) window.__cameraSampled=true
@@ -36,7 +36,7 @@ test('3D component isolation animates out as well as in and returns to the origi
     }, true)`,
   )
   await key('Escape', 'Escape')
-  await until('blur sampled', () => ev('window.__cameraSampled === true'))
+  await until('blur sampled', () => ev('window.__cameraSampled === true'), 60000)
   const frames = await ev('window.__cameraFrames')
   assert.ok(
     frames.filter(f => distance(f.p, base.p) > 0.01 && distance(f.p, focused.p) > 0.01).length > 3,

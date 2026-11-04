@@ -28,6 +28,8 @@ Available operations, by anchor capabilities:
 
 Editing pauses while an invalidated board recompiles and resumes when the compile finishes, including view-only compiles without a new whole-board snapshot.
 
+Reference-based selection in library mode resolves against the isolated layout, preserving its local identities instead of adding an instance path. A newer selection supersedes an in-flight layout lookup.
+
 Board `edit` holds capabilities, frame, coordinate grid, optional persisted `snap` pitch and subdivision limit, and sources. `def` names the literal's definition, schematic.md; `frames` lists enclosing instances/groups, outermost first, own frame last.
 
 ## Gestures

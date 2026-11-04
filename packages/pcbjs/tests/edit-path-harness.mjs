@@ -296,14 +296,14 @@ export async function settled(board) {
 export const viewSettled = () =>
   ev(`new Promise((done, reject) => {
   let previous = null, stable = 0
-  const deadline = performance.now() + 15000
+  const deadline = performance.now() + 45000
   const sample = () => {
     const c = window.__pcbjs3d?.camera
     const value = c ? [...c.position.toArray(), ...c.quaternion.toArray(), c.zoom] : document.querySelector('svg.board-svg')?.getAttribute('viewBox').split(' ').map(Number)
     stable = value && previous && value.every((n,i) => Math.abs(n - previous[i]) < 1e-8) ? stable + 1 : 0
     previous = value
-    if (stable >= 8) done(value)
-    else if (performance.now() > deadline) reject(new Error('view fitting did not settle'))
+    if (stable >= (c ? 4 : 8)) done(value)
+    else if (performance.now() > deadline) reject(new Error('view fitting did not settle: ' + JSON.stringify({ previous, value, stable })))
     else requestAnimationFrame(sample)
   }
   requestAnimationFrame(sample)

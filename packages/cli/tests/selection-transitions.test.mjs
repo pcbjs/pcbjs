@@ -20,7 +20,7 @@ const make = target => ({
     circuits: [{ path: ['CH1'] }],
   },
 })
-function fixture(boards = [make()]) {
+function fixture(boards = [make()], layout = boards[0]) {
   let release,
     run = 1
   const pending = new Promise(r => (release = r))
@@ -35,7 +35,7 @@ function fixture(boards = [make()]) {
     compiler: () => ({
       layout: async () => {
         await pending
-        return { board: boards[0], site: {} }
+        return { board: layout, site: {} }
       },
     }),
   }
@@ -102,4 +102,27 @@ test('target changes clear previous finding, isolation and snapshot before valid
   assert.equal(next.finding, null)
   assert.equal(next.isolate, null)
   assert.equal(next.snapshot, '')
+})
+
+test('reference selection retains library-local identities instead of adding an instance path', async () => {
+  const board = make()
+  const layout = { ...board, schematic: { ...board.schematic, parts: board.schematic.parts.map(p => ({ ...p, path: [], local: p.ref })) } }
+  const f = fixture([board], layout)
+  f.release()
+  const opened = await f.select({ selection: library('R1') })
+  assert.equal(opened.anchor, 'R1')
+  const next = await f.select({ refs: ['D1'], anchor: 'D1' })
+  assert.equal(next.anchor, 'D1')
+  assert.equal(next.isolate.mode, 'library')
+})
+
+test('a reference selection waiting for library geometry cannot supersede blur', async () => {
+  const f = fixture()
+  f.release()
+  await f.select({ selection: library('CH1/R') })
+  f.advance()
+  const pending = f.select({ refs: ['D1'] })
+  f.select({ selection: emptySelection('B') })
+  assert.equal((await pending).anchor, null)
+  assert.equal(f.events.at(-1).data.selection.isolate, null)
 })

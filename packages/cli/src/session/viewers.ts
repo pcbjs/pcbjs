@@ -248,7 +248,11 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
     }
     const st = selectionsOf(rt)
     const was = st.get(p.board)
-    const sel = st.set(p.board, refsSelection(model, was, p), setBy, by)
+    const iso = was?.isolate
+    const focused = was && iso?.mode === 'library' && (p.target === undefined || p.target === was.target) ? (await loadLayout(rt, p.board, was.target, iso.ref)).board : model
+    if (st.get(p.board) !== was) return st.get(p.board)
+    const latest = boardModel(rt, p.board, p.target !== undefined ? p.target : was?.target) ?? model
+    const sel = st.set(p.board, refsSelection(latest, was, p, focused), setBy, by)
     if (sel) selected(rt, sel, by, was)
     return sel ?? st.get(p.board)
   }

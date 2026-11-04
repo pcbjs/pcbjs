@@ -301,11 +301,11 @@ const selectionBase = (board: string, previous: Selection | null, target?: strin
   previous && (target === undefined || target === previous.target) ? previous : emptySelection(board, target ?? null)
 
 /** Target-local context never crosses a refs-form target change. */
-export function refsSelection(board: Board, previous: Selection | null, p: RefSelect): Selection {
+export function refsSelection(board: Board, previous: Selection | null, p: RefSelect, focused = board): Selection {
   const base = selectionBase(p.board, previous, p.target)
   const refs = p.refs
   const finding = p.finding !== undefined ? p.finding : (refs.find(ref => [...board.drc, ...board.erc].some(f => f.id === ref)) ?? base.finding)
-  return validateSelection(board, { ...base, refs, anchor: p.anchor ?? refs.at(-1) ?? null, level: p.level ?? null, marks: undefined, finding })
+  return validateSelection(board, { ...base, refs, anchor: p.anchor ?? refs.at(-1) ?? null, level: p.level ?? null, marks: undefined, finding }, focused)
 }
 
 /** One state and pending intent per board; stale client bases cannot supersede newer intent. */
