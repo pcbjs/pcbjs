@@ -1,3 +1,4 @@
+import { resolve as fixturePath } from 'node:path'
 // A click on a board row of the Boards view asks the session to open the board's entry with focus; the session's answer, the
 // `pcbjs/select` of the board's `<PCB`, opens the entry beside the preview with the cursor there and the editor focused. A folder
 // row's click only expands it, unless the folder declares one board, which it then shows and opens as a board row does.
@@ -40,7 +41,7 @@ test('a board row opens its entry with the cursor on <PCB and the editor focused
   const row = boardNodes(info, undefined, undefined)[0].children[0]
   assert.deepEqual(row.action, { kind: 'board', name: 'Blinky', project: root, entry: join(root, 'blinky.pcb.tsx'), route: '/' })
   const pane = group('pane')
-  setGroups([group('/work/other.ts'), pane], 1)
+  setGroups([group(fixturePath('/work/other.ts')), pane], 1)
   layout.calls = []
   let kept = 0
   const editor = await showSelect(session('session/select', entryJump(row.action.name)), { last: () => 1, size: () => undefined }, show => (kept++, show()))
@@ -59,7 +60,7 @@ test('a board row opens its entry with the cursor on <PCB and the editor focused
 })
 
 test('the same answer without focus keeps the preview focused, as the viewer selector asks', async () => {
-  setGroups([group('/work/other.ts'), group('pane')], 1)
+  setGroups([group(fixturePath('/work/other.ts')), group('pane')], 1)
   layout.calls = []
   let kept = 0
   const p = session('session/select', { board: 'Blinky', refs: ['board:Blinky'] })
@@ -74,13 +75,13 @@ test('the same answer without focus keeps the preview focused, as the viewer sel
 })
 
 test('config rows expand directly to boards from every entry', async () => {
-  const demo = { root: '/work/demo', route: '/demo/', displayed: true }
+  const demo = { root: fixturePath('/work/demo'), route: '/demo/', displayed: true }
   const solo = { root, route: '/solo/', displayed: false, boards: [] }
-  const declared = { '/work/demo': ['/work/demo/a.tsx', '/work/demo/b.tsx'], [root]: [join(root, 'blinky.pcb.tsx')] }
+  const declared = { [fixturePath('/work/demo')]: [fixturePath('/work/demo/a.tsx'), fixturePath('/work/demo/b.tsx')], [root]: [join(root, 'blinky.pcb.tsx')] }
   const rows = boardNodes(
     {
       ...info,
-      root: '/work/demo',
+      root: fixturePath('/work/demo'),
       boards: [
         { name: 'A', entry: 'a.tsx' },
         { name: 'B', entry: 'b.tsx' },
@@ -101,7 +102,7 @@ test('config rows expand directly to boards from every entry', async () => {
     rows[0].children.map(r => r.label),
     ['A', 'B'],
   )
-  assert.deepEqual(rows[0].load.entries, ['/work/demo/a.tsx', '/work/demo/b.tsx'])
+  assert.deepEqual(rows[0].load.entries, [fixturePath('/work/demo/a.tsx'), fixturePath('/work/demo/b.tsx')])
   assert.deepEqual(rows[1].load, { root, entries: [join(root, 'blinky.pcb.tsx')], route: '/solo/' })
   const calls = []
   await openFolder({ kind: 'scope', id: 'config:solo', root, route: '/solo/' }, { expand: async id => calls.push(id), show: () => assert.fail('expansion must not navigate') })

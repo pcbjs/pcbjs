@@ -22,7 +22,7 @@ export function parseWorktrees(text: string): Worktree[] {
     for (const line of block.split('\n')) {
       const [key, ...rest] = line.split(' ')
       const v = rest.join(' ')
-      if (key === 'worktree') w.path = v
+      if (key === 'worktree') w.path = path.resolve(v)
       else if (key === 'HEAD') w.head = v
       else if (key === 'branch') w.branch = v.replace(/^refs\/heads\//, '')
       else if (key === 'bare') w.bare = true
@@ -32,14 +32,15 @@ export function parseWorktrees(text: string): Worktree[] {
   return out
 }
 
-export type Git = (cwd: string, args: string[]) => Promise<string>
+export type Git = (cwd: string, args: string[], input?: string) => Promise<string>
 
-export const git: Git = (cwd, args) =>
-  new Promise((ok, fail) =>
-    execFile('git', args, { cwd, maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) =>
+export const git: Git = (cwd, args, input) =>
+  new Promise((ok, fail) => {
+    const child = execFile('git', args, { cwd, maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) =>
       err ? fail(new Error(String(stderr || err.message).trim())) : ok(stdout),
-    ),
-  )
+    )
+    child.stdin?.end(input)
+  })
 
 export interface WorktreeState extends Worktree {
   /** the agents connected from inside it */
@@ -90,9 +91,9 @@ export async function ownProjects(folder: string, dirs: string[], run: Git = git
   if (!ours || !kept.length) return kept
   let ignored: string[] = []
   try {
-    ignored = (await run(ours.path, ['check-ignore', '--', ...kept])).split('\n').map(l => l.trim())
+    ignored = (await run(ours.path, ['check-ignore', '--stdin', '-z'], kept.join('\0') + '\0')).split('\0').filter(Boolean)
   } catch {}
-  return kept.filter(d => !ignored.includes(d))
+  return kept.filter(d => !ignored.some(i => samePath(i, d)))
 }
 
 /** What the node shows of each worktree besides the main one. */

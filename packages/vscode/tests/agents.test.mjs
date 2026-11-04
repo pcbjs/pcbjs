@@ -1,3 +1,4 @@
+import { resolve as fixturePath } from 'node:path'
 // The Agent activity view and the Worktrees node from session data alone: events update an agent's files, task and findings delta;
 // the porcelain of git worktree list parses; a sidebar shows both.
 import { test } from 'node:test'
@@ -10,7 +11,7 @@ const { Activity, agentNodes, ago } = require('../dist/agents.cjs')
 const { parseWorktrees, worktreeStates, worktreeNodes, visibleClients } = require('../dist/worktrees.cjs')
 const { Sidebar } = require('../dist/sidebar.cjs')
 
-const P = '/work/p'
+const P = fixturePath('/work/p')
 const by = { client: 'c4', name: 'Claude Code', role: 'agent' }
 let n = 0
 const ev = (kind, data, who = null, t = 1000) => ({ id: `s.${++n}`, t, kind, project: P, by: who, data })
@@ -37,8 +38,8 @@ test('the activity view follows the events: plan, progress, files with their tim
   assert.deepEqual(
     agent.files.map(f => [f.file, f.at]),
     [
-      ['/work/p/lib/usb.ts', 5000],
-      ['/work/p/pcb.tsx', 2000],
+      [fixturePath('/work/p/lib/usb.ts'), 5000],
+      [fixturePath('/work/p/pcb.tsx'), 2000],
     ],
   )
   assert.deepEqual(a.delta(agent), { errors: 2, warnings: -1 })
@@ -68,14 +69,14 @@ test('worktrees: the porcelain parsed, a node per worktree besides the main one,
     'worktree /r\nHEAD aaa\nbranch refs/heads/main\n\nworktree /r/.wt/a\nHEAD bbb\nbranch refs/heads/agent/a\n\nworktree /r/.wt/b\nHEAD ccc\ndetached\n\n',
   )
   assert.deepEqual(list, [
-    { path: '/r', head: 'aaa', branch: 'main' },
-    { path: '/r/.wt/a', head: 'bbb', branch: 'agent/a' },
-    { path: '/r/.wt/b', head: 'ccc' },
+    { path: fixturePath('/r'), head: 'aaa', branch: 'main' },
+    { path: fixturePath('/r/.wt/a'), head: 'bbb', branch: 'agent/a' },
+    { path: fixturePath('/r/.wt/b'), head: 'ccc' },
   ])
-  const clients = [{ client: 'c4', name: 'Codex', role: 'agent', root: '/r/.wt/a/board', task: 'place the LEDs' }]
-  const scopes = { scopes: [{ root: '/r/.wt/a/board', route: '/board/', boards: [{ name: 'LED' }] }] }
-  const states = worktreeStates(list, clients, scopes, new Map([['/r/.wt/a', ['board/pcb.tsx']]]), new Map())
-  const [root] = worktreeNodes(states, '/r')
+  const clients = [{ client: 'c4', name: 'Codex', role: 'agent', root: fixturePath('/r/.wt/a/board'), task: 'place the LEDs' }]
+  const scopes = { scopes: [{ root: fixturePath('/r/.wt/a/board'), route: '/board/', boards: [{ name: 'LED' }] }] }
+  const states = worktreeStates(list, clients, scopes, new Map([[fixturePath('/r/.wt/a'), ['board/pcb.tsx']]]), new Map())
+  const [root] = worktreeNodes(states, fixturePath('/r'))
   assert.deepEqual(
     root.children.map(c => [c.label, c.description]),
     [
@@ -90,7 +91,7 @@ test('worktrees: the porcelain parsed, a node per worktree besides the main one,
       ['board/pcb.tsx', 'diff'],
     ],
   )
-  assert.equal(worktreeNodes([], '/r').length, 0)
+  assert.equal(worktreeNodes([], fixturePath('/r')).length, 0)
   const sidebar = new Sidebar(async () => undefined, false)
   sidebar.setWorktrees([root])
   sidebar.setAgents([])
@@ -98,13 +99,31 @@ test('worktrees: the porcelain parsed, a node per worktree besides the main one,
   assert.equal(sidebar.providers.boards.getTreeItem(root.children[0]).contextValue, 'worktree.attached')
   assert.equal(sidebar.providers.boards.getTreeItem(root.children[1]).contextValue, 'worktree')
   // the Agents view: an agent of the main tree, and one of a worktree only while it is attached
-  const both = [{ client: 'c1', name: 'Claude Code', role: 'agent', root: '/r/board' }, ...clients, { client: 'c5', name: 'Cursor', role: 'agent', root: '/r/.wt/b' }]
+  const both = [
+    { client: 'c1', name: 'Claude Code', role: 'agent', root: fixturePath('/r/board') },
+    ...clients,
+    { client: 'c5', name: 'Cursor', role: 'agent', root: fixturePath('/r/.wt/b') },
+  ]
   assert.deepEqual(
-    visibleClients(both, list, '/r', scopes).map(c => c.client),
+    visibleClients(both, list, fixturePath('/r'), scopes).map(c => c.client),
     ['c1', 'c4'],
   )
   assert.deepEqual(
-    visibleClients(both, list, '/r', { scopes: [] }).map(c => c.client),
+    visibleClients(both, list, fixturePath('/r'), { scopes: [] }).map(c => c.client),
     ['c1'],
   )
+})
+
+test('Git ignores paths containing whitespace without shell quoting or separator assumptions', async () => {
+  const { ownProjects } = require('../dist/worktrees.cjs')
+  const root = fixturePath('/repo')
+  const ignored = fixturePath(root, 'scratch board')
+  const kept = fixturePath(root, 'real board')
+  const run = async (_cwd, args, input) => {
+    if (args[0] === 'worktree') return `worktree ${root.replaceAll('\\', '/')}\nHEAD abc\n\n`
+    assert.deepEqual(args, ['check-ignore', '--stdin', '-z'])
+    assert.equal(input, [kept, ignored].join('\0') + '\0')
+    return ignored.replaceAll('\\', '/') + '\0'
+  }
+  assert.deepEqual(await ownProjects(root, [kept, ignored], run), [kept])
 })

@@ -1,3 +1,4 @@
+import { resolve as fixturePath } from 'node:path'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
@@ -9,7 +10,7 @@ const { shownBoard, boardPath, panelTitle } = require('../dist/views.cjs')
 
 function fakeServer() {
   return {
-    root: '/work/demo',
+    root: fixturePath('/work/demo'),
     name: 'demo',
     active: true,
     state: { kind: 'running', url: 'http://127.0.0.1:5301/' },
@@ -18,7 +19,7 @@ function fakeServer() {
         { name: 'Blinky', title: 'Blinky', entry: 'blinky.pcb.tsx' },
         { name: 'Coin', title: 'Coin', entry: 'coin.tsx' },
       ],
-      root: '/work/demo',
+      root: fixturePath('/work/demo'),
     },
     scope: undefined,
     page: undefined,
@@ -79,15 +80,15 @@ test('the titles follow the board shown: an entry in focus, then a scope switch 
   const server = fakeServer()
   await preview.open(server, '2d')
   await preview.open(server, '3d')
-  editor.file = '/work/demo/coin.tsx'
+  editor.file = fixturePath('/work/demo/coin.tsx')
   await preview.update()
   assert.deepEqual(titles(preview), ['Coin | 2D', 'Coin | 3D'])
   // a file that is no entry keeps the board
-  editor.file = '/work/demo/lib/part.tsx'
+  editor.file = fixturePath('/work/demo/lib/part.tsx')
   await preview.update()
   assert.deepEqual(titles(preview), ['Coin | 2D', 'Coin | 3D'])
-  server.scope = { scope: 'usb', root: '/work/usb-hub', route: '/usb-hub/', url: 'http://127.0.0.1:5301/usb-hub/' }
-  server.boards = { boards: [{ name: 'Hub', title: 'USB hub', entry: 'pcb.tsx' }], root: '/work/usb-hub' }
+  server.scope = { scope: 'usb', root: fixturePath('/work/usb-hub'), route: '/usb-hub/', url: 'http://127.0.0.1:5301/usb-hub/' }
+  server.boards = { boards: [{ name: 'Hub', title: 'USB hub', entry: 'pcb.tsx' }], root: fixturePath('/work/usb-hub') }
   await preview.update()
   assert.deepEqual(titles(preview), ['USB hub | 2D', 'USB hub | 3D'])
   preview.dispose()
@@ -216,7 +217,13 @@ test('restored previews finish loading when scope changes while the external URL
   const external = vscode.env.asExternalUri
   const pending = []
   vscode.env.asExternalUri = uri => new Promise(resolve => pending.push(() => resolve(uri)))
-  const link = { open: true, root: '/work/demo', info: { urls: ['http://127.0.0.1:5301/'] }, boards: fakeServer().boards, scope: { root: '/work/demo', url: '/' } }
+  const link = {
+    open: true,
+    root: fixturePath('/work/demo'),
+    info: { urls: ['http://127.0.0.1:5301/'] },
+    boards: fakeServer().boards,
+    scope: { root: fixturePath('/work/demo'), url: '/' },
+  }
   const { preview } = makePreview({ link: () => link })
   const server = fakeServer()
   try {
@@ -347,7 +354,7 @@ test('a pane that starts its server never shows it stopped, and the viewer page 
 test('a running server with no board to show: the idle screen under the viewer, no spinner, and the Boards view named', async () => {
   reset()
   const { preview } = makePreview()
-  const server = { ...fakeServer(), boards: { boards: [], root: '/work/demo' } }
+  const server = { ...fakeServer(), boards: { boards: [], root: fixturePath('/work/demo') } }
   await preview.open(server, '2d')
   const html = panels[0].webview.html
   assert.ok(iframe(panels[0]))
@@ -397,7 +404,7 @@ for (const duplicate of [false, true])
     const { Sidebar } = require('../dist/sidebar.cjs')
     panels.length = 0
     const links = ['alpha', 'beta'].map((session, i) => {
-      const root = `/work/${session}`
+      const root = fixturePath(`/work/${session}`)
       const name = duplicate ? 'Board' : session
       const route = duplicate ? '/project/' : `/${session}/`
       return {
@@ -442,7 +449,7 @@ for (const duplicate of [false, true])
         assert.equal(panels[0].posted.at(-1).data.board, link.boards.boards[0].name)
         const row = sidebar.node('boards', `board:${link.root}:${link.boards.boards[0].name}`)
         assert.equal(row?.action.session, link.session)
-        assert.equal(row.children[0].action.source.file, `${link.root}/pcb.tsx`)
+        assert.equal(row.children[0].action.source.file, fixturePath(link.root, 'pcb.tsx'))
         assert.equal(row.children[0].action.session, link.session)
         const stale = links.find(l => l !== link)
         preview.follow(server, '/wrong/', stale)
@@ -480,21 +487,27 @@ test('same-board navigation keeps frames and repeated source focus retains the c
 
 test('checks reuse the live pane across findings, preserve preview focus and clear focus only when closed', async () => {
   panels.length = 0
-  setGroups([group('/work/demo/custom.tsx'), group('pane')], 1)
+  setGroups([group(fixturePath('/work/demo/custom.tsx')), group('pane')], 1)
   const active = tabGroups.activeTabGroup
   const calls = []
   const server = fakeServer()
   const link = {
-    root: '/work/demo',
+    root: fixturePath('/work/demo'),
     open: true,
-    info: { root: '/work/demo', port: 5301 },
-    scopes: { scopes: [{ root: '/work/demo', route: '/demo/', boards: [{ name: 'Blinky', entry: 'custom.tsx' }] }] },
+    info: { root: fixturePath('/work/demo'), port: 5301 },
+    scopes: { scopes: [{ root: fixturePath('/work/demo'), route: '/demo/', boards: [{ name: 'Blinky', entry: 'custom.tsx' }] }] },
     request: async (...args) => {
       calls.push(args)
     },
   }
   const preview = makePreview({ link: () => link }).preview
-  const event = { project: '/work/demo', board: 'Blinky', finding: { id: 'drc:a', rule: 'clearance', message: 'detail', refs: ['R1/1'] }, refs: ['drc:a'], anchor: 'drc:a' }
+  const event = {
+    project: fixturePath('/work/demo'),
+    board: 'Blinky',
+    finding: { id: 'drc:a', rule: 'clearance', message: 'detail', refs: ['R1/1'] },
+    refs: ['drc:a'],
+    anchor: 'drc:a',
+  }
   await preview.open(server, '2d')
   await preview.finding(server, event, link)
   const checks = panels.at(-1)
@@ -514,13 +527,13 @@ test('checks reuse the live pane across findings, preserve preview focus and cle
   assert.equal(ui.clipboard.at(-1), '# Clearance')
   assert.deepEqual(checks.posted.at(-1), { type: 'post', data: { type: 'pcbjs:copied-markdown', id: 'copy-1', ok: true } })
   link.open = false
-  const reconnected = { ...link, open: true, roots: ['/work/demo'], info: { root: '/work/demo', port: 5302 } }
+  const reconnected = { ...link, open: true, roots: [fixturePath('/work/demo')], info: { root: fixturePath('/work/demo'), port: 5302 } }
   server.links = [reconnected]
   await preview.update()
   assert.equal(panels.length, 2)
   assert.ok(iframe(checks).includes('127.0.0.1:5302/demo/board/Blinky'))
   checks.dispose()
-  assert.deepEqual(calls.at(-1), ['session/select', { project: '/work/demo', board: 'Blinky', refs: [], finding: null }])
+  assert.deepEqual(calls.at(-1), ['session/select', { project: fixturePath('/work/demo'), board: 'Blinky', refs: [], finding: null }])
   assert.equal(calls.length, 1)
   preview.dispose()
 })
@@ -546,8 +559,8 @@ test('retarget checks to another server and close only the displayed owner, reje
   reset()
   const callsA = [],
     callsB = []
-  const a = ownedLink('/work/a', 5301, callsA),
-    b = ownedLink('/work/b', 5302, callsB)
+  const a = ownedLink(fixturePath('/work/a'), 5301, callsA),
+    b = ownedLink(fixturePath('/work/b'), 5302, callsB)
   const serverA = fakeServer(),
     serverB = { ...fakeServer(), root: b.root }
   const preview = makePreview({ link: server => (server === serverA ? a : b), board: () => ({ name: 'Board' }) }).preview
@@ -567,7 +580,7 @@ test('retarget checks to another server and close only the displayed owner, reje
 test('checks navigation replaces finding ownership and manual checks participate in last-pane close', async () => {
   reset()
   const calls = [],
-    link = ownedLink('/work/a', 5301, calls)
+    link = ownedLink(fixturePath('/work/a'), 5301, calls)
   const server = fakeServer()
   const preview = makePreview({ link: () => link, board: () => ({ name: 'Board' }) }).preview
   await preview.finding(server, findingEvent(link, 'assembled'), link)
@@ -593,7 +606,7 @@ test('checks navigation replaces finding ownership and manual checks participate
 test('checks close preserves target identity and disconnected panes never mutate old sessions', async () => {
   reset()
   const calls = [],
-    link = ownedLink('/work/a', 5301, calls)
+    link = ownedLink(fixturePath('/work/a'), 5301, calls)
   const server = fakeServer()
   const preview = makePreview({ link: () => link, board: () => ({ name: 'Board' }) }).preview
   await preview.finding(server, findingEvent(link, 'assembled'), link)
@@ -609,7 +622,7 @@ test('checks close preserves target identity and disconnected panes never mutate
 test('cleared finding reconciles existing checks target without opening a closed pane', async () => {
   reset()
   const calls = [],
-    link = ownedLink('/work/a', 5301, calls)
+    link = ownedLink(fixturePath('/work/a'), 5301, calls)
   const server = fakeServer()
   const preview = makePreview({ link: () => link, board: () => ({ name: 'Board' }) }).preview
   await preview.finding(server, { ...findingEvent(link, 'Bare PCB'), finding: null }, link)

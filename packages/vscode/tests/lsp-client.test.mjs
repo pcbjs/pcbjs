@@ -1,3 +1,5 @@
+import { resolve as fixturePath } from 'node:path'
+import { pathToFileURL } from 'node:url'
 // The language client side against a mock language server: a mock session answers the link's hello and JSON-RPC on the same
 // socket. The client is a vscode-jsonrpc connection over the extension's transports, standing in for
 // vscode-languageclient, with a fake editor: the handshake options, the focus, a segment edit round trip, the
@@ -14,8 +16,8 @@ const { SessionLink } = require('../dist/link.cjs')
 const { Sync } = require('../dist/sync.cjs')
 const { PcbjsSession, transports, initializationOptions } = require('../dist/lsp-client.cjs')
 
-const FILE = '/work/p/pcb.tsx'
-const URI = 'file:///work/p/pcb.tsx'
+const FILE = fixturePath('/work/p/pcb.tsx')
+const URI = pathToFileURL(FILE).href
 const TEXT = `route(a, b, 'V 14 Z')\n<J1 at="3 7" />\n`
 
 /** The mock session: says ready on hello and runs a JSON-RPC server on the same socket, one message per line. */
@@ -27,7 +29,7 @@ async function mockServer() {
       port: 5273,
       host: '127.0.0.1',
       urls: ['http://127.0.0.1:5273/'],
-      root: '/work/p',
+      root: fixturePath('/work/p'),
       pid: 7,
       version: '0.1.0',
       protocol: 2,
@@ -90,7 +92,7 @@ function fakeEditor() {
         ed.text = ed.text.slice(0, off(e.range.start)) + e.newText + ed.text.slice(off(e.range.end))
       return true
     },
-    uri: file => `file://${file}`,
+    uri: file => pathToFileURL(file).href,
   }
   return ed
 }
@@ -125,7 +127,7 @@ test('handshake: the client states its protocol, major and capabilities', async 
     })
     assert.equal(res.capabilities.experimental.pcbjs.protocol, 2)
     // JSON-RPC frames never reach the envelope handlers, and envelopes still work beside them
-    assert.equal(t.client.info.root, '/work/p')
+    assert.equal(t.client.info.root, fixturePath('/work/p'))
   } finally {
     await t.close()
   }
@@ -135,7 +137,7 @@ test('focus: the active file and the cursor go as pcbjs/focus', async () => {
   const t = await setup()
   try {
     await t.conn.sendRequest('initialize', { processId: null, capabilities: {}, initializationOptions: initializationOptions('0.4.0') })
-    const sync = new Sync({ frameMs: 10, route: () => ({ root: '/work/p', focus: at => (void t.session.focus(at), true) }) })
+    const sync = new Sync({ frameMs: 10, route: () => ({ root: fixturePath('/work/p'), focus: at => (void t.session.focus(at), true) }) })
     // the first move at once, the last of the frame after it
     sync.cursor(FILE, 2, 5)
     sync.cursor(FILE, 2, 6)
@@ -258,9 +260,9 @@ async function hintSession(id, root) {
 test('several sessions attached, through restarts and reattaches: one hint per number, from the session that serves the file', async () => {
   const { PcbjsServer } = require('../dist/server.cjs')
   const { ownedMiddleware } = require('../dist/lsp-client.cjs')
-  const ROOT = '/work/w'
-  const WORKTREE = `${ROOT}/.claude/worktrees/a`
-  const EXAMPLE = `${ROOT}/examples/x`
+  const ROOT = fixturePath('/work/w')
+  const WORKTREE = fixturePath(ROOT, '.claude/worktrees/a')
+  const EXAMPLE = fixturePath(ROOT, 'examples/x')
   const sessions = [await hintSession('own00001', ROOT), await hintSession('wt000001', WORKTREE), await hintSession('ex000001', EXAMPLE)]
   const live = new Map(sessions.map(s => [s.dev.root, s.dev]))
   /** the extension's language clients: one per link, disposed when its link closes */
@@ -278,8 +280,8 @@ test('several sessions attached, through restarts and reattaches: one hint per n
       void conn.sendRequest('initialize', { processId: null, rootUri: null, capabilities: {} })
     },
   })
-  const doc = file => ({ uri: { toString: () => `file://${file}` } })
-  const files = [`${ROOT}/pcb.tsx`, `${WORKTREE}/pcb.tsx`, `${EXAMPLE}/pcb.tsx`]
+  const doc = file => ({ uri: { toString: () => pathToFileURL(file).href } })
+  const files = [fixturePath(ROOT, 'pcb.tsx'), fixturePath(WORKTREE, 'pcb.tsx'), `${EXAMPLE}/pcb.tsx`]
   const TEXT = `route('3 10')`
   /** every client opens the files and answers an inlay hint request through its middleware, as vscode-languageclient calls it */
   const hints = async (gated = true) => {
@@ -312,7 +314,7 @@ test('several sessions attached, through restarts and reattaches: one hint per n
       assert.deepEqual(await hints(), [2, 2, 2], `round ${round}: one hint per number after attaching again`)
       assert.equal(new Set([...clients].map(c => c.link)).size, server.links.length, 'one client per link')
     }
-    for (const [i, s] of sessions.entries()) assert.deepEqual([...new Set(s.opened)], [`file://${files[i]}`], 'each session is sent only the files it serves')
+    for (const [i, s] of sessions.entries()) assert.deepEqual([...new Set(s.opened)], [pathToFileURL(files[i]).href], 'each session is sent only the files it serves')
   } finally {
     await server.stop()
     for (const s of sessions) await s.close()
@@ -322,8 +324,8 @@ test('several sessions attached, through restarts and reattaches: one hint per n
 test('the session serving a file closes while another covers it: the file moves to the remaining one, which answers its hints', async () => {
   const { PcbjsServer } = require('../dist/server.cjs')
   const { ownedMiddleware, Holders } = require('../dist/lsp-client.cjs')
-  const ROOT = '/work/w'
-  const EXAMPLE = `${ROOT}/examples/x`
+  const ROOT = fixturePath('/work/w')
+  const EXAMPLE = fixturePath(ROOT, 'examples/x')
   const own = await hintSession('own00001', ROOT)
   const inner = await hintSession('ex000001', EXAMPLE)
   const live = new Map([own, inner].map(s => [s.dev.root, s.dev]))
@@ -353,7 +355,7 @@ test('the session serving a file closes while another covers it: the file moves 
     },
   })
   const FILE = `${EXAMPLE}/pcb.tsx`
-  const docs = [{ uri: `file://${FILE}`, languageId: 'typescriptreact', version: 1, text: `route('3 10')` }]
+  const docs = [{ uri: pathToFileURL(FILE).href, languageId: 'typescriptreact', version: 1, text: `route('3 10')` }]
   const doc = { uri: { toString: () => docs[0].uri } }
   const ask = c => () =>
     c.conn.sendRequest('textDocument/inlayHint', { textDocument: { uri: docs[0].uri }, range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } } })

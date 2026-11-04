@@ -10,6 +10,8 @@ pcbjs dev --workspace          # the working directory
 
 `--workspace` is a switch: the arguments of `dev` are then folders, not entries. Each project uses its own config, so `--config` does not apply; other flags are those of `pcbjs dev`. `build` and `check` stay per project. Every session serves its projects as scopes: `pcbjs dev` in one project is a workspace of that one, and a project of the same checkout attached later joins as one more scope, see session.md.
 
+Git worktree paths use native filesystem separators. Ignored project discovery uses null-delimited Git input and output, including paths with spaces.
+
 ## Scopes
 
 Windows editor paths, Vite's forward-slash paths and drive-letter case differences identify the same project files. Saved imports and config changes update the affected scopes; source navigation and `pcbjs check` use the same path comparison. Schematic shorthand names are bound during type checking with either native Windows or TypeScript path separators. POSIX paths retain their case and separator semantics.

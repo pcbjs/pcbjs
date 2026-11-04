@@ -1,5 +1,6 @@
 // A fake of the vscode API the panels and the sidebar use, installed as the module `vscode` for require.
 import Module from 'node:module'
+import { basename, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { readFileSync, writeFileSync } from 'node:fs'
 
@@ -367,7 +368,7 @@ export const terminals = []
 const workspace = {
   openTextDocument,
   get workspaceFolders() {
-    return ui.folders.map((f, index) => ({ uri: vscode.Uri.file(f), name: f.split('/').pop(), index }))
+    return ui.folders.map((f, index) => ({ uri: vscode.Uri.file(f), name: basename(f), index }))
   },
   findFiles: async (glob, exclude) => (ui.calls.push({ kind: 'findFiles', glob, exclude }), ui.files.map(f => vscode.Uri.file(f))),
   get textDocuments() {
@@ -381,8 +382,9 @@ const workspace = {
   applyEdit,
   getConfiguration: () => ({ get: (_key, fallback) => ui.autoSave ?? fallback }),
   asRelativePath: p => {
-    const root = ui.folders.find(f => p.startsWith(`${f}/`))
-    return root ? p.slice(root.length + 1) : p
+    const file = typeof p === 'string' ? p : p.fsPath
+    const root = ui.folders.find(f => resolve(file).startsWith(resolve(f) + sep))
+    return root ? relative(root, file).split(sep).join('/') : file
   },
 }
 

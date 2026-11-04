@@ -1,3 +1,4 @@
+import { resolve as fixturePath } from 'node:path'
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
@@ -6,7 +7,7 @@ import { vscode, tabGroups, layout, group, setGroups } from './vscode.mjs'
 const require = createRequire(import.meta.url)
 const { reveal } = require('../dist/reveal.cjs')
 
-const FILE = '/work/demo/blinky.pcb.tsx'
+const FILE = fixturePath('/work/demo/blinky.pcb.tsx')
 const doc = { uri: vscode.Uri.file(FILE) }
 const sel = new vscode.Selection({ line: 4, character: 2 }, { line: 4, character: 9 })
 const deps = (size, last) => ({ last: () => last, size: () => size })
@@ -19,16 +20,16 @@ beforeEach(() => {
 })
 
 test('successive source navigation replaces temporary tabs while preserving pinned and edited documents', async () => {
-  const code = group('/work/demo/pinned.ts'),
+  const code = group(fixturePath('/work/demo/pinned.ts')),
     pane = group('pane')
   setGroups([code, pane], 1)
   await reveal(doc, sel, deps(undefined), false)
   assert.equal(code.activeTab.isPreview, true)
-  const next = { uri: vscode.Uri.file('/work/demo/next.ts') }
+  const next = { uri: vscode.Uri.file(fixturePath('/work/demo/next.ts')) }
   await reveal(next, sel, deps(undefined), false)
-  assert.deepEqual(files(code), ['/work/demo/pinned.ts', '/work/demo/next.ts'])
+  assert.deepEqual(files(code), [fixturePath('/work/demo/pinned.ts'), fixturePath('/work/demo/next.ts')])
   assert.equal(code.activeTab.isPreview, true)
-  await reveal({ uri: vscode.Uri.file('/work/demo/pinned.ts') }, sel, deps(undefined), false)
+  await reveal({ uri: vscode.Uri.file(fixturePath('/work/demo/pinned.ts')) }, sel, deps(undefined), false)
   assert.equal(code.activeTab.isPreview, false, 'a user-pinned tab stays pinned')
   await reveal({ ...doc, isDirty: true }, sel, deps(undefined), false)
   assert.equal(code.activeTab.isPreview, false, 'an edited source stays open')
@@ -42,8 +43,8 @@ test('successive source navigation replaces temporary tabs while preserving pinn
 })
 
 test('another group takes the file, preferring the one that shows it, then the last used', async () => {
-  const code = group('/work/demo/a.ts')
-  const shows = group('/work/demo/b.ts', FILE, '/work/demo/c.ts')
+  const code = group(fixturePath('/work/demo/a.ts'))
+  const shows = group(fixturePath('/work/demo/b.ts'), FILE, fixturePath('/work/demo/c.ts'))
   const pane = group('pane')
   setGroups([code, shows, pane], 2)
   const ed = await reveal(doc, sel, deps(undefined, 1))
@@ -53,12 +54,12 @@ test('another group takes the file, preferring the one that shows it, then the l
   assert.deepEqual(files(pane), ['pane'])
   assert.ok(!layout.calls.some(([c]) => c.startsWith('workbench.')))
 
-  setGroups([group('/work/demo/a.ts'), group('/work/demo/b.ts'), group('pane')], 2)
+  setGroups([group(fixturePath('/work/demo/a.ts')), group(fixturePath('/work/demo/b.ts')), group('pane')], 2)
   assert.equal((await reveal(doc, sel, deps(undefined, 2))).viewColumn, 2)
 })
 
 test('a new source tab prefers an ordinary editor group over another preview group', async () => {
-  const code = group('/work/demo/a.ts')
+  const code = group(fixturePath('/work/demo/a.ts'))
   setGroups([code, group('pane'), group('pane')], 1)
   assert.equal((await reveal(doc, sel, deps(undefined, 2))).viewColumn, 1)
 })
@@ -75,7 +76,7 @@ test('an inactive preview group can open a new source tab before creating a spli
 })
 
 test('reuse a hidden source tab behind another preview before opening in an ordinary source group', async () => {
-  const code = group('/work/demo/notes.ts')
+  const code = group(fixturePath('/work/demo/notes.ts'))
   const existing = group(FILE, 'pane')
   const clicked = group('pane')
   setGroups([code, existing, clicked], 2)
@@ -84,14 +85,14 @@ test('reuse a hidden source tab behind another preview before opening in an ordi
   assert.equal(ed.viewColumn, 2)
   assert.equal(existing.activeTab, tab, 'the existing tab is activated')
   assert.deepEqual(layout.calls, [['show', 2, true]], 'no new group or source tab migration')
-  assert.deepEqual(files(code), ['/work/demo/notes.ts'])
+  assert.deepEqual(files(code), [fixturePath('/work/demo/notes.ts')])
   assert.deepEqual(files(existing), [FILE, 'pane'])
   assert.equal(tabGroups.activeTabGroup, clicked, 'the clicked preview retains focus')
   assert.deepEqual(files(clicked), ['pane'])
 })
 
 test('an existing source tab is reused without closing another user-opened copy behind the active preview', async () => {
-  const existing = group(FILE, '/work/demo/other.ts')
+  const existing = group(FILE, fixturePath('/work/demo/other.ts'))
   const clicked = group(FILE, 'pane')
   setGroups([existing, clicked], 1)
   const tab = existing.tabs[0]
@@ -104,7 +105,7 @@ test('an existing source tab is reused without closing another user-opened copy 
 
 test('without an active preview, a source tab behind an inactive preview remains eligible', async () => {
   const existing = group(FILE, 'pane')
-  const code = group('/work/demo/other.ts')
+  const code = group(fixturePath('/work/demo/other.ts'))
   setGroups([existing, code], 1)
   const tab = existing.tabs[0]
   const ed = await reveal(doc, sel, deps(undefined, 2))
@@ -156,7 +157,7 @@ test('the file open behind the preview moves to the target group before it takes
 })
 
 test('the same move when another group exists', async () => {
-  const code = group('/work/demo/a.ts')
+  const code = group(fixturePath('/work/demo/a.ts'))
   const pane = group(FILE, 'pane')
   setGroups([code, pane], 1)
   await reveal(doc, sel, deps(undefined))
@@ -166,7 +167,7 @@ test('the same move when another group exists', async () => {
     ['show', 1, false],
   ])
   assert.deepEqual(files(pane), ['pane'])
-  assert.deepEqual(files(code), ['/work/demo/a.ts', FILE])
+  assert.deepEqual(files(code), [fixturePath('/work/demo/a.ts'), FILE])
 })
 
 test('delayed source selection cannot cover its originating preview after focus changes', async () => {
@@ -210,12 +211,12 @@ test('a newer selection supersedes an older document open', async () => {
       return showSelect({ primary: { uri, index: 0 }, items: [{ uri, ranges: [{ start: at, end: at }] }], reveal: true }, deps(), show => show())
     }
     const a = select(FILE),
-      b = select('/work/demo/new.tsx')
+      b = select(fixturePath('/work/demo/new.tsx'))
     pending[1]()
     await b
     pending[0]()
     assert.equal(await a, undefined)
-    assert.equal(code.activeTab.input.uri.fsPath, '/work/demo/new.tsx')
+    assert.equal(code.activeTab.input.uri.fsPath, fixturePath('/work/demo/new.tsx'))
   } finally {
     vscode.workspace.openTextDocument = original
   }
@@ -273,14 +274,14 @@ for (const focus of [false, true])
     try {
       const older = showSelect({ ...selectFile(FILE), focus }, deps(), show => show())
       await turn()
-      const newer = showSelect({ ...selectFile('/work/demo/new.tsx'), focus }, deps(), show => show())
+      const newer = showSelect({ ...selectFile(fixturePath('/work/demo/new.tsx')), focus }, deps(), show => show())
       await turn()
       assert.equal(layout.calls.length, 0, 'uncancellable host operations do not overlap')
       release()
       assert.equal(await older, undefined)
       assert.ok(await newer)
       assert.equal(oldEditor.selection, undefined, 'superseded completion does not move the caret')
-      assert.equal(code.activeTab.input.uri.fsPath, '/work/demo/new.tsx')
+      assert.equal(code.activeTab.input.uri.fsPath, fixturePath('/work/demo/new.tsx'))
       assert.deepEqual(files(pane), ['pane'])
     } finally {
       vscode.workspace.openTextDocument = open
@@ -341,12 +342,12 @@ test('latest request survives an older host focus change while its document is s
   try {
     const older = showSelect({ ...selectFile(FILE), focus: true }, deps(), show => show())
     await turn()
-    const newer = showSelect({ ...selectFile('/work/demo/new.tsx'), focus: true }, deps(), show => show())
+    const newer = showSelect({ ...selectFile(fixturePath('/work/demo/new.tsx')), focus: true }, deps(), show => show())
     releaseShow()
     assert.equal(await older, undefined)
     releaseOpen()
     assert.ok(await newer)
-    assert.equal(code.activeTab.input.uri.fsPath, '/work/demo/new.tsx')
+    assert.equal(code.activeTab.input.uri.fsPath, fixturePath('/work/demo/new.tsx'))
     assert.deepEqual(files(pane), ['pane'])
   } finally {
     vscode.workspace.openTextDocument = open

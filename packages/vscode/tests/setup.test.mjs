@@ -36,6 +36,7 @@ const touch = (f, text = '') => {
   mkdirSync(path.dirname(f), { recursive: true })
   writeFileSync(f, text)
 }
+const tool = name => (process.platform === 'win32' ? `${name}.cmd` : name)
 const BIN = 'node_modules/@pcbjs/pcbjs/bin/pcbjs.js'
 const SKILLS = 'node_modules/@pcbjs/skills/package.json'
 
@@ -78,7 +79,7 @@ test('KiCad projects: convertible when the .kicad_pcb of the same name is beside
   const w = dir('b/b.kicad_pro', 'a/a.kicad_pro', 'a/a.kicad_pcb', 'c/c.kicad_pro', 'c/other.kicad_pcb')
   const found = kicadProjects(['b/b', 'c/c', 'a/a'].map(p => path.join(w, `${p}.kicad_pro`)))
   assert.deepEqual(
-    found.map(p => [path.relative(w, p.pro), p.skip ?? 'ok']),
+    found.map(p => [path.relative(w, p.pro).split(path.sep).join('/'), p.skip ?? 'ok']),
     [
       ['a/a.kicad_pro', 'ok'],
       ['b/b.kicad_pro', 'no b.kicad_pcb beside it'],
@@ -108,11 +109,11 @@ test('the pcbjs that runs: the nearest install, else a global one, else npx', ()
   const sub = path.join(w, 'p')
   assert.deepEqual(pcbjsRunner([sub], '/n/node', {}), { command: '/n/node', args: [path.join(w, BIN)], shell: false })
   const bare = dir()
-  const glob = dir('pcbjs')
-  assert.deepEqual(pcbjsRunner([bare], '/n/node', { PATH: glob }).command, path.join(glob, 'pcbjs'))
-  assert.deepEqual(pcbjsRunner([bare], 'node', { PATH: '' }), { command: 'npx', args: ['--yes', '--package', '@pcbjs/pcbjs', 'pcbjs'], shell: false })
-  const nodeDir = dir('npm')
-  assert.equal(nodeTool(path.join(nodeDir, 'node'), 'npm', ['install']).command, path.join(nodeDir, 'npm'))
+  const glob = dir(tool('pcbjs'))
+  assert.deepEqual(pcbjsRunner([bare], '/n/node', { PATH: glob }).command, path.join(glob, tool('pcbjs')))
+  assert.deepEqual(pcbjsRunner([bare], 'node', { PATH: '' }), { command: tool('npx'), args: ['--yes', '--package', '@pcbjs/pcbjs', 'pcbjs'], shell: process.platform === 'win32' })
+  const nodeDir = dir(tool('npm'))
+  assert.equal(nodeTool(path.join(nodeDir, 'node'), 'npm', ['install']).command, path.join(nodeDir, tool('npm')))
 })
 
 test('create: one folder, the default name, the workspace pcbjs, then the board file and the preview', async () => {
@@ -164,8 +165,8 @@ test('create: several folders ask which; no folder opens a dialog, runs npx and 
   assert.deepEqual(
     two.runs.map(r => [path.basename(r.command), ...r.args]),
     [
-      ['npx', '--yes', '--package', '@pcbjs/pcbjs@0.1.2', 'pcbjs', 'create', '.'],
-      ['npm', 'install'],
+      [tool('npx'), '--yes', '--package', '@pcbjs/pcbjs@0.1.2', 'pcbjs', 'create', '.'],
+      [tool('npm'), 'install'],
     ],
   )
   assert.equal(two.runs[1].cwd, empty)
@@ -273,6 +274,6 @@ test('skills: several projects ask which; without @pcbjs/skills the npx route is
   assert.match(calls('warning')[0].text, /pcbjs is not installed/)
   assert.deepEqual(
     t.runs.map(r => [path.basename(r.command), r.cwd, ...r.args]),
-    [['npx', bare, '--yes', '@pcbjs/skills', 'install']],
+    [[tool('npx'), bare, '--yes', '@pcbjs/skills', 'install']],
   )
 })

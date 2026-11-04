@@ -27,12 +27,13 @@ const tmp = realpathSync(mkdtempSync(path.join(tmpdir(), 'pcbjs-ext-')))
 const main = path.join(tmp, 'main')
 const wt = path.join(tmp, 'wt')
 const pids = new Set()
-after(() => {
+after(async () => {
   for (const pid of pids)
     try {
       process.kill(pid, 'SIGKILL')
     } catch {}
-  rmSync(tmp, { recursive: true, force: true })
+  await until(() => [...pids].every(pid => !alive(pid)), 10000)
+  rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })
 const alive = pid => {
   try {

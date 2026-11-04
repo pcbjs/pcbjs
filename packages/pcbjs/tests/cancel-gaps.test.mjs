@@ -29,6 +29,7 @@ test('cancel: no gap between pulses in a cold usb3-hub compile takes 50 ms outsi
   const { pluginState } = await import('@pcbjs/cli/internal/site')
   const { compileServer } = await import('@pcbjs/cli/internal/compile')
   const { compileStages } = await import('@pcbjs/compile')
+  const { STAGE_DEFS } = await import('../../compile/dist/stages.js')
   const { pulsed } = await import('@pcbjs/compile/internal/cancel')
   const { clearRouteCache } = await import('@pcbjs/compile/internal/route-cache')
   const dir = mkdtempSync(join(EXAMPLES, '.tmp-gaps-'))
@@ -45,6 +46,18 @@ test('cancel: no gap between pulses in a cold usb3-hub compile takes 50 ms outsi
     clearRouteCache()
     const gaps = []
     let prev = new Error()
+    let unit = 'evaluate'
+    const original = STAGE_DEFS.map(d => ({ d, run: d.run, units: d.units }))
+    const labeled =
+      (name, run) =>
+      (...args) => {
+        unit = name
+        return run(...args)
+      }
+    for (const { d, run, units } of original) {
+      if (run) d.run = labeled(d.name, run)
+      if (units) d.units = (...args) => units(...args).map(u => ({ ...u, run: labeled(`${d.name}:${u.name}`, u.run) }))
+    }
     // this thread's CPU time, so the other processes of a loaded machine do not count as the compile's
     const cpuMs = () => {
       const u = process.threadCpuUsage()
@@ -60,16 +73,17 @@ test('cancel: no gap between pulses in a cold usb3-hub compile takes 50 ms outsi
         wall => {
           const ms = cpuMs() - last
           const at = new Error()
-          if (ms > BOUND / 2) gaps.push({ ms, wall, from: prev, to: at })
+          if (ms > BOUND / 2) gaps.push({ ms, wall, unit, from: prev, to: at })
           prev = at
           last = cpuMs()
         },
       )
     } finally {
       Error.stackTraceLimit = limit
+      for (const { d, run, units } of original) Object.assign(d, { run, units })
     }
     const show = g =>
-      `${g.ms.toFixed(1)} ms, ${g.wall.toFixed(1)} wall, from ${where(g.from).slice(0, 3).join(' < ') || 'start'} to ${where(g.to).slice(0, 3).join(' < ') || 'end'}`
+      `${g.unit}: ${g.ms.toFixed(1)} ms, ${g.wall.toFixed(1)} wall, from ${where(g.from).slice(0, 3).join(' < ') || 'start'} to ${where(g.to).slice(0, 3).join(' < ') || 'end'}`
     const longest = gs => gs.sort((a, b) => b.ms - a.ms)
     const open = longest(gaps.filter(g => !unitOf(g)))
     t.diagnostic(`longest open gaps: ${open.slice(0, 5).map(show).join('; ') || `none over ${BOUND / 2} ms`}`)

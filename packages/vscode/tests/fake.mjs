@@ -4,6 +4,7 @@ import { PassThrough } from 'node:stream'
 import { createServer } from 'node:net'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
 let nextPid = 40000
@@ -53,9 +54,9 @@ export async function until(fn, ms = 2000) {
   }
 }
 
-/** A session on a UNIX socket that answers hello with `ready`, unless null; each frame of the client reaches `frames` and `onFrame`. */
+/** A session on a local socket or Windows named pipe that answers hello with `ready`, unless null; each frame of the client reaches `frames` and `onFrame`. */
 export async function mockSession(ready, onFrame = () => {}) {
-  const socket = join(mkdtempSync(join(tmpdir(), 'pcbjs-mock-')), 's')
+  const socket = process.platform === 'win32' ? `\\\\.\\pipe\\pcbjs-mock-${randomUUID()}` : join(mkdtempSync(join(tmpdir(), 'pcbjs-mock-')), 's')
   const frames = []
   const conns = new Set()
   const send = m => {
@@ -78,7 +79,10 @@ export async function mockSession(ready, onFrame = () => {}) {
       }
     })
   })
-  await new Promise(r => server.listen(socket, r))
+  await new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(socket, resolve)
+  })
   return {
     socket,
     get connections() {

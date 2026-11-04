@@ -1,4 +1,5 @@
-import { dirname, join } from 'node:path'
+import { posix } from 'node:path'
+const { dirname, join } = posix
 
 export function hostPaths({ platform = process.platform, code, cli, node = process.execPath } = {}) {
   if (!['darwin', 'linux'].includes(platform)) throw new Error('Installed-host acceptance supports macOS and Linux')

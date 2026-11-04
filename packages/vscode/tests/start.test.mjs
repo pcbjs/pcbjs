@@ -229,7 +229,7 @@ test('wizard: without pcbjs installed the version comes first, create runs from 
     'a pre-release build has the checkbox on',
   )
   assert.deepEqual(runs[0].args.slice(0, 5), ['--yes', '--package', '@pcbjs/pcbjs@0.0.1-beta.3', 'pcbjs', 'create'])
-  assert.deepEqual(runs[1], { command: 'npm', args: ['install'], cwd: path.join(r, 'board') })
+  assert.deepEqual(runs[1], { command: process.platform === 'win32' ? 'npm.cmd' : 'npm', args: ['install'], cwd: path.join(r, 'board') })
   assert.deepEqual(JSON.parse(readFileSync(path.join(r, '.vscode', 'extensions.json'), 'utf8')), { recommendations: ['pcbjs.vscode-pcbjs'] })
   assert.deepEqual(JSON.parse(readFileSync(path.join(r, '.devcontainer', 'devcontainer.json'), 'utf8')).customizations, { vscode: { extensions: ['pcbjs.vscode-pcbjs'] } })
   assert.ok(h.lines.includes('pcbjs: recommended pcbjs.vscode-pcbjs in .vscode/extensions.json'))

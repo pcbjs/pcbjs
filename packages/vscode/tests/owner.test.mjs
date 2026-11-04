@@ -1,3 +1,4 @@
+import { resolve as fixturePath } from 'node:path'
 // Which session owns a file, and the wiring the extension runs over two attached sessions: the document handoff, the cursor sync and
 // requests about a file go to the deepest session, and move to the one that covers the file when it closes.
 import { test } from 'node:test'
@@ -11,21 +12,21 @@ const { ownerOf } = require('../dist/owner.cjs')
 const { Wiring } = require('../dist/wiring.cjs')
 const { PROTOCOL, MAJOR } = require('@pcbjs/core/protocol')
 
-const ROOT = '/work/w'
-const EXAMPLE = `${ROOT}/examples/x`
+const ROOT = fixturePath('/work/w')
+const EXAMPLE = fixturePath(ROOT, 'examples/x')
 
 test('ownerOf: the deepest root holding the file, a root itself included, nothing outside the folders', () => {
-  const outer = { name: 'outer', roots: [ROOT, `${ROOT}/lib`] }
+  const outer = { name: 'outer', roots: [ROOT, fixturePath(ROOT, 'lib')] }
   const inner = { name: 'inner', roots: [EXAMPLE] }
   const of = (file, links = [outer, inner]) => ownerOf(file, [ROOT], links)
-  assert.deepEqual(of(`${EXAMPLE}/pcb.tsx`), { link: inner, root: EXAMPLE })
-  assert.deepEqual(of(`${ROOT}/pcb.tsx`), { link: outer, root: ROOT })
-  assert.deepEqual(of(`${ROOT}/lib/part.tsx`), { link: outer, root: `${ROOT}/lib` })
+  assert.deepEqual(of(fixturePath(EXAMPLE, 'pcb.tsx')), { link: inner, root: EXAMPLE })
+  assert.deepEqual(of(fixturePath(ROOT, 'pcb.tsx')), { link: outer, root: ROOT })
+  assert.deepEqual(of(fixturePath(ROOT, 'lib/part.tsx')), { link: outer, root: fixturePath(ROOT, 'lib') })
   assert.deepEqual(of(EXAMPLE), { link: inner, root: EXAMPLE }, 'a project root is its own')
-  assert.deepEqual(of(`${ROOT}/examples/xy/pcb.tsx`), { link: outer, root: ROOT }, 'a sibling with a common prefix is not inside')
+  assert.deepEqual(of(fixturePath(ROOT, 'examples/xy/pcb.tsx')), { link: outer, root: ROOT }, 'a sibling with a common prefix is not inside')
   assert.equal(of('/elsewhere/pcb.tsx'), undefined)
-  assert.equal(of(`${EXAMPLE}/pcb.tsx`, []), undefined)
-  assert.equal(ownerOf(`${EXAMPLE}/pcb.tsx`, [], [inner]), undefined, 'no folder, no owner')
+  assert.equal(of(fixturePath(EXAMPLE, 'pcb.tsx'), []), undefined)
+  assert.equal(ownerOf(fixturePath(EXAMPLE, 'pcb.tsx'), [], [inner]), undefined, 'no folder, no owner')
 })
 
 /** A session at `root` that offers a language server and answers every request with its own id. */
@@ -54,8 +55,8 @@ test('two sessions attached: the deeper one owns its files until it closes, then
   const outer = await session('own00001', ROOT)
   const inner = await session('ex000001', EXAMPLE)
   const live = new Map([outer, inner].map(s => [s.dev.root, s.dev]))
-  const FILE = `${EXAMPLE}/pcb.tsx`
-  const TOP = `${ROOT}/pcb.tsx`
+  const FILE = fixturePath(EXAMPLE, 'pcb.tsx')
+  const TOP = fixturePath(ROOT, 'pcb.tsx')
   const docs = [FILE, TOP].map(f => ({ uri: pathToFileURL(f).href, languageId: 'typescriptreact', version: 1, text: '' }))
   /** what each session's language client was sent: the document handoff and the cursor */
   const sent = []

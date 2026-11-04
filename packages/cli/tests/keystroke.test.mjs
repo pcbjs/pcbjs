@@ -25,7 +25,7 @@ after(() => {
 function blinky() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-keys-')))
   dirs.push(root)
-  cpSync(join(REPO, 'examples', 'demo'), root, { recursive: true, filter: s => !s.includes('/.pcbjs') && !s.includes('/node_modules') })
+  cpSync(join(REPO, 'examples', 'demo'), root, { recursive: true, filter: s => !/[\\/](?:\.pcbjs|node_modules)$/.test(s) })
   mkdirSync(join(root, 'node_modules'))
   symlinkSync(join(REPO, 'node_modules', '@pcbjs'), join(root, 'node_modules', '@pcbjs'), 'dir')
   const cfg = join(root, 'pcb.config.ts')

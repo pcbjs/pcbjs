@@ -192,7 +192,7 @@ test('the .bin link runs under the chosen node, a shell shim as it is, a global 
   )
   assert.deepEqual(
     launcher(dot, '/n/node', p => p),
-    { command: dot, args: [], shell: false },
+    { command: dot, args: [], shell: process.platform === 'win32' },
   )
   assert.deepEqual(
     launcher('C:\\p\\pcbjs.cmd', 'node', p => p),
