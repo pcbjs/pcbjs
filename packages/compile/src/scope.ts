@@ -391,7 +391,12 @@ export function scopeHost(options: ts.CompilerOptions, root?: string, read?: (fi
   const base = ts.createCompilerHost(options, true)
   const injections = new Map<string, ScopeInjection>()
   const errors = new Map<string, ScopeError>()
-  const want = (f: string) => /\.[jt]sx?$/.test(f) && !f.endsWith('.d.ts') && !f.includes('/node_modules/') && (!root || f.startsWith(root.replace(/\/$/, '') + '/'))
+  const key = (f: string) => {
+    const path = f.replace(/\\/g, '/')
+    return ts.sys.useCaseSensitiveFileNames ? path : path.toLowerCase()
+  }
+  const prefix = root && key(root).replace(/\/$/, '') + '/'
+  const want = (f: string) => /\.[jt]sx?$/.test(f) && !f.endsWith('.d.ts') && !key(f).includes('/node_modules/') && (!prefix || key(f).startsWith(prefix))
   const readFile = (f: string) => read?.(f) ?? base.readFile(f)
   const resolveModule: ResolveModule = (spec, from) => {
     const m = resolveFile(spec, from)

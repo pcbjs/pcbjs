@@ -7,12 +7,12 @@ import ts from 'typescript'
 
 const require = createRequire(import.meta.url)
 const init = require('../dist/index.cjs')
-const dir = join(import.meta.dirname, 'fixture')
-const PCB = join(dir, 'pcb.tsx')
-const SCH = join(dir, 'board.sch.tsx')
+const dir = join(import.meta.dirname, 'fixture').replaceAll('\\', '/')
+const PCB = `${dir}/pcb.tsx`
+const SCH = `${dir}/board.sch.tsx`
 
 function service(edits = {}) {
-  const texts = new Map(Object.entries(edits).map(([f, t]) => [join(dir, f), t]))
+  const texts = new Map(Object.entries(edits).map(([f, t]) => [`${dir}/${f}`, t]))
   const versions = new Map()
   const config = ts.getParsedCommandLineOfConfigFile(join(dir, 'tsconfig.json'), {}, { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} })
   const host = {

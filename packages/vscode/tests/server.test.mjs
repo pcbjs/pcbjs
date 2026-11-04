@@ -567,7 +567,7 @@ test('the candidates are the own projects of the checkout: a worktree under .cla
     assert.ok(
       attaches()
         .flat()
-        .every(f => !f.includes('.claude') && !f.includes('tmp')),
+        .every(f => own.includes(f)),
       JSON.stringify(attaches()),
     )
     const before = attaches().length

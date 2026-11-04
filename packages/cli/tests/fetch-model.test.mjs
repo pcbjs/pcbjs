@@ -12,9 +12,9 @@ import { KICAD_3D_TAG, fetchedPath, fetchNotice, licenceOf, remoteResolver, retr
 const KICAD = 'kicad:Crystal.3dshapes/Crystal_SMD_3225-4Pin_3.2x2.5mm.step'
 
 test('a source is cached by its kind under .pcbjs/models/fetched', () => {
-  assert.equal(fetchedPath('/p', KICAD), `/p/.pcbjs/models/fetched/kicad-${KICAD_3D_TAG}/Crystal.3dshapes/Crystal_SMD_3225-4Pin_3.2x2.5mm.step`)
-  assert.equal(fetchedPath('/p', 'lcsc:c165948'), '/p/.pcbjs/models/fetched/lcsc/C165948.step')
-  assert.equal(fetchedPath('/p', 'https://example.com/a/b%20c.step'), '/p/.pcbjs/models/fetched/example.com/a/b c.step')
+  assert.equal(fetchedPath('/p', KICAD), join(`/p/.pcbjs/models/fetched/kicad-${KICAD_3D_TAG}/Crystal.3dshapes/Crystal_SMD_3225-4Pin_3.2x2.5mm.step`))
+  assert.equal(fetchedPath('/p', 'lcsc:c165948'), join('/p/.pcbjs/models/fetched/lcsc/C165948.step'))
+  assert.equal(fetchedPath('/p', 'https://example.com/a/b%20c.step'), join('/p/.pcbjs/models/fetched/example.com/a/b c.step'))
   assert.equal(sourceUrl('kicad:Battery.3dshapes/X.wrl'), `https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/${KICAD_3D_TAG}/Battery.3dshapes/X.step`)
   assert.match(licenceOf(KICAD), /CC-BY-SA 4\.0 with the KiCad library exception/)
   assert.match(licenceOf('lcsc:C1'), /no licence stated/)

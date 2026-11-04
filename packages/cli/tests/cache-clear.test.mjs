@@ -8,6 +8,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { socketOf } from '../dist/session/paths.js'
+
 const bin = fileURLToPath(new URL('../../pcbjs/bin/pcbjs.js', import.meta.url))
 const run = (cwd, ...args) => spawnSync(process.execPath, [bin, 'cache', 'clear', ...args], { cwd, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } })
 
@@ -26,8 +28,8 @@ test('cache clear: refuses while a live session serves a project, --force clears
   const ws = mkdtempSync(join(tmpdir(), 'pcbjs-cc-'))
   const a = join(ws, 'a')
   project(a)
-  const socket = join(tmpdir(), `pcbjs-cc-${process.pid}.sock`)
-  rmSync(socket, { force: true })
+  const socket = socketOf(a)
+  if (process.platform !== 'win32') rmSync(socket, { force: true })
   const server = createServer(c => c.end())
   await new Promise(ok => server.listen(socket, ok))
   writeFileSync(join(a, '.pcbjs', 'dev.json'), JSON.stringify({ session: 'fake', socket, pid: process.pid }))
@@ -46,7 +48,7 @@ test('cache clear: refuses while a live session serves a project, --force clears
     assert.ok(existsSync(join(a, '.pcbjs', 'dev.json')))
   } finally {
     await new Promise(ok => server.close(ok))
-    rmSync(socket, { force: true })
+    if (process.platform !== 'win32') rmSync(socket, { force: true })
   }
   const models = run(a, '--models')
   assert.equal(models.status, 0, models.stdout + models.stderr)

@@ -4,11 +4,12 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 import { join, relative } from 'node:path'
 
 const root = join(import.meta.dirname, '..')
 const examples = join(root, 'examples')
-const cli = p => join(root, 'packages/cli/dist', p)
+const cli = p => pathToFileURL(join(root, 'packages/cli/dist', p)).href
 const sha = s => createHash('sha256').update(s).digest('hex').slice(0, 16)
 
 async function child(dir, mode) {
@@ -19,7 +20,7 @@ async function child(dir, mode) {
   const { compileServer, compileSlots } = await import(cli('project/compile.js'))
   const { viteLoader } = await import(cli('project/loader.js'))
   const { inspectBoard } = await import(cli('project/inspect.js'))
-  const { zipFab } = await import(join(root, 'packages/export/dist/fab.js'))
+  const { zipFab } = await import(pathToFileURL(join(root, 'packages/export/dist/fab.js')).href)
   const cfg = await resolveConfig([], 'build', undefined, dir, () => {})
   const state = pluginState(cfg)
   const errors = new Map()

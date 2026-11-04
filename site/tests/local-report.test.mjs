@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readdirSync, readFileSync, symlinkSync } from 'node:fs'
@@ -128,7 +129,7 @@ test('local page responses are uncached and excluded from indexing', () => {
   assert.ok(called)
 })
 
-const dist = process.env.PCBJS_SITE_DIST ? resolve(process.env.PCBJS_SITE_DIST) : new URL('../.vitepress/dist/', import.meta.url).pathname
+const dist = process.env.PCBJS_SITE_DIST ? resolve(process.env.PCBJS_SITE_DIST) : fileURLToPath(new URL('../.vitepress/dist/', import.meta.url))
 test('production pages, navigation, search and sitemap contain no local documents', { skip: !existsSync(dist) }, () => {
   assert.ok(!existsSync(join(dist, 'local')))
   function check(dir) {

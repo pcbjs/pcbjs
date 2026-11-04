@@ -41,7 +41,7 @@ export function typecheck(root: string, entries: string[], o: TypecheckOptions =
   const config = join(root, 'tsconfig.json')
   if (!existsSync(config)) return null
   const cacheFile = join(root, '.pcbjs', 'typecheck.json')
-  const key = JSON.stringify([4, ts.version, entries.map(e => resolve(root, e)).sort(), stamp(config)])
+  const key = JSON.stringify([5, ts.version, entries.map(e => resolve(root, e)).sort(), stamp(config)])
   if (!o.overlay)
     try {
       const c = JSON.parse(readFileSync(cacheFile, 'utf8')) as Cache

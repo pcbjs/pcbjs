@@ -161,7 +161,9 @@ test('layout: places an instance as an element or a call, and the site data name
   assert.equal(refAt(b, 20, 9), 'D2')
   assert.ok(b.items.some(it => it.kind === 'track' && it.net === 'A1/led'))
   const s = site(b).schematic
-  const here = fileURLToPath(import.meta.url).slice(1)
+  const here = fileURLToPath(import.meta.url)
+    .replaceAll('\\', '/')
+    .replace(/^\//, '')
   assert.deepEqual(s.circuits, [
     { path: ['A1'], name: 'A1', kind: 'circuit', def: `${here}#chan`, circuit: 'chan', layout: `${here}#Row`, parts: ['R1', 'D1'], children: [], placed: true },
     { path: ['B2'], name: 'B2', kind: 'circuit', def: `${here}#chan`, circuit: 'chan', layout: `${here}#Column`, parts: ['R2', 'D2'], children: [], placed: true },
@@ -201,7 +203,9 @@ test('layout methods preserve placement, overrides, definition keys and instance
   assert.equal(refAt(b, 5, 10), 'R1')
   assert.equal(refAt(b, 13, 10), 'D1')
   assert.equal(refAt(b, 17, 20), 'R2')
-  const here = fileURLToPath(import.meta.url).slice(1)
+  const here = fileURLToPath(import.meta.url)
+    .replaceAll('\\', '/')
+    .replace(/^\//, '')
   assert.deepEqual(
     site(b).schematic.circuits.map(c => c.layout),
     [`${here}#Shared`, `${here}#OnlyB`],

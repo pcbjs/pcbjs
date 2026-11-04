@@ -1,13 +1,14 @@
 // STEP conversion and the binary round trip, against a pin 2 mm across and 5 mm tall written by hand in tests/fixtures.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { stepToMesh, meshToBinary, meshFromBinary, meshKey, bounds, DEFAULT_OPTIONS } from '../dist/index.js'
 
 const PIN = new URL('./fixtures/pin.step', import.meta.url)
 
 test('a STEP pin converts to millimetres with its colour, normals and indices', async () => {
-  const model = await stepToMesh(PIN.pathname)
+  const model = await stepToMesh(fileURLToPath(PIN))
   assert.equal(model.meshes.length, 1)
   const m = model.meshes[0]
   assert.equal(m.positions.length % 3, 0)
@@ -50,7 +51,7 @@ test('the default deflection keeps a 2 mm pin round', async () => {
 })
 
 test('the binary round trip keeps positions and indices exactly and normals to a byte', async () => {
-  const model = await stepToMesh(PIN.pathname)
+  const model = await stepToMesh(fileURLToPath(PIN))
   const bin = meshToBinary(model)
   const back = meshFromBinary(bin)
   assert.equal(back.meshes.length, model.meshes.length)

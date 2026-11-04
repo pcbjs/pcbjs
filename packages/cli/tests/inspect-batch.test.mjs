@@ -65,7 +65,10 @@ test('inspect: one answer prints as before, several share the frame lines under 
 
 test('shot: one shot per --select and view, the layers shown together in one', () => {
   const files = shotJobs([{ entry: '/p/b.tsx', name: 'B', targets: [null] }], ['2d', '3d'], '/o', { layers: ['F.Cu', 'B.Cu'] }, ['U1', 'Q1']).map(j => j.file)
-  assert.deepEqual(files, ['/o/B-2d-select-U1-F.Cu+B.Cu.png', '/o/B-2d-select-Q1-F.Cu+B.Cu.png', '/o/B-3d-select-U1-F.Cu+B.Cu.png', '/o/B-3d-select-Q1-F.Cu+B.Cu.png'])
+  assert.deepEqual(
+    files,
+    ['/o/B-2d-select-U1-F.Cu+B.Cu.png', '/o/B-2d-select-Q1-F.Cu+B.Cu.png', '/o/B-3d-select-U1-F.Cu+B.Cu.png', '/o/B-3d-select-Q1-F.Cu+B.Cu.png'].map(f => join(f)),
+  )
   const [j] = shotJobs([{ entry: '/p/b.tsx', name: 'B', targets: [null] }], ['3d'], '/o', {}, ['U1'])
   assert.deepEqual(j.spec, { view: '3d', entry: '/p/b.tsx', frame: 'U1', highlight: ['U1'] }, '--select frames and highlights')
 })

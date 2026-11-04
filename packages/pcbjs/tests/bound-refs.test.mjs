@@ -161,13 +161,13 @@ test('<Place> places a part held in an array, on the board and in the schematic;
   assert.throws(() => Place({ part: 3, at: '1 1' }), /needs part=/)
 })
 
-test('a placement takes at, side, ref:at and thermal only; the rest belongs to the part', () => {
+test('a placement takes at, side, grid, ref:at and thermal only; the rest belongs to the part', () => {
   const { A, B } = nets()
   const R1 = bindRef(R0603('1').connect({ 1: A, 2: B }), 'R1', site(1))
   for (const k of ['dnp', 'bom', 'fields', 'model', 'rules', 'ref', 'nets'])
     assert.throws(
       () => compileBoard(board(h(R1, { at: '5 5', [k]: k === 'ref' ? false : {} }))),
-      e => e instanceof CompileError && new RegExp(`a placement takes at, side, ref:at and thermal, not ${k}`).test(e.message),
+      e => e instanceof CompileError && new RegExp(`a placement takes at, side, grid, ref:at and thermal, not ${k}`).test(e.message),
       k,
     )
 })

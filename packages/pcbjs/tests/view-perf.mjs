@@ -217,7 +217,7 @@ export async function viewBench({ shots, log = () => {}, devtools = 0, port = 0,
         await shot('failed')
         throw new Error(`${e.message}; chip: ${await chip()}`)
       })
-      await until('its tools', async () => /Move/.test(await ev(`document.querySelector('.bv-edit')?.innerText ?? ''`)))
+      await until('its tools', async () => /Placement/.test(await ev(`document.querySelector('.bv-edit')?.innerText ?? ''`)))
       await settle()
       if (view === '3d') out.callsFade3d ??= await ev('window.__pcbjs3d.calls')
       const b = await to([from[0] + 5, from[1]])

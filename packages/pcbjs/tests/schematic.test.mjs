@@ -161,8 +161,8 @@ test('registry: a declared part that is never placed is a compile error, and ref
     e => e instanceof CompileError && /R2 at .*schematic\.test\.mjs:\d+:\d+ is declared but never placed/.test(e.message),
   )
   void C
-  assert.throws(() => compileBoard(board(h(R, { at: '5 5', ref: 'R9' }))), /a placement takes at, side, ref:at and thermal, not ref/)
-  assert.throws(() => compileBoard(board(h(R, { at: '5 5', 'net:pad1': 'X' }))), /a placement takes at, side, ref:at and thermal, not net:pad1/)
+  assert.throws(() => compileBoard(board(h(R, { at: '5 5', ref: 'R9' }))), /a placement takes at, side, grid, ref:at and thermal, not ref/)
+  assert.throws(() => compileBoard(board(h(R, { at: '5 5', 'net:pad1': 'X' }))), /a placement takes at, side, grid, ref:at and thermal, not net:pad1/)
 })
 
 test('ERC: a net with fewer than two pins is a warning', () => {

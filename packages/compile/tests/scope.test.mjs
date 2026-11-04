@@ -1,6 +1,9 @@
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { freeNames, moduleExports, scopeInject, ScopeError, toInjected, toSource } from '../dist/scope.js'
+import { freeNames, moduleExports, scopeInject, scopeHost, ScopeError, toInjected, toSource } from '../dist/scope.js'
 import ts from 'typescript'
 
 const files = {
@@ -82,4 +85,24 @@ test('scope: two schematic namespaces in one file are an error asking for a spli
 test('scope: a namespace not passed to schematic, or a drawing passed by name, injects nothing', () => {
   assert.equal(scopeInject(`import * as sch from './board.sch'\nexport default <PCB name="b"><U1 /></PCB>\n`, resolve, '/p/pcb.tsx'), null)
   assert.equal(scopeInject(`import { drawing } from './board.sch'\nexport default <PCB name="b" schematic={drawing}><U1 /></PCB>\n`, resolve, '/p/pcb.tsx'), null)
+})
+
+test('scope host binds schematic names across native and TypeScript path separators', () => {
+  const root = mkdtempSync(join(tmpdir(), 'pcbjs-scope-host-'))
+  const file = join(root, 'pcb.tsx')
+  const source = "import * as sch from './board.sch'; export default <PCB schematic={sch}><R1 /></PCB>"
+  try {
+    writeFileSync(join(root, 'board.sch.ts'), 'export const R1 = 1')
+    writeFileSync(file, source)
+    for (const spelling of [root.replaceAll('\\', '/'), root.replaceAll('/', '\\')]) {
+      const { host, injections } = scopeHost({}, spelling)
+      const loaded = host.getSourceFile(file.replaceAll('\\', '/'), ts.ScriptTarget.Latest)
+      assert.match(loaded.text, /const \{R1\}=sch/)
+      assert.deepEqual([...injections.values()][0].names, ['R1'])
+      const outside = scopeHost({}, spelling + '-other').host.getSourceFile(file, ts.ScriptTarget.Latest)
+      assert.equal(outside.text, source, 'neighboring path prefixes are not owned')
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

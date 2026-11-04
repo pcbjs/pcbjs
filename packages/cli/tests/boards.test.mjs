@@ -114,9 +114,9 @@ test('config: pcb.config.{ts,mts,js,mjs} in that order, no other name', () => {
   const having =
     (...names) =>
     f =>
-      names.some(n => f === `/p/${n}`)
+      names.some(n => f === join('/p', n))
   assert.equal(findConfig('/p', having()), null)
-  assert.equal(findConfig('/p', having('pcb.config.mjs', 'pcb.config.mts')), '/p/pcb.config.mts')
+  assert.equal(findConfig('/p', having('pcb.config.mjs', 'pcb.config.mts')), join('/p', 'pcb.config.mts'))
   assert.equal(findConfig('/p', having('pcbjs.config.js')), null)
 })
 

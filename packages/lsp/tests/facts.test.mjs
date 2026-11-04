@@ -1,11 +1,12 @@
+import { resolve } from 'node:path'
 // Board facts: one object per set of compiled boards, the boards of a file, its innermost range, routes, findings and parts.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { boardFacts, itemsOf } from '../dist/facts.js'
 import { docOf } from '../dist/doc.js'
 
-const ROOT = '/p'
-const FILE = '/p/pcb.tsx'
+const ROOT = resolve('/p')
+const FILE = resolve('/p/pcb.tsx')
 const TEXT = `const R1 = R0603('1k')
 const ch = chain(SIG, J1[3], U2.IN)
 export default <PCB><R1 at="5 5" /></PCB>

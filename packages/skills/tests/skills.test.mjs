@@ -13,6 +13,7 @@ const run = (cwd, opts) =>
   install(cwd, opts)
     .map(s => installLine(s, cwd))
     .join('\n')
+    .replaceAll('\\', '/')
 
 test('skills: the five skills, each with valid frontmatter, a short body and only references that exist', () => {
   assert.deepEqual(names.sort(), ['pcbjs-basics', 'pcbjs-best-practices', 'pcbjs-port-from-kicad', 'pcbjs-port-from-python-scripted', 'pcbjs-upgrade'])

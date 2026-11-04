@@ -6,8 +6,10 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
+import { pathToFileURL } from 'node:url'
+
 const repo = join(import.meta.dirname, '../../..')
-const { checkEntries, cliLayers, packageEntries } = await import(join(repo, 'scripts/check-entries.mjs'))
+const { checkEntries, cliLayers, packageEntries } = await import(pathToFileURL(join(repo, 'scripts/check-entries.mjs')).href)
 
 const put = (root, file, text) => {
   mkdirSync(dirname(join(root, file)), { recursive: true })

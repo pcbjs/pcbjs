@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 // The assist context: a chain call or an `at` waiting for its argument becomes a context with the command, the start point from the
 // chain so far, layer, net, side, grid and relative flag; and the repair rule that cuts such a call so the chain compiles up to it.
 import { test } from 'node:test'
@@ -6,8 +7,8 @@ import { assistSpot, assistContexts } from '../dist/assist.js'
 import { cutCalls, repair } from '../dist/repair.js'
 import { docOf, parse } from '../dist/doc.js'
 
-const root = '/p'
-const file = '/p/pcb.tsx'
+const root = resolve('/p')
+const file = resolve('/p/pcb.tsx')
 const head = `export default (\n  <PCB grid={G}>\n`
 const tail = `\n  </PCB>\n)\n`
 

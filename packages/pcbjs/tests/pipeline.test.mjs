@@ -152,6 +152,7 @@ test('plugins: findings reported before the checks follow the built-in ones in r
   const p = {
     name: 'order',
     version: '1',
+    cache: true,
     stages: [
       { name: 'early', slot: 'beforeRoute', reads: [], run: () => ({ findings: [f('order.early', 'warning'), f('order.early', 'error'), f('order.sch', 'error', 'erc')] }) },
       { name: 'late', slot: 'beforeChecks', reads: [], run: () => ({ findings: [f('order.late', 'info')] }) },

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
@@ -6,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { extname, join, resolve } from 'node:path'
 import { chromes, launchAny, stopChrome, cdp, evaluate } from '../../scripts/browser-equality.mjs'
 
-const dist = process.env.PCBJS_SITE_DIST ? resolve(process.env.PCBJS_SITE_DIST) : new URL('../.vitepress/dist/', import.meta.url).pathname
+const dist = process.env.PCBJS_SITE_DIST ? resolve(process.env.PCBJS_SITE_DIST) : fileURLToPath(new URL('../.vitepress/dist/', import.meta.url))
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 async function until(page, expression, ms = 15000) {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (await evaluate(page, expression)) return true

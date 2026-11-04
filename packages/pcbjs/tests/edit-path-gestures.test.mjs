@@ -35,7 +35,7 @@ import {
 
 harness()
 
-test('a click on J1 selects it and puts the editor cursor on its at, focus kept', { skip }, async () => {
+test('a click on J1 selects it and its source expression, focus kept', { skip }, async () => {
   await settled()
   await click(await screenOf(3, 8.77))
   await until('the chip', async () => (await chip()).startsWith('J1'))
@@ -44,10 +44,10 @@ test('a click on J1 selects it and puts the editor cursor on its at, focus kept'
   })
   const s = ed.selects.at(-1)
   const r = s.items[0].ranges[s.primary.index]
-  assert.equal(TEXT0.split('\n')[r.start.line].slice(r.start.character, r.end.character), '3 6.23', 'the range is the value of at')
+  assert.equal(TEXT0.split('\n')[r.start.line].slice(r.start.character, r.end.character), '<J1 at="3 6.23" />', 'the range is the placement expression')
   assert.equal(s.reveal, true)
   assert.ok(!s.focus, 'the editor does not take focus')
-  assert.match(await ev(`document.querySelector('.bv-edit')?.innerText ?? ''`), /Move/)
+  assert.match(await ev(`document.querySelector('.bv-edit')?.innerText ?? ''`), /Placement/)
 })
 
 test('drag J1 2 mm: its at, through the editor, never drawn where it was after the drop', { skip }, async () => {
@@ -80,7 +80,7 @@ test('R turns it 90 degrees more', { skip }, async () => {
 })
 
 test('flip: side="B" on the same element', { skip }, async () => {
-  await gesture('flip', () => ev(`(() => { const s = document.querySelector('.bv-edit select'); s.value = 'B'; s.dispatchEvent(new Event('change')) })()`))
+  await gesture('flip', () => ev(`(() => { const s = document.querySelector('[aria-label="Placement side"]'); s.value = 'B'; s.dispatchEvent(new Event('change')) })()`))
   assert.match(ed.doc.getText(), /<J1 at="5 6\.23 180" side="B" \/>/)
 })
 
@@ -88,11 +88,11 @@ test('a part inside a group: a double-click enters its definition, a drag writes
   await settled()
   await dblclick(await screenOf(10.825, 7.5))
   await until('R1 inside Divider', async () => /^Divider\s*\/\s*R1/.test(await chip()))
-  await until('its tools', async () => /Move/.test(await ev(`document.querySelector('.bv-edit')?.innerText ?? ''`)))
+  await until('its tools', async () => /Placement/.test(await ev(`document.querySelector('.bv-edit')?.innerText ?? ''`)))
   const from = await screenOf(10.825, 7.5),
     to = await screenOf(10.825, 8.5)
   await gesture('group part', () => drag(from, to))
-  assert.match(ed.doc.getText(), /<R1 at="10 8\.5" \/>/)
+  assert.match(ed.doc.getText(), /<R1 at="-6 1" \/>/)
   await key('Escape', 'Escape')
   await until('back on the board with Divider selected', async () => /^Divider/.test(await chip()) && !/shown with/.test(await chip()))
 })
@@ -147,7 +147,7 @@ test('drag a text 2 mm: its own at', { skip }, async () => {
   const from = await onText(16, 12.5)
   await click(from)
   await until('the text selected', async () => /^item:/.test(await chip()))
-  await until('its tools', async () => /Move/.test(await ev(`document.querySelector('.bv-edit')?.innerText ?? ''`)))
+  await until('its tools', async () => /Placement/.test(await ev(`document.querySelector('.bv-edit')?.innerText ?? ''`)))
   const [a, b] = [await screenOf(16, 12.5), await screenOf(18, 12.5)]
   await gesture('text', () => drag(from, [from[0] + b[0] - a[0], from[1] + b[1] - a[1]]))
   assert.match(ed.doc.getText(), /<text layer="F\.SilkS" at="18 12\.5" size=\{1\}>/)
@@ -158,7 +158,7 @@ test('typing the session has not seen yet during a drag: the editor refuses the 
   const from = await onText(18, 12.5)
   await click(from)
   await until('the text selected', async () => /^item:/.test(await chip()))
-  await until('its tools', async () => /Move/.test(await ev(`document.querySelector('.bv-edit')?.innerText ?? ''`)))
+  await until('its tools', async () => /Placement/.test(await ev(`document.querySelector('.bv-edit')?.innerText ?? ''`)))
   const [a, b] = [await screenOf(18, 12.5), await screenOf(20, 12.5)]
   const to = [from[0] + b[0] - a[0], from[1] + b[1] - a[1]]
   const before = { applied: ed.applied.length, refused: ed.refused.length, shown: (await confirmations()).length }
@@ -256,7 +256,7 @@ test('Blinky in 3D: a drag of the instance CH1 moves its routes and text in the 
     },
     { board: 'Blinky', file },
   )
-  assert.match(doc.getText(), /<LedChannelRow g=\{CH1\} at="2 5" label="LED1" \/>/)
+  assert.match(doc.getText(), /<LedChannelRow g=\{CH1\} at="18 5" label="LED1" \/>/)
   assert.ok(posed.kinds.track >= 3, `CH1's three routes drawn again: ${JSON.stringify(posed)}`)
   assert.ok(posed.kinds.text >= 1, `its label drawn again: ${JSON.stringify(posed)}`)
   assert.ok(posed.kinds.pad >= 4, `its parts' pads drawn again: ${JSON.stringify(posed)}`)

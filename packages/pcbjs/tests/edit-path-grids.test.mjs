@@ -53,6 +53,9 @@ test('a part under a defineGrid: its grid drawn as dots through its own origin, 
   await dblclick(await screenOf(11.025, 8.5))
   await until('R1 inside Divider', async () => /^Divider\s*\/\s*R1/.test(await chip()))
   await until('the dots of its grid', () => ev(`!!document.querySelector('.grid-dots path.dot')`))
+  assert.equal(await ev(`document.querySelector('.bv-edit input[type=checkbox]').checked`), false, 'an off-grid placement starts with snapping disabled')
+  await ev(`document.querySelector('.bv-edit input[type=checkbox]').click()`)
+  assert.equal(await ev(`document.querySelector('.bv-edit input[type=checkbox]').checked`), true)
   await shot('quad-r1-grid-dots')
   const [from, to] = [await screenOf(11.025, 8.5), await screenOf(12.325, 8.6)]
   await gesture('grid drag', () => drag(from, to))
@@ -73,7 +76,7 @@ test('Blinky: a click on R1 selects CH1 with the tools, a drag writes the at of 
   await settled('Blinky')
   await click(await screenOf(11.175, 5))
   await until('CH1 selected', async () => (await chip()).startsWith('CH1'))
-  await until('its tools', async () => /Move/.test(await ev(`document.querySelector('.bv-edit')?.innerText ?? ''`)))
+  await until('its tools', async () => /Placement/.test(await ev(`document.querySelector('.bv-edit')?.innerText ?? ''`)))
   await shot('blinky-ch1-selected')
   const [from, to] = [await screenOf(11.175, 5), await screenOf(13.175, 5)]
   await ev(SAMPLE('R1'))

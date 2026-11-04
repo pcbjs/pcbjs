@@ -6,14 +6,14 @@ import { spawn, execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, symlinkSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import WebSocket from 'ws'
 import { board } from './fixtures/workspace.mjs'
 import { printedPort, stop } from './fixtures/proc.mjs'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const BIN = join(REPO, 'packages', 'pcbjs', 'bin', 'pcbjs.js')
-const HOOK = join(REPO, 'packages', 'cli', 'tests', 'fixtures', 'trace-lsp.mjs')
+const HOOK = pathToFileURL(join(REPO, 'packages', 'cli', 'tests', 'fixtures', 'trace-lsp.mjs')).href
 let PORT
 
 const root = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-lazy-')))

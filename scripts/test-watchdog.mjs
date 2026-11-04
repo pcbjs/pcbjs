@@ -1,6 +1,15 @@
 // Loaded by every package's test script: a test file still running after PCBJS_TEST_FILE_MS, default 10 minutes, fails and stops the children it spawned.
 import cp from 'node:child_process'
+import { realpathSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { syncBuiltinESMExports } from 'node:module'
+
+// Windows TEMP may use an 8.3 alias; fixtures and Vite must agree on the directory.
+if (process.platform === 'win32') {
+  const directory = realpathSync.native(tmpdir())
+  process.env.TEMP = directory
+  process.env.TMP = directory
+}
 
 if (process.env.NODE_TEST_CONTEXT) {
   const kids = new Set()

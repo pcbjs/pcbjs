@@ -109,7 +109,7 @@ export async function boards() {
   const cfg = await resolveConfig([], 'build', undefined, root, () => {})
   const state = pluginState(cfg)
   const server = await compileServer(cfg)
-  const out = { root, text: file => readFileSync(join(root, file), 'utf8'), done: () => rmSync(root, { recursive: true, force: true }) }
+  const out = { root, text: file => readFileSync(resolve(root, file), 'utf8'), done: () => rmSync(root, { recursive: true, force: true }) }
   try {
     for (const slot of state.slots) {
       const [c] = await compileEntry(viteLoader(server), cfg, slot.entry, { dev: true })

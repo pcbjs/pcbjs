@@ -40,7 +40,7 @@ function blinky() {
   const all = Object.fromEntries(
     walk(template)
       .filter(p => /\.(tsx?|json)$/.test(p) && !p.endsWith('package.json'))
-      .map(p => [relative(template, p), clean(read(p))]),
+      .map(p => [relative(template, p).replaceAll('\\', '/'), clean(read(p))]),
   )
   const base = all['pcb.tsx']
   const stages = [

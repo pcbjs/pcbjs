@@ -136,7 +136,7 @@ test(
       await page.send('Page.enable')
       await page.send('Emulation.setDeviceMetricsOverride', { width: 1000, height: 900, deviceScaleFactor: 1, mobile: false })
       await page.send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` })
-      await until(page, `document.documentElement.dataset.ready==='checks'`)
+      await until(page, `document.documentElement?.dataset.ready==='checks'`)
       assert.equal(await evaluate(page, 'window.store.sel.finding??null'), null, 'mount never chooses a finding')
       assert.equal(await evaluate(page, `document.querySelectorAll('.finding-row').length`), 3)
       assert.equal(await evaluate(page, `document.querySelector('#checks-list').textContent.includes('Full diagnostic')`), false, 'list uses rule labels, details own messages')

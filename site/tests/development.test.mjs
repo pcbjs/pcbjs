@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
@@ -12,7 +13,7 @@ import {
   developmentRedirects,
 } from '../scripts/development.mjs'
 
-const repo = new URL('../../', import.meta.url).pathname
+const repo = fileURLToPath(new URL('../../', import.meta.url))
 const site = join(repo, 'site')
 const dist = process.env.PCBJS_SITE_DIST ? resolve(process.env.PCBJS_SITE_DIST) : join(site, '.vitepress/dist')
 const skip = !existsSync(join(dist, 'development/index.html'))

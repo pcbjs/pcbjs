@@ -48,7 +48,7 @@ after(() => rmSync(root, { recursive: true, force: true }))
 
 const run = (...args) => {
   const r = spawnSync(process.execPath, [BIN, 'model', ...args], { cwd: root, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } })
-  return { code: r.status, out: r.stdout, err: r.stderr }
+  return { code: r.status, out: r.stdout.replaceAll('\\', '/'), err: r.stderr }
 }
 
 test('check lists every footprint with its source and flags files off the courtyard, missing or unreadable', () => {

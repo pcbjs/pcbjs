@@ -49,7 +49,7 @@ test('library labels restart for each instance and local selection edits the sha
   await until('first instance focused', () => ev(`document.querySelector('.chip.path')?.textContent.includes('CH1')`))
   await click(await centre('[aria-label="Edit library layout"]'))
   await until('first instance library loaded', () => ev(`!!document.querySelector('svg.board-svg [data-ref="R1"]') && !document.querySelector('svg.board-svg [data-ref="R2"]')`))
-  await ed.link.request('session/select', { board: 'Blinky', refs: ['R1'], anchor: 'R1' })
+  await ed.link.request('session/select', { board: 'Blinky', refs: ['R1'], anchor: 'R1', isolate: 'CH1', isolateMode: 'library' })
   await until('first instance also R0', async () => (await label()) === 'R0')
   await open('isolate=CH1&isolate-mode=library&select=R1', '3d')
   await until('3D uses local R0', async () => (await label()) === 'R0')

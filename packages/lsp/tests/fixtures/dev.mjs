@@ -3,7 +3,7 @@
 // owner's session may already serve the checkout and a session is one per checkout.
 import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { dirname, join, isAbsolute, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serveSession } from '@pcbjs/cli/internal/session/serve'
 
@@ -13,10 +13,10 @@ const EXAMPLES = join(REPO, 'examples')
 /** The example root copied under a temporary folder: the whole top-level example, so shared siblings come along. */
 function copied(root) {
   const rel = relative(EXAMPLES, root)
-  if (rel.startsWith('..') || !rel) return null
+  if (isAbsolute(rel) || rel.startsWith('..') || !rel) return null
   const top = rel.split(sep)[0]
   const tmp = realpathSync(mkdtempSync(join(tmpdir(), `pcbjs-${top}-`)))
-  cpSync(join(EXAMPLES, top), join(tmp, top), { recursive: true, filter: p => !/\/(\.pcbjs|node_modules)(\/|$)/.test(p) })
+  cpSync(join(EXAMPLES, top), join(tmp, top), { recursive: true, filter: p => !/[\\/](\.pcbjs|node_modules)([\\/]|$)/.test(p) })
   mkdirSync(join(tmp, 'node_modules'))
   symlinkSync(join(REPO, 'node_modules', '@pcbjs'), join(tmp, 'node_modules', '@pcbjs'), 'dir')
   return { root: join(tmp, rel), tmp }

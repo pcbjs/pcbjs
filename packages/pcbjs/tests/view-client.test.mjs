@@ -30,17 +30,32 @@ test('view query: view, explode, layer, select, isolate, side and theme, bad val
     layer: 'F.Cu',
     select: 'U1,net:GND',
     isolate: 'CH1',
+    isolateMode: null,
+    focus: null,
     side: 'B',
     mirror: true,
     theme: 'dark',
   })
-  assert.deepEqual(parseViewQuery(''), { view: null, explode: null, layer: null, select: null, isolate: null, side: null, mirror: null, theme: null })
+  assert.deepEqual(parseViewQuery(''), {
+    view: null,
+    explode: null,
+    layer: null,
+    select: null,
+    isolate: null,
+    isolateMode: null,
+    focus: null,
+    side: null,
+    mirror: null,
+    theme: null,
+  })
   assert.deepEqual(parseViewQuery('?view=iso&explode=x&layer=&isolate=&side=bottom&mirror=yes&theme=hc'), {
     view: null,
     explode: null,
     layer: null,
     select: null,
     isolate: null,
+    isolateMode: null,
+    focus: null,
     side: null,
     mirror: null,
     theme: null,

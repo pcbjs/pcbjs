@@ -99,7 +99,7 @@ test('docs: every TypeScript and JavaScript sample type checks', async () => {
         })
       // a module of another page's example, imported by name: a stub with those names
       for (const [file, b] of blocks) {
-        if (!file.startsWith(dir + '/')) continue
+        if (!file.startsWith(join(dir, '/'))) continue
         for (const m of b.code.matchAll(/import\s*\{([^}]*)\}\s*from\s*'(\.[^']+|@acme\/[^']+)'/g)) {
           const target = m[2].startsWith('@acme/') ? join(dir, 'node_modules', m[2]) : resolve(dirname(file), m[2])
           if (['.ts', '.tsx', ''].some(x => blocks.has(target + x))) continue

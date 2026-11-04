@@ -273,7 +273,7 @@ new MutationObserver(ms => {
   for (const m of ms)
     for (const n of m.addedNodes) {
       if (n.nodeType !== 1) continue
-      if (n.matches('.chip.written')) window.__written.push(n.textContent.trim())
+      if (n.matches('.selection-status[role="status"]')) window.__written.push(n.textContent.trim())
       if (n.matches('.toast')) window.__toasts.push(n.textContent.trim())
     }
 }).observe(document.body, { childList: true, subtree: true })`
@@ -385,7 +385,7 @@ export const SCREEN3 = (ref, x, y) => `(() => {
   return [r.x + ((s.x + 1) / 2) * r.width, r.y + ((1 - s.y) / 2) * r.height]
 })()`
 
-/** `session/select` of Blinky's CH1 through the extension's link: the editor's cursor lands on the at of `<LedChannelRow g={CH1} at="16 5" label="LED1" />`. */
+/** `session/select` of Blinky's CH1 through the extension's link: the editor's cursor selects `<LedChannelRow g={CH1} at="16 5" label="LED1" />`. */
 export async function instanceJump(e, root) {
   const n = e.selects.length
   await e.link.request('session/select', { board: 'Blinky', refs: ['CH1'], anchor: 'CH1' })
@@ -396,7 +396,7 @@ export async function instanceJump(e, root) {
   const r = item.ranges[s.primary.index]
   const line = readFileSync(join(root, 'blinky.pcb.tsx'), 'utf8').split('\n')[r.start.line]
   assert.match(line, /<LedChannelRow g=\{CH1\} at="16 5" label="LED1" \/>/)
-  assert.equal(line.slice(r.start.character, r.end.character), '16 5')
+  assert.equal(line.slice(r.start.character, r.end.character), '<LedChannelRow g={CH1} at="16 5" label="LED1" />')
 }
 
 export function harness() {

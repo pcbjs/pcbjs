@@ -1,6 +1,6 @@
 // Copies the example boards from examples/ into templates/examples, the source of truth staying examples/; `--check` lists drift and exits 1.
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -54,7 +54,7 @@ function exampleFiles(name, ex) {
   const dir = join(repo, 'examples', ex.from)
   const files = new Map()
   if (!ex.entry) {
-    for (const rel of walk(dir)) files.set(join(dirname(rel), RENAME[rel.split('/').pop()] ?? rel.split('/').pop()), readFileSync(join(dir, rel), 'utf8'))
+    for (const rel of walk(dir)) files.set(join(dirname(rel), RENAME[basename(rel)] ?? basename(rel)), readFileSync(join(dir, rel), 'utf8'))
     if (!files.has('_gitignore')) files.set('_gitignore', GITIGNORE)
     return files
   }

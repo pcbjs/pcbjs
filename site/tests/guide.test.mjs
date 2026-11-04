@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
@@ -6,7 +7,7 @@ import { excerptRange } from '../scripts/source-selection.mjs'
 import { guideExamples, fencedExamples } from '../scripts/guide-examples.mjs'
 import { guideData } from '../scripts/guide-data.mjs'
 
-const dist = process.env.PCBJS_SITE_DIST ? resolve(process.env.PCBJS_SITE_DIST) : new URL('../.vitepress/dist/', import.meta.url).pathname
+const dist = process.env.PCBJS_SITE_DIST ? resolve(process.env.PCBJS_SITE_DIST) : fileURLToPath(new URL('../.vitepress/dist/', import.meta.url))
 const first = join(dist, 'guide/getting-started/index.html')
 test('drawing selection falls back to visible part identity', () => {
   const ranges = [
