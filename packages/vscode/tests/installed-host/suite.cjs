@@ -2,10 +2,11 @@ const vscode = require('vscode')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
+const { writeJson } = require('./report.cjs')
 
 exports.run = async () => {
   const result = { checks: [], failures: [], tabs: [], extension: null, platform: process.platform, vscode: vscode.version }
-  const report = () => fs.writeFileSync(process.env.PCBJS_HOST_REPORT, JSON.stringify(result, null, 2))
+  const report = () => writeJson(process.env.PCBJS_HOST_REPORT, result)
   const wait = async (name, fn, ms = 60000) => {
     const end = Date.now() + ms
     while (Date.now() < end) {

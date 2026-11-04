@@ -8,6 +8,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import { hostPaths } from './platform.mjs'
+import { writeJson } from './report.cjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const args = process.argv.slice(2)
@@ -160,8 +161,8 @@ try {
           if (evidence) {
             handled.add(action.id)
             probeResults.push(evidence)
-            writeFileSync(join(out, 'webview-probes.json'), JSON.stringify(probeResults, null, 2))
-            writeFileSync(ack, JSON.stringify({ id: action.id, evidence, ...(evidence.error ? { error: evidence.error } : {}) }))
+            writeJson(join(out, 'webview-probes.json'), probeResults)
+            writeJson(ack, { id: action.id, evidence, ...(evidence.error ? { error: evidence.error } : {}) })
           }
         }
       }
