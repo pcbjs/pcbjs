@@ -220,9 +220,13 @@ test('the .bin link runs under the chosen node, a shell shim as it is, a global 
   assert.deepEqual(notices, [glob], 'one notice, not one per start')
 })
 
-test('a connection lost without bye connects again with a backoff, gives up after maxRestarts; a bye ends it', async () => {
+test('a connection lost without bye connects again with a backoff, gives up after maxRestarts; a bye ends it', async t => {
   const mock = await mockSession(readyFor())
   const { server, live } = makeServer({ maxRestarts: 3 })
+  t.after(async () => {
+    await server.stop()
+    await mock.close()
+  })
   live.set(ROOT, mock.dev)
   await server.start()
   assert.equal(server.state.kind, 'running')
@@ -240,8 +244,13 @@ test('a connection lost without bye connects again with a backoff, gives up afte
 
   const m2 = await mockSession(readyFor(), (m, send) => m.event === 'pcbjs:ide:hello' && send({ event: 'pcbjs:ide:bye', data: { reason: 'session stop' } }))
   const d = makeServer()
+  t.after(async () => {
+    await d.server.stop()
+    await m2.close()
+  })
   d.live.set(ROOT, m2.dev)
   await d.server.start()
+  await until(() => d.server.links.some(link => link.saidBye))
   m2.drop()
   await until(() => d.server.state.kind === 'detached')
   assert.ok(d.server.lines.includes('session mock0001 ended'), 'the session said bye: it ended on purpose')

@@ -1,5 +1,5 @@
 import { resolve as fixturePath } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 // The language client side against a mock language server: a mock session answers the link's hello and JSON-RPC on the same
 // socket. The client is a vscode-jsonrpc connection over the extension's transports, standing in for
 // vscode-languageclient, with a fake editor: the handshake options, the focus, a segment edit round trip, the
@@ -274,14 +274,14 @@ test('several sessions attached, through restarts and reattaches: one hint per n
     onLink: link => {
       const conn = createMessageConnection(transports(link).reader, transports(link).writer)
       conn.listen()
-      const client = { conn, link, mw: ownedMiddleware(uri => server.owner(new URL(uri).pathname)?.link === link) }
+      const client = { conn, link, mw: ownedMiddleware(uri => server.owner(fileURLToPath(uri))?.link === link) }
       clients.add(client)
       link.onClose(() => (clients.delete(client), conn.dispose()))
       void conn.sendRequest('initialize', { processId: null, rootUri: null, capabilities: {} })
     },
   })
   const doc = file => ({ uri: { toString: () => pathToFileURL(file).href } })
-  const files = [fixturePath(ROOT, 'pcb.tsx'), fixturePath(WORKTREE, 'pcb.tsx'), `${EXAMPLE}/pcb.tsx`]
+  const files = [fixturePath(ROOT, 'pcb.tsx'), fixturePath(WORKTREE, 'pcb.tsx'), fixturePath(EXAMPLE, 'pcb.tsx')]
   const TEXT = `route('3 10')`
   /** every client opens the files and answers an inlay hint request through its middleware, as vscode-languageclient calls it */
   const hints = async (gated = true) => {
@@ -333,7 +333,7 @@ test('the session serving a file closes while another covers it: the file moves 
   /** the extension's language clients by link, as `links` holds them */
   const clients = new Map()
   const owner = uri => {
-    const c = clients.get(server.owner(new URL(uri).pathname)?.link)
+    const c = clients.get(server.owner(fileURLToPath(uri))?.link)
     return c?.peer
   }
   const server = new PcbjsServer({
@@ -344,7 +344,7 @@ test('the session serving a file closes while another covers it: the file moves 
       const conn = createMessageConnection(transports(link).reader, transports(link).writer)
       conn.listen()
       const peer = { alive: () => clients.has(link), notify: (m, p) => void conn.sendNotification(m, p) }
-      const client = { conn, peer, mw: ownedMiddleware(uri => server.owner(new URL(uri).pathname)?.link === link, { holders, peer }) }
+      const client = { conn, peer, mw: ownedMiddleware(uri => server.owner(fileURLToPath(uri))?.link === link, { holders, peer }) }
       clients.set(link, client)
       link.onClose(() => {
         clients.delete(link)
@@ -354,7 +354,7 @@ test('the session serving a file closes while another covers it: the file moves 
       void conn.sendRequest('initialize', { processId: null, rootUri: null, capabilities: {} })
     },
   })
-  const FILE = `${EXAMPLE}/pcb.tsx`
+  const FILE = fixturePath(EXAMPLE, 'pcb.tsx')
   const docs = [{ uri: pathToFileURL(FILE).href, languageId: 'typescriptreact', version: 1, text: `route('3 10')` }]
   const doc = { uri: { toString: () => docs[0].uri } }
   const ask = c => () =>
@@ -381,5 +381,6 @@ test('the session serving a file closes while another covers it: the file moves 
   } finally {
     await server.stop()
     await own.close()
+    await inner.close()
   }
 })

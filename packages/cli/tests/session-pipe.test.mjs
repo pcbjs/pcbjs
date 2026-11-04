@@ -4,8 +4,9 @@ import { stop } from './fixtures/proc.mjs'
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { board } from './fixtures/workspace.mjs'
@@ -31,7 +32,7 @@ after(async () => {
     for (let i = 0; i < 200 && alive(owned.pid); i++) await new Promise(r => setTimeout(r, 100))
     assert.equal(alive(owned.pid), false, 'the owned session exited before removing its working directory')
   }
-  if (root) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
 test('the named pipe: bound, hello and ready exchanged, a second session on the root exits', { skip: !WIN && 'Windows only', timeout: 120000 }, async () => {
