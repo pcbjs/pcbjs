@@ -32,6 +32,10 @@ test(
       page = await cdp(chrome.socket)
       await page.send('Runtime.enable')
       await page.send('Page.enable')
+      if (process.env.PCBJS_TEST_CPU_RATE) await page.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.PCBJS_TEST_CPU_RATE) })
+      await page.send('Page.addScriptToEvaluateOnNewDocument', {
+        source: `for (const type of ['error', 'warn']) { const log = console[type]; console[type] = (...args) => log.call(console, location.pathname, ...args) }`,
+      })
       const origin = `http://127.0.0.1:${server.address().port}`
       await page.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false })
       await page.send('Page.navigate', { url: origin + '/guide/getting-started/placement' })
@@ -97,6 +101,7 @@ test(
       )
       await page.send('Page.navigate', { url: origin + '/development/' })
       assert.ok(await until(page, `document.querySelector('#VPSidebarNav')?.textContent.includes('Syntax and semantics')`), 'development have their own sectioned sidebar')
+      assert.ok(await until(page, `!!document.getElementById('app')?.__vue_app__`), 'VitePress is hydrated before sidebar interaction')
       await evaluate(page, `document.querySelector('#VPSidebarNav a[href="/development/syntax/"]').click()`)
       assert.ok(await until(page, `document.querySelector('h1')?.textContent.includes('Syntax and semantics')`), 'section navigation opens its overview')
       await page.send('Page.navigate', { url: origin + '/docs/routing?from=legacy#branches' })

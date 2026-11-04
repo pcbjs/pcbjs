@@ -164,6 +164,7 @@ export default async ({ command }: { command: 'build' | 'serve' }) => {
       console.log(`site: built in ${process.uptime().toFixed(1)} s, the boards compiled in Node included`)
     },
     vite: {
+      define: { __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: true },
       plugins: [developmentRedirects(base, host), localDocsWatch(repo), brandFiles(), boardRefs(), guideBoards(), pcbjs({ boards: 'compile' }), svgLoader()],
       server: { host: '0.0.0.0', port: 8080, strictPort: true, allowedHosts: ['dev.z-yx.net'], fs: { allow: [repo] } },
     },
