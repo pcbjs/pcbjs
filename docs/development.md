@@ -116,6 +116,10 @@ Changesets publishes linked trains: `@pcbjs/core` is a peer of its importers; `@
 
 The session compiles each project in a worker thread, `session/worker.ts`, which an edit cancels through shared memory in a few ms and which keeps the GLB, fab set and drawings, sending a board and site only when changed; a keystroke runs the keystroke tier, the full compile waits for the quiet period, session.md. `keystroke.test.mjs`, `worker-boundary.test.mjs` and compile's `cancel.test.mjs` hold their latencies.
 
+Compile workers keep the process alive while a request is pending, including a retry after a worker crash. Idle workers do not prevent shutdown. Windows session events use portable project-relative source names; file identity accepts native, Vite and TypeScript separators. Length-tuning searches check cancellation between batches of columns. Board snapshots and unit boundaries also check cancellation.
+
+Browser-heavy and language-server test suites run files sequentially; CLI integration tests run two files at a time. This keeps CPU contention and competing Chromium processes from distorting latency checks.
+
 ## Support
 
 support.md is generated from `site/features/`, listing supported, partial and missing features with tests or gaps. Catalogue format: site/README.md.

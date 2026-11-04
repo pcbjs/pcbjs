@@ -1,5 +1,6 @@
 // A reference from an older snapshot resolved in the current one: exact when it still names something, a finding by its fingerprint,
 // else by lineage through the previous snapshot, the source call it came from mapped through the edit to the call the current snapshot minted it from.
+import { resolve } from 'node:path'
 import { boardIndex, isTreeRef, parseRef, resolveRef as resolveOn } from '@pcbjs/core/ref'
 import type { SourceRange } from '@pcbjs/core/site-data'
 import { matchFinding, type Finding } from '@pcbjs/export/internal/findings'
@@ -67,7 +68,7 @@ function treeLineage(prev: Snapshot, cur: Snapshot, ref: string): string | null 
 const maps = new WeakMap<Snapshot, Map<string, PointMap | null>>()
 /** A position in a project file of `prev` as the same position in `cur`, null inside an edit or when the file is not known. */
 function mapPoint(prev: Snapshot, cur: Snapshot, rel: string, at: [number, number]): [number, number] | null {
-  const abs = `${prev.project}/${rel}`
+  const abs = resolve(prev.project, rel)
   let byFile = maps.get(cur)
   if (!byFile) maps.set(cur, (byFile = new Map()))
   if (!byFile.has(`${prev.id}|${abs}`)) {

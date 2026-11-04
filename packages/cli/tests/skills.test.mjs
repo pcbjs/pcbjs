@@ -22,7 +22,7 @@ const target = (up, name) => join(up, 'node_modules', '@pcbjs', 'skills', name)
 async function quiet(run) {
   const lines = []
   const log = console.log
-  console.log = line => lines.push(line)
+  console.log = line => lines.push(line.replaceAll('\\', '/'))
   try {
     return { code: await run(), lines }
   } finally {

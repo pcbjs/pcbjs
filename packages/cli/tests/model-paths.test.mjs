@@ -66,7 +66,7 @@ after(() => rmSync(top, { recursive: true, force: true }))
 
 const run = (...args) => {
   const r = spawnSync(process.execPath, [BIN, 'model', ...args], { cwd: root, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } })
-  return { code: r.status, out: r.stdout, err: r.stderr }
+  return { code: r.status, out: r.stdout.replaceAll('\\', '/'), err: r.stderr }
 }
 
 test('a model path is relative to the file that holds the literal: a part call, or a footprint shared from outside the project', () => {

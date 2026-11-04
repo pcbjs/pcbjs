@@ -385,9 +385,9 @@ test('alt-click: the entity a plain click selects, its definition, factory or de
     // a part of no instance: its declaration
     [hitOf(padOf(B, 'J1', 'VCC')), sel0(B), 'J1', /^blinky\.sch\.tsx: export const J1 = /],
     // a part inside an instance: the instance, the render of its layout
-    [hitOf(padOf(B, 'R2')), sel0(B), 'CH2', /^lib\/led-channel\.tsx: <g at=\{at\} side=\{side\}>/],
+    [hitOf(padOf(B, 'R2')), sel0(B), 'CH2', /^lib[\\/]led-channel\.tsx: <g at=\{at\} side=\{side\}>/],
     // inside the isolated definition: the part, its declaration in the circuit
-    [hitOf(padOf(B, 'R2')), iso(B, 'CH2'), 'CH2/R', /^lib\/led-channel\.tsx: /],
+    [hitOf(padOf(B, 'R2')), iso(B, 'CH2'), 'CH2/R', /^lib[\\/]led-channel\.tsx: /],
   ]
   for (const [hit, sel, ref, where] of cases) {
     const r = resolve(B, hit, { sel })

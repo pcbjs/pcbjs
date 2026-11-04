@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { viewerTools } from '../dist/session/viewers.js'
@@ -235,7 +236,7 @@ test('finding focus opens checks without source reveal, affected entity reveals 
   assert.equal(events.at(-1).target, 'Second')
   assert.equal(events.at(-1).finding.id, 'drc:clearance:0123456789ab')
   assert.equal(calls.length, 1)
-  assert.equal(calls[0][1][0].file, '/p/second.tsx')
+  assert.equal(calls[0][1][0].file, join('/p', 'second.tsx'))
 })
 
 test('lazy library requests validate ownership and share only the matching target/run cache', async () => {

@@ -72,7 +72,7 @@ export const PROBE = `(() => {
 })()`
 // before any script of the page: WebGL draws nothing, so a frame's work is the main thread's own, three.js's draw calls included, and
 // never a software rasteriser's, which takes seconds a frame in a headless browser without a GPU
-const NO_RASTER = `for (const C of [self.WebGLRenderingContext, self.WebGL2RenderingContext])
+export const NO_RASTER = `for (const C of [self.WebGLRenderingContext, self.WebGL2RenderingContext])
   for (const m of ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced', 'drawRangeElements', 'clear', 'blitFramebuffer'])
     if (C?.prototype[m]) C.prototype[m] = function () {}`
 

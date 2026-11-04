@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 // The platform: Node's by default, a memory one for the browser compile, and the JavaScript SHA-1 and POSIX paths it runs on.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -59,7 +60,7 @@ test('platform: Node by default, the one set until it is cleared', () => {
   assert.equal(platform().name, 'node')
   assert.equal(
     nodePlatform()
-      .text(new URL(import.meta.url).pathname)
+      .text(fileURLToPath(import.meta.url))
       ?.includes('platform: Node by default'),
     true,
   )

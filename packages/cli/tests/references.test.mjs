@@ -1,3 +1,4 @@
+import { sameFile } from '../dist/project/files.js'
 // Board references through the cli, see docs/references.md: the referenced entry compiles in a child process, its result is
 // kept per content hash of its module graph, a cycle is an error naming it, and the workspace server marks a scope stale when
 // a board it references changes.
@@ -55,7 +56,7 @@ test('references: a referenced entry compiles once per content of its graph, fro
   assert.equal(st.spawned, spawned + 1)
   assert.equal(one.name, 'B')
   assert.equal(one.title, 'Beta 1')
-  assert.ok(one.files.includes(join(s.b, 'pcb.tsx')) && one.files.includes(join(s.b, 'pcb.config.ts')), one.files.join(' '))
+  assert.ok(one.files.some(f => sameFile(f, join(s.b, 'pcb.tsx'))) && one.files.some(f => sameFile(f, join(s.b, 'pcb.config.ts'))), one.files.join(' '))
   assert.ok(existsSync(join(boardMeshDir(s.a), `${one.mesh}.bin`)), 'the mesh is in the cache')
   assert.deepEqual(
     one.footprints.map(f => f.ref),
@@ -116,7 +117,10 @@ test('references: the workspace server marks a scope stale when a board it refer
     }
     await fetch(`${base}/__pcbjs/scope/a`)
     assert.equal(refTitle(), 'Beta 1')
-    assert.ok(scope('a').files.includes(join(s.b, 'pcb.tsx')), "the referenced entry is in the scope's files")
+    assert.ok(
+      scope('a').files.some(f => sameFile(f, join(s.b, 'pcb.tsx'))),
+      "the referenced entry is in the scope's files",
+    )
     await fetch(`${base}/__pcbjs/scope/b`)
     await new Promise(r => setTimeout(r, 50))
     writeFileSync(join(s.b, 'pcb.tsx'), board('B', 'Beta 2'))

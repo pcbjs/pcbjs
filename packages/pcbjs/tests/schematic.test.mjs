@@ -423,7 +423,7 @@ test('types: every defineFootprint form gives literal pin names, and tsc rejects
   const ts = (await import('typescript')).default
   const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs')
   const { tmpdir } = await import('node:os')
-  const { join } = await import('node:path')
+  const { join, resolve } = await import('node:path')
   const dist = fileURLToPath(import.meta.resolve('@pcbjs/core'))
   const dir = mkdtempSync(join(tmpdir(), 'pcbjs-pins-'))
   const lines = [
@@ -459,7 +459,7 @@ test('types: every defineFootprint form gives literal pin names, and tsc rejects
       skipLibCheck: true,
       types: [],
     })
-    const diags = ts.getPreEmitDiagnostics(program).filter(d => d.file?.fileName === file)
+    const diags = ts.getPreEmitDiagnostics(program).filter(d => d.file && resolve(d.file.fileName) === file)
     const byLine = new Map(diags.map(d => [d.file.getLineAndCharacterOfPosition(d.start).line, ts.flattenDiagnosticMessageText(d.messageText, '\n')]))
     const badLines = lines.flatMap((l, i) => (l.startsWith('export const bad') ? [i] : []))
     assert.deepEqual(
@@ -584,7 +584,7 @@ test('types: pad ids are typed keys, pin keys win, and tsc rejects an unknown pa
   const ts = (await import('typescript')).default
   const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs')
   const { tmpdir } = await import('node:os')
-  const { join } = await import('node:path')
+  const { join, resolve } = await import('node:path')
   const core = fileURLToPath(import.meta.resolve('@pcbjs/core'))
   const lib = fileURLToPath(import.meta.resolve('@pcbjs/lib'))
   const kicad = fileURLToPath(import.meta.resolve('@pcbjs/kicad'))
@@ -659,7 +659,7 @@ test('types: pad ids are typed keys, pin keys win, and tsc rejects an unknown pa
       skipLibCheck: true,
       types: [],
     })
-    const diags = ts.getPreEmitDiagnostics(program).filter(d => d.file?.fileName === file)
+    const diags = ts.getPreEmitDiagnostics(program).filter(d => d.file && resolve(d.file.fileName) === file)
     assert.deepEqual(
       diags.map(d => `${d.file.getLineAndCharacterOfPosition(d.start).line + 1}: ${ts.flattenDiagnosticMessageText(d.messageText, '\n')}`),
       [],

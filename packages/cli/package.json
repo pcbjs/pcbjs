@@ -114,7 +114,7 @@
   "scripts": {
     "build": "tsc -b && node ../../scripts/docs-index.mjs",
     "watch": "tsc -b --watch",
-    "test": "node --import ../../scripts/test-env.mjs --import ../../scripts/test-watchdog.mjs --test \"tests/**/*.test.mjs\"",
+    "test": "node --import ../../scripts/test-env.mjs --import ../../scripts/test-watchdog.mjs --test --test-concurrency=2 \"tests/**/*.test.mjs\"",
     "prepack": "node ../../scripts/pack-files.mjs pre",
     "postpack": "node ../../scripts/pack-files.mjs post"
   },

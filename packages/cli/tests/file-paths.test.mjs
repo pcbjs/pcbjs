@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileKey, sameFile, under } from '../dist/project/files.js'
+import { fileKey, sameFile, sourcePath, under } from '../dist/project/files.js'
 import { entriesReaching, focusTarget } from '../dist/project/boards.js'
 import { modulesFor } from '../dist/project/loader.js'
 import { scopeOf } from '../dist/session/scopes.js'
@@ -33,6 +33,9 @@ test('Windows editor, watcher and Vite spellings reach the same entry and deepes
     assert.ok(previewable(root, shared))
     assert.equal(previewable(root, 'C:\\dev\\pcb\\node_modules\\lib\\file.ts'), false)
     assert.equal(previewable(root, 'C:\\dev\\pcb\\.pcbjs\\file.ts'), false)
+    assert.equal(sourcePath(root, shared), 'lib/pinout.ts')
+    assert.equal(sourcePath(root, 'c:\\dev\\pcb\\pcb.tsx'), 'pcb.tsx')
+    assert.equal(sourcePath(root, 'C:/dev/pcb-other/file.ts'), 'C:/dev/pcb-other/file.ts')
     assert.ok(under('C:/dev/pcb/pcb.tsx', 'c:\\dev\\pcb\\'))
     assert.ok(sameFile('C:/dev/pcb/pcb.tsx', entry))
     const nodes = new Set([{ file: shared }])

@@ -5,6 +5,7 @@ import { partOf } from '@pcbjs/core/internal/part'
 import { isCopper } from './layers.js'
 import { sha1 } from './cache.js'
 import { immutable } from './items.js'
+import { pulse } from './cancel.js'
 
 /** Board fields by facet; a field none names is in `rest`. */
 const FIELDS: Record<string, string[]> = {
@@ -88,11 +89,16 @@ const textOf = (it: Item): string => {
 /** `extra`: facets the board does not hold, such as jobs and the target's own state. */
 export function snapshot(board: Board, extra: Record<string, string> = {}): Snapshot {
   const fields = new Map<string, string>()
-  for (const k of Object.keys(board)) if (k !== 'items' && (board as any)[k] !== undefined) fields.set(k, JSON.stringify((board as any)[k]))
+  for (const k of Object.keys(board)) {
+    pulse()
+    if (k !== 'items' && (board as any)[k] !== undefined) fields.set(k, JSON.stringify((board as any)[k]))
+  }
   const items = new Map<number, string>()
   const groups: Record<string, string[]> = { pads: [], copper: [], drawings: [] }
   const frame: string[] = []
+  let n = 0
   for (const it of board.items) {
+    if ((n++ & 127) === 0) pulse()
     const j = textOf(it)
     items.set(it.id, j)
     groups[itemFacet(it)].push(j)

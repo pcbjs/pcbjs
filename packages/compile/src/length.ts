@@ -119,6 +119,7 @@ export function longestFreeSegment(pts: Pt[], isFree: IsFree, width: number, amp
           best = { index: i, side, from, to, a: [a[0] + u[0] * from, a[1] + u[1] * from], b: [a[0] + u[0] * to, a[1] + u[1] * to], length: to - from }
       }
       for (let k = 0; k <= K; k++) {
+        if ((k & 15) === 0) pulse()
         if (columnFree(k)) {
           if (runStart < 0) runStart = k
         } else if (runStart >= 0) {

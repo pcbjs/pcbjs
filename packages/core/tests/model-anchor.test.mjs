@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { anchorModel, jsx } from '../dist/jsx-runtime.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -11,10 +11,10 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 test('anchorModel resolves a relative file against the writing file and keeps the path as written', () => {
   const m = anchorModel({ file: './models/a.step', offset: [1, 0, 0] }, '/p/board/lib/parts.tsx')
   assert.equal(m.file, './models/a.step')
-  assert.equal(m.path, '/p/board/lib/models/a.step')
+  assert.equal(m.path, resolve('/p/board/lib/models/a.step'))
   assert.deepEqual(m.offset, [1, 0, 0])
   // once anchored it stays, wherever it is passed on
-  assert.equal(anchorModel(m, '/elsewhere/x.tsx').path, '/p/board/lib/models/a.step')
+  assert.equal(anchorModel(m, '/elsewhere/x.tsx').path, resolve('/p/board/lib/models/a.step'))
   // an absolute path, a file: URL, a fetched model and a generated model are left as they are
   assert.equal(anchorModel({ file: '/abs/c.step' }, '/p/pcb.tsx').path, undefined)
   assert.equal(anchorModel({ file: 'file:///abs/c.step' }, '/p/pcb.tsx').path, undefined)

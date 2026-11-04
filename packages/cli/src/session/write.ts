@@ -1,5 +1,6 @@
 // Source edits from the session: through the editor that holds the file, else any editor of the project, both by LSP
 // `workspace/applyEdit`; with no editor attached, on disk by a temporary file and a rename.
+import { sameFile, under } from '../project/files.js'
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, relative } from 'node:path'
 import { randomBytes } from 'node:crypto'
@@ -25,7 +26,7 @@ function editorFor(f: FileEdits, o: WriteOptions): LanguageServer | null {
   const held = holder && servers.find(s => s.server.holder.id === holder)
   if (held) return held.server
   const of = (key: unknown) => o.projectOf?.(key) ?? null
-  return servers.find(s => of(s.key) === null || of(s.key) === o.root || file.startsWith(of(s.key) + '/'))?.server ?? null
+  return servers.find(s => of(s.key) === null || sameFile(of(s.key)!, o.root) || under(file, of(s.key)!))?.server ?? null
 }
 
 /** A file's whole text on disk, by a temporary file and a rename, its folder made. */

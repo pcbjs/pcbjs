@@ -1,7 +1,7 @@
 // A project's config and entries as browser ESM for @pcbjs/compile/browser: the `?pcb:module` facet and scripts/browser-equality.mjs.
 // Each file takes the CLI's scope and source range transforms as Vite's SSR applies them, then esbuild bundles with keepNames,
 // since Rollup renames a function expression shadowing its own constant and with it the name a part is labelled by. docs/browser.md.
-import { under } from './files.js'
+import { sameFile, under } from './files.js'
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
@@ -260,7 +260,7 @@ export function browserModule(
   url: { output: (rel: string) => string; file: (rel: string) => string },
   more: Pick<BrowserModule, 'routes' | 'references' | 'meshes' | 'expect' | 'generatedAt'> = {},
 ): BrowserModule {
-  const e = built.entries.get(entry.file)
+  const e = built.entries.get(entry.file) ?? [...built.entries].find(([file]) => sameFile(file, entry.file))?.[1]
   if (!e) throw new Error(`${entry.rel} is no entry of the built project`)
   const files: Record<string, string | null> = Object.fromEntries(projectFiles(built.root).map(f => [`${ROOT}/${f.rel}`, f.read ? url.file(f.rel) : null]))
   // a model with a mesh exists for the compile, fetched ones too, which live under .pcbjs where projectFiles never looks

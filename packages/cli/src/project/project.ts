@@ -1,4 +1,4 @@
-import { fileKey, sameFile, under } from './files.js'
+import { fileKey, sameFile, sourcePath, under } from './files.js'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { compileBoards, compileLoaded, sketch, type CompileOptions, type CompileResult, type Exporter, type StageTime } from '@pcbjs/compile'
@@ -189,7 +189,7 @@ export async function sketchEntry(loader: ModuleLoader, cfg: ResolvedConfig, ent
   const { root } = await evaluateEntry(loader, entry, null, job.signal)
   const { board, target } = sketch(root, { defaults: realm().defaults, files: loader.imported(entry.file), sourceRoot: cfg.root, signal: job.signal })
   // as the site data names files: the transform gives them relative to the root, jsxDEV absolute
-  const rel = (f: string) => (f.startsWith(cfg.root) ? f.slice(cfg.root.length).replace(/^[\\/]/, '') : f)
+  const rel = (f: string) => sourcePath(cfg.root, f)
   const { uids, refs } = editedIn(sourceIndex(board, rel)[rel(job.file)] ?? [], job.spans)
   const ids = touchedIds(board, uids, refs)
   if (!ids.size) return null

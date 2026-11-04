@@ -125,6 +125,22 @@ async function until(page, expression, label = expression) {
   )
 }
 const boxes = async page => Object.fromEntries(await Promise.all(Object.keys(selectors).map(async kind => [kind, await evaluate(page, boxExpression(kind))])))
+async function settle(page) {
+  await evaluate(
+    page,
+    `new Promise((done, fail) => {
+    let last = '', stable = 0;
+    const end = performance.now() + 4000;
+    const tick = () => {
+      const now = [...document.querySelectorAll('svg.board-svg,svg.sch-svg')].map(e => e.getAttribute('viewBox')).join('|');
+      stable = now === last ? stable + 1 : 0; last = now;
+      if (stable >= 6) done(); else if (performance.now() > end) fail(new Error('viewport did not settle')); else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  })`,
+  )
+}
+
 async function dimensions(page) {
   return Object.fromEntries(
     await Promise.all(
@@ -176,6 +192,7 @@ test(
       await until(page, `!!document.querySelector('#d2 svg.board-svg')&&!!document.querySelector('#sch svg.sch-svg')`)
       await sleep(100)
       for (const kind of Object.keys(selectors)) await wheel(page, kind)
+      await settle(page)
       const original = await boxes(page)
       await evaluate(page, 'window.demo.focus(0)')
       for (const kind of Object.keys(selectors)) await until(page, `${boxExpression(kind)}!==${JSON.stringify(original[kind])}`, `${kind} finding A fits`)
@@ -210,6 +227,7 @@ test(
       for (const kind of Object.keys(selectors)) await until(page, `${boxExpression(kind)}!==${JSON.stringify(original[kind])}`, `${kind} fits an underlying frame`)
       const frameFit = await boxes(page)
       for (const kind of Object.keys(selectors)) await wheel(page, kind, 10)
+      await settle(page)
       const manualFrame = await boxes(page)
       await evaluate(page, 'window.demo.focus(0)')
       await sleep(450)

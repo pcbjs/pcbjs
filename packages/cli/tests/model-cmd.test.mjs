@@ -82,7 +82,7 @@ test('add copies a local file, notes it, fits it to a part and writes the model 
   assert.match(r.out, /pins 4, 4 on 4 pads/)
   assert.match(r.out, /model: \{ file: '\.\/models\/header\.step' \}/)
   assert.match(readFileSync(join(root, 'pcb.tsx'), 'utf8'), /const J1 = PinHeader\(4\)\(\{ model: \{ file: '\.\/models\/header\.step' \} \}\)/)
-  assert.match(readFileSync(join(root, 'models', 'LICENSES.md'), 'utf8'), /- `header\.step`: local file .*downloads\/header\.step, added \d{4}-\d\d-\d\d/)
+  assert.match(readFileSync(join(root, 'models', 'LICENSES.md'), 'utf8'), /- `header\.step`: local file .*downloads[\\/]header\.step, added \d{4}-\d\d-\d\d/)
   // the board reads the written option: J1 now has a model file that fits
   assert.match(run('check').out, /J1\s+file models\/header\.step\s+ok/)
   // the same file again is no change; other content under the name needs --force

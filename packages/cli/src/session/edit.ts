@@ -1,6 +1,7 @@
 // The viewer's tools as transactions, `session/edit/begin`, `update`, `commit` and `cancel`: a drag previews many plans and writes one, through
 // the session sources, where the entity was instantiated, or for an automatic leg of a chain with no source of its own into the entry's patches file; see docs/editing.md.
-import { relative } from 'node:path'
+import { sourcePath, under } from '../project/files.js'
+import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { Board, Capability, EditNode, Pt, RouteRecord } from '@pcbjs/core/model'
 import type { Patch, PatchOp } from '@pcbjs/core/internal/patch'
@@ -102,7 +103,7 @@ function reach(b: Board, n: EditNode | null | undefined): number {
 }
 /** A literal code repeats within one instance, which no tool writes for all it places. */
 const repeated = (b: Board, n: EditNode) => twins(b, n).length > reach(b, n)
-const isWritable = (root: string, file: string) => file.startsWith(root + '/') && !file.includes('/node_modules/')
+const isWritable = (root: string, file: string) => under(file, root) && !/[\\/]node_modules[\\/]/.test(file)
 
 /** The tools the anchor's capabilities allow. */
 export function toolsOf(node: EditNode | null): Tool[] {
@@ -111,7 +112,7 @@ export function toolsOf(node: EditNode | null): Tool[] {
 
 export function editTxns(d: EditDeps) {
   const txns = new Map<string, Txn>()
-  const abs = (f: string) => (f.startsWith('/') ? f : `${d.root}/${f}`)
+  const abs = (f: string) => resolve(d.root, f)
 
   const begin = (p: EditBegin, by: By | null) => {
     if (p?.tool === 'assist') return beginAssist(p, by)
@@ -212,7 +213,7 @@ function posed(n: EditNode, tool: ToolId, u: EditUpdate, c: Pt): Pose {
   return { at, rot: n.at![2], side: u.side ?? side }
 }
 
-const rel = (root: string, f: string) => relative(root, f) || f
+const rel = (root: string, f: string) => sourcePath(root, f) || f
 
 /** The rotation a placement's `at` gave it in its own frame, degrees, for an `at` that was an expression. */
 function localRot(n: EditNode): number {

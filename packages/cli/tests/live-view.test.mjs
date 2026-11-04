@@ -328,7 +328,7 @@ test('a view out of sync resyncs and leaves an incident with no design source in
     assert.deepEqual(body.interest.facets, ['meta', 'layers', 'model', 'findings'])
     for (const word of ['LedChannelRow', 'roundedRect', 'Brand']) assert.ok(!text.includes(word), `no source: ${word}`)
     const doc = execFileSync(process.execPath, [BIN, 'doctor'], { cwd: root, encoding: 'utf8' })
-    assert.match(doc, /desync incidents\s+1 in \.pcbjs\/log/)
+    assert.match(doc, /desync incidents\s+1 in \.pcbjs[\\/]log/)
     assert.equal(JSON.parse(execFileSync(process.execPath, [BIN, 'doctor', '--desync'], { cwd: root, encoding: 'utf8' })).condition, 'seq')
     v.close()
   } finally {

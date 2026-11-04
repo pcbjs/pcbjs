@@ -1,3 +1,4 @@
+import { sourcePath } from './source-path.js'
 import type { Board, Footprint, Pad, Pt, Ratsnest, SchematicExport, Track } from '@pcbjs/core/model'
 import { itemsHash, joinSite, type FacetData } from '@pcbjs/core/site-facets'
 import type { Src } from '@pcbjs/core'
@@ -44,7 +45,7 @@ export interface FabOptions {
   bom: SiteData['bom']
 }
 
-const relOf = (root: string) => (p: string) => (p.startsWith(root) ? p.slice(root.length).replace(/^[\\/]/, '') : p)
+const relOf = (root: string) => (p: string) => sourcePath(root, p)
 
 export function siteData(board: Board, opts: SiteOptions & FabOptions): SiteData {
   const items = siteItems(board)

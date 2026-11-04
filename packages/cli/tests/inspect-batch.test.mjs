@@ -130,7 +130,9 @@ test('session reuse: shot renders in the session by its worker, each PNG naming 
 })
 
 test('session reuse: without a live session inspect compiles itself', async () => {
-  await stop(session)
+  const info = await sessionOf(root)
+  await ask(info, 'test', root, 'session/stop', {}).catch(() => {})
+  if (session.exitCode === null && session.signalCode === null) await new Promise(done => session.once('exit', done))
   assert.ok(!existsSync(join(w.a, '.pcbjs', 'dev.json')))
   const r = await run(w.a, 'inspect', 'TP1', 'TP2')
   assert.equal(r.code, 0, r.stderr)

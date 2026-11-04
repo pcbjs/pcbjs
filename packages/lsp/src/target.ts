@@ -1,5 +1,6 @@
 // A name resolves through its declaration, takes its kind from the `$$` brand of its type and reaches board items by recorded source positions.
 
+import { sameFile } from './facts.js'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import ts from 'typescript'
 import type { SiteData } from '@pcbjs/core/site-data'
@@ -108,7 +109,7 @@ function inSymbolTag(n: ts.Node, boards: TargetBoard[]): boolean {
     if (!ts.isJsxSelfClosingElement(p) && !ts.isJsxOpeningElement(p)) continue
     const sf = p.getSourceFile()
     const at = siteIn(sf, (ts.isJsxOpeningElement(p) ? p.parent : p).getStart(sf))
-    return boards.some(b => b.site.schematic.drawing?.symbols.some(s => s.src && s.src.line === at.line && s.src.col === at.col && abs(b.root, s.src.file) === sf.fileName))
+    return boards.some(b => b.site.schematic.drawing?.symbols.some(s => s.src && s.src.line === at.line && s.src.col === at.col && sameFile(b.root, s.src.file, sf.fileName)))
   }
   return false
 }
@@ -116,7 +117,7 @@ function inSymbolTag(n: ts.Node, boards: TargetBoard[]): boolean {
 /** The boards built from a file: those whose source index or parts name it, else every board given. */
 function boardsOf(file: string, boards: TargetBoard[]): TargetBoard[] {
   const uses = (b: TargetBoard) =>
-    Object.keys(b.site.sources ?? {}).some(k => abs(b.root, k) === file) || b.site.schematic.parts.some(p => p.src && abs(b.root, p.src.file) === file)
+    Object.keys(b.site.sources ?? {}).some(k => sameFile(b.root, k, file)) || b.site.schematic.parts.some(p => p.src && sameFile(b.root, p.src.file, file))
   const own = boards.filter(uses)
   return own.length ? own : boards
 }
@@ -351,7 +352,7 @@ function namedFallback(name: string, cx: Cx): Val | undefined {
 function partsMadeAt(e: ts.CallExpression, cx: Cx): string[] {
   const sf = e.getSourceFile()
   const p = siteIn(sf, e.getStart(sf))
-  return cx.site.schematic.parts.filter(x => x.src && x.src.line === p.line && x.src.col === p.col && abs(cx.root, x.src.file) === sf.fileName).map(x => x.ref)
+  return cx.site.schematic.parts.filter(x => x.src && x.src.line === p.line && x.src.col === p.col && sameFile(cx.root, x.src.file, sf.fileName)).map(x => x.ref)
 }
 
 function stringValue(s: ts.StringLiteralLike, cx: Cx): Val | undefined {

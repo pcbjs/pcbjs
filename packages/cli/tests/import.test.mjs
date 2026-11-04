@@ -188,7 +188,7 @@ test('import footprint: a library footprint becomes a module a board compiles; a
   const dst = join(top, 'fp')
   mkdirSync(dst, { recursive: true })
   const out = execFileSync(process.execPath, [BIN, 'import', 'footprint', 'Package_SO:SOIC-8_3.9x4.9mm_P1.27mm'], { cwd: dst, env, encoding: 'utf8' })
-  assert.match(out, /wrote lib\/SOIC_8_3_9x4_9mm_P1_27mm\.tsx: SOIC_8_3_9x4_9mm_P1_27mm, 8 pads, pins 1 2 3 4 5 6 7 8/)
+  assert.match(out, /wrote lib[\\/]SOIC_8_3_9x4_9mm_P1_27mm\.tsx: SOIC_8_3_9x4_9mm_P1_27mm, 8 pads, pins 1 2 3 4 5 6 7 8/)
   writeFileSync(join(dst, 'pcb.config.ts'), "import { defineConfig } from '@pcbjs/core'\nexport default defineConfig({ entries: ['pcb.tsx'] })\n")
   writeFileSync(
     join(dst, 'tsconfig.json'),

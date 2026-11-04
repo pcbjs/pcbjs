@@ -1,4 +1,5 @@
 // docs/vscode.md, Drafts, has the rules.
+import { sourcePath, under } from '../project/files.js'
 import { readFileSync } from 'node:fs'
 import type { Range, Tiers } from '@pcbjs/core/protocol'
 import { textDoc, type Site } from '@pcbjs/core/internal/textdoc'
@@ -218,8 +219,8 @@ export function drafts(changed: (file: string) => void, hooks: HoldHooks = {}): 
 
 /** The first hold of a project, its file relative to the root, as `session/state` and the viewers' heartbeat carry it; null when none. */
 export function holdIn(store: Drafts | null | undefined, root: string): { file: string; line: number } | null {
-  const h = store?.holds().find(x => x.file.startsWith(root + '/'))
-  return h ? { file: h.file.slice(root.length + 1), line: h.line } : null
+  const h = store?.holds().find(x => under(x.file, root))
+  return h ? { file: sourcePath(root, h.file), line: h.line } : null
 }
 
 const LOADERS: Record<string, 'ts' | 'tsx' | 'js' | 'jsx'> = { ts: 'ts', mts: 'ts', cts: 'ts', tsx: 'tsx', js: 'js', mjs: 'js', cjs: 'js', jsx: 'jsx' }

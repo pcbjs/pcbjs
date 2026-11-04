@@ -1,4 +1,5 @@
 // The project's compile in Node: a Vite server without HTTP that evaluates entries, the slots compiled on it and the one line of a failure.
+import { sourcePath, under } from './files.js'
 import { createLogger, createServer, type Logger, type LogLevel, type ViteDevServer } from 'vite'
 import { isUserFile, localFrames } from '@pcbjs/core/internal/provenance'
 import type { ResolvedConfig } from './config.js'
@@ -44,11 +45,11 @@ export const strip = (t: string): string => t.replace(/\x1b\[[0-9;]*m/g, '')
 export function errorText(e: any, verbose?: boolean, root?: string): { line: string; detail: string[] } {
   const msg = strip(String(e?.message ?? e))
   const first = msg.split('\n').find(l => l.trim()) ?? msg
-  const rel = (f: string) => (root && f.startsWith(root + '/') ? f.slice(root.length + 1) : f)
+  const rel = (f: string) => (root ? sourcePath(root, f) : f)
   // Vite's location of a syntax error, else the first frame of the stack in the project
   let loc = e?.loc?.file ? `${rel(e.loc.file)}:${e.loc.line}:${e.loc.column}: ` : ''
   if (!loc && root && !/\.(m?[jt]sx?):\d+:\d+/.test(first)) {
-    const f = localFrames(strip(String(e?.stack ?? ''))).find(f => f.file.startsWith(root + '/') && isUserFile(f.file))
+    const f = localFrames(strip(String(e?.stack ?? ''))).find(f => under(f.file, root) && isUserFile(f.file))
     if (f) loc = `${rel(f.file)}:${f.line}:${f.col}: `
   }
   const detail: string[] = []

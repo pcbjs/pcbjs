@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 // The editor selection model: what a cursor or a selection names per board, as the references the viewers highlight.
 import { readFileSync } from 'node:fs'
 import { docOf } from '../dist/doc.js'
@@ -6,8 +7,8 @@ import assert from 'node:assert/strict'
 import { boardFacts } from '../dist/facts.js'
 import { editorSelection, memberOf, selectParams } from '../dist/selection.js'
 
-const ROOT = '/p'
-const FILE = '/p/pcb.tsx'
+const ROOT = resolve('/p')
+const FILE = resolve('/p/pcb.tsx')
 
 /** Line 3 places R1 inside a route element; line 5 draws a wire in the schematic; R7 is member R01 of instance A. */
 function facts() {
@@ -75,9 +76,9 @@ test('selection: how an item is named, and pcbjs/select grouped by file', () => 
   assert.equal(memberOf({ uid: 'item:x', kind: 'pad', ref: 'U1' }), 'item:x')
   const p = selectParams(
     [
-      { file: '/p/a.tsx', line: 1, col: 1, endLine: 1, endCol: 3 },
-      { file: '/p/b.tsx', line: 2, col: 1, endLine: 2, endCol: 1 },
-      { file: '/p/a.tsx', line: 4, col: 2, endLine: 4, endCol: 2 },
+      { file: resolve('/p/a.tsx'), line: 1, col: 1, endLine: 1, endCol: 3 },
+      { file: resolve('/p/b.tsx'), line: 2, col: 1, endLine: 2, endCol: 1 },
+      { file: resolve('/p/a.tsx'), line: 4, col: 2, endLine: 4, endCol: 2 },
     ],
     true,
   )
@@ -114,7 +115,7 @@ test('selection: generated reference text source range selects only its item UID
 })
 
 test('selection: library context belongs to the declaration, including whitespace, coordinates and routing', () => {
-  const file = '/p/lib/led-channel.tsx'
+  const file = resolve('/p/lib/led-channel.tsx')
   const text = readFileSync(new URL('../../../examples/demo/lib/led-channel.tsx', import.meta.url), 'utf8')
   const doc = docOf(file, text)
   const key = 'lib/led-channel.tsx#LedChannelRow'
@@ -147,7 +148,7 @@ test('selection: function and arrow definitions use the innermost declaration an
 })
 
 test('selection: colocated generic exports use explicit core factory names without selecting neighboring declarations', () => {
-  const file = '/p/lib/led-channel.tsx'
+  const file = resolve('/p/lib/led-channel.tsx')
   const text = `import { circuit, layout as defineLayout, board } from '@pcbjs/core'
 import * as core from '@pcbjs/core'
 import { layout as otherLayout } from './other'
@@ -192,7 +193,7 @@ const computed = defineLayout(schematic, () => <g />, getName())`
 })
 
 test('selection: layout methods resolve explicit, callback and default names on definitions and instances', () => {
-  const file = '/p/lib/channel.tsx'
+  const file = resolve('/p/lib/channel.tsx')
   const text = `import { circuit as defineCircuit } from '@pcbjs/core'
 const schematic = defineCircuit('channel', () => ({}))
 const instance = schematic({}, 'CH1')

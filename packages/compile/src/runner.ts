@@ -288,10 +288,12 @@ function stage(run: Run, t: Target, d: StageDef): void {
 /** A step's body: reporting into the target, the uids minted, and under PCBJS_FREEZE every facet it changed checked against its writes. */
 function body(run: Run, t: Target, d: StageDef, u: UnitDef): void {
   const was = run.freeze ? snapshot(t.board).facets : null
+  pulse()
   u.run!(t, { opts: run.opts, placer: run.placer, report: (...found) => void t.found.push(...found), progress: (done, of) => emit(run, t, d.name, 'running', 0, [done, of]) })
   // a step that writes nothing adds no item, and runs before place mints the first uids
   if (u.writes.length) mintUids(t.board)
   t.snap = null
+  pulse()
   if (!was) return
   const now = snapshot(t.board).facets
   const wrote = Object.keys(now).filter(f => now[f] !== was[f] && !u.writes.includes(f as FacetName))

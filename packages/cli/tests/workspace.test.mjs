@@ -191,7 +191,10 @@ test('workspace: a scope loads on first use with its own default board, and the 
 test('workspace: the watcher keeps the files of every compiled scope, so an edit of a hidden one marks it stale', async () => {
   await json('/__pcbjs/scope/alpha')
   const alphaFiles = scope('alpha').files
-  assert.ok(alphaFiles.some(f => f.endsWith('/alpha/pcb.tsx')) && alphaFiles.some(f => f.endsWith('/alpha/pcb.config.ts')), alphaFiles.join(' '))
+  assert.ok(
+    alphaFiles.some(f => f.replaceAll('\\', '/').endsWith('/alpha/pcb.tsx')) && alphaFiles.some(f => f.replaceAll('\\', '/').endsWith('/alpha/pcb.config.ts')),
+    alphaFiles.join(' '),
+  )
   let now = watched()
   assert.ok(
     alphaFiles.every(f => now.has(f)),
@@ -211,7 +214,7 @@ test('workspace: the watcher keeps the files of every compiled scope, so an edit
 
 test('workspace: an edit in a scope no one observes marks it stale, and it recompiles when shown again', async () => {
   assert.equal((await json('/__pcbjs/scopes')).displayed, 'f2')
-  const file = scope('alpha').files.find(f => f.endsWith('/alpha/pcb.tsx'))
+  const file = scope('alpha').files.find(f => f.replaceAll('\\', '/').endsWith('/alpha/pcb.tsx'))
   await new Promise(r => setTimeout(r, 20))
   writeFileSync(file, board('Alpha2'))
   // the watcher sets the flag; nothing asks the server in between

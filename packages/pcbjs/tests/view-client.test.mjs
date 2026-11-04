@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 // The viewer's view query, the pair and length helpers it reads routes with, the pair fields of the site items, and the
 // helpers of `pcbjs shot`. The client modules come from @pcbjs/ui as built.
 import { test } from 'node:test'
@@ -200,14 +201,21 @@ test('shot: the size and one job per board, target and view, its options in the 
   )
   assert.deepEqual(
     jobs.map(j => j.file),
-    ['/o/Blinky-2d.png', '/o/Blinky-3d.png', '/o/Multi-jlcpcb-2-layer-2d.png', '/o/Multi-jlcpcb-2-layer-3d.png', '/o/Multi-house-2d.png', '/o/Multi-house-3d.png'],
+    [
+      join('/o/Blinky-2d.png'),
+      join('/o/Blinky-3d.png'),
+      join('/o/Multi-jlcpcb-2-layer-2d.png'),
+      join('/o/Multi-jlcpcb-2-layer-3d.png'),
+      join('/o/Multi-house-2d.png'),
+      join('/o/Multi-house-3d.png'),
+    ],
   )
   assert.deepEqual(jobs[2].spec, { view: '2d', entry: '/p/multi.pcb.tsx', target: 'JLCPCB 2-Layer' })
   // the options are in the name, so shots with other options never overwrite each other; explode and the camera are 3D only
   const o = { explode: 0.6, layers: ['F.Cu'], theme: 'dark', camera: 'top' }
   assert.deepEqual(
     shotJobs([{ entry: '/p/b.tsx', name: 'Blinky', targets: [null] }], ['2d', '3d'], '/o', o, ['U1']).map(j => j.file),
-    ['/o/Blinky-2d-select-U1-F.Cu-dark.png', '/o/Blinky-3d-top-explode60-select-U1-F.Cu-dark.png'],
+    [join('/o/Blinky-2d-select-U1-F.Cu-dark.png'), join('/o/Blinky-3d-top-explode60-select-U1-F.Cu-dark.png')],
   )
   assert.equal(shotSuffix('2d'), '')
   assert.equal(shotSuffix('3d', { explode: 0 }), '-explode0')

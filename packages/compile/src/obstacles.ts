@@ -24,6 +24,7 @@ export function fill(g: Grid, s: RingSet, out: Uint8Array, value: number) {
   const rows: number[][] = Array.from({ length: g.ny }, () => [])
   for (const r of s.rings)
     for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+      if ((i & 63) === 0) pulse()
       const [xa, ya] = r[j],
         [xb, yb] = r[i]
       if (ya === yb) continue
@@ -39,6 +40,7 @@ export function fill(g: Grid, s: RingSet, out: Uint8Array, value: number) {
       }
     }
   for (let row = 0; row < g.ny; row++) {
+    if ((row & 63) === 0) pulse()
     const xs = rows[row]
     if (xs.length < 2) continue
     xs.sort((a, b) => a - b)
@@ -64,6 +66,7 @@ export function fillAdd(g: Grid, s: RingSet, out: Uint16Array, delta = 1) {
   const rows: number[][] = Array.from({ length: r1 - r0 + 1 }, () => [])
   for (const r of s.rings)
     for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+      if ((i & 63) === 0) pulse()
       const [xa, ya] = r[j],
         [xb, yb] = r[i]
       if (ya === yb) continue
@@ -78,6 +81,7 @@ export function fillAdd(g: Grid, s: RingSet, out: Uint16Array, delta = 1) {
       }
     }
   for (let k0 = 0; k0 < rows.length; k0++) {
+    if ((k0 & 63) === 0) pulse()
     const xs = rows[k0],
       row = k0 + r0
     if (xs.length < 2) continue

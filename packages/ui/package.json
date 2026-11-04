@@ -53,7 +53,7 @@
   ],
   "scripts": {
     "build": "vite build && vue-tsc -p tsconfig.json",
-    "test": "node --import ../../scripts/test-watchdog.mjs --test \"tests/**/*.test.mjs\"",
+    "test": "node --import ../../scripts/test-watchdog.mjs --test --test-concurrency=1 \"tests/**/*.test.mjs\"",
     "prepack": "node ../../scripts/pack-files.mjs pre",
     "postpack": "node ../../scripts/pack-files.mjs post"
   },

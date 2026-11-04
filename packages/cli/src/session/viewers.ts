@@ -1,6 +1,7 @@
 // The viewer methods of a session, docs/viewer.md: what each viewer page observes, its resyncs and their incidents, the selection held
 // per board, hover between the viewers of a board, the editor's assist, and the tools' edit transactions and history. A viewer is a
 // session client like any other; every event to it goes to the viewers of its project and board.
+import { sourcePath } from '../project/files.js'
 import { isAbsolute, join } from 'node:path'
 import type { Board } from '@pcbjs/core/model'
 import type { EditorSelection } from '@pcbjs/lsp'
@@ -519,7 +520,7 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
     const root = rt?.root ?? h.ws.folders[0]
     const body = incidentOf(p, c, rt)
     const file = writeIncident(root, 'desync', body)
-    const rel = file.startsWith(root + '/') ? file.slice(root.length + 1) : file
+    const rel = sourcePath(root, file)
     h.muted(`a view fell out of sync, ${body.description}; it resynced, the incident is ${rel}`)
     return { file: rel, url: issueUrl(JSON.stringify(body, null, 2), rel) }
   }

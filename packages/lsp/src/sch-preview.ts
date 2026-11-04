@@ -1,4 +1,5 @@
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { sameFile } from './facts.js'
+import { isAbsolute, relative, sep } from 'node:path'
 import type { SchDrawing } from '@pcbjs/core/internal/sch-model'
 import type { SiteData } from '@pcbjs/core/site-data'
 import { WIDTH, type Preview } from './preview.js'
@@ -34,7 +35,7 @@ const words = (s: SchDrawing['symbols'][number]): [number, number][] => [
 /** Every element drawn from code with a range in `file`, with its bounds in sheet mm. */
 function ranged(d: SchDrawing, root: string, file: string): Ranged[] {
   const out: Ranged[] = []
-  const mine = (s?: { file: string; endLine?: number }) => !!s && s.endLine != null && (s.file === relKey(root, file) || resolve(root, s.file) === file)
+  const mine = (s?: { file: string; endLine?: number }) => !!s && s.endLine != null && (s.file === relKey(root, file) || sameFile(root, s.file, file))
   const add = (key: string, what: string, box: Box, s?: { file: string; line: number; col: number; endLine?: number; endCol?: number }) => {
     if (mine(s)) out.push({ key, what, box, src: { line: s!.line, col: s!.col, endLine: s!.endLine!, endCol: s!.endCol! } })
   }

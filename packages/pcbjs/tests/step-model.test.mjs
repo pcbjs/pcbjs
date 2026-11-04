@@ -46,7 +46,7 @@ test('a STEP path resolves against the file of the <footprint> element, and the 
     const s = site(b, p.root).footprints[0]
     assert.equal(s.model, undefined)
     assert.deepEqual(s.step, {
-      file: 'parts/models/pin.step',
+      file: join('parts', 'models', 'pin.step'),
       mesh: meshKey(new Uint8Array(readFileSync(PIN))),
       transform: { offset: [0, 0, 0], rotate: [0, 0, 90], scale: [1, 1, 1] },
     })

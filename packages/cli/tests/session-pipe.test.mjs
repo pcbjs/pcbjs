@@ -1,5 +1,6 @@
 // Windows only, in CI's Windows job: the session binds its named pipe, answers hello with ready over it, and a second session
 // on the same root exits.
+import { stop } from './fixtures/proc.mjs'
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
@@ -16,9 +17,9 @@ const ARGS = ['session', 'serve', '--port', '0', '--host', '127.0.0.1', '--grace
 
 const root = WIN ? realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-pipe-'))) : ''
 const children = []
-after(() => {
-  for (const c of children) if (c.exitCode === null) c.kill()
-  if (root) rmSync(root, { recursive: true, force: true })
+after(async () => {
+  await Promise.all(children.map(c => stop(c)))
+  if (root) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
 test('the named pipe: bound, hello and ready exchanged, a second session on the root exits', { skip: !WIN && 'Windows only', timeout: 120000 }, async () => {

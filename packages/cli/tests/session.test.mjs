@@ -6,7 +6,7 @@ import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { networkInterfaces, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import WebSocket from 'ws'
 import { board } from './fixtures/workspace.mjs'
 import { ensureSession, liveSession } from '../dist/session/start.js'
@@ -67,7 +67,7 @@ async function stop(info) {
 
 /** ensureSession in a process of its own, as a second terminal runs it. */
 function starter(root, args) {
-  const code = `import { ensureSession } from ${JSON.stringify(START)}\nconst r = await ensureSession(${JSON.stringify(root)}, { args: ${JSON.stringify(args)} })\nconsole.log(JSON.stringify({ session: r.info.session, pid: r.info.pid, started: r.started }))\nprocess.exit(0)`
+  const code = `import { ensureSession } from ${JSON.stringify(pathToFileURL(START).href)}\nconst r = await ensureSession(${JSON.stringify(root)}, { args: ${JSON.stringify(args)} })\nconsole.log(JSON.stringify({ session: r.info.session, pid: r.info.pid, started: r.started }))\nprocess.exit(0)`
   const child = spawn(process.execPath, ['--input-type=module', '-e', code], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
   let out = ''
   child.stdout.on('data', d => (out += d))

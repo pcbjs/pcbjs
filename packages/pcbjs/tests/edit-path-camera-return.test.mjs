@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { NO_RASTER } from './view-perf.mjs'
 import { harness, skip, ev, ed, page, S, until, sleep, key } from './edit-path-harness.mjs'
 
 harness()
@@ -7,6 +8,7 @@ const distance = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]))
 const pose = `(()=>{const c=window.__pcbjs3d.camera;return {p:c.position.toArray(),q:c.quaternion.toArray(),zoom:c.zoom}})()`
 
 test('3D component isolation animates out as well as in and returns to the original camera', { skip }, async () => {
+  await page.send('Page.addScriptToEvaluateOnNewDocument', { source: NO_RASTER })
   await ev('window.__beforeReload = true')
   await page.send('Page.navigate', { url: new URL('board/Blinky?view=3d', S.dev.url).href })
   await until('3D ready', () => ev(`!window.__beforeReload && document.documentElement.dataset.ready === '3d' && !!window.__pcbjs3d`).catch(() => false), 30000)

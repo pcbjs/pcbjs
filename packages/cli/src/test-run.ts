@@ -1,5 +1,6 @@
 // `pcbjs test` and `check --test`: every *.test.ts under the project through node --test, against one snapshot written to .pcbjs/test/<snapshot>/
 // by the session when one is live, else by a compile here; `--update` writes the goldens first.
+import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -87,7 +88,7 @@ export async function runTests(cfg: ResolvedConfig, o: TestOptions = {}): Promis
     `--test-reporter=${REPORTER.href}`,
     `--test-reporter-destination=${results}`,
     ...files.map(f => relative(root, f) || f),
-    ...(goldens ? [GOLDEN.pathname] : []),
+    ...(goldens ? [fileURLToPath(GOLDEN)] : []),
   ]
   const code = await new Promise<number>(done => {
     // a run inside another node --test would report to that one instead of printing
@@ -101,7 +102,7 @@ export async function runTests(cfg: ResolvedConfig, o: TestOptions = {}): Promis
         .split('\n')
         .filter(Boolean)
         .map(l => JSON.parse(l))
-        .map(r => ({ ...r, file: r.file ? relative(root, r.file.replace(/^file:\/\//, '')) : null }))
+        .map(r => ({ ...r, file: r.file ? relative(root, r.file.startsWith('file:') ? fileURLToPath(r.file) : r.file) : null }))
     : []
   rmSync(out, { recursive: true, force: true })
   const bad = list.filter(r => !r.ok).length

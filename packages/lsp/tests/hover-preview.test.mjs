@@ -258,7 +258,7 @@ test('usb3-hub: every hover kind has its image, each render under 50 ms', async 
     assert.ok(contains(qfn.box, boxOf(localPads(s.footprints.find(f => f.ref === 'U1')))))
     // a model path: the land pattern under it, and a note that the 3D model is not drawn
     const model = await look("'./models/SOT-23-5.step'", 4)
-    assert.match(model.rest, /^model `models\/SOT-23-5\.step` on /)
+    assert.match(model.rest, /^model `models[\\/]SOT-23-5\.step` on /)
     assert.match(model.rest, /3D model itself is not drawn/)
     // the renders themselves, uncached, against the 50 ms budget
     const specs = [{ refs: ['U1'] }, { net: 'GND' }, { net: 'VBUS' }, { ids: s.items.filter(i => i.kind === 'zone').map(i => i.id) }, { frame: 'U1' }]

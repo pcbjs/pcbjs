@@ -1,5 +1,6 @@
 // A snapshot is one finished compile of a project, `<session>.<run>` of the run that committed it: its boards, findings, file stamps and the unsaved text it
 // compiled. Answers carry it in an Envelope; docs/session.md has the model.
+import { sourcePath } from '../project/files.js'
 import { createHash } from 'node:crypto'
 import type { Entry } from '../project/config.js'
 import type { BoardOut } from '../project/project.js'
@@ -136,6 +137,6 @@ export function changedOnDisk(snap: Snapshot): string[] {
 
 /** The answer of a query on a snapshot. */
 export function envelope<T>(snap: Snapshot, stale: Stale | null, value: T): Envelope<T> {
-  const rel = (f: string) => (f.startsWith(snap.project + '/') ? f.slice(snap.project.length + 1) : f)
+  const rel = (f: string) => sourcePath(snap.project, f)
   return { snapshot: snap.id, stale, overlay: [...snap.overlay.keys()].map(rel).sort(), value }
 }

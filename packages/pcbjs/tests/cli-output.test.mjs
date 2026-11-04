@@ -294,7 +294,7 @@ test('stale: a failed entry marks its board JSON and fab directories', () => {
     writeFileSync(join(outDir, 'boards', 'Blinky.json'), JSON.stringify({ name: 'Blinky', drc: [] }))
     writeFileSync(join(outDir, 'boards', 'Multi', 'house.json'), JSON.stringify({ name: 'Multi' }))
     const marked = markStale({ root, outDir, fabDir }, 'main.tsx', 'main.tsx:3:1: boom')
-    assert.deepEqual(marked.sort(), ['.pcbjs/dist/boards/Blinky.json', '.pcbjs/dist/fab/Blinky/STALE', '.pcbjs/fab/Blinky/STALE'])
+    assert.deepEqual(marked.map(p => p.replaceAll('\\', '/')).sort(), ['.pcbjs/dist/boards/Blinky.json', '.pcbjs/dist/fab/Blinky/STALE', '.pcbjs/fab/Blinky/STALE'])
     const data = JSON.parse(readFileSync(join(outDir, 'boards', 'Blinky.json'), 'utf8'))
     assert.equal(data.stale, true)
     assert.equal(data.staleError, 'main.tsx:3:1: boom')
@@ -302,7 +302,10 @@ test('stale: a failed entry marks its board JSON and fab directories', () => {
     // the other entry's outputs are untouched
     assert.equal(JSON.parse(readFileSync(join(outDir, 'boards', 'Multi', 'house.json'), 'utf8')).stale, undefined)
     assert.ok(!existsSync(join(fabDir, 'Multi', 'house', 'STALE')))
-    assert.deepEqual(markStale({ root, outDir, fabDir }, 'multi.tsx', 'x'), ['.pcbjs/dist/boards/Multi/house.json', '.pcbjs/fab/Multi/house/STALE'])
+    assert.deepEqual(
+      markStale({ root, outDir, fabDir }, 'multi.tsx', 'x').map(p => p.replaceAll('\\', '/')),
+      ['.pcbjs/dist/boards/Multi/house.json', '.pcbjs/fab/Multi/house/STALE'],
+    )
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
@@ -440,7 +443,7 @@ after(() => {
 test('check: exit 0 when clean, without fab files or a site', async () => {
   const r = await cli(root, 'check', 'clean.tsx')
   assert.equal(r.code, 0, r.stdout + r.stderr)
-  assert.match(r.stdout, /^Clean 1\.0  clean\.tsx  2 footprints, .*  DRC ok  ERC ok  \d+ ms/m)
+  assert.match(r.stdout, /^Clean 1\.0  clean\.tsx  2 footprints, .*  DRC ok  ERC ok  \d+(?:\.\d+)? (?:ms|s)/m)
   assert.match(r.stdout.trim().split('\n').at(-1), /^ok\s+DRC 0 errors/)
   assert.ok(!existsSync(join(root, '.pcbjs', 'fab')))
   assert.ok(!existsSync(join(root, '.pcbjs', 'dist')))
@@ -461,7 +464,7 @@ test('check: exit 1 on DRC errors, every finding listed with its id, --json a pc
   assert.match(r.stdout, /^  DRC short: \d+ errors?$/m)
   assert.match(r.stdout, /^    error    short  F\.Cu  at \(\d+\.\d\d, \d+\.\d\d\)  TP3\/1, net:V  route:1  short\.tsx:\d+:\d+: .*  drc:short:[0-9a-f]{12}$/m)
   assert.match(r.stdout, /^    warning  single-pad  at \(10\.00, 10\.50\)  net:W, TP3\/1  short\.tsx:\d+:\d+: net W has only one pad  drc:single-pad:[0-9a-f]{12}$/m)
-  assert.match(r.stdout, /^json   out\/report\.json$/m)
+  assert.match(r.stdout, /^json   out[\\/]report\.json$/m)
   const one = JSON.parse(readFileSync(join(root, 'out', 'report.json'), 'utf8'))
   fits(one, 'report', 'report')
   assert.equal(one.schema, 'pcbjs.check/1')

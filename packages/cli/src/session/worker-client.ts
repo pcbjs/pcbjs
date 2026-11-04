@@ -168,10 +168,10 @@ export function workerCompiler(o: WorkerOptions): Compiler {
 
   const spawn = () => {
     const w = new Worker(new URL('./worker.js', import.meta.url), { workerData: { root: o.root, configFile: o.configFile, entries: o.entries ?? [], flag } satisfies WorkerData })
-    w.unref()
     w.on('message', (m: FromWorker) => receive(m))
     w.on('error', e => o.log(`the compile thread of ${o.root} failed: ${String(e?.message ?? e).split('\n')[0]}`))
     w.on('exit', code => exited(w, code))
+    if (!jobs.size) w.unref()
     for (const d of drafts.values()) w.postMessage(d)
     worker = w
     return w
@@ -189,6 +189,7 @@ export function workerCompiler(o: WorkerOptions): Compiler {
     const job = jobs.get(m.id)
     if (!job) return
     jobs.delete(m.id)
+    if (!jobs.size) worker?.unref()
     restarted = false
     if (m.graph) graph = mirrorGraph(m.graph)
     if (m.error) job.fail(asError(m.error))
@@ -213,7 +214,9 @@ export function workerCompiler(o: WorkerOptions): Compiler {
   const ask = <T>(msg: Job['msg'], on: Pick<Job, 'progress' | 'facet' | 'stage'> = {}) =>
     new Promise<T>((ok, fail) => {
       jobs.set(msg.id, { msg, ok: ok as (v: unknown) => void, fail, ...on })
-      thread().postMessage(msg)
+      const w = thread()
+      w.ref()
+      w.postMessage(msg)
     })
 
   return {
@@ -268,6 +271,7 @@ export function workerCompiler(o: WorkerOptions): Compiler {
       closing = true
       for (const j of jobs.values()) j.fail(new Error('the session is closing'))
       jobs.clear()
+      worker?.ref()
       await worker?.terminate()
       worker = null
     },

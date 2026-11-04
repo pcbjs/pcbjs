@@ -273,7 +273,7 @@ new MutationObserver(ms => {
   for (const m of ms)
     for (const n of m.addedNodes) {
       if (n.nodeType !== 1) continue
-      if (n.matches('.selection-status[role="status"]')) window.__written.push(n.textContent.trim())
+      if (n.matches('.selection-status[role="status"][title]')) window.__written.push(n.textContent.trim())
       if (n.matches('.toast')) window.__toasts.push(n.textContent.trim())
     }
 }).observe(document.body, { childList: true, subtree: true })`

@@ -134,7 +134,7 @@ function fileFacts(every: BoardRef[], file: string): FileFacts {
   const calls = new WeakMap<DocModel, CallRoute[]>()
   const named = new Map<string, PartHit[]>()
   let mine: Marker[] | null = null
-  const markers = () => (mine ??= unique(all.flatMap(markersOf)).filter(m => m.file === file))
+  const markers = () => (mine ??= unique(all.flatMap(markersOf)).filter(m => sameFile('', m.file, file)))
   const callRoutes = (doc: DocModel) => {
     let c = calls.get(doc)
     if (!c) calls.set(doc, (c = routesCalledIn(all, file, doc)))
@@ -251,7 +251,7 @@ function gridAt(boards: BoardRef[], file: string, line: number, col: number): { 
     const g = n && ref.site.grids?.find(x => x.name === n.grid)
     if (!g) continue
     const own = g.src && !g.src.file.startsWith('..') ? g.src : (g.attach ?? g.src)
-    const at = own ? { file: /^([\\/]|[A-Za-z]:)/.test(own.file) ? own.file : `${ref.root}/${own.file}`, line: own.line, col: own.col } : undefined
+    const at = own ? { file: abs(ref.root, own.file), line: own.line, col: own.col } : undefined
     return { project: ref.root, board: ref.site.name, grid: { name: g.name, pitch: g.pitch, origin: g.origin, angle: g.angle, ...(at ? { at } : {}) } }
   }
   return null
@@ -394,8 +394,12 @@ export function keyOf(root: string, file: string): string | undefined {
 }
 
 /** Whether a source path of a board, relative to its root or absolute, names `file`. */
-export const sameFile = (root: string, src: string, file: string) => (isAbsolute(src) ? src : resolve(root, src)) === file
-export const abs = (root: string, f: string) => (isAbsolute(f) ? f : resolve(root, f))
+export const abs = (root: string, f: string) => resolve(root, f)
+export const sameFile = (root: string, src: string, file: string) => {
+  const a = abs(root, src),
+    b = resolve(file)
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
+}
 /** A position as a source range end, 1-based. */
 export const tuple = (p: Position): [number, number] => {
   const s = toSite(p)

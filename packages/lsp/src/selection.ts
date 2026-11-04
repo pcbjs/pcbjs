@@ -8,7 +8,7 @@ import type { Position, Range, SelectParams } from '@pcbjs/core/protocol'
 import { toRange } from '@pcbjs/core/internal/textdoc'
 import { toUri, type BoardRef } from './host.js'
 import type { Target } from './target.js'
-import { abs, before, contains, itemsOf, pathRef, size, tuple, type FileFacts } from './facts.js'
+import { sameFile, before, contains, itemsOf, pathRef, size, tuple, type FileFacts } from './facts.js'
 
 /** What the editor selections name on one board, in references of docs/refs.md. */
 export interface EditorSelection {
@@ -58,7 +58,7 @@ export function libraryAt(f: FileFacts, board: string, range: Range, doc: DocMod
     for (const key of [c.layout, c.def]) {
       if (!key) continue
       const split = key.lastIndexOf('#')
-      if (split >= 0 && abs(b.root, key.slice(0, split)) === f.file) keys.set(key.slice(split + 1), key)
+      if (split >= 0 && sameFile(b.root, key.slice(0, split), f.file)) keys.set(key.slice(split + 1), key)
     }
   }
   if (!keys.size) return
@@ -192,7 +192,7 @@ export function schDrawn(b: BoardRef, file: string, r: Range, empty: boolean): {
   if (!d) return null
   const ranged: { key: string; ref?: string; range: SourceRange }[] = []
   const add = (key: string, src: Src | undefined, ref?: string) => {
-    if (src?.endLine == null || src.endCol == null || abs(b.root, src.file) !== file) return
+    if (src?.endLine == null || src.endCol == null || !sameFile(b.root, src.file, file)) return
     ranged.push({ key, ref, range: { start: [src.line, src.col], end: [src.endLine, src.endCol], uids: [], refs: [] } })
   }
   for (const x of d.symbols) if (!x.auto) add(`sym:${x.ref}`, x.src, x.ref)

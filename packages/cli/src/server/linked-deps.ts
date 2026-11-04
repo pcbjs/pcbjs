@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join, sep } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { Plugin } from 'vite'
+import { fileKey, under } from '../project/files.js'
 
 /** A prebundled package and its folder, real path. */
 export interface Dep {
@@ -16,7 +17,7 @@ const SETTLE_MS = 400
 const BUILT = /\.(m?js|css)$/
 
 /** A package outside node_modules, a linked development tree: its dist changes without the lockfile, which keys Vite's prebundle. */
-export const isLinked = (dir: string) => !dir.split(sep).includes('node_modules')
+export const isLinked = (dir: string) => !fileKey(dir).split('/').includes('node_modules')
 
 /** A package and the @pcbjs packages it depends on, real paths: the prebundle bundles their dists with it, so a rebuild of any of them changes it. */
 export function withDeps(name: string, dir: string): Dep[] {
@@ -48,7 +49,7 @@ const bannerOf = (deps: Dep[]) => `/* pcbjs linked ${deps.map(d => `${d.name} ${
 /** Prebundles linked `deps` again whenever their dist changes, at start and while the server runs, then reloads the page. */
 export function linkedDepsPlugin(deps: Dep[]): Plugin {
   const linked = deps.filter(d => isLinked(d.dir))
-  const dists = linked.map(d => join(d.dir, 'dist') + sep)
+  const dists = linked.map(d => join(d.dir, 'dist'))
   return {
     name: 'pcbjs:linked-deps',
     apply: 'serve',
@@ -66,7 +67,7 @@ export function linkedDepsPlugin(deps: Dep[]): Plugin {
         env.depsOptimizer?.run()
       }
       const changed = (f: string) => {
-        if (!BUILT.test(f) || !dists.some(d => f.startsWith(d))) return
+        if (!BUILT.test(f) || !dists.some(d => under(f, d))) return
         clearTimeout(timer)
         timer = setTimeout(refresh, SETTLE_MS)
       }

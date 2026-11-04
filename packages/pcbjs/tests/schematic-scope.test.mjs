@@ -14,7 +14,7 @@ import { compileBoard } from '@pcbjs/compile'
 import { scopeHost, sourcePosition } from '@pcbjs/compile/internal/scope'
 import { BoardIndex } from '@pcbjs/export/internal/findings'
 
-const here = dirname(fileURLToPath(import.meta.url))
+const here = dirname(fileURLToPath(import.meta.url).replaceAll('\\', '/'))
 const repo = resolve(here, '..', '..', '..')
 const cli = join(repo, 'packages', 'pcbjs', 'bin', 'pcbjs.js')
 const edge = () => h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 30, h: 20 })
@@ -45,7 +45,7 @@ test('schematic namespace: parts and nets carry their export, and a part is name
   const part = r => b.schematic.parts.find(p => p.ref === r)
   assert.equal(part('R1').export.name, 'R1')
   assert.equal(part('Rpull').export.name, 'Rpull')
-  assert.equal(part('Rpull').export.module, fileURLToPath(import.meta.url))
+  assert.equal(part('Rpull').export.module, fileURLToPath(import.meta.url).replaceAll('\\', '/'))
   assert.equal(b.schematic.nets.find(n => n.name === 'VCC').export.name, 'VCC')
   assert.equal(new BoardIndex(b).paths.size, 0, 'a part at the board level has no tree path beside its ref')
   const plain = compileBoard(h(PCB, { name: 'P' }, ...place(module())))

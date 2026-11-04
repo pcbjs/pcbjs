@@ -140,7 +140,7 @@ test('install: copies where a symlink cannot be made, and leaves a shared .claud
       names.map(() => ['copy', 'copy']),
     )
     for (const d of ['.agents', '.claude']) assert.ok(lstatSync(join(dir, d, 'skills', 'pcbjs-basics')).isDirectory())
-    assert.equal(installLine(done[0], dir), 'installed  pcbjs-basics  copy .agents/skills/pcbjs-basics  copy .claude/skills/pcbjs-basics')
+    assert.equal(installLine(done[0], dir).replaceAll('\\', '/'), 'installed  pcbjs-basics  copy .agents/skills/pcbjs-basics  copy .claude/skills/pcbjs-basics')
   } finally {
     fs.symlinkSync = symlink
     rmSync(dir, { recursive: true, force: true })

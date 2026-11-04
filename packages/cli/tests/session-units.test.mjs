@@ -1,10 +1,11 @@
+import { pathToFileURL } from 'node:url'
 // The session's parts on their own: a project's realm swapped around a call, edits through an editor or on disk, positions
 // mapped through an edit, snapshots and their staleness, the events log's cursor, and tsc over unsaved text.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { applyEdits } from '../dist/session/write.js'
 import { textDoc } from '@pcbjs/core/internal/textdoc'
 import { pointMap } from '../dist/project/textmap.js'
@@ -87,7 +88,7 @@ test('applyEdits: through the editor that holds the file, else one of the projec
     const out = await applyEdits([{ file, edits }], { hub, root: dir, projectOf: () => dir })
     assert.deepEqual(out, [{ file, via: 'editor', applied: true }])
     assert.equal(sent[0][0], 'e2')
-    assert.deepEqual(Object.keys(sent[0][1].changes), [`file://${file}`])
+    assert.deepEqual(Object.keys(sent[0][1].changes), [pathToFileURL(file).href])
     assert.equal(readFileSync(file, 'utf8'), '1\ntwo 3\n')
     // a file nobody holds goes through an editor of the project, never an agent and never on disk under the editor
     const other = join(dir, 'lib.ts')
@@ -115,7 +116,7 @@ test('applyEdits: a write to a held file carries the version it was computed on,
     const hub = { servers: () => [{ key: 'k', server: editor }], store: () => ({ holderOf: () => ({ id: 'e1', role: 'editor' }) }) }
     const o = { hub, root: dir, projectOf: () => dir }
     assert.deepEqual(await applyEdits([{ file, edits, against: { holder: 'e1', version: 7 } }], o), [{ file, via: 'editor', applied: true }])
-    assert.deepEqual(sent[0], { documentChanges: [{ textDocument: { uri: `file://${file}`, version: 7 }, edits }] })
+    assert.deepEqual(sent[0], { documentChanges: [{ textDocument: { uri: pathToFileURL(file).href, version: 7 }, edits }] })
     assert.deepEqual(await applyEdits([{ file, edits, against: { holder: 'e1', version: 6 } }], o), [
       { file, via: 'editor', applied: false, reason: 'pcb.tsx changed in the editor while the edit was made; nothing was written there' },
     ])
@@ -198,7 +199,7 @@ test('typecheck with an overlay: the unsaved text counts, and the cache is neith
     writeFileSync(join(dir, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true, noEmit: true, types: [] } }))
     writeFileSync(join(dir, 'main.ts'), 'export const n: number = 1\n')
     const main = join(dir, 'main.ts')
-    const over = typecheck(dir, ['main.ts'], { overlay: f => (f === main ? "export const n: number = 'x'\n" : undefined) })
+    const over = typecheck(dir, ['main.ts'], { overlay: f => (resolve(f) === main ? "export const n: number = 'x'\n" : undefined) })
     assert.equal(over.errors.length, 1)
     assert.equal(over.cached, false)
     assert.ok(!existsSync(join(dir, '.pcbjs', 'typecheck.json')))

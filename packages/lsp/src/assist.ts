@@ -1,5 +1,5 @@
 // The assist mode's context: a chain call or an `at` waiting for its argument at the cursor, and what the board knows of it; docs/editing.md, Assist.
-import { isAbsolute, relative, resolve } from 'node:path'
+import { relative } from 'node:path'
 import ts from 'typescript'
 import type { SiteData } from '@pcbjs/core/site-data'
 import { shapeOf } from '@pcbjs/core/site-shapes'
@@ -10,6 +10,7 @@ import { siteIn } from './edits.js'
 import type { AssistContext, EndCandidate, EndSlot } from '@pcbjs/core/protocol'
 import type { ProjectAssist } from './host.js'
 import { instanceIn } from '@pcbjs/core/internal/instances'
+import { sameFile } from './facts.js'
 
 type Pt = [number, number]
 
@@ -204,9 +205,8 @@ export function assistContexts(spot: AssistSpot, doc: DocModel, boards: { root: 
 }
 
 const relPath = (root: string, file: string) => relative(root, file).split('\\').join('/')
-const abs = (root: string, f: string) => (isAbsolute(f) ? f : resolve(root, f))
 function usesFile(site: SiteData, root: string, file: string): boolean {
-  return Object.keys(site.sources ?? {}).some(k => abs(root, k) === file) || site.footprints.some(f => f.src && abs(root, f.src.file) === file)
+  return Object.keys(site.sources ?? {}).some(k => sameFile(root, k, file)) || site.footprints.some(f => f.src && sameFile(root, f.src.file, file))
 }
 
 /** Numbers of a typed argument list in mm: `9`, `'2mm'`, `5, 16` or `'5 16'`. */

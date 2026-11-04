@@ -2,7 +2,7 @@ import { resolve } from 'node:path'
 // Board facts: one object per set of compiled boards, the boards of a file, its innermost range, routes, findings and parts.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { boardFacts, itemsOf } from '../dist/facts.js'
+import { boardFacts, itemsOf, sameFile } from '../dist/facts.js'
 import { docOf } from '../dist/doc.js'
 
 const ROOT = resolve('/p')
@@ -129,6 +129,14 @@ test('facts: the grid of a placement, with where its glyph leads', () => {
     grids: [{ name: 'G', pitch: 2.54, origin: [0, 0], angle: 0, src: { file: 'pcb.tsx', line: 1, col: 1 } }],
   })
   const f = boardFacts([{ root: ROOT, site: s }]).forFile(FILE)
-  assert.deepEqual(f.gridAt(3, 21), { project: '/p', board: 'b', grid: { name: 'G', pitch: 2.54, origin: [0, 0], angle: 0, at: { file: '/p/pcb.tsx', line: 1, col: 1 } } })
+  assert.deepEqual(f.gridAt(3, 21), { project: ROOT, board: 'b', grid: { name: 'G', pitch: 2.54, origin: [0, 0], angle: 0, at: { file: FILE, line: 1, col: 1 } } })
   assert.equal(f.gridAt(3, 1), null)
+})
+
+test('source identity accepts native and Vite paths, with platform case rules', () => {
+  const vite = FILE.replaceAll('\\', '/')
+  assert.equal(sameFile(ROOT, 'pcb.tsx', FILE), true)
+  assert.equal(sameFile(ROOT, vite, FILE), true)
+  assert.equal(sameFile(ROOT, vite.toUpperCase(), FILE), process.platform === 'win32')
+  assert.equal(sameFile(ROOT, 'other.tsx', FILE), false)
 })

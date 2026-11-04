@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { connectSession } from '../dist/session/client.js'
 import { stop } from './fixtures/proc.mjs'
 
@@ -85,22 +85,26 @@ const readInfo = () => {
   }
 }
 
-test('pcbjs session serve with an editor attached, closed by a signal during its first compile, exits and removes dev.json', async () => {
-  const run = start([BIN, 'session', 'serve', '--port', '0', '--host', '127.0.0.1'])
-  await until(() => readInfo()?.socket)
-  const boards = []
-  const editor = await connectSession(readInfo().socket, { name: 'editor', role: 'editor', capabilities: ['boards'] })
-  editor.onEvent(e => e === 'pcbjs:ide:boards' && boards.push(e))
-  assert.ok(!boards.length, 'closed before the first compile ended')
-  run.child.kill('SIGTERM')
-  await exitsWithin(run, EXIT_MS)
-  await editor.done
-  assert.ok(!existsSync(devJson()))
-})
+test(
+  'pcbjs session serve with an editor attached, closed by a signal during its first compile, exits and removes dev.json',
+  { skip: process.platform === 'win32' ? 'Windows SIGTERM is a forced kill; graceful stop is covered below' : false },
+  async () => {
+    const run = start([BIN, 'session', 'serve', '--port', '0', '--host', '127.0.0.1'])
+    await until(() => readInfo()?.socket)
+    const boards = []
+    const editor = await connectSession(readInfo().socket, { name: 'editor', role: 'editor', capabilities: ['boards'] })
+    editor.onEvent(e => e === 'pcbjs:ide:boards' && boards.push(e))
+    assert.ok(!boards.length, 'closed before the first compile ended')
+    run.child.kill('SIGTERM')
+    await exitsWithin(run, EXIT_MS)
+    await editor.done
+    assert.ok(!existsSync(devJson()))
+  },
+)
 
 test('a session stopped during its first compile lets its process exit, esbuild stopped', async () => {
   const script = `
-    import { serveSession } from ${JSON.stringify(SERVE)}
+    import { serveSession } from ${JSON.stringify(pathToFileURL(SERVE).href)}
     const session = await serveSession({ projects: [{ dir: ${JSON.stringify(root)} }], port: 0, host: '127.0.0.1', log: () => {} })
     console.log('listening')
     await new Promise(r => process.stdin.once('data', r))

@@ -6,7 +6,7 @@ import { pluginState, virtualModule } from '../dist/server/site.js'
 import { CONFIG_NAMES, findConfig, resolveConfig } from '../dist/project/config.js'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 const entry = rel => ({ file: `/p/${rel}`, rel })
 const fake = (rel, name, status = 'ok') => ({
@@ -114,9 +114,9 @@ test('config: pcb.config.{ts,mts,js,mjs} in that order, no other name', () => {
   const having =
     (...names) =>
     f =>
-      names.some(n => f === join('/p', n))
+      names.some(n => f === resolve('/p', n))
   assert.equal(findConfig('/p', having()), null)
-  assert.equal(findConfig('/p', having('pcb.config.mjs', 'pcb.config.mts')), join('/p', 'pcb.config.mts'))
+  assert.equal(findConfig('/p', having('pcb.config.mjs', 'pcb.config.mts')), resolve('/p', 'pcb.config.mts'))
   assert.equal(findConfig('/p', having('pcbjs.config.js')), null)
 })
 

@@ -1,5 +1,7 @@
 // What becomes an event: store syncs and watcher writes coalesced per file over 200 ms, saves, claims of agents' own writes, and the cursor and
 // selection kept at their last value per 500 ms. docs/queries.md has the rules.
+import { resolve } from 'node:path'
+import { sourcePath } from '../project/files.js'
 import { createHash } from 'node:crypto'
 import type { By, EventData } from '@pcbjs/core/protocol'
 import { changedRanges, type EventLog } from './events.js'
@@ -54,7 +56,7 @@ export function eventFeed(o: FeedOptions): Feed {
     timers.add(t)
     return t
   }
-  const rel = (project: string, file: string) => (file.startsWith(project + '/') ? file.slice(project.length + 1) : file)
+  const rel = (project: string, file: string) => sourcePath(project, file)
   // the text each file had before its burst of syncs began, and the last one synced
   const synced = new Map<string, { before: string; text: string; by: By | null; source: 'editor' | 'agent'; timer: NodeJS.Timeout }>()
   const last = new Map<string, string>()
@@ -119,6 +121,7 @@ export function eventFeed(o: FeedOptions): Feed {
 
   return {
     synced(file, text, by, source) {
+      file = resolve(file)
       if (!o.projectOf(file)) return
       const now = text ?? o.disk(file) ?? ''
       const s = synced.get(file)
@@ -135,7 +138,8 @@ export function eventFeed(o: FeedOptions): Feed {
       synced.set(file, { before, text: now, by, source, timer: later(COALESCE_MS, () => flushSync(file)) })
     },
     written(file) {
-      if (!o.projectOf(file) || file.includes('/.pcbjs/') || file.includes('/node_modules/')) return
+      file = resolve(file)
+      if (!o.projectOf(file) || /[\\/](?:\.pcbjs|node_modules)[\\/]/.test(file)) return
       const d = disk.get(file)
       if (d) {
         clearTimeout(d.timer)
@@ -150,12 +154,14 @@ export function eventFeed(o: FeedOptions): Feed {
       disk.set(file, { timer: t, at })
     },
     saved(file, by) {
+      file = resolve(file)
       const project = o.projectOf(file)
       if (!project) return
       saves.set(file, { hash: hash(o.disk(file)), at: Date.now() })
       o.log()?.push('save', project, { file: rel(project, file) }, by)
     },
     claim(file, by) {
+      file = resolve(file)
       claimed = Date.now()
       claims.set(file, { by, at: claimed })
       const sh = shadows.get(file)
@@ -177,6 +183,7 @@ export function eventFeed(o: FeedOptions): Feed {
       claimed = Date.now()
     },
     shadowed(file, push) {
+      file = resolve(file)
       const by = take(file)
       if (by || Date.now() - claimed > CLAIMING_MS) return push(by)
       const timer = later(CLAIM_MS, () => {
@@ -186,6 +193,7 @@ export function eventFeed(o: FeedOptions): Feed {
       shadows.set(file, { push, timer })
     },
     cursor(file, line, col, by) {
+      file = resolve(file)
       const project = o.projectOf(file)
       if (!project) return
       throttle(`cursor|${by?.client ?? ''}`, () => o.log()?.push('cursor', project, { file: rel(project, file), line, col }, by))

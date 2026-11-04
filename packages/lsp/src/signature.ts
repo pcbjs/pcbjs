@@ -1,6 +1,7 @@
 // Pad access is a one-parameter operation even while the TypeScript parser recovers an empty or unfinished index.
+import { sameFile } from './facts.js'
 import ts from 'typescript'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { isAbsolute, relative, sep } from 'node:path'
 import type { SignatureHelp } from 'vscode-languageserver/node.js'
 import { partTarget, type TargetBoard } from './target.js'
 import { renderPreview } from './preview.js'
@@ -45,8 +46,8 @@ export function padSignature(program: ts.Program, file: string, offset: number, 
     const rel = relative(candidate.root, file)
     const inside = !isAbsolute(rel) && rel !== '..' && !rel.startsWith('..' + sep)
     const recordsFile =
-      Object.keys(candidate.site.sources ?? {}).some(path => resolve(candidate.root, path) === file) ||
-      candidate.site.schematic.parts.some(part => part.src && resolve(candidate.root, part.src.file) === file)
+      Object.keys(candidate.site.sources ?? {}).some(path => sameFile(candidate.root, path, file)) ||
+      candidate.site.schematic.parts.some(part => part.src && sameFile(candidate.root, part.src.file, file))
     if (!inside && !recordsFile) continue
     const target = partTarget(program, accessor.receiver, [candidate])
     const ref = target?.boards[0]?.parts[0]

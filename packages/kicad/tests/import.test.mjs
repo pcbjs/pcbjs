@@ -6,7 +6,7 @@ import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { h } from '@pcbjs/core/jsx-runtime'
 import PCB, { nets } from '@pcbjs/core'
@@ -153,7 +153,7 @@ test('kicadFootprint: ${KIPRJMOD} is the project root, a model option is relativ
     return compileBoard(h(PCB, { name: 'M' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 10, h: 10 }), h(U, { at: '5 5' })))
   }
   const own = place(kicadFootprint('Mine:Part')).footprints[0].model
-  assert.equal(own.path ?? own.step, join(proj, 'models', 'part.step'), 'not lib/footprints/models')
+  assert.equal(resolve(own.path ?? own.step), join(proj, 'models', 'part.step'), 'not lib/footprints/models')
   // the factory made in one module and placed from another: its model is relative to the module that made it
   writeFileSync(
     join(proj, 'footprints.mjs'),
@@ -161,5 +161,5 @@ test('kicadFootprint: ${KIPRJMOD} is the project root, a model option is relativ
   )
   const { Part } = await import(pathToFileURL(join(proj, 'footprints.mjs')).href)
   const given = place(Part).footprints[0].model
-  assert.equal(given.path ?? given.step, join(proj, 'models', 'part.step'), 'relative to footprints.mjs, not to this test file')
+  assert.equal(resolve(given.path ?? given.step), join(proj, 'models', 'part.step'), 'relative to footprints.mjs, not to this test file')
 })

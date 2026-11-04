@@ -1,3 +1,4 @@
+import { sameFile } from '../dist/project/files.js'
 // The workspace dev server with files shared between scopes, as in examples/motor-stack: a lib/ beside the scope folders is
 // watched through the module graphs, an edit of it recompiles the scope shown last, which an observer of every stage follows, and marks every other loaded scope that
 // imports it stale, and a hidden scope edited long before it is shown again still recompiles.
@@ -54,7 +55,11 @@ test("shared lib: the lib folder is no scope, and each scope's graph holds its f
     [['A', 'T1']],
   )
   const file = join(w.lib, 'shared.ts')
-  for (const s of ['a', 'b']) assert.ok(scope(s).files.includes(file), `${s}: ${scope(s).files.join(' ')}`)
+  for (const s of ['a', 'b'])
+    assert.ok(
+      scope(s).files.some(f => sameFile(f, file)),
+      `${s}: ${scope(s).files.join(' ')}`,
+    )
   assert.ok(watched().has(file), 'the shared file is watched')
 })
 

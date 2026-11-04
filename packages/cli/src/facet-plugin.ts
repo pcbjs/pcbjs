@@ -1,5 +1,6 @@
 // `import layers from './pcb.tsx?pcb:layers'`: a board module's facets as ES modules for a site built with Vite. A worker thread per
 // project compiles, or in dev the live session serving the project; an edit to a file the board read updates its facet modules. docs/ui.md.
+import { sameFile } from './project/files.js'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, posix, relative, resolve, sep } from 'node:path'
@@ -558,7 +559,7 @@ export function pcbjs(opts: PcbjsPluginOptions = {}): Plugin {
       const hit: string[] = []
       for (const [key, b] of boards) {
         const board = await b.catch(() => null)
-        if (board && !board.files.includes(ctx.file) && board.entry !== ctx.file) continue
+        if (board && !board.files.some(f => sameFile(f, ctx.file)) && !sameFile(board.entry, ctx.file)) continue
         hit.push(key)
       }
       if (!hit.length) return

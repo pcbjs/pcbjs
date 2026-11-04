@@ -1,4 +1,5 @@
 // No Node imports: the viewer shows findings too.
+import { sourcePath } from './source-path.js'
 import type { Board, DrcMarker, Item, Pad, Pt, RoutingReport } from '@pcbjs/core/model'
 import type { Src } from '@pcbjs/core/internal/types'
 import type { Finding, Mark, SourceRef } from '@pcbjs/core/finding'
@@ -52,11 +53,10 @@ export class BoardIndex {
     }
   }
   rel(file: string): string {
-    const r = this.root.replace(/[\\/]$/, '')
-    return r && file.startsWith(r + '/') ? file.slice(r.length + 1) : file
+    return sourcePath(this.root, file)
   }
   inProject(file: string): boolean {
-    return !file.includes('/node_modules/') && !isOwnFile(file) && (!/^([\\/]|[A-Za-z]:)/.test(file) || !this.root || file.startsWith(this.root))
+    return !/[\\/]node_modules[\\/]/.test(file) && !isOwnFile(file) && (!/^([\\/]|[A-Za-z]:)/.test(file) || !this.root || this.rel(file) !== file)
   }
   /** The part a reference names or holds a pad of, a declared part never placed by its ref; undefined for any other reference. */
   partOf(ref: string): string | undefined {

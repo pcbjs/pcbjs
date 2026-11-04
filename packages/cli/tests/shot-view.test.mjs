@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 // `pcbjs shot --view`: the schematic is a view like 2D and 3D, each a render spec with the run's look.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -16,9 +17,9 @@ test('each view is a spec of its own; the board side, mirror, layers and explode
   assert.deepEqual(
     jobs.map(j => [j.spec.view, j.file]),
     [
-      ['2d', '/o/Blinky-2d-select-Q1-F.Cu-back-mirror-light.png'],
-      ['3d', '/o/Blinky-3d-explode50-select-Q1-F.Cu-back-mirror-light.png'],
-      ['sch', '/o/Blinky-sch-select-Q1-light.png'],
+      ['2d', join('/o/Blinky-2d-select-Q1-F.Cu-back-mirror-light.png')],
+      ['3d', join('/o/Blinky-3d-explode50-select-Q1-F.Cu-back-mirror-light.png')],
+      ['sch', join('/o/Blinky-sch-select-Q1-light.png')],
     ],
   )
   assert.deepEqual(jobs[2].spec, { ...look, view: 'sch', entry: '/p/blinky.pcb.tsx', frame: 'Q1', highlight: ['Q1'] })
@@ -26,6 +27,6 @@ test('each view is a spec of its own; the board side, mirror, layers and explode
 
 test('a target is part of the file name and the spec', () => {
   const [j] = shotJobs([{ entry: '/p/m.tsx', name: 'Multi', targets: ['Rev B'] }], ['2d'], '/o')
-  assert.equal(j.file, '/o/Multi-rev-b-2d.png')
+  assert.equal(j.file, join('/o/Multi-rev-b-2d.png'))
   assert.equal(j.spec.target, 'Rev B')
 })
