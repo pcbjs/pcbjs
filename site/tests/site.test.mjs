@@ -7,7 +7,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } 
 import { tmpdir } from 'node:os'
 import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromes, launchAny, cdp, evaluate } from '../../scripts/browser-equality.mjs'
+import { chromes, launchAny, stopChrome, cdp, evaluate } from '../../scripts/browser-equality.mjs'
 
 const site = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // pages.yml builds into its own folder
@@ -124,7 +124,7 @@ test(
       assert.deepEqual(bad, [], bad.join('\n'))
     } finally {
       page.close()
-      chrome.proc.kill()
+      await stopChrome(chrome.proc)
       server.close()
       rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
     }

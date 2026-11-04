@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { extname, join, resolve } from 'node:path'
-import { chromes, launchAny, cdp, evaluate } from '../../scripts/browser-equality.mjs'
+import { chromes, launchAny, stopChrome, cdp, evaluate } from '../../scripts/browser-equality.mjs'
 
 const dist = process.env.PCBJS_SITE_DIST ? resolve(process.env.PCBJS_SITE_DIST) : new URL('../.vitepress/dist/', import.meta.url).pathname
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -157,7 +157,7 @@ test(
       )
     } finally {
       page?.close()
-      chrome?.proc.kill()
+      await stopChrome(chrome?.proc)
       server.close()
       rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
     }

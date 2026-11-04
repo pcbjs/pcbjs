@@ -7,7 +7,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { parse, compileScript, compileStyle } from 'vue/compiler-sfc'
-import { chromes, launchAny, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
+import { chromes, launchAny, stopChrome, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url)),
   styles = []
@@ -119,7 +119,7 @@ test('placement fields validate, recover refused writes, and cancel typing witho
     )
   } finally {
     page?.close()
-    chrome?.proc.kill()
+    await stopChrome(chrome?.proc)
     await new Promise(resolve => server.close(resolve))
     rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
   }

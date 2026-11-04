@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { parse, compileScript, compileStyle } from 'vue/compiler-sfc'
 import { fixture } from './fixture-board.mjs'
-import { chromes, launchAny, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
+import { chromes, launchAny, stopChrome, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const symbol = (ref, x) => ({
@@ -302,7 +302,7 @@ test(
       )
     } finally {
       page?.close()
-      chrome?.proc.kill()
+      await stopChrome(chrome?.proc)
       await new Promise(resolve => server.close(resolve))
       rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
     }

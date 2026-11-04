@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { facetSet } from '@pcbjs/core/site-facets'
 import { fixture } from './fixture-board.mjs'
-import { chromes, launchAny, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
+import { chromes, launchAny, stopChrome, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const compiled = await build({
   stdin: {
@@ -97,7 +97,7 @@ test(
       )
     } finally {
       page?.close()
-      chrome?.proc.kill()
+      await stopChrome(chrome?.proc)
       await new Promise(resolve => server.close(resolve))
       rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
     }

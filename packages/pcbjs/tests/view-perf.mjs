@@ -6,7 +6,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync,
 import { cpus, loadavg, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromes, launchAny, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
+import { chromes, launchAny, stopChrome, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const BIN = join(REPO, 'packages', 'pcbjs', 'bin', 'pcbjs.js')
@@ -96,6 +96,7 @@ export async function viewBench({ shots, log = () => {}, devtools = 0, port = 0,
   mkdirSync(run)
   const children = []
   let text = ''
+  let chrome
   try {
     const child = spawn(process.execPath, [BIN, 'session', 'serve', '--port', String(port), '--host', '127.0.0.1'], {
       cwd: root,
@@ -107,7 +108,7 @@ export async function viewBench({ shots, log = () => {}, devtools = 0, port = 0,
     child.stderr.on('data', d => (text += d))
     await until('the session', () => /\[pcbjs\] session \w+, pid/.test(text), 60000)
     const dev = JSON.parse(readFileSync(join(root, '.pcbjs', 'dev.json'), 'utf8'))
-    const chrome = await launchAny(chromes(), top, devtools)
+    chrome = await launchAny(chromes(), top, devtools)
     children.push(chrome.proc)
     const page = await cdp(chrome.socket)
     await page.send('Runtime.enable')
@@ -292,6 +293,7 @@ export async function viewBench({ shots, log = () => {}, devtools = 0, port = 0,
     out.load = Math.max(out.load, loadPerCore())
     return { out, text }
   } finally {
+    await stopChrome(chrome?.proc)
     for (const c of children) c.kill('SIGKILL')
     rmSync(top, { recursive: true, force: true })
   }

@@ -164,13 +164,23 @@ function serve(tmp, port) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
-async function stopChrome(proc) {
-  if (!proc?.pid || proc.exitCode !== null || proc.signalCode !== null) return
-  const exited = new Promise(resolve => proc.once('exit', resolve))
-  const timer = setTimeout(() => proc.kill('SIGKILL'), 3000)
+/** Stop an owned, detached browser process group, including surviving children. */
+export async function stopChrome(proc) {
+  if (!proc?.pid) return
+  const signal = name => {
+    try {
+      if (process.platform === 'win32') proc.kill(name)
+      else process.kill(-proc.pid, name)
+    } catch (error) {
+      if (error.code !== 'ESRCH') throw error
+    }
+  }
+  const exited = proc.exitCode !== null || proc.signalCode !== null ? Promise.resolve() : new Promise(resolve => proc.once('exit', resolve))
+  const timer = setTimeout(() => signal('SIGKILL'), 3000)
   try {
-    proc.kill('SIGTERM')
+    signal('SIGTERM')
     await exited
+    signal('SIGKILL')
   } finally {
     clearTimeout(timer)
   }
@@ -192,6 +202,7 @@ async function launch(bin, profile, port) {
     ],
     {
       stdio: 'ignore',
+      detached: process.platform !== 'win32',
     },
   )
   try {

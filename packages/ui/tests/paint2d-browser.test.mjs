@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromes, launchAny, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
+import { chromes, launchAny, stopChrome, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const compiled = await build({
@@ -77,7 +77,7 @@ test(
       assert.equal(await evaluate(page, `document.querySelectorAll('.lit > *').length`), 2, 'facet refresh rebuilds explicit layer destinations')
     } finally {
       page?.close()
-      chrome?.proc.kill()
+      await stopChrome(chrome?.proc)
       await new Promise(resolve => server.close(resolve))
       rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
     }

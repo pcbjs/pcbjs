@@ -9,7 +9,7 @@ import { build } from 'esbuild'
 import { parse, compileScript, compileStyle } from 'vue/compiler-sfc'
 import { registerHooks } from 'node:module'
 import { fixture } from './fixture-board.mjs'
-import { chromes, launchAny, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
+import { chromes, launchAny, stopChrome, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
 
 registerHooks({
   resolve: (spec, ctx, next) => {
@@ -248,7 +248,7 @@ test(
       )
     } finally {
       page?.close()
-      chrome?.proc.kill()
+      await stopChrome(chrome?.proc)
       await new Promise(resolve => server.close(resolve))
       rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
     }

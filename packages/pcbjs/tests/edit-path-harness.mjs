@@ -12,7 +12,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { chromes, launchAny, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
+import { chromes, launchAny, stopChrome, cdp, evaluate } from '../../../scripts/browser-equality.mjs'
 
 export const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 export const BIN = join(REPO, 'packages', 'pcbjs', 'bin', 'pcbjs.js')
@@ -444,6 +444,7 @@ export function harness() {
     if (process.env.PCBJS_E2E_LOG && S) writeFileSync(process.env.PCBJS_E2E_LOG, S.log.text)
     await ed?.close().catch(() => {})
     page?.close()
+    await stopChrome(chrome?.proc)
     for (const c of children) c.kill('SIGKILL')
     for (const d of dirs) rmSync(d, { recursive: true, force: true })
   })
