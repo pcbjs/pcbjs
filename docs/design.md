@@ -57,7 +57,7 @@ A part carries `MPN` and `MPN:<tag>`; a board or fab target has an ordered tag l
 - Connectivity is union-find per copper layer, each pour piece its own item, one pass over grid candidates feeding DRC; tests are on edges, Clipper builds. DRC is findings.md.
 - A hook's delta applies to its stage's input for `before`, its output for `after`; plugins.md.
 - `want` lists views, `meta`, `sch`, `layers`, `shapes`, `model`, `findings`, `fab`; the plan is every stage whose `emits` meets them and what they run after: `sch` runs `evaluate`, `place` and `schematic`.
-- `CompileOptions.signal` is read by `pulse()` in every stage and its loops, including pair-segment comparisons and obstacle-grid updates: the compile throws `CancelledError` within a few ms, its finished units cached.
+- `CompileOptions.signal` is read by `pulse()` in every stage and its loops, including pair layout candidates, sampled clearance checks, pair-segment comparisons and obstacle-grid updates: the compile throws `CancelledError` within a few ms, its finished units cached. Pair layout fallbacks preserve cancellation instead of treating it as a geometry failure.
 - `sketch()`, the keystroke tier, is the plan of `meta` and `manualCopper` with the cache, the placer and references off.
 - A stage that changes an item puts a new one in its place with its id and uid. `PCBJS_FREEZE=1`, on in the tests, deep-freezes each item as it joins the board and each field once no later stage writes it, and throws when a stage changes a facet its `writes` leaves out.
 - `board.timings` keeps five phases.

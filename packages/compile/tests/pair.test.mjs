@@ -3,6 +3,29 @@ import assert from 'node:assert/strict'
 import { offsetPair, pairEnds, pairVias, pairLengths, fitCentre, offsetPolyline, turn, PairGeometryError } from '../dist/pair.js'
 import { near, nearPt } from './helpers.mjs'
 
+test('pair clearance checks can be cancelled within a long pair', async () => {
+  const { pairClash } = await import('../dist/pair-lay.js')
+  const { pulsed, CancelledError } = await import('../dist/cancel.js')
+  const laid = {
+    job: { copper: 0.15, g: 0.15 },
+    tracks: ['P', 'N'].map((role, y) => ({ role, layer: 'F.Cu', width: 0.2, pts: Array.from({ length: 256 }, (_, x) => [x / 10, y]) })),
+    vias: [],
+  }
+  assert.equal(pairClash(laid), null)
+  let reads = 0
+  assert.throws(
+    () =>
+      pulsed(
+        () => {
+          if (++reads === 2) throw new CancelledError()
+        },
+        () => pairClash(laid),
+      ),
+    CancelledError,
+  )
+  assert.equal(reads, 2)
+})
+
 const W = 0.2,
   G = 0.15,
   PITCH = W + G,
@@ -365,6 +388,39 @@ const job = o => ({
   vias: [],
   layers: ['F.Cu'],
   ...o,
+})
+
+test('pair layout fallbacks preserve cancellation from clearance checks', async () => {
+  const { slideVias } = await import('../dist/pair-lay.js')
+  const { CancelledError } = await import('../dist/cancel.js')
+  const cancelled = new CancelledError()
+  const j = job({
+    centre: [
+      [0, 0],
+      [5, 0],
+      [10, 0],
+    ],
+    startPads: [
+      [0, -0.1],
+      [0, 0.1],
+    ],
+    endPads: [
+      [10, -0.1],
+      [10, 0.1],
+    ],
+    vias: [1],
+    layers: ['F.Cu', 'B.Cu'],
+  })
+  assert.throws(
+    () =>
+      slideVias(j, {
+        centreFree: () => true,
+        padFree: () => {
+          throw cancelled
+        },
+      }),
+    e => e === cancelled,
+  )
 })
 
 test('pair layout: a via pair the maze put at a jog right past the fan moves onto the jog, P and N keep their clearance', async () => {

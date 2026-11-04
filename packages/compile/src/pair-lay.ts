@@ -6,6 +6,7 @@ import type { Prim } from '@pcbjs/core/model'
 import { pairPaths, PairGeometryError, cleanPolyline, turn, leftNormal, pairEnds, pairVias, type PairPaths } from './pair.js'
 import { neckLength, neckOf, neckPrims, padReach, type Neck } from './neck.js'
 import { flatten, linesOf, primsLength, tidyPrims, trackShape } from './round.js'
+import { pulse } from './cancel.js'
 
 export interface PairJob {
   id: string
@@ -124,6 +125,7 @@ function polyFree(free: IsFree, layer: string, pts: Pt[], net: string | undefine
       l = d2(a, b),
       n = Math.max(1, Math.ceil(l / STEP))
     for (let k = i === 1 ? 0 : 1; k <= n; k++) {
+      if ((k & 63) === 0) pulse()
       const p: Pt = [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]
       if (skip?.(p)) continue
       if (!free(layer, p[0], p[1], net, width)) return false
@@ -281,15 +283,20 @@ export function pairClash(laid: PairLaid): Pt | null {
       if (a.layer !== b.layer) continue
       const lim = c + (a.width + b.width) / 2
       for (let i = 1; i < a.pts.length; i++)
-        for (let j = 1; j < b.pts.length; j++)
+        for (let j = 1; j < b.pts.length; j++) {
+          if ((j & 63) === 1) pulse()
           if (segSeg(a.pts[i - 1], a.pts[i], b.pts[j - 1], b.pts[j]) < lim) return [(a.pts[i][0] + b.pts[j][0]) / 2, (a.pts[i][1] + b.pts[j][1]) / 2]
+        }
     }
   for (const v of laid.vias) {
     const span = spanOf(job.copperLayers, v.layers[0], v.layers[1])
     for (const t of v.role === 'P' ? N : P) {
       if (!span.includes(t.layer)) continue
       const lim = Math.max(job.copper - 1e-6 + job.via.size / 2, job.holeClearance - 1e-6 + job.via.drill / 2) + t.width / 2
-      for (let i = 1; i < t.pts.length; i++) if (ptSeg(v.at, t.pts[i - 1], t.pts[i]) < lim) return v.at
+      for (let i = 1; i < t.pts.length; i++) {
+        if ((i & 63) === 1) pulse()
+        if (ptSeg(v.at, t.pts[i - 1], t.pts[i]) < lim) return v.at
+      }
     }
   }
   return null
@@ -453,7 +460,8 @@ export function slideVias(job: PairJob, ctx: PairContext): PairJob | null {
     let laid: PairLaid
     try {
       laid = layCentre(j, ctx)
-    } catch {
+    } catch (e) {
+      if (!(e instanceof PairGeometryError)) throw e
       return true
     }
     const c = pairClash(laid)
@@ -471,6 +479,7 @@ export function slideVias(job: PairJob, ctx: PairContext): PairJob | null {
     const cands: { s: number; dir: number }[] = []
     for (let s = 0.1; s <= 4 * spacing + 1e-9; s += 0.1) cands.push({ s, dir: 1 }, { s, dir: -1 })
     for (const { s, dir } of cands) {
+      pulse()
       let rest = s,
         j = i,
         q: Pt | null = null
@@ -561,6 +570,7 @@ export function layPairJob(job: PairJob, ctx: PairContext = {}): PairLaid {
     err: unknown = null
   const seen = new Set<string>()
   for (const [k, steps] of gens.entries()) {
+    pulse()
     let j: PairJob = job
     for (const s of steps) j = s(j, ctx) ?? j
     const key = JSON.stringify([j.centre, j.vias])
