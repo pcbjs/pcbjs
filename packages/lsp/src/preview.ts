@@ -487,9 +487,10 @@ function simplify(xs: number[], ys: number[], tol: number): Uint8Array {
       ay = ys[a],
       dx = xs[b] - ax,
       dy = ys[b] - ay,
-      len = Math.hypot(dx, dy) || 1
+      len = Math.sqrt(dx * dx + dy * dy) || 1
+    bd *= len
     for (let i = a + 1; i < b; i++) {
-      const d = Math.abs((xs[i] - ax) * dy - (ys[i] - ay) * dx) / len
+      const d = Math.abs((xs[i] - ax) * dy - (ys[i] - ay) * dx)
       if (d > bd) {
         bd = d
         best = i

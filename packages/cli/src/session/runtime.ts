@@ -444,7 +444,9 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
 
   /** The keystroke tier, docs/session.md: the edit's affected set half-opaque at once, then the edited entity redrawn from the text as typed, for the viewers of its layers. */
   const sketch = async (job: Sketch) => {
+    const start = performance.now()
     const d = await drafts()?.sketch(job.file)
+    if (process.env.PCBJS_DEBUG_SKETCH) hooks.log(`sketch prepare ${(performance.now() - start).toFixed(1)} ms`)
     const snap = current()
     if (!d || !snap || !hooks.viewers()) return
     const file = job.file
@@ -576,7 +578,12 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
       const pv = state.preview
       if (pv && (!file || sameFile(file, pv.file) || entriesReaching(graph().getModulesByFile(file), [pv.file])?.size)) previewDirty = true
       stop()
-      sched.edit({ file, slots: affected(file).map(s => s.entry.file), typed }, Date.now())
+      const slots = affected(file).map(s => s.entry.file)
+      if (typed && file && slots.some(s => demand.has(s) && (demand.get(s) ?? ['layers']).includes('layers')))
+        void drafts()
+          ?.sketch(file)
+          .catch(e => hooks.log(`draft preparation: ${String(e)}`))
+      sched.edit({ file, slots, typed }, Date.now())
       pump()
     },
     demand(d) {

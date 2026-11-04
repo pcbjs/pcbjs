@@ -30,7 +30,7 @@ after(() => {
 function blinky(entries = ['blinky.pcb.tsx']) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-live-')))
   dirs.push(root)
-  cpSync(join(REPO, 'examples', 'demo'), root, { recursive: true, filter: s => !s.includes('/.pcbjs') && !s.includes('/node_modules') })
+  cpSync(join(REPO, 'examples', 'demo'), root, { recursive: true, filter: s => !/[\\/](?:\.pcbjs|node_modules)$/.test(s) })
   mkdirSync(join(root, 'node_modules'))
   symlinkSync(join(REPO, 'node_modules', '@pcbjs'), join(root, 'node_modules', '@pcbjs'), 'dir')
   const cfg = join(root, 'pcb.config.ts')
@@ -278,7 +278,10 @@ test('two panes on two boards: each board compiles only the views of its own pan
     await until(() => facets(flat, 'Blinky').some(e => e.facet === 'findings') && facets(sch, 'Coin').some(e => e.facet === 'sch') && idle())
     const n = [flat.got.length, sch.got.length]
     for (const f of ['blinky.pcb.tsx', 'coin.pcb.tsx']) writeFileSync(join(root, f), readFileSync(join(root, f), 'utf8') + '\n// edited\n')
-    await Promise.all([settled(flat, n[0], 'Blinky', 'blinky.pcb.tsx'), settled(sch, n[1], 'Coin', 'coin.pcb.tsx')])
+    await Promise.all([settled(flat, n[0], 'Blinky', 'blinky.pcb.tsx'), settled(sch, n[1], 'Coin', 'coin.pcb.tsx')]).catch(error => {
+      error.message += '\n' + JSON.stringify([flat, sch].map((v, i) => v.got.slice(n[i]).filter(e => e.event === 'pcbjs:status' || e.event === 'pcbjs:invalidate')))
+      throw error
+    })
     await holdsCurrent(flat, 'Blinky', ['meta', 'layers', 'findings'])
     await holdsCurrent(sch, 'Coin', ['meta', 'sch'])
     const statuses = flat.got.slice(n[0]).filter(e => e.event === 'pcbjs:status' && e.entry)

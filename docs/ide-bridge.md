@@ -71,7 +71,7 @@ First `initialize` loads `@pcbjs/lsp`, failing if absent. JSON-RPC uses separate
 | `textDocument/inlayHint` | pad nets, `net GND` or `nets A/sl, B/sl`; rule widths, `width 0.2 mm` |
 | `textDocument/publishDiagnostics` | findings: `source` `pcbjs DRC`/`pcbjs ERC`, `code` the rule; draft spans: Unnecessary hints, `pcbjs draft`; disk writes under unsaved text: `shadowed`, `pcbjs session` |
 
-Compiles refresh code lenses and inlay hints. Markdown hover starts with `![<kind> on <board>](data:image/svg+xml;base64,…)`: `kind` is `placement`, `items`, `pad`, `net`, `keepout`, `footprint`, `model`, `group`, `point` or `reference`. Hover images use shared lazy index accessors and item bounds before decoding rings; off-screen geometry stays packed. SVG size: 360 px wide, at most 198 high; `data-box`: crop `x y w h` in mm.
+Compiles refresh code lenses and inlay hints. Markdown hover starts with `![<kind> on <board>](data:image/svg+xml;base64,…)`: `kind` is `placement`, `items`, `pad`, `net`, `keepout`, `footprint`, `model`, `group`, `point` or `reference`. Hover images use shared lazy index accessors and item bounds before decoding rings; off-screen geometry stays packed. Ring simplification compares cross products directly while preserving its pixel tolerance. SVG size: 360 px wide, at most 198 high; `data-box`: crop `x y w h` in mm.
 
 | Method | Kind | Meaning |
 | --- | --- | --- |

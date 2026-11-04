@@ -81,6 +81,11 @@ jobs:
           enableCrossOsArchive: true
       - name: Fetch the vendor models the tests read
         run: node scripts/check-examples.mjs --fetch
+      - name: Windows interactive latency and simultaneous board updates
+        if: runner.os == 'Windows'
+        run: node --test --test-concurrency=1 --test-name-pattern="typing in a text block|two panes on two boards|every hover kind" packages/cli/tests/keystroke.test.mjs packages/cli/tests/live-view.test.mjs packages/lsp/tests/hover-preview.test.mjs
+        env:
+          PCBJS_DEBUG_SKETCH: '1'
       - run: npm test
 
   boards:

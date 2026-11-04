@@ -75,6 +75,7 @@ export interface Drafts {
 }
 
 interface Waiting {
+  prepared?: Promise<Omit<Draft, 'named'>>
   text: string
   named: string
   n: number
@@ -179,7 +180,7 @@ export function drafts(changed: (file: string) => void, hooks: HoldHooks = {}): 
     async sketch(file) {
       const w = waiting.get(file)
       if (!w) return null
-      const d = await prepare(file, w.text)
+      const d = await (w.prepared ??= prepare(file, w.text))
       return seq.get(file) === w.n && !d.broken ? { ...d, named: w.named } : null
     },
     settle(file) {

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { repair } from '@pcbjs/lsp/internal/repair'
 import { parse } from '@pcbjs/lsp'
 import { transformSourceRanges } from '../dist/project/source-ranges.js'
-import { prepare } from '../dist/session/drafts.js'
+import { drafts, prepare } from '../dist/session/drafts.js'
 // the transform's text hashes, which tests/source-ranges.test.mjs checks, left out of the literals compared here
 const plain = s => s.replace(/, hash: "[0-9a-f]{12}"/g, '')
 
@@ -29,4 +29,18 @@ test('drafts: prepare keeps text esbuild takes and repairs text it rejects', asy
   const lost = await prepare('/p/pcb.tsx', Array.from({ length: 6 }, (_, i) => `const v${i} = (\n;`).join('\n'))
   assert.equal(lost.broken, true)
   assert.equal(lost.code, lost.text)
+})
+
+test('draft preparation shared with the keystroke tier never returns a superseded text', async () => {
+  const d = drafts(() => {})
+  const file = '/p/pcb.tsx'
+  d.set(file, 'const n = 1')
+  const first = d.sketch(file)
+  d.set(file, 'const n = 2')
+  const pending = d.sketch(file)
+  const current = d.sketch(file)
+  assert.equal(await first, null)
+  assert.equal((await pending).code, 'const n = 2')
+  assert.deepEqual(await current, await pending)
+  d.dispose()
 })

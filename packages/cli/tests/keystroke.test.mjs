@@ -187,6 +187,14 @@ test('typing in a text block: the keystroke tier per key, nothing stale, one ful
     view.close()
     ed.close()
   } finally {
+    if (process.env.PCBJS_DEBUG_SKETCH)
+      t.diagnostic(
+        s
+          .log()
+          .split('\n')
+          .filter(line => line.includes('sketch '))
+          .join('\n'),
+      )
     await s.stop()
   }
 })

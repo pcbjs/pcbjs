@@ -112,15 +112,13 @@ Changesets publishes linked trains: `@pcbjs/core` is a peer of its importers; `@
 
 `ci.yml` runs on pushes to `main` and `beta2` and pull requests: Prettier; build and test on ubuntu with Node 22 and 24, Windows and macOS with 22; `scripts/check-examples.mjs`, failing unless each example's findings match examples/README.md; the pack smoke test; the benchmark.
 
-The CLI test files run serially so concurrent compilers do not distort the keystroke latency contract. Cancellation checkpoints also separate stage bodies from item identity generation.
+CLI, browser-heavy and language-server test files run serially so concurrent work does not distort latency checks. Set `PCBJS_DEBUG_SKETCH=1` to log draft preparation, module evaluation and geometry timings. Cancellation checkpoints also separate stage bodies from item identity generation.
 
 `scripts/bench.mjs` times `pcbjs check` per example cold, without `.pcbjs/cache` and the typecheck cache, and warm, and `keystroke-to-first-facet`, ms from a key in Blinky's text block to its facet through a session, failing over a budget of `bench.json` by 20 percent and half a second or 30 ms; budgets are per machine kind, `ci` when `CI` is set, `--write` records this machine's medians, uploaded by the bench job. `view` drives the viewer on usb3-hub in a headless Chromium, `packages/pcbjs/tests/view-perf.mjs`, also run by `view-perf.test.mjs`: the main thread's work per frame, timed from the first animation callback to the end of that frame rather than the preceding vsync timestamp, WebGL rasterising nothing, idle, pointer move, wheel and drag, plain and with the 50 or more findings a drop of U1 makes, and in frames the hover and a drag's first response, against the fixed `view.budgets`: idle and move 4 ms, a wheel step 8 ms in 2D and 4 ms in 3D, a drag frame 16 ms, one frame, 3D draws at rest and under U1's fade exactly, else failing over by a quarter plus the run's peak one-minute load per CPU above a half.
 
 The session compiles each project in a worker thread, `session/worker.ts`, which an edit cancels through shared memory in a few ms and which keeps the GLB, fab set and drawings, sending a board and site only when changed; a keystroke runs the keystroke tier, the full compile waits for the quiet period, session.md. `keystroke.test.mjs`, `worker-boundary.test.mjs` and compile's `cancel.test.mjs` hold their latencies.
 
 Compile workers keep the process alive while a request is pending, including a retry after a worker crash. Idle workers do not prevent shutdown. Windows session events use portable project-relative source names; file identity accepts native, Vite and TypeScript separators. Length-tuning searches check cancellation between batches of columns. Board snapshots and unit boundaries also check cancellation.
-
-Browser-heavy and language-server test suites run files sequentially; CLI integration tests run two files at a time. This keeps CPU contention and competing Chromium processes from distorting latency checks.
 
 ## Support
 
