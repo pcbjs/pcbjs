@@ -33,17 +33,12 @@ before(async () => {
     "import { defineConfig, defineDefaultBoard } from '@pcbjs/core'\nimport { JLCPCB } from '@pcbjs/lib/rules'\ndefineDefaultBoard({ rules: JLCPCB })\nexport default defineConfig({ entries: ['blinky.pcb.tsx'], vite: { logLevel: 'silent' } })\n",
   )
   // the channel binds its supply track as vccTrunk, which the row layout places
-  const sch = join(ROOT, 'lib', 'led-channel.sch.ts')
+  const sch = join(ROOT, 'lib', 'led-channel.tsx')
   writeFileSync(
     sch,
-    edit(
-      readFileSync(sch, 'utf8'),
-      ["import { circuit, type Ports } from '@pcbjs/core'", "import { circuit, route, type Ports } from '@pcbjs/core'"],
-      ['=> ({\n', "=> {\n  const vccTrunk = route('-7 0').net(VCC).width(0.3).H(-4.825)\n  return {\n    vccTrunk,\n"],
-      ['}),\n}))', '}),\n  }\n})'],
-    ),
+    edit(readFileSync(sch, 'utf8'), ['=> ({\n', "=> {\n  const vccTrunk = route('-7 0').net(VCC).width(0.3).H(-4.825)\n  return {\n    vccTrunk,\n"], ['\n}))', '\n  }\n})']),
   )
-  const row = join(ROOT, 'lib', 'led-channel.layout.tsx')
+  const row = join(ROOT, 'lib', 'led-channel.tsx')
   writeFileSync(row, edit(readFileSync(row, 'utf8'), ["{route('-7 0').net(g.ports.VCC).width(0.3).H(-4.825)}", '{g.vccTrunk}']))
   const show = f => execFileSync('git', ['show', `HEAD:examples/demo/${f}`], { cwd: REPO, encoding: 'utf8' })
   writeFileSync(
@@ -111,7 +106,7 @@ test('the views get the same handles and the note for CH3, whose variable is in 
 })
 
 test('in the layout, the render parameter g names every instance it lays out: the definition offers g.R[1], never ch1 or CH1', async () => {
-  const row = join(ROOT, 'lib', 'led-channel.layout.tsx')
+  const row = join(ROOT, 'lib', 'led-channel.tsx')
   const SLOT2 = '{route()}'
   const text = edit(readFileSync(row, 'utf8'), ['      {g.vccTrunk}', `      {g.vccTrunk}\n      ${SLOT2}`])
   await client.conn.sendNotification('textDocument/didOpen', { textDocument: { uri: pathToFileURL(row).href, languageId: 'typescriptreact', version: 1, text } })

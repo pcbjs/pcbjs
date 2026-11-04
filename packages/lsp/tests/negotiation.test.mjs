@@ -57,7 +57,7 @@ test('ready names the protocol, the major and the capabilities, the language ser
   const ready = event('pcbjs:ide:ready').data
   assert.equal(ready.protocol, PROTOCOL)
   assert.equal(ready.major, MAJOR)
-  assert.deepEqual(ready.capabilities, ['bye', 'lsp'])
+  assert.deepEqual(ready.capabilities, ['bye', 'layout', 'lsp'])
   const devJson = JSON.parse(readFileSync(`${project.root}/.pcbjs/dev.json`, 'utf8'))
   assert.deepEqual(Object.keys(devJson), ['pid', 'tiers', 'version', 'protocol', 'major', 'startedAt', 'root', 'url', 'session', 'socket', 'edit', 'checkout'])
   assert.deepEqual(devJson.tiers, { keystroke: 30, quiet: 300 })

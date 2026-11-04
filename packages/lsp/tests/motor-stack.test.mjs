@@ -41,7 +41,7 @@ before(async () => {
   await client.conn.sendNotification('initialized', {})
   pcb = await open(join(root, 'pcb.tsx'))
   wire = await open(join(root, '..', 'lib', 'wire.ts'))
-  lay = await open(join(root, 'halfbridge.layout.tsx'))
+  lay = await open(join(root, 'halfbridge.tsx'))
 })
 after(async () => {
   client?.close()

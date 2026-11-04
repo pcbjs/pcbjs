@@ -19,7 +19,7 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const ROOT = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-ends-')))
 const FILE = join(ROOT, 'blinky.pcb.tsx')
 // J1/2 loses its track to the VCC bus and J1/3 its route to Q1/1
-const OPEN = ["    {route('3 10').net(VCC).width(0.3).H(9)}\n", "    {route(J1[3], Q1[1]).width(0.25).V(14).L(5, 16).via('B.Cu').H(24).V(7.5).via('F.Cu')}\n"]
+const OPEN = ["    {route('3 10').net(VCC).width(0.3).H(9)}\n", "    {route(J1[3], Q1[1]).width(0.25).V(14).L(5, 16).via('B.Cu').X('24 16').V(7.5).via('F.Cu')}\n"]
 
 let server, site, client, TEXT
 before(async () => {
