@@ -396,10 +396,13 @@ export function buildLayout(world: ObstacleWorld, exclude: Set<number> = new Set
     const n = g.nx * g.ny,
       out = new Uint8Array(n)
     for (let i = 0; i < n; i++) if (a[i]) out[i] = 1
+    pulse()
     const al = store.mask(`al\u0000${r.edgeClearance}\u0000${w}`, g, () => allowedSet(w))
     if (al) for (let i = 0; i < n; i++) if (!al[i]) out[i] = 1
+    pulse()
     const k = via ? null : store.mask(`k\u0000${layer}\u0000${w}\u0000${exemptOf(net)}`, g, () => keptOf(layer, w, net))
     if (k) for (let i = 0; i < n; i++) if (k[i]) out[i] = 1
+    pulse()
     return out
   }
   const viaGrid = (g: Grid, layer: string, net: string | undefined, size: number, drill: number, viaInPad: boolean): Uint8Array => {
@@ -419,6 +422,7 @@ export function buildLayout(world: ObstacleWorld, exclude: Set<number> = new Set
     const n = g.nx * g.ny,
       out = new Uint8Array(n)
     for (let i = 0; i < n; i++) if (a[i]) out[i] = 1
+    pulse()
     if (!viaInPad && net !== undefined)
       for (const it of ownNow(net))
         if (it.kind === 'pad' && it.type === 'smd' && it.layers.includes(layer)) {
@@ -427,6 +431,7 @@ export function buildLayout(world: ObstacleWorld, exclude: Set<number> = new Set
         }
     const k = store.mask(`vk\u0000${layer}\u0000${size}\u0000${exemptOf(net)}`, g, () => viaKeptSet(keepouts, layer, size, net))
     if (k) for (let i = 0; i < n; i++) if (k[i]) out[i] = 1
+    pulse()
     return out
   }
   const bb = board.outline.length ? board.bbox : { x: board.bbox.x - 2, y: board.bbox.y - 2, w: board.bbox.w + 4, h: board.bbox.h + 4 }
@@ -1437,7 +1442,10 @@ function itemsClash(x: Item, y: Item, gap: number, rules: Rules, cu: string[]): 
   if (x.kind === 'track' && y.kind === 'track') {
     if (x.layer !== y.layer) return false
     const need = gap + (x.width + y.width) / 2 - E
-    for (let i = 1; i < x.pts.length; i++) for (let j = 1; j < y.pts.length; j++) if (segSegDist(x.pts[i - 1], x.pts[i], y.pts[j - 1], y.pts[j]) < need) return true
+    for (let i = 1; i < x.pts.length; i++) {
+      pulse()
+      for (let j = 1; j < y.pts.length; j++) if (segSegDist(x.pts[i - 1], x.pts[i], y.pts[j - 1], y.pts[j]) < need) return true
+    }
     return false
   }
   if (x.kind === 'track' && y.kind === 'via') {
@@ -2795,10 +2803,15 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
       return null
     }
     const gap = gapOf(a, b)
-    for (const x of A) for (const y of B) if (itemsClash(x, y, gap, rules, cu)) return at(x, y)
+    for (const x of A)
+      for (const y of B) {
+        pulse()
+        if (itemsClash(x, y, gap, rules, cu)) return at(x, y)
+      }
     return null
   }
   const unplace = (t: Task) => {
+    pulse()
     if (t.r.pair) dropResv(t.r)
     const ids = new Set(t.items)
     drop(ids)

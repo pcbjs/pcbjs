@@ -191,7 +191,7 @@ function renderBoard(site: SiteData, spec: PreviewSpec): Preview | undefined {
 
   // a crop with many items starts coarser, so it is drawn once
   const many = ix.items.reduce((n, x) => n + (hits(x.box, crop) ? 1 : 0), 0)
-  for (let level = many > 600 ? 2 : many > 300 ? 1 : 0; level < 4; level++) {
+  for (let level = many > 900 ? 3 : many > 600 ? 2 : many > 300 ? 1 : 0; level < 4; level++) {
     const svg = drawBoard(site, ix, crop, { hl, sel, crt, netIds, lit, dim, top, spec, level })
     if (svg.length <= BUDGET || level === 3) return finish(svg, crop)
   }

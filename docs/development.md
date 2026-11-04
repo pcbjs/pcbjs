@@ -23,7 +23,7 @@ npm run docs:dev                    # the docs site with hot reload; docs:build 
 
 The CLI and tests use `dist`: rebuild after changing `src`. Outside `node_modules`, `pcbjs dev` keys the UI prebundle on the built `@pcbjs/ui` and `@pcbjs/core` content; rebuilding either triggers prebundling and reload. The root `tsconfig.json` references all packages; each references its dependencies. In `examples/demo`, `pcbjs check` checks four entries, Multi as three targets.
 
-Tests set `PCBJS_FREEZE=1`, design.md, and `scripts/test-watchdog.mjs` fails a test file still running after 10 minutes, `PCBJS_TEST_FILE_MS`. `scripts/stage-equality.mjs`, run by CI, compiles each example cold, warm, from route memos alone and past a corrupt object, failing unless all agree and warm hits every stage.
+Tests set `PCBJS_FREEZE=1`, design.md. The typing latency benchmark starts its session with `PCBJS_FREEZE=0` to measure shipped behavior; other correctness cases retain the mutation guards. `scripts/test-watchdog.mjs` fails a test file still running after 10 minutes, `PCBJS_TEST_FILE_MS`. `scripts/stage-equality.mjs`, run by CI, compiles each example cold, warm, from route memos alone and past a corrupt object, failing unless all agree and warm hits every stage.
 
 `site/` renders these topics, one page each; `pages.yml` deploys `main` to https://pcbjs.dev and the last train's docs to https://pcbjs.dev/stable/, site/README.md has the rest.
 
@@ -118,7 +118,7 @@ CLI, browser-heavy and language-server test files run serially so concurrent wor
 
 The session compiles each project in a worker thread, `session/worker.ts`, which an edit cancels through shared memory in a few ms and which keeps the GLB, fab set and drawings, sending a board and site only when changed; a keystroke runs the keystroke tier, the full compile waits for the quiet period, session.md. `keystroke.test.mjs`, `worker-boundary.test.mjs` and compile's `cancel.test.mjs` hold their latencies.
 
-Compile workers keep the process alive while a request is pending, including a retry after a worker crash. Idle workers do not prevent shutdown. Windows session events use portable project-relative source names; file identity accepts native, Vite and TypeScript separators. Length-tuning searches check cancellation between batches of columns. Board snapshots and unit boundaries also check cancellation.
+Compile workers keep the process alive while a request is pending, including a retry after a worker crash. Idle workers do not prevent shutdown. Windows session events use portable project-relative source names; file identity accepts native, Vite and TypeScript separators. Length-tuning searches check cancellation between batches of columns; route collision checks do so between items and track segments. Board snapshots and unit boundaries also check cancellation.
 
 ## Support
 

@@ -43,8 +43,12 @@ async function until(fn, ms = 60000) {
   }
 }
 
-async function serve(root) {
-  const child = spawn(process.execPath, [BIN, 'session', 'serve', '--port', '0', '--host', '127.0.0.1'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
+async function serve(root, env = {}) {
+  const child = spawn(process.execPath, [BIN, 'session', 'serve', '--port', '0', '--host', '127.0.0.1'], {
+    cwd: root,
+    env: { ...process.env, ...env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
   children.push(child)
   let out = ''
   child.stdout.on('data', d => (out += d))
@@ -127,7 +131,7 @@ test('typing in a text block: the keystroke tier per key, nothing stale, one ful
   const root = blinky()
   const file = join(root, 'blinky.pcb.tsx')
   const text = readFileSync(file, 'utf8')
-  const s = await serve(root)
+  const s = await serve(root, { PCBJS_FREEZE: '0' })
   try {
     assert.deepEqual(s.info.tiers, { keystroke: 30, quiet: 300 })
     const port = new URL(s.info.url).port

@@ -85,11 +85,11 @@ jobs:
           enableCrossOsArchive: true
       - name: Fetch the vendor models the tests read
         run: node scripts/check-examples.mjs --fetch
-      - name: Windows interactive latency and simultaneous board updates
-        if: runner.os == 'Windows'
-        run: node --import ./scripts/test-watchdog.mjs --test --test-concurrency=1 --test-name-pattern="typing in a text block|two panes on two boards|every hover kind" packages/cli/tests/keystroke.test.mjs packages/cli/tests/live-view.test.mjs packages/lsp/tests/hover-preview.test.mjs
+      - name: Interactive editing and cancellation
+        run: node --import ./scripts/test-env.mjs --import ./scripts/test-watchdog.mjs --test --test-concurrency=1 --test-name-pattern="typing in a text block|two panes on two boards|every hover kind|a part under a defineGrid|cancel.*no gap" packages/cli/tests/keystroke.test.mjs packages/cli/tests/live-view.test.mjs packages/lsp/tests/hover-preview.test.mjs packages/pcbjs/tests/edit-path-grids.test.mjs packages/pcbjs/tests/cancel-gaps.test.mjs
         env:
           PCBJS_DEBUG_SKETCH: '1'
+          PCBJS_E2E_DEBUG: '1'
       - run: npm test
 
   boards:
