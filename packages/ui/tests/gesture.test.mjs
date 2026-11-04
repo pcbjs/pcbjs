@@ -358,6 +358,7 @@ test('editing waits for compile completion, including view-only compiles without
   store.held.get('Fx').facets.meta.run = 2
   store.rev++
   assert.equal(g.rw.value, false, 'new geometry alone does not finish the compile')
+  assert.ok(g.tools.value.length, 'controls stay visible while editing is temporarily disabled')
   store.settle()
   assert.equal(g.rw.value, true, 'a view-only compile can finish without a whole-board snapshot')
   assert.equal(store.run, 1)

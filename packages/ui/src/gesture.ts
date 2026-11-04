@@ -86,7 +86,8 @@ export function useGesture(d: GestureInput) {
   const t = d.store.edit
   const on = computed(() => !!t.client && !!t.mode && !!d.board().dev)
   const current = computed(() => !Object.keys(d.store.invalid).length)
-  const rw = computed(() => current.value && on.value && t.mode?.mode === 'rw' && !(d.board().variant && d.board().variant!.index !== 0))
+  const writable = computed(() => on.value && t.mode?.mode === 'rw' && !(d.board().variant && d.board().variant!.index !== 0))
+  const rw = computed(() => current.value && writable.value)
   const node = computed<SiteEditNode | null>(() => editNodeOf(d.board(), d.sel().anchor))
   /** an isolation writes the definition, which a part with an own placement in the instance does not follow */
   const isolated = computed(() => (d.sel().isolate?.mode === 'instance' ? null : (d.sel().isolate?.ref ?? null)))
@@ -94,7 +95,7 @@ export function useGesture(d: GestureInput) {
     d.sel().isolate?.mode === 'instance' && n?.def && !n.layout && !n.owned && reachOf(d.board().schematic.circuits, n.def).length > 1
       ? 'this shared element has no instance override; choose Edit library layout'
       : null
-  const tools = computed<Tool[]>(() => (rw.value && node.value ? toolsOf(node.value.caps).filter(tool => targets(tool.id).refs.length) : []))
+  const tools = computed<Tool[]>(() => (writable.value && node.value ? toolsOf(node.value.caps).filter(tool => targets(tool.id).refs.length) : []))
   /** why the anchor takes no tools, said under the chip */
   const why = computed(() => {
     const a = d.sel().anchor

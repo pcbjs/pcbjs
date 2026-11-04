@@ -26,7 +26,7 @@ Available operations, by anchor capabilities:
 | `chain` | a route | primitive, relative form and layer |
 | `viaEnd` | a route with a chain via | the via's layer with its point |
 
-Editing pauses while an invalidated board recompiles and resumes when the compile finishes, including view-only compiles without a new whole-board snapshot.
+Editing controls stay visible but disabled while an invalidated board recompiles and resumes when the compile finishes, including view-only compiles without a new whole-board snapshot.
 
 Reference-based selection in library mode resolves against the isolated layout, preserving its local identities instead of adding an instance path. A newer selection supersedes an in-flight layout lookup.
 

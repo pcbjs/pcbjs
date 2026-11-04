@@ -84,9 +84,20 @@ function indexOf(site: SiteData): SiteIndex {
   let ix = indexes.get(site)
   if (ix) return ix
   const items = (site.items ?? []).map(it => {
-    const rings = shapeOf(site, it.id)
-    const boxes = rings.map(boxOf)
-    return { it, rings, boxes, box: boxes.length ? boxes.reduce(union) : boxOf([]) }
+    let rings: Ring[] | undefined, boxes: Box[] | undefined
+    let box = it.box ? { x0: it.box[0], y0: it.box[1], x1: it.box[2], y1: it.box[3] } : undefined
+    return {
+      it,
+      get rings() {
+        return (rings ??= shapeOf(site, it.id))
+      },
+      get boxes() {
+        return (boxes ??= this.rings.map(boxOf))
+      },
+      get box() {
+        return (box ??= this.boxes.length ? this.boxes.reduce(union) : boxOf([]))
+      },
+    }
   })
   ix = {
     items,
