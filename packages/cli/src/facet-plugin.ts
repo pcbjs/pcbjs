@@ -445,9 +445,9 @@ export function pcbjs(opts: PcbjsPluginOptions = {}): Plugin {
     name: 'pcbjs:facets',
     enforce: 'pre',
     api: { workers: () => compiler.workers(), boards },
-    // a facet file's URL under the base, also in an SSR build, whose own would be a file: URL of its output folder
+    // Absolute bases keep SSR and browser attributes identical; relative client builds use Rollup's chunk-relative URLs.
     resolveFileUrl({ referenceId, fileName }) {
-      return ssr && assets.has(referenceId) ? JSON.stringify(base + fileName) : null
+      return assets.has(referenceId) && (ssr || base !== './') ? JSON.stringify(base + fileName) : null
     },
     configResolved(c) {
       build = c.command === 'build'

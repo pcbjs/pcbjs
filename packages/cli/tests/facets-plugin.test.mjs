@@ -108,7 +108,7 @@ test('a site of two facet imports builds with @pcbjs/ui: findings inline, the bo
     'utf8',
   )
   assert.match(js, /JSON\.parse\('\{"drc":\[\]/, 'the findings facet is inlined')
-  assert.match(js, /new URL\("Hello\.layers-[\w-]+\.json",import\.meta\.url\)/, 'the board ref points at its files')
+  assert.match(js, /"\/assets\/Hello\.layers-[\w-]+\.json"/, 'the board ref points at its files')
   assert.match(js, /board-view/, "the 2D view's markup")
   const meta = JSON.parse(
     readFileSync(
@@ -260,4 +260,34 @@ test('--ui-src serves a checkout: the one installed here is one, a folder withou
   dirs.push(empty)
   assert.throws(() => uiSource(empty), /--ui-src needs a pcbjs checkout: .* has no src\/index\.ts/)
   assert.ok(existsSync(join(uiSource(null), 'src', 'index.ts')))
+})
+
+test('poster URLs agree between SSR and the browser under a deployment base', { timeout: 120000 }, async () => {
+  const root = site()
+  const entry = join(root, 'poster.js')
+  writeFileSync(entry, "export { default } from './pcb.tsx?pcb:poster'\n")
+  const urls = []
+  for (const ssr of [false, true]) {
+    const result = await build({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      base: '/manual/',
+      plugins: [pcbjs({ session: false })],
+      build: {
+        write: false,
+        ssr: ssr ? entry : false,
+        ssrEmitAssets: true,
+        lib: { entry, formats: ['es'] },
+        rollupOptions: { output: { assetFileNames: 'assets/[name]-[hash][extname]' } },
+      },
+    })
+    const output = (Array.isArray(result) ? result[0] : result).output
+    const code = output.find(o => o.type === 'chunk' && o.isEntry).code
+    const module = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
+    urls.push(module.default)
+    assert.ok(output.some(o => o.type === 'asset' && '/manual/' + o.fileName === module.default))
+  }
+  assert.match(urls[0], /^\/manual\/assets\/Hello.*\.svg$/)
+  assert.equal(urls[0], urls[1])
 })

@@ -43,6 +43,7 @@ A module whose default export is a `<PCB>`, an entry of the config or not, takes
 
 - `&target=<name>` picks a variant, the first target without it. Another facet name fails the import with the list above.
 - Every facet module also exports `header`: `{ entry, board, target, facet, run, hash }`, `run` the compile that made it, ordered, and `hash` its content.
+- With an absolute Vite deployment base, poster and facet URLs have the same spelling in server-rendered HTML and browser modules. Relative browser builds keep chunk-relative asset URLs.
 - A worker thread per project compiles, with its own config, globals and Vite SSR. The data facets compile as `pcbjs check` does and share its stage cache, so a warm build evaluates nothing and the hashes match check's; `?pcb:sch` alone runs no routing stage. `board` and `poster` compile every stage with the SVGs.
 - In dev, when `.pcbjs/dev.json` names a live session serving the project, the data facets of its entries come from it, `session/facets` of session.md, and no worker starts; `pcbjs({ session: false })` turns that off.
 - A build writes the board's facets and posters as hashed JSON and SVG files beside the chunks, and each STEP model's mesh once as `models/<hash>.bin`; in dev they are served under `/@pcbjs/facet/`.
