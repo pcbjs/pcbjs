@@ -53,6 +53,10 @@ jobs:
           key: model-cache-${{ hashFiles('examples/**/models/LICENSES.md') }}
       - name: Fetch the vendor models the tests read
         run: node scripts/check-examples.mjs --fetch
+      - name: Library focus and shared-source editing
+        run: node --import ./scripts/test-env.mjs --import ./scripts/test-watchdog.mjs --test --test-concurrency=1 packages/pcbjs/tests/edit-path-library-numbering.test.mjs packages/pcbjs/tests/edit-path-library-backtrace.test.mjs
+        env:
+          PCBJS_E2E_DEBUG: '1'
       - run: npm test
 
   test-os:
