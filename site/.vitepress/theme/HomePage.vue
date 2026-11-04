@@ -12,7 +12,7 @@ import StatusPill from './StatusPill.vue'
 import ViewTabs from './ViewTabs.vue'
 import { CATEGORY, md } from './text'
 
-const INSTALL = 'npm install -D @pcbjs/pcbjs@beta'
+const INSTALL = 'npm install -D @pcbjs/pcbjs@^0.1.0'
 const github = 'https://github.com/pcbjs/pcbjs'
 const copied = ref(false)
 let reset: ReturnType<typeof setTimeout> | undefined
