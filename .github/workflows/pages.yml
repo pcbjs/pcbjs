@@ -83,6 +83,8 @@ jobs:
           key: model-cache-${{ hashFiles('examples/**/models/LICENSES.md') }}
       - run: npm ci
       - run: npm run build
+      - name: Prepare gallery model and library dependencies
+        run: node scripts/check-examples.mjs --fetch
       # the build prints the artifact's size by kind and its time; the boards compile in Node for the numbers and again in each reader's browser
       - id: main
         name: Main tree at /
@@ -128,6 +130,7 @@ jobs:
         run: |
           npm ci
           npm run build
+          node scripts/check-examples.mjs --fetch
           npm run build -w pcbjs-site -- --outDir "$STABLE"
         env:
           PCBJS_SITE_BASE: /stable/

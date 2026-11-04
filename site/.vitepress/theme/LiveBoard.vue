@@ -53,6 +53,11 @@ function hide() {
   shown.value = false
 }
 
+function onReady() {
+  ready.value = true
+  emit('ready')
+}
+
 watch(
   () => props.view,
   () => {
@@ -90,10 +95,7 @@ onBeforeUnmount(() => {
       :arm="armed ? 'always' : 'click'"
       :tools="tools !== false"
       :highlight="highlight"
-      @ready="
-        ready = true
-        emit('ready')
-      "
+      @ready="onReady"
       @hover="(h: Hover) => emit('hover', h)"
       @update:select="(s: string[]) => emit('select', s)"
     />

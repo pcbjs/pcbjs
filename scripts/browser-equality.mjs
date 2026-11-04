@@ -164,6 +164,18 @@ function serve(tmp, port) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
+async function stopChrome(proc) {
+  if (!proc?.pid || proc.exitCode !== null || proc.signalCode !== null) return
+  const exited = new Promise(resolve => proc.once('exit', resolve))
+  const timer = setTimeout(() => proc.kill('SIGKILL'), 3000)
+  try {
+    proc.kill('SIGTERM')
+    await exited
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** A headless Chromium on about:blank and the DevTools socket of its page. */
 async function launch(bin, profile, port) {
   const proc = spawn(
@@ -182,24 +194,28 @@ async function launch(bin, profile, port) {
       stdio: 'ignore',
     },
   )
-  const file = join(profile, 'DevToolsActivePort')
-  for (let i = 0; !(existsSync(file) && readFileSync(file, 'utf8').split('\n').length >= 2); i++) {
-    if (proc.exitCode !== null || i > 600) {
-      proc.kill()
-      throw new Error(proc.exitCode !== null ? `exited with code ${proc.exitCode}` : 'no DevTools port within 30 s')
+  try {
+    const file = join(profile, 'DevToolsActivePort')
+    for (let i = 0; !(existsSync(file) && readFileSync(file, 'utf8').split('\n').length >= 2); i++) {
+      if (proc.exitCode !== null || i > 600) {
+        throw new Error(proc.exitCode !== null ? `exited with code ${proc.exitCode}` : 'no DevTools port within 30 s')
+      }
+      await sleep(50)
     }
-    await sleep(50)
+    const dt = readFileSync(file, 'utf8').split('\n')[0].trim()
+    for (let i = 0; i < 100; i++) {
+      const list = await fetch(`http://127.0.0.1:${dt}/json/list`)
+        .then(r => r.json())
+        .catch(() => [])
+      const page = list.find(t => t.type === 'page')
+      if (page) return { proc, socket: page.webSocketDebuggerUrl }
+      await sleep(50)
+    }
+    throw new Error('Chromium opened no page')
+  } catch (error) {
+    await stopChrome(proc)
+    throw error
   }
-  const dt = readFileSync(file, 'utf8').split('\n')[0].trim()
-  for (let i = 0; i < 100; i++) {
-    const list = await fetch(`http://127.0.0.1:${dt}/json/list`)
-      .then(r => r.json())
-      .catch(() => [])
-    const page = list.find(t => t.type === 'page')
-    if (page) return { proc, socket: page.webSocketDebuggerUrl }
-    await sleep(50)
-  }
-  throw new Error('Chromium opened no page')
 }
 
 /** The first candidate that opens a page; a browser that exits at once, as an installed Chrome may, gives way to the next. */
@@ -347,7 +363,7 @@ async function main(argv) {
     if (page.logs.length) console.log(page.logs.map(l => `      console ${l}`).join('\n'))
   } finally {
     page?.close()
-    chrome?.proc.kill()
+    await stopChrome(chrome?.proc)
     server?.close()
     // Chromium may still be writing its profile as it exits
     rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
