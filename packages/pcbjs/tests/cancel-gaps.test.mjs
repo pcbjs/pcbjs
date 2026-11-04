@@ -64,18 +64,23 @@ test('cancel: no gap between pulses in a cold usb3-hub compile takes 50 ms outsi
       return (u.user + u.system) / 1000
     }
     let last = cpuMs()
+    let lastWall = performance.now()
     const limit = Error.stackTraceLimit
     Error.stackTraceLimit = 5
     try {
       pulsed(
         () => {},
         () => compileStages(root, { cache: false, plugins: cfg.plugins }),
-        wall => {
-          const ms = cpuMs() - last
+        () => {
+          const wall = performance.now() - lastWall
+          const cpu = cpuMs() - last
+          // Coarse CPU accounting cannot charge one thread more work than its elapsed interval.
+          const ms = Math.min(cpu, wall)
           const at = new Error()
-          if (ms > BOUND / 2) gaps.push({ ms, wall, unit, from: prev, to: at })
+          if (ms > BOUND / 2) gaps.push({ ms, cpu, wall, unit, from: prev, to: at })
           prev = at
           last = cpuMs()
+          lastWall = performance.now()
         },
       )
     } finally {
@@ -83,7 +88,7 @@ test('cancel: no gap between pulses in a cold usb3-hub compile takes 50 ms outsi
       for (const { d, run, units } of original) Object.assign(d, { run, units })
     }
     const show = g =>
-      `${g.unit}: ${g.ms.toFixed(1)} ms, ${g.wall.toFixed(1)} wall, from ${where(g.from).slice(0, 3).join(' < ') || 'start'} to ${where(g.to).slice(0, 3).join(' < ') || 'end'}`
+      `${g.unit}: ${g.ms.toFixed(1)} ms work, ${g.cpu.toFixed(1)} CPU, ${g.wall.toFixed(1)} wall, from ${where(g.from).slice(0, 3).join(' < ') || 'start'} to ${where(g.to).slice(0, 3).join(' < ') || 'end'}`
     const longest = gs => gs.sort((a, b) => b.ms - a.ms)
     const open = longest(gaps.filter(g => !unitOf(g)))
     t.diagnostic(`longest open gaps: ${open.slice(0, 5).map(show).join('; ') || `none over ${BOUND / 2} ms`}`)
