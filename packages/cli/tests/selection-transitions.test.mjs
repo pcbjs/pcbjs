@@ -23,6 +23,7 @@ const make = target => ({
 function fixture(boards = [make()], layout = boards[0]) {
   let release,
     run = 1,
+    loads = 0,
     recompile = false
   const pending = new Promise(r => (release = r))
   const events = [],
@@ -40,6 +41,7 @@ function fixture(boards = [make()], layout = boards[0]) {
     },
     compiler: () => ({
       layout: async () => {
+        loads++
         await pending
         return { board: layout, site: {} }
       },
@@ -53,6 +55,7 @@ function fixture(boards = [make()], layout = boards[0]) {
       recompile = true
     },
     advance: () => run++,
+    loads: () => loads,
     select: p => tools.views['session/select']({ board: 'B', ...p }, viewer),
   }
 }
@@ -73,16 +76,13 @@ test('latest library selection wins while the shared layout is loading', async (
   assert.equal((await last).anchor, 'CH1/D')
   assert.equal(f.events.filter(e => e.name === 'pcbjs:select').at(-1).data.selection.anchor, 'CH1/D')
 })
-for (const cancel of ['blur', 'unchanged blur', 'target', 'compile', 'refs blur']) {
+for (const cancel of ['blur', 'unchanged blur', 'target', 'refs blur']) {
   test(`pending library selection cannot outlive ${cancel}`, async () => {
     const f = fixture([make('First'), make('Second')])
     if (cancel === 'unchanged blur') f.select({ selection: emptySelection('B') })
     const pending = f.select({ selection: library('CH1/R') })
     if (cancel === 'target') await f.select({ target: 'Second', refs: ['D1'] })
-    else if (cancel === 'compile') {
-      await Promise.resolve()
-      f.advance()
-    } else if (cancel === 'refs blur') await f.select({ refs: [] })
+    else if (cancel === 'refs blur') await f.select({ refs: [] })
     else f.select({ selection: emptySelection('B') })
     f.release()
     assert.equal(await pending, null)
@@ -152,3 +152,24 @@ test('library selection survives the freshness compile needed to load its geomet
   assert.equal(selected.anchor, 'CH1/R')
   assert.equal(selected.isolate.mode, 'library')
 })
+
+for (const blur of [false, true]) {
+  test(`library loading retries newer geometry${blur ? ' without restoring cancelled focus' : ' before acknowledging focus'}`, async () => {
+    const f = fixture()
+    const pending = f.select({ selection: library('CH1/R') })
+    await Promise.resolve()
+    assert.equal(f.loads(), 1)
+    f.advance()
+    if (blur) f.select({ selection: emptySelection('B') })
+    f.release()
+    const selected = await pending
+    assert.equal(f.loads(), 2, 'resolve against the current compile before accepting the intent')
+    if (blur) {
+      assert.equal(selected, null)
+      assert.equal(f.events.at(-1).data.selection.isolate, null)
+    } else {
+      assert.equal(selected.anchor, 'CH1/R')
+      assert.equal(selected.isolate.mode, 'library')
+    }
+  })
+}

@@ -94,10 +94,11 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
 
   // --- the selection, per project and board
 
-  const layouts = new Map<string, Promise<import('../project/project.js').Library & { run: Run | null }>>()
+  type Layout = import('../project/project.js').Library & { run: Run | null }
+  const layouts = new Map<string, Promise<Layout>>()
   const libraryBoards = new Map<string, Board>()
   const libraryKey = (rt: ProjectRuntime, board: string, target: string | null, ref: string) => JSON.stringify([rt.root, rt.current()?.run, board, target, ref])
-  const loadLayout = async (rt: ProjectRuntime, board: string, target: string | null, ref: string) => {
+  const loadLayout = async (rt: ProjectRuntime, board: string, target: string | null, ref: string): Promise<Layout> => {
     await rt.compiledOnce()
     const model = boardModel(rt, board, target)
     if (!model || !model.schematic?.circuits.some(c => c.path.join('/') === ref)) throw new Error(`no layout ${ref} on ${board}`)
@@ -130,7 +131,8 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
         if (layouts.get(key) === pending) layouts.delete(key)
       })
     }
-    return pending
+    const loaded = await pending
+    return loaded.run === (rt.current()?.run ?? null) ? loaded : loadLayout(rt, board, target, ref)
   }
   const stores = new Map<string, ReturnType<typeof selectionStore>>()
   const selectionsOf = (rt: ProjectRuntime) => {
