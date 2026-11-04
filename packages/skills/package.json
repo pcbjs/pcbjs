@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/skills",
-  "version": "0.0.1-beta.1",
+  "version": "0.1.0",
   "description": "Agent skills for pcbjs in the Agent Skills format: basics, best practices, porting from KiCad and from Python generators, and upgrading. `pcbjs skills install` links them from .agents/skills and .claude/skills.",
   "type": "module",
   "license": "MIT",

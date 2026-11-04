@@ -1,7 +1,0 @@
----
-'@pcbjs/cli': patch
-'@pcbjs/compile': patch
-'@pcbjs/skills': patch
----
-
-`pcbjs inspect --json` prints the records of `pcbjs q` beside the frame, one shape per thing: a part list `{ parts, models }`, a part `{ part, graphics }`, a pad `{ pad }`, a group `{ group, parts }`, a route `{ route, legs, tracks, vias }`, `--lengths` `{ routes }`, an item `{ item }`, a pair `{ pair, routes }`, a point `{ pt }`, a leg `{ leg }`, a span `{ span, vias }`, a plane `{ plane, zones, regions }` and a region `{ region }`; a net answer carries its net record as `net` with pad, track and via records. `--layer` lists item records with the ink `bounds` on that layer as `{ x, y, w, h }`, a `summary` and a pad's `rings`. The text is rendered from the same records, mm to 0.1 µm. The records grow to carry what inspect printed: a pad record its uid, number, name, rotation, size and drill in board axes and the footprint's; a part record its model and full pad records; a route record its pair, target as `{ min, max }` narrowed by its match group, skew with via barrels, tuning and helper call site, its status following the match group; an item record its compile id, a track's length, arcs, pair and role, a via's stitch flag, a pad's number and shape, a zone's priority, fill area and pieces, a text's size, thickness, strokes and glyphs, a drawing's paths, fill and arcs, and the source of the part that drew it; a pair record its source as `source`; a region record its hash, area and bbox.

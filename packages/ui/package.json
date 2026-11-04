@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/ui",
-  "version": "0.0.1-beta.1",
+  "version": "0.1.0",
   "description": "pcbjs UI: the 2D, 3D and schematic views, the selection chip, the findings list and the panels as Vue components, prebuilt, with the viewer store.",
   "type": "module",
   "license": "MIT",
@@ -58,11 +58,11 @@
     "postpack": "node ../../scripts/pack-files.mjs post"
   },
   "dependencies": {
-    "@pcbjs/core": "^0.0.1-beta.0"
+    "@pcbjs/core": "^0.1.0"
   },
   "peerDependencies": {
-    "@pcbjs/export": "^0.0.1-beta.1",
-    "@pcbjs/step": "^0.0.1-beta.0",
+    "@pcbjs/export": "^0.1.0",
+    "@pcbjs/step": "^0.1.0",
     "three": ">=0.170.0",
     "vue": "^3.5.0"
   },
@@ -75,9 +75,9 @@
     }
   },
   "devDependencies": {
-    "@pcbjs/export": "^0.0.1-beta.1",
-    "@pcbjs/lib": "^0.0.1-beta.0",
-    "@pcbjs/step": "^0.0.1-beta.0",
+    "@pcbjs/export": "^0.1.0",
+    "@pcbjs/lib": "^0.1.0",
+    "@pcbjs/step": "^0.1.0",
     "@types/three": "^0.182.0",
     "@vitejs/plugin-vue": "^6.0.0",
     "clipper-lib": "^6.4.2",

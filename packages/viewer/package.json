@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/viewer",
-  "version": "0.0.1-beta.0",
+  "version": "0.1.0",
   "description": "pcbjs viewer: the app that pcbjs dev serves and pcbjs build prerenders, a shell of routes, top bar and loading screens around the components of @pcbjs/ui, served and built from source by @pcbjs/cli through Vite.",
   "type": "module",
   "license": "MIT",
@@ -32,12 +32,12 @@
     "postpack": "node ../../scripts/pack-files.mjs post"
   },
   "dependencies": {
-    "@pcbjs/ui": "^0.0.1-beta.1",
+    "@pcbjs/ui": "^0.1.0",
     "three": "^0.182.0",
     "vue": "^3.5.0"
   },
   "peerDependencies": {
-    "@pcbjs/core": "^0.0.1-beta.0"
+    "@pcbjs/core": "^0.1.0"
   },
   "peerDependenciesMeta": {
     "@pcbjs/core": {

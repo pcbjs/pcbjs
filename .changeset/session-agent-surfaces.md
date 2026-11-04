@@ -1,5 +1,0 @@
----
-'@pcbjs/cli': patch
----
-
-The session's agent surfaces. `pcbjs events` prints the session's events log as JSON lines: `edit`, `save`, `compile` per stage, `findings` as a delta of finding ids, `selection` and `cursor`, each naming who made it in `by`, after a cursor with `--since`, up to the first of some kinds with `--wait --for`, or followed with `--follow`, filtered by `--kind` and by reference patterns with `--scope`; an edit compiles only while something observes the session. `pcbjs q <reference>` prints one reference's record in its snapshot's envelope, exit 2 listing the candidates of an ambiguous one. `pcbjs script` and `pcbjs repl` run TypeScript against the board API of `@pcbjs/compile/query`, and `script --watch` prints an expression whenever its value changes. `pcbjs test` and `check --test` run `*.test.ts` board tests with `board()` of `@pcbjs/cli/test` against one snapshot, with goldens of the fab set from `test --update`. `check`, `inspect` and `shot` ask a live session over its socket, printing what they print in process.
