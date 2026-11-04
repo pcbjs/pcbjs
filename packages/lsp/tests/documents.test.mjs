@@ -49,7 +49,7 @@ test('a disconnect releases every file the connection held; versions count every
 })
 
 test('a file named through a symbolic link is one document under its real path', () => {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-store-')))
+  const dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'pcbjs-store-')))
   try {
     writeFileSync(join(dir, 'pcb.tsx'), 'disk')
     symlinkSync(dir, join(dir, 'link'), 'dir')
