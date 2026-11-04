@@ -25,7 +25,7 @@ import PCB from '@pcbjs/fab/JLCPCB/2-Layer'
 import { houseRules } from './house'
 
 export default (
-  <PCB name="Housed" rules={houseRules({ clearance: 0.25 })}>
+  <PCB name="Housed" rev="0.1.0" rules={houseRules({ clearance: 0.25 })}>
     <rect layer="Edge.Cuts" x={0} y={0} w={20} h={20} />
   </PCB>
 )

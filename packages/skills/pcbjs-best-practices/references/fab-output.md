@@ -10,24 +10,25 @@ import { nets, route } from '@pcbjs/core'
 import { PinHeader } from '@pcbjs/lib'
 
 const { A, B } = nets()
-const J1 = PinHeader(2).connect(A, B)
-const J2 = PinHeader(2).connect(A, B)
+const J1 = PinHeader(2)().connect({ 1: A, 2: B })
+const J2 = PinHeader(2)().connect({ 1: A, 2: B })
 const LABEL = { size: 1.25, width: 1.35, thickness: 0.21, font: 'newstroke' } as const
 const stamp = `V1.2.0 | ${process.env.GIT_SHORT || 'DEV'}`
 
 export default (
   <PCB
     name="Notes"
+    rev="0.1.0"
     color="black"
     fabNotes={['Single board, no panel.', 'Remove the order number.']}
     teardrops={{ pads: 'tht' }}
-    fonts={{ slab: './fonts/RobotoSlab-Bold.ttf' }}
+    fonts={{ slab: { file: './fonts/RobotoSlab-Bold.ttf' } }}
   >
     <rect layer="Edge.Cuts" x={0} y={0} w={30} h={15} />
     <J1 at="3 5" />
     <J2 at="27 5" />
-    {route(J1[1]).Z(J2[1]).width(0.4)}
-    {route(J1[2]).Z(J2[2]).width(0.4)}
+    {route(J1[1], J2[1]).width(0.4).Z()}
+    {route(J1[2], J2[2]).width(0.4).Z()}
     <text layer="F.SilkS" at="15 10" {...LABEL}>IN</text>
     <text layer="F.SilkS" at="15 13" size={1.2} font="slab" thicken>{stamp}</text>
   </PCB>
@@ -54,7 +55,7 @@ const Adv = bindPCB({ ...AdvancedPCB.preset, finishes: [...AdvancedPCB.preset.fi
 const PCB = variants(Jlc, Adv)
 
 export default (
-  <PCB name="Both">
+  <PCB name="Both" rev="0.1.0">
     <rect layer="Edge.Cuts" x={0} y={0} w={20} h={20} />
   </PCB>
 )

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" fill="none">
+<rect x="8" y="8" width="464" height="284" rx="10" fill="var(--vscode-editorWidget-background)" stroke="var(--vscode-widget-border, var(--vscode-panel-border))" stroke-width="1.5"/>
+<rect x="24" y="24" width="432" height="104" rx="6" fill="var(--vscode-editor-background)"/>
+<g font-family="var(--vscode-font-family, sans-serif)" font-size="14"><text x="40" y="58" fill="var(--vscode-foreground)">Install @pcbjs/pcbjs 0.1.0</text><text x="40" y="80" fill="var(--vscode-descriptionForeground)">npm install -D @pcbjs/pcbjs@latest</text><text x="60" y="114" fill="var(--vscode-foreground)">Include the beta and next dist-tags</text></g>
+<rect x="40" y="101" width="14" height="14" rx="3" fill="none" stroke="var(--vscode-descriptionForeground)"/>
+<rect x="24" y="144" width="432" height="132" rx="6" fill="var(--vscode-editor-background)"/>
+<g font-family="var(--vscode-editor-font-family, monospace)" font-size="14"><text x="40" y="176" fill="var(--vscode-textLink-foreground)">$ npm install -D @pcbjs/pcbjs@latest</text><text x="40" y="208" fill="var(--vscode-descriptionForeground)">added 214 packages in 9s</text></g>
+<g font-family="var(--vscode-font-family, sans-serif)" font-size="13"><rect x="40" y="232" width="200" height="26" rx="3" fill="var(--vscode-statusBar-background, #007acc)"/><text x="52" y="250" fill="var(--vscode-statusBar-foreground, #fff)">pcbjs 0.1.0: 1 board</text></g></svg>

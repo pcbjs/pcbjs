@@ -16,12 +16,12 @@ pcbjs model add https://example.com/part.stp --ref J1 --write
 pcbjs model align J1
 pcbjs model check
 pcbjs shot --view 3d --select J1
-pcbjs shot --view 3d --select U1 --flip
+pcbjs shot --view 3d --select U1 --side B
 ```
 
 - A confidence under 0.5 from `align`, or a model without distinct pins, means look at the shot and check pin 1 by eye. For an axial or symmetric part, read the axis from the file and set `rotate` and `offset` by hand.
 - `--footprint <id>` fits once for every part of that footprint.
-- In a project of several boards, name the board with `--entry` or `--ref Board/J1`.
+- In a project of several boards, name the board with `--entry`.
 - A VRML file is in units of 2.54 mm and its y is the footprint's -y.
 - A `fallback` shows while the mesh loads or when the file is missing: a generated body such as `{ kind: 'ic', w, h, height }`, or `{ kind: 'box', w, h, height }`, which draws the dashed `no model` outline.
 

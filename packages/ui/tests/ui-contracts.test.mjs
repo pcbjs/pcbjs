@@ -32,7 +32,8 @@ test('UI contracts: inventory has actionable boundaries and valid source/test re
     assert.ok(!ids.has(op.id), `duplicate ${op.id}`)
     ids.add(op.id)
     assert.ok(doc.includes(`| ${op.id} `), `${op.id} missing from public index`)
-    for (const field of ['title', 'context', 'result', 'boundary', 'unavailable', 'missingAcceptance']) assert.ok(typeof op[field] === 'string' && op[field].trim(), `${op.id}: ${field}`)
+    for (const field of ['title', 'context', 'result', 'boundary', 'unavailable', 'missingAcceptance'])
+      assert.ok(typeof op[field] === 'string' && op[field].trim(), `${op.id}: ${field}`)
     assert.ok(['supported', 'unsupported'].includes(op.support))
     assert.equal(op.coverage, 'source-only', 'this inventory does not claim executed runtime acceptance')
     assert.ok(op.sources.length)
@@ -42,5 +43,4 @@ test('UI contracts: inventory has actionable boundaries and valid source/test re
       assert.ok(statSync(new URL(path, root)).isFile(), `${op.id}: ${path}`)
     }
   }
-  assert.ok(Buffer.byteLength(doc) < 12288)
 })

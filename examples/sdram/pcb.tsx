@@ -240,8 +240,10 @@ export default (
     <g at="16 24 90deg">{mcuDecoupling()}</g>
 
     {/* the SDRAM turned so its pin rows face up and down: the bus flows right from the MCU and splits above and below it */}
-    <U2 at="42 18 90deg" />
-    <g at="42 24 90deg">{ramDecoupling()}</g>
+    <g at="42 24 90deg">
+      <U2 at="0 0" />
+      {ramDecoupling()}
+    </g>
 
     <Y1 at="19 39" />
     <C_X1 at="15.1 39.85 180deg" />

@@ -27,9 +27,9 @@ for (const fp of all(parseSExpr(readFileSync(kicadFile, 'utf8')), 'footprint')) 
 }
 
 const refs = [...new Set(kicad.map(p => p.ref))]
-const json = JSON.parse(execFileSync('npx', ['pcbjs', 'inspect', entry, ...refs.map(r => `part:${r}`), '--json', '--fresh'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 1 << 28 }))
+const json = JSON.parse(execFileSync('npx', ['pcbjs', 'inspect', entry, ...refs, '--json', '--fresh'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 1 << 28 }))
 const pcbjs = new Map()
-for (const { footprint: fp } of json.results) for (const p of fp?.pads ?? []) {
+for (const { part: fp } of json.results) for (const p of fp?.pads ?? []) {
   pcbjs.set(`${fp.ref} ${mm(p.at[0])} ${mm(p.at[1])}`, { num: p.num, net: p.net && p.net !== 'NC' ? p.net : '' })
 }
 
@@ -58,7 +58,7 @@ process.exitCode = out.some(l => !l.startsWith('numbered')) ? 1 : 0
 ```
 
 - Nets are compared as a mapping, not by name: the importer renames `+5V` to `P5V` and drops a root sheet's slash, `/D6` to `D6`. Every KiCad net must map to exactly one pcbjs net and back.
-- `inspect --json` prints mm to 3 decimals, so positions match within 1 µm; the `near` lookup absorbs rounding at the third decimal.
+- `inspect --json` prints mm to 4 decimals and `mm()` rounds both sides to 3, so positions match within 1 µm; the `near` lookup absorbs rounding at the third decimal.
 - Pads of one number on a padstack with a different front shape come out as two pcbjs pads at one centre; count them apart rather than calling them extra.
 - Extend it the same way for tracks and vias: `pcbjs inspect net:<name> --json` gives `tracks` with `layer`, `width` and `pts`, `vias` with `at`, `size` and `drill`; compare KiCad's `segment`, `arc` and `via` nodes by net, layer, width and both ends. Query every net that has KiCad copper, plus the nets your own changes touch, or new vias on a net KiCad routes only by pour are never seen.
 - Run it on the raw import, after every refinement, and cold and warm after any pcbjs update. A port that improves the copper lists the intended differences, see the pcbjs-best-practices skill.

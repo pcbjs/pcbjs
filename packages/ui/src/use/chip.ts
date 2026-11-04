@@ -1,9 +1,8 @@
-// The selection chip: the anchor's path, each segment ascending to it, every other member, the isolation's words, where the anchor
-// is placed or defined, and the context menu that sends the selection to an agent.
+// Selection breadcrumbs, source navigation and agent actions.
 import { computed, ref } from 'vue'
 import type { PaneContext } from '../context'
 import { load, save } from '../context'
-import { chipPath, isolationLabel, partOfRef, partRefOf, selectRefs } from '../selection'
+import { chipPath, isolationName, partOfRef, partRefOf, selectRefs } from '../selection'
 import { displayRef } from '../refs'
 import { refSource } from '../defs'
 import { agentChoices, sendRequest, type LastAgent } from '../agents'
@@ -18,8 +17,8 @@ export function useChip(ctx: PaneContext) {
   const { board: store, pane } = ctx
   const agents = ctx.shell?.agents ?? NO_AGENTS
   const sel = computed(() => store.sel)
-  const displaySite = computed(() => pane.mode !== 'checks' ? store.layoutSite : store.site)
-  const label = (ref: string) => displaySite.value ? displayRef(displaySite.value, ref) : ref
+  const displaySite = computed(() => (pane.mode !== 'checks' ? store.layoutSite : store.site))
+  const label = (ref: string) => (displaySite.value ? displayRef(displaySite.value, ref) : ref)
   const anchorPath = computed(() => (displaySite.value && sel.value.anchor ? chipPath(displaySite.value, sel.value.anchor) : []))
   const others = computed(() => sel.value.refs.filter(r => r !== sel.value.anchor).reverse())
   const gone = computed(() => new Set(store.drawn?.missing ?? []))
@@ -27,8 +26,8 @@ export function useChip(ctx: PaneContext) {
     store.setSel(selectRefs({ ...sel.value, level: null }, [ref]))
   }
   /** Where the anchor is placed or defined, in the view the pane shows. */
-  const sourceSite = displaySite
-  const anchorSource = (kind: SourceKind): SourceTarget | null => (sourceSite.value && sel.value.anchor ? refSource(sourceSite.value, sel.value.anchor, kind, pane.mode === 'sch') : null)
+  const anchorSource = (kind: SourceKind): SourceTarget | null =>
+    displaySite.value && sel.value.anchor ? refSource(displaySite.value, sel.value.anchor, kind, pane.mode === 'sch') : null
   const openPlace = computed(() => anchorSource('placement'))
   const openDef = computed(() => {
     const d = anchorSource('definition'),
@@ -46,9 +45,7 @@ export function useChip(ctx: PaneContext) {
         : t
     if (b) void ctx.open(pad)
   }
-  const isoCount = computed(() => sel.value.isolate?.instances.length ?? 0)
-  /** the chip's words in an isolation: `LedChannelRow, shown with CH1's values, 3 instances follow` */
-  const isoLabel = computed(() => (store.site && sel.value.isolate ? isolationLabel(store.site, sel.value.isolate) : null))
+  const isoName = computed(() => (store.site && sel.value.isolate ? isolationName(store.site, sel.value.isolate) : null))
 
   // the context menu: Send to agent, while an agent is attached; an editor's pane hands it to the extension, a standalone page asks here
   const chipMenu = ref(false)
@@ -85,5 +82,5 @@ export function useChip(ctx: PaneContext) {
     save(LAST_AGENT, JSON.stringify({ client: to.client, name: to.name }))
     agents.send(to.client, sendRequest(b.name, targetName(b), sel.value), box.comment)
   }
-  return { sel, label, anchorPath, others, gone, ascend, openPlace, openDef, openAnchor, isoCount, isoLabel, chipMenu, sendBox, canSend, agentList, openChipMenu, sendToAgent, submitSend }
+  return { sel, label, anchorPath, others, gone, ascend, openPlace, openDef, openAnchor, isoName, chipMenu, sendBox, canSend, agentList, openChipMenu, sendToAgent, submitSend }
 }

@@ -6,10 +6,9 @@
 
 | File | Holds |
 | --- | --- |
-| `pcb.tsx` | `<PCB>` with name, revision, stackup and net classes; outline; placements grouped by ref prefix; text; the copper and art |
-| `pcb.sch.ts` | nets with KiCad's names made identifiers, `+5V` as `P5V`, `/D6` as `D6`; one part per footprint named by its ref, with `bom`, `pos`, `dnp` and each pin's net |
-| `pcb.sourcing.ts` | MPN, Manufacturer, LCSC as `MPN:LCSC` and the project's fields, from footprints with the `.kicad_sch` symbols over them |
-| `pcb.copper.tsx` | pours, keepouts, every net's tracks as `route()` chains of `.Z()` segments with `.neck(AS_DRAWN)`, vias, arcs |
+| `pcb.tsx` | `<PCB>` with name, rev, stackup and net classes; outline; placements grouped by ref prefix; text; the copper and art |
+| `pcb.sch.ts` | nets with KiCad's names made identifiers, `+5V` as `P5V`, `/D6` as `D6`; one part per footprint named by its ref, with `bom`, `pos`, `dnp`, each pin's net and `.source({ … })` holding MPN, Manufacturer, LCSC as `MPN:LCSC` and the project's fields from the `.kicad_sch` symbols over them |
+| `pcb.copper.tsx` | pours, keepouts, every net's tracks as `route()` chains of `.L()` segments and `.A()` arcs with `.neck(AS_DRAWN)`, vias; copper on no net as `pour(null, …)`, `via(null, …)` and `.net(null)` |
 | `pcb.art.tsx` | board silk, Fab and user graphics in KiCad's draw order |
 | `lib/<Name>.tsx` | footprints that are not the installed library's own, deduplicated |
 | `lib/kicad.ts` | `kicadFootprint()` for footprints matching the installed library |
@@ -20,7 +19,7 @@
 - mm, x right, y down in both tools; a coordinate copied from KiCad lands at the same place.
 - Rotation is counter-clockwise on screen in both.
 - A back part: KiCad flips about the local x axis, pcbjs mirrors about local y and rotates, so KiCad `(layer "B.Cu") (at x y a)` is `at="x y (a+180)deg" side="B"`.
-- Refs stay KiCad's: `R1` binds by its variable name, anything else, such as `J_HR`, by `.ref('J_HR')`.
+- Refs stay KiCad's: each part is the constant of its ref's name, `R1` or `J_HR`; a ref no identifier can hold takes `{ ref }`.
 - `pcbjs inspect J1` prints every pad's board centre; compare against KiCad with it, never by hand.
 
 ## Pads and footprints
@@ -31,7 +30,7 @@
 - `net_tie_pad_groups` as `netTie`, so a Kelvin shunt's sense tabs touch its pads without a `short`.
 - `remove_unused_layers` keeps only the layers a track or zone joins in some placement.
 - Footprints that differ only in element order, courtyard, 1 µm coordinates or pad zone connections merge into one module; the zone connections become a placement `thermal` map.
-- `kicadFootprint('Lib:Name', { pinNames, silk: 'none', model })` reads a library footprint in code, so the `.kicad_mod` stays the single source. Its pins are the pad numbers; `pinNames` renames them. The libraries searched are the project's `.pretty` folders, `kicad.footprints` in the config, `KICAD_FOOTPRINTS` and the installed library.
+- `withPins(kicadFootprint('Lib:Name', { silk: 'none', model }), names)` reads a library footprint in code, so the `.kicad_mod` stays the single source. Its pins are the pad numbers; `withPins` renames them. The libraries searched are the project's `.pretty` folders, `kicad.footprints` in the config, `KICAD_FOOTPRINTS` and the installed library.
 
 ## Rules
 
@@ -68,7 +67,7 @@ function kat(x: number, y: number, deg: number) {
 }
 
 export default (
-  <PCB name="Labels">
+  <PCB name="Labels" rev="0.1.0">
     <rect layer="Edge.Cuts" x={0} y={0} w={20} h={10} />
     <text layer="F.SilkS" at={kat(5, 5, 0)} {...PIN}>1</text>
     <text layer="F.SilkS" at={kat(10, 5, 90)} {...PIN}>GND</text>
@@ -86,6 +85,6 @@ A `.kicad_mod` model line maps one to one, offset, scale and rotate in KiCad's o
 
 1. `pcbjs check --fab` and decide each finding.
 2. Name the pins you will connect by name.
-3. Replace routes you want redone with `.X()` legs; `.lock()` the ones to keep. Drop `.neck(AS_DRAWN)` on a chain you redo.
+3. Replace segments you want redone with `.X()` legs, and freeze them with `pcbjs patch hold` once they route as wanted. Drop `.neck(AS_DRAWN)` on a chain you redo.
 4. Swap `lib/` footprints for standard library families where one fits, `pcbjs docs stdlib`.
 5. Move the stackup and rules to a fab preset when the board is ordered there, `pcbjs docs fab`.

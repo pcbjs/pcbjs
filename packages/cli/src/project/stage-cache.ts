@@ -43,13 +43,12 @@ export const idOf = (name: string): string => {
   }
 }
 
-/** What an evaluation reads beyond its files: PCBJS_* variables, the Vite mode and the @pcbjs packages the project installs. */
+/** What an evaluation reads beyond its files: environment variables, the Vite mode and the @pcbjs packages the project installs. */
 export function cacheEnv(cfg: ResolvedConfig, dev: boolean): string {
   const vars = Object.keys(process.env)
-    .filter(k => k.startsWith('PCBJS_'))
     .sort()
     .map(k => `${k}=${process.env[k]}`)
-  return JSON.stringify([dev ? 'dev' : 'build', vars, installed(cfg.root)])
+  return JSON.stringify([dev ? 'dev' : 'build', createHash('sha256').update(JSON.stringify(vars)).digest('hex'), installed(cfg.root)])
 }
 
 /** `@pcbjs/<name>@<version>` of each package under the nearest node_modules/@pcbjs dirs, as Node resolves them. */

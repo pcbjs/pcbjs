@@ -160,8 +160,36 @@ export class ToolLayer {
       tick.renderOrder = ORDER + 1
       g.add(tick)
     }
-    g.add(mesh(ribbon([[r.c[0] - px * 6, r.c[1]], [r.c[0] + px * 6, r.c[1]]], px, z), flat(c.accent), [0, 0], 0))
-    g.add(mesh(ribbon([[r.c[0], r.c[1] - px * 6], [r.c[0], r.c[1] + px * 6]], px, z), flat(c.accent), [0, 0], 0))
+    g.add(
+      mesh(
+        ribbon(
+          [
+            [r.c[0] - px * 6, r.c[1]],
+            [r.c[0] + px * 6, r.c[1]],
+          ],
+          px,
+          z,
+        ),
+        flat(c.accent),
+        [0, 0],
+        0,
+      ),
+    )
+    g.add(
+      mesh(
+        ribbon(
+          [
+            [r.c[0], r.c[1] - px * 6],
+            [r.c[0], r.c[1] + px * 6],
+          ],
+          px,
+          z,
+        ),
+        flat(c.accent),
+        [0, 0],
+        0,
+      ),
+    )
     const tri = mesh(polygons([r.tri], z), flat(c.accent), [0, 0], 0, { tool: 'ring' })
     tri.renderOrder = ORDER + 2
     g.add(tri)
@@ -196,9 +224,9 @@ export class ToolLayer {
     const g = new THREE.Group()
     b.forEach((pts, i) => {
       if (!pts.length) return
-      const material = dotMaterial(c.dim, 4.4 * dpr, .2 * (i + 1) / b.length)
+      const material = dotMaterial(c.dim, 4.4 * dpr, (0.36 * (i + 1)) / b.length)
       material.depthTest = true
-      const dots = cloud(pts, z - .002, material)
+      const dots = cloud(pts, z - 0.002, material)
       dots.renderOrder = -1
       g.add(dots)
     })

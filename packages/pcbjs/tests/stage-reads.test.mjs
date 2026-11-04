@@ -90,6 +90,7 @@ function perturbed(o, base = {}) {
 const probe = (version = '1') => ({
   name: 'probe',
   version,
+  cache: true,
   after: { place: () => ({ data: { v: version } }) },
   stages: [
     {

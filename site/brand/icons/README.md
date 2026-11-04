@@ -13,7 +13,7 @@ File and panel icons in the language of the pcbjs mark: the 9c3 chip with pads t
 | Icon | Glyph | Use for |
 | --- | --- | --- |
 | `entry` | the brand prompt `>_` | board entries: every file in `entries` of `pcb.config.ts`, and by name `pcb.tsx` and `*.pcb.tsx` |
-| `config` | 4-tooth cog with square teeth and a centre hole, on the pixel grid | `pcb.config.ts`, `.mts`, `.js`, `.mjs`, and the old `pcbjs.config.*` |
+| `config` | 4-tooth cog with square teeth and a centre hole, on the pixel grid | `pcb.config.ts`, `.mts`, `.js`, `.mjs` |
 | `schematic` | op-amp triangle with two inputs, centred | `*.sch.ts` and `*.sch.tsx` |
 | `footprint` | pad pair | footprint and library modules: `*.tsx` and `*.ts` under a project's `lib/` folder, and any module that calls `defineFootprint` |
 | `fab` | layer stack | fab output: the `.pcbjs/fab` folder and each `.pcbjs/fab/<Board>` folder in it, and the fab zip |

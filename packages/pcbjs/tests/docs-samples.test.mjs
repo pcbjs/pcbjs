@@ -2,13 +2,14 @@
 // block is a module of its own, and `ts file=lib/pinout.ts` names the path another block of the same file imports it by.
 // Docs show fragments, so a block gets one prelude line: an import of each @pcbjs/core and @pcbjs/lib name it uses without
 // importing or declaring it, then `any` for the example nets, refs and types it uses undeclared, such as GND, Q1 or Stats.
-// The program runs over the scope host of `pcbjs check`, so a board may use the bare names of its schematic module.
+// The program runs over the scope host of `pcbjs check`, so a board may use the bare names of its schematic module. A library of
+// the placeholder scope @acme, such as @acme/power/ldo, is a stub module of the names imported from it, as another page's module is.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { scopeHost, sourcePosition } from '@pcbjs/compile/scope'
+import { scopeHost, sourcePosition } from '@pcbjs/compile/internal/scope'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..', '..', '..')
@@ -22,8 +23,6 @@ const pages = [
 // names a sample may use as placeholders: nets and refs in capitals, and the report's types
 const REF = /^(BT|SW|TP|[CDEFHJKLQRUY])\d+$/
 const PLACEHOLDER = /^([A-Z][A-Z0-9_]*|Stats|Timings|Routing|Finding)$/
-// the README's example is the region of the demo's blinky.pcb.tsx, which pcbjs check type checks in place
-const blinky = /^\/\/ #region example\n([\s\S]*?)^\/\/ #endregion example$/m.exec(readFileSync(join(repo, 'examples/demo/blinky.pcb.tsx'), 'utf8'))?.[1]
 
 /** The fenced blocks of a markdown file: `{ lang, file, code, line }`, line the 1-based line of the first code line. */
 function samples(text) {
@@ -91,7 +90,7 @@ test('docs: every TypeScript and JavaScript sample type checks', async () => {
     for (const md of pages) {
       const dir = join(work, relative(repo, md).replace(/[\\/.]/g, '_'))
       samples(readFileSync(md, 'utf8'))
-        .filter(s => scripts.has(s.lang) && s.code !== blinky)
+        .filter(s => scripts.has(s.lang))
         .forEach((s, i) => {
           const file = join(dir, s.file ?? `sample${i}.${s.lang}`)
           mkdirSync(dirname(file), { recursive: true })
@@ -101,8 +100,8 @@ test('docs: every TypeScript and JavaScript sample type checks', async () => {
       // a module of another page's example, imported by name: a stub with those names
       for (const [file, b] of blocks) {
         if (!file.startsWith(dir + '/')) continue
-        for (const m of b.code.matchAll(/import\s*\{([^}]*)\}\s*from\s*'(\.[^']+)'/g)) {
-          const target = resolve(dirname(file), m[2])
+        for (const m of b.code.matchAll(/import\s*\{([^}]*)\}\s*from\s*'(\.[^']+|@acme\/[^']+)'/g)) {
+          const target = m[2].startsWith('@acme/') ? join(dir, 'node_modules', m[2]) : resolve(dirname(file), m[2])
           if (['.ts', '.tsx', ''].some(x => blocks.has(target + x))) continue
           mkdirSync(dirname(target), { recursive: true })
           writeFileSync(

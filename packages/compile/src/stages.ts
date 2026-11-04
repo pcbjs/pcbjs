@@ -205,6 +205,8 @@ function registered(list: PcbPlugin[], defs: readonly StageDef[]): PcbPlugin[] {
     const bad = (msg: string): never => fail(`plugin ${JSON.stringify(p?.name)}: ${msg}`)
     if (!p || typeof p.name !== 'string' || !p.name || p.name.includes('/')) bad('needs a name without a slash')
     if (typeof p.version !== 'string') bad('needs a version string')
+    if (p.cacheKey !== undefined && typeof p.cacheKey !== 'string') bad('cacheKey must be a string')
+    if (p.cache !== undefined && typeof p.cache !== 'boolean') bad('cache must be a boolean')
     if (names.has(p.name)) bad('is registered twice')
     names.add(p.name)
     for (const s of p.stages ?? []) {

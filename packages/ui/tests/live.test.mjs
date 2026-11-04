@@ -240,3 +240,38 @@ test('a committed drag is drawn where it went from the commit until each facet t
   assert.equal(holding(held.get('B'), hold, 'layers'), false)
   assert.deepEqual(pose(), there, 'the full facet')
 })
+
+test('geometry joins only its matching item rows, in either arrival order and across unchanged runs', async () => {
+  const { itemsHash } = await import('@pcbjs/core/site-facets')
+  const newer = { ...layers, items: [{ id: 1, uid: 'different-pad', kind: 'pad' }] }
+  const shape = rows => ({
+    shapes: {
+      itemsHash: itemsHash(rows.items),
+      rings: pack([
+        [
+          1,
+          [
+            [
+              [0, 0],
+              [1, 0],
+              [1, 1],
+            ],
+          ],
+        ],
+      ]),
+      covered: { F: pack([]), B: pack([]) },
+      openings: { F: pack([]), B: pack([]) },
+    },
+  })
+  for (const first of ['layers', 'shapes']) {
+    const held = new Map()
+    takeFacet(held, msg('meta', meta, 1))
+    takeFacet(held, msg('layers', layers, 1))
+    assert.ok(takeFacet(held, msg('shapes', shape(layers), 1)).site.shapes)
+    const changed = { layers: newer, shapes: shape(newer) }
+    assert.equal(takeFacet(held, msg(first, changed[first], 2)).site.shapes, undefined, 'no numeric id joins to another entity')
+    const second = first === 'layers' ? 'shapes' : 'layers'
+    assert.ok(takeFacet(held, msg(second, changed[second], 2)).site.shapes)
+    assert.ok(takeFacet(held, msg('layers', newer, 3)).site.shapes, 'identical rows remain compatible across runs')
+  }
+})

@@ -125,7 +125,7 @@ export interface IndexRecord {
   defaults?: string
   exports?: string
   files?: Record<string, string>
-  /** every stage of the plan ran or hit */
+  /** every stage ran or hit, and startup reuse needs no plugin evaluation */
   complete: boolean
   stages: StageEntry[]
 }

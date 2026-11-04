@@ -657,7 +657,9 @@ export interface Methods {
   }
   /** by references, or a view's whole selection with the `base` seq it changed and the view it was made in, whose placements the editor shows */
   'session/select': {
-    params: { project?: string; board: string; refs: string[]; anchor?: string; level?: string; finding?: string | null; focus?: boolean } | { project?: string; board: string; selection: Selection; base?: number; view?: ViewName }
+    params:
+      | { project?: string; board: string; target?: string | null; refs: string[]; anchor?: string | null; level?: string | null; finding?: string | null; focus?: boolean }
+      | { project?: string; board: string; selection: Selection; base?: number; view?: ViewName }
     result: Selection | null
     write: false
   }
@@ -759,7 +761,15 @@ export interface Events {
   'pcbjs:error': { name: string | null; entry: string; message: string; stack: string; text: string | null }
   'pcbjs:focus': FocusEvent
   'pcbjs:sync:hover': HoverMsg
-  'pcbjs:ide:finding': { project: string; board: string; target?: string | null; snapshot?: string; finding: (DrcMarker & { id: string; refs: string[] }) | null; refs: string[]; anchor: string | null }
+  'pcbjs:ide:finding': {
+    project: string
+    board: string
+    target?: string | null
+    snapshot?: string
+    finding: (DrcMarker & { id: string; refs: string[] }) | null
+    refs: string[]
+    anchor: string | null
+  }
   'pcbjs:select': SelectMsg
   'pcbjs:facet': FacetMsg
   'pcbjs:invalidate': Invalidate

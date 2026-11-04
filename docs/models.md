@@ -1,7 +1,7 @@
 # Model files from vendors
 
 `pcbjs model add`, `align` and `check`: fetch a STEP, glTF or WRL model, fit it to a placed part, write the `model` option, and where to find models and what their licences allow.
-The model descriptor, its frame and the mesh cache are in 3d.md.
+Advanced. The model descriptor, its frame and the user model cache are in 3d.md.
 
 ```sh
 pcbjs model add https://example.com/JK0654219NL.stp --ref J1 --write
@@ -25,16 +25,17 @@ Stdlib parts fetch their own models, see 3d.md Fetched on first use; `pcbjs mode
 | `--ref` | fits to that placed part as align does and prints the `model` option; alone, uses the part's `MPN:LCSC` number |
 | `--footprint <id>` | fits to the first part with that footprint; `--write` goes on the `<footprint>` element found by `id`, so every part of it gets it |
 | `--write` | writes the option into the code, the path relative to that file |
-| `--entry` | the board, when a ref is on several; or `--ref Sense/SW1` by board name, entry or folder |
+| `--entry` | add and align: the board, when a ref is on several, by board name, entry or folder |
 | `--as`, `--force` | file name; overwrite |
 
 - It prints the model's box in mm and unit guess and appends source and date to `models/LICENSES.md`; a licence in the zip, such as Hirose's `Read me.pdf`, is saved as `<model>-<file>`.
-- `--write` takes the options form: `R0603('10k')` becomes `R0603({ value: '10k', model })`, `F('10k', { MPN })` becomes `F({ value: '10k', source: { MPN }, model })`.
+- A download goes through the user model cache, kept by content: adding the same `lcsc:` part again, in any project, needs no network, the same URL asks the server with its ETag or Last-Modified and downloads only a changed file, and either prints `from the model cache` when it takes the cached copy; the copy in `models/` is the project's own file. 3d.md Model cache has where the cache lives and `pcbjs model cache ls|prune|path`.
+- `--write` puts the model in the options after the value: `R0603('10k')` becomes `R0603('10k', { model })`, `R0603('10k', { dnp: true })` becomes `R0603('10k', { dnp: true, model })`, and a call with no value gets the options alone, `PinHeader(4)()` becomes `PinHeader(4)({ model })`, and `PinHeader(4)()` becomes `PinHeader(4)({ model })`.
 - Without a board for a shared ref, such as `--entry sense.tsx`, add and align refuse and list the boards.
 
 ## model align
 
-`pcbjs model align [entry] <ref> [--file <model>]` prints `offset`, `rotate`, `scale`, the pins matched, a confidence from 0 to 1 and the `shot` command.
+`pcbjs model align <ref> [--entry <board>] [--file <model>]` prints `offset`, `rotate`, `scale`, the pins matched, a confidence from 0 to 1 and the `shot` command.
 
 - The unit comes from the courtyard; of the 24 ways to stand and turn the model it keeps the one with most pins on pads, as drawn unless the pins clearly disagree, or by `height` without pins.
 - It keeps what fits: the part's transform, such as KiCad's `(model ...)` line, and the file's own frame stay when they land as many pins. A new fit snaps to 0, the pad pitch or half of it within 0.1 mm.

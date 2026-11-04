@@ -14,20 +14,19 @@ The rules an agent meets most, with the usual cause and fix. `pcbjs docs finding
 | `edge-clearance` | copper near the outline | move it in, or `part.rules({ edgeClearance })` for an edge connector the fab allows |
 | `keepout` | copper of a forbidden kind inside a keepout | route around it, or `except: [NET]` on the keepout for a net that may enter |
 | `length`, `length-match` | no room for meanders, or a route already too long | a finding that names no room means a courtyard or silk label is in the way: move the label or part, or add a waypoint into free board |
-| `net-loop` | a hand chain or a `.direct()` leg that crosses copper its net already has, two routes between the same pads | let one leg join instead: drop its waypoints so `route(a).X(b)` meets the trunk, or remove the second path; `.loop()` on a route of the net, or `loops: true` in its class, when the loop is meant |
+| `net-loop` | a hand chain or a `.direct()` leg that crosses copper its net already has, two routes between the same pads | let one leg join instead: drop its waypoints so `route(a, b)` meets the trunk, or remove the second path; `.loop()` on a route of the net, or `loops: true` in its class, when the loop is meant |
 | `thermal-spokes` | a pad reached by too few spokes | `thermal={{ 2: 'solid' }}` on the placement, a smaller `thermal.gap`, or `{ angle: 45 }` on that pad |
-| `silk-over-pad`, `silk-over-edge`, `silk-width` | a label on a mask opening or past the edge, a thin stroke | move the label; set `refAt` for a ref; `thicken` on outline-font text |
+| `silk-over-pad`, `silk-over-edge`, `silk-width` | a label on a mask opening or past the edge, a thin stroke | move the label; set `ref:at` for a ref; `thicken` on outline-font text |
 | `courtyard` | two parts overlap | move one; inspect both with `pcbjs inspect A B` |
 | `edge-courtyard`, `edge-silk`, `edge-pad` | an item inside the `edge` band | move it, or list the part in the band's `except` when it is meant to overhang |
 | `mask-web` | two pad openings too close for the fab's dam | a gang opening drawn on the mask layer, or accept the merge as the warning says |
-| `reference-mate`, `reference-net`, `reference-collision` | a mating connector misplaced, a pin with a different net, a body in the gap | see `pcbjs docs references`; `pcbjs inspect references` prints the stack |
+| `reference-mate`, `reference-net`, `reference-collision` | a mating connector misplaced, a pin with a different net, a body in the gap | see `pcbjs docs references`; `pcbjs inspect --references` prints the stack |
 
 ## ERC
 
 | Rule | Fix |
 | --- | --- |
 | `unconnected-pin` | connect the pin, or connect it to `NC` |
-| `unplaced-part` | place the part or remove it |
 | `single-pin-net` | a net reaching one pin is usually a typo in `.connect()` |
 | `net-class` | add the class to `classes` on `<PCB>`, a preset or `defineDefaultBoard` |
 | `model-missing` | the model path is relative to the file that holds the `model` literal |

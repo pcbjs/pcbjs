@@ -346,8 +346,12 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   })
 
-  const development = () => context.extensionMode === vscode.ExtensionMode.Development || vscode.workspace.getConfiguration('pcbjs').get<boolean>('development', false) ||
-    (vscode.workspace.workspaceFolders ?? []).some(f => fs.existsSync(path.join(f.uri.fsPath, 'packages/ui/src/BoardFrame.vue')) && fs.existsSync(path.join(f.uri.fsPath, 'packages/vscode/src/extension.ts')))
+  const development = () =>
+    context.extensionMode === vscode.ExtensionMode.Development ||
+    vscode.workspace.getConfiguration('pcbjs').get<boolean>('development', false) ||
+    (vscode.workspace.workspaceFolders ?? []).some(
+      f => fs.existsSync(path.join(f.uri.fsPath, 'packages/ui/src/BoardFrame.vue')) && fs.existsSync(path.join(f.uri.fsPath, 'packages/vscode/src/extension.ts')),
+    )
   const developmentContext = () => void vscode.commands.executeCommand('setContext', 'pcbjs.development', development())
   developmentContext()
 
@@ -381,7 +385,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const fabHost: FabHost = {
     origin: root => server?.linkOf(root)?.session,
-    connected: (root, session) => !!session && !!actionOwner({ kind: 'source', session, project: root, source: { file: root, line: 1, col: 1, endLine: 1, endCol: 1 } }, server?.links ?? []),
+    connected: (root, session) =>
+      !!session && !!actionOwner({ kind: 'source', session, project: root, source: { file: root, line: 1, col: 1, endLine: 1, endCol: 1 } }, server?.links ?? []),
     projects: () => {
       const s = server
       const served = s?.scopes?.scopes.map(sc => sc.root) ?? []
@@ -424,8 +429,7 @@ export function activate(context: vscode.ExtensionContext): void {
       onEvent: (link, event, data) => {
         if (event === 'pcbjs:ide:finding') {
           if (link.open && link === shownLink() && link.roots.includes(data?.project)) void preview.finding(w.server, data, link)
-        }
-        else if (link === shownLink()) onSessionEvent(w.server, event, data)
+        } else if (link === shownLink()) onSessionEvent(w.server, event, data)
       },
       onMismatch: text => void notice(`pcbjs: ${text}`),
       nodePath: () => findNode(config(uri).get<string>('nodePath', '')),
@@ -542,7 +546,7 @@ export function activate(context: vscode.ExtensionContext): void {
   async function applySelection(p: SelectParams): Promise<void> {
     // a click in a pane shows its source with the cursor there and the pane keeping focus; an Open gives the editor focus
     const deps = { last: () => editorColumn, size: (c: vscode.ViewColumn) => preview.sizeAt(c) }
-    const editor = await showSelect(p, deps, show => preview.keepFocus(show))
+    const editor = await showSelect(p, deps, (show, valid) => preview.keepFocus(show, valid))
     if (editor) applied = selectionKey(editor.document.uri.fsPath, editor.selections)
   }
 
@@ -659,7 +663,10 @@ export function activate(context: vscode.ExtensionContext): void {
     segmentsUi,
     unitTokens,
     padHints,
-    vscode.workspace.onDidChangeWorkspaceFolders(() => { developmentContext(); void discover() }),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      developmentContext()
+      void discover()
+    }),
     vscode.window.onDidChangeTextEditorSelection(e => {
       if (e.textEditor === vscode.window.activeTextEditor) reportCursor(e.textEditor)
     }),
@@ -687,32 +694,38 @@ export function activate(context: vscode.ExtensionContext): void {
       if (maintenance || closing) return
       let reloading = false
       try {
-        reloading = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'pcbjs: Purge Reload Dev Suite' }, progress => devSuite.run({
-          development,
-          signal: lifetime.signal,
-          folders: roots,
-          projects: () => [...projectDirs, ...(server?.served ?? [])],
-          save: () => vscode.workspace.saveAll(false),
-          disconnect: async () => {
-            maintenance = true
-            discovery++
-            boardTicket++
-            clearTimeout(iconTimer)
-            const old = wiring
-            wiring = undefined
-            server = undefined
-            serverKey = ''
-            await old?.dispose()
-          },
-          stop: stopSuite,
-          run: async (tool, args, root) => {
-            const runner = tool === 'npm' ? nodeTool(setup.nodePath(), 'npm', []) : { command: setup.nodePath(), args: [path.join(root, 'packages/pcbjs/bin/pcbjs.js')], shell: false }
-            const result = await run(runner, args, root, setup)
-            if (result.code !== 0) throw new Error(`${tool} ${args.join(' ')} failed: ${result.lines.filter(l => l.trim()).at(-1) ?? result.code}`)
-          },
-          reload: () => vscode.commands.executeCommand('workbench.action.reloadWindow'),
-          progress: message => { progress.report({ message }); output.appendLine(`[dev suite] ${message}`) },
-        }))
+        reloading = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'pcbjs: Purge Reload Dev Suite' }, progress =>
+          devSuite.run({
+            development,
+            signal: lifetime.signal,
+            folders: roots,
+            projects: () => [...projectDirs, ...(server?.served ?? [])],
+            save: () => vscode.workspace.saveAll(false),
+            disconnect: async () => {
+              maintenance = true
+              discovery++
+              boardTicket++
+              clearTimeout(iconTimer)
+              const old = wiring
+              wiring = undefined
+              server = undefined
+              serverKey = ''
+              await old?.dispose()
+            },
+            stop: stopSuite,
+            run: async (tool, args, root) => {
+              const runner =
+                tool === 'npm' ? nodeTool(setup.nodePath(), 'npm', []) : { command: setup.nodePath(), args: [path.join(root, 'packages/pcbjs/bin/pcbjs.js')], shell: false }
+              const result = await run(runner, args, root, setup)
+              if (result.code !== 0) throw new Error(`${tool} ${args.join(' ')} failed: ${result.lines.filter(l => l.trim()).at(-1) ?? result.code}`)
+            },
+            reload: () => vscode.commands.executeCommand('workbench.action.reloadWindow'),
+            progress: message => {
+              progress.report({ message })
+              output.appendLine(`[dev suite] ${message}`)
+            },
+          }),
+        )
       } catch (e) {
         if (closing) return
         output.appendLine(`[dev suite] ${String(e)}`)
@@ -722,12 +735,13 @@ export function activate(context: vscode.ExtensionContext): void {
         if (!reloading) maintenance = false
       }
     }),
-    ...(['toggle', 'enable', 'disable'] as const).map(action => command(`pcbjs.devtools.${action}`, () => {
-      const applied = preview.devtools(action === 'toggle' ? undefined : action === 'enable')
-      if (!applied && development())
-        void vscode.window.showInformationMessage('pcbjs: focus a preview editor to inspect its UI.')
-      return applied
-    })),
+    ...(['toggle', 'enable', 'disable'] as const).map(action =>
+      command(`pcbjs.devtools.${action}`, () => {
+        const applied = preview.devtools(action === 'toggle' ? undefined : action === 'enable')
+        if (!applied && development()) void vscode.window.showInformationMessage('pcbjs: focus a preview editor to inspect its UI.')
+        return applied
+      }),
+    ),
     ...VIEWS.flatMap(v => (Object.keys(OPEN_COMMANDS) as OpenMode[]).map(mode => command(OPEN_COMMANDS[mode][v], (node?: Node) => openView(v, mode, node)))),
     command('pcbjs.openAllViews', async () => {
       const s = need()

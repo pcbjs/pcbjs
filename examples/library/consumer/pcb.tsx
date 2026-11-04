@@ -6,7 +6,7 @@ import { nets, reference, route } from '@pcbjs/core'
 import { LED0603, PinHeader, R0603, roundedRect } from '@pcbjs/lib'
 import { schematic as ldo, layout as LdoBlock } from '@pcbjs-examples/power/ldo'
 
-const { VIN, V3V3, V3AUX, GND, LED1, LED2 } = nets()
+const { VIN, '3V3': V3V3, V3AUX, GND, LED1, LED2 } = nets()
 
 // power in, and the socket the module stands on, wired as its header: VIN, GND, 3.3 V
 const J1 = PinHeader(2)().source({ MPN: 'PZ254V-11-02P' }).connect({ 1: GND, 2: VIN })

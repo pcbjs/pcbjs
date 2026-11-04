@@ -1,5 +1,5 @@
 // hover and the selection shared by every viewer of one session; free of Vue and the DOM so Node imports it in the tests
-import { sameSelection, type Selection } from '@pcbjs/core/internal/selection'
+import { emptySelection, sameSelection, type Selection } from '@pcbjs/core/internal/selection'
 import type { HoverMsg, HoverWire, SelectMsg, ViewName } from '@pcbjs/core/protocol'
 
 /** What the pointer is on: board item ids of this snapshot, the parts of a body, symbol or sheet, and its net; each viewer finds the net's pair group itself. */
@@ -35,6 +35,7 @@ const keyOf = (board: string, v: unknown) => JSON.stringify([board, v])
  */
 export function createSync(out: SyncOut, frame: (cb: () => void) => void) {
   let last: Selection | null = null
+  let accepted: Selection | null = null
   let seq = 0
   let hoverKey = keyOf('', null)
   let pending: HoverMsg | null = null
@@ -47,9 +48,14 @@ export function createSync(out: SyncOut, frame: (cb: () => void) => void) {
     },
     /** A selection from the session: returned to apply, its seq kept as the base of the next change, and remembered so it is not sent back. */
     receive(m: SelectMsg): Selection {
-      last = m.selection
+      accepted = last = m.selection
       seq = Math.max(seq, m.selection.seq)
       return m.selection
+    },
+    /** Roll back only the rejected intent, never a newer local or server selection. */
+    reject(m: SelectOffer): Selection | null {
+      if (last !== m.selection) return null
+      return (last = accepted ?? emptySelection(m.board))
     },
     /** The local hover changed, as it travels; null when the pointer left. */
     hover(board: string, hover: HoverWire | null) {
@@ -67,7 +73,7 @@ export function createSync(out: SyncOut, frame: (cb: () => void) => void) {
     },
     /** The page switched board: whatever it selects there is news to the session. */
     reset() {
-      last = null
+      accepted = last = null
     },
   }
 }

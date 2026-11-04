@@ -104,7 +104,7 @@ export async function compileEntry(loader: ModuleLoader, cfg: ResolvedConfig, en
   const formats = exporters(cfg, dev, at).filter(e => !o.formats || o.formats.includes(e.name))
   const dir = cacheOf(cfg.root)
   const env = cacheEnv(cfg, dev)
-  const served = draft ? null : servedStages(dir, entry.rel, { env, exports: exportsKey(formats), defaults: defaultsKey(realm().defaults), hashOf: fileHash })
+  const served = draft || cfg.plugins.length ? null : servedStages(dir, entry.rel, { env, exports: exportsKey(formats), defaults: defaultsKey(realm().defaults), hashOf: fileHash })
   if (served) {
     const out = await finish(served, entry, cfg, performance.now() - t0, 0, served[0].files ?? [])
     keepLast(
@@ -328,12 +328,23 @@ export function writeFab(c: Compiled, dir: string): string[] {
   return names
 }
 
-export interface Library { board: Board; site: SiteData }
+export interface Library {
+  board: Board
+  site: SiteData
+}
 
 /** Re-evaluate effective instance parameters, suppressing its own placement overrides for a library view. */
 export async function compileLayout(loader: ModuleLoader, cfg: ResolvedConfig, entry: Entry, name: string, target: string | null, ref: string): Promise<Library> {
   const { root } = await evaluateEntry(loader, entry, null)
-  const boards = compileBoards(root, { library: ref, cache: false, sourceRoot: cfg.root, files: loader.imported(entry.file), references: referenceResolver(cfg.root, entry.file), modelBox: modelBoxLoader(cfg.root), want: ['meta', 'sch', 'layers', 'shapes', 'model'] })
+  const boards = compileBoards(root, {
+    library: ref,
+    cache: false,
+    sourceRoot: cfg.root,
+    files: loader.imported(entry.file),
+    references: referenceResolver(cfg.root, entry.file),
+    modelBox: modelBoxLoader(cfg.root),
+    want: ['meta', 'sch', 'layers', 'shapes', 'model'],
+  })
   const board = boards.find(b => b.name === name && (target ? b.variant?.name === target : !b.variant || b.variant.index === 0))
   if (!board) throw new Error(`no board ${name} target ${target ?? 'default'}`)
   const options = { root: cfg.root, dev: true, fabUrl: '', fabName: '', fabFiles: [], fabStatus: '', svgUrl: '', bom: [] }
@@ -345,19 +356,24 @@ export async function compileLayout(loader: ModuleLoader, cfg: ResolvedConfig, e
   const kept = board.items.filter(it => ids.has(it.id))
   const renumber = new Map(kept.map((it, i) => [it.id, i + 1]))
   board.items = kept.map(it => ({ ...it, id: renumber.get(it.id)! }))
-  board.footprints = board.footprints.filter(f => parts.has(f.ref)).map(f => ({ ...f, pads: f.pads.flatMap(id => renumber.has(id) ? [renumber.get(id)!] : []) }))
+  board.footprints = board.footprints.filter(f => parts.has(f.ref)).map(f => ({ ...f, pads: f.pads.flatMap(id => (renumber.has(id) ? [renumber.get(id)!] : [])) }))
   board.outline = []
   board.references = []
   board.ratsnest = []
   board.routes = board.routes?.filter(r => routes.has(r.id))
   board.edit = board.edit?.filter(n => inside(n.ref) || parts.has(n.ref) || routes.has(n.ref))
-  board.schematic = { ...board.schematic, parts: board.schematic.parts.filter(p => parts.has(p.ref)), circuits: board.schematic.circuits.map(c => ({ ...c, parts: c.parts.filter(p => parts.has(p)) })) }
+  board.schematic = {
+    ...board.schematic,
+    parts: board.schematic.parts.filter(p => parts.has(p.ref)),
+    circuits: board.schematic.circuits.map(c => ({ ...c, parts: c.parts.filter(p => parts.has(p)) })),
+  }
   const finding = (f: Board['drc'][number]) => (f.refs ?? []).some(r => inside(r) || [...parts].some(p => r === p || r.startsWith(p + '/')))
   board.drc = board.drc.filter(finding)
   board.erc = board.erc.filter(finding)
   const boxes = site.footprints.filter(f => parts.has(f.ref)).map(f => f.bbox)
   if (boxes.length) {
-    const x = Math.min(...boxes.map(b => b.x)), y = Math.min(...boxes.map(b => b.y))
+    const x = Math.min(...boxes.map(b => b.x)),
+      y = Math.min(...boxes.map(b => b.y))
     board.bbox = { x, y, w: Math.max(...boxes.map(b => b.x + b.w)) - x, h: Math.max(...boxes.map(b => b.y + b.h)) - y }
   }
   return { board, site: siteData(board, options) }

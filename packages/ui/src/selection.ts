@@ -164,13 +164,20 @@ export function click(sel: Selection, site: Site, hit: Hit | null, mods: Mods): 
   if (/^route:\d+$/.test(pick) && hit?.kind === 'track' && hit.at) {
     const pts = site.routes?.find(r => r.id === pick)?.pts
     const steps = site.edit?.find(e => e.ref === pick)?.steps
-    let best = Infinity, end = 0
+    let best = Infinity,
+      end = 0
     for (let j = 0; pts && j + 1 < pts.length; j++) {
       if (!/^[LlHhVvAa]$/.test(steps?.[j]?.op ?? '')) continue
-      const a = pts[j], b = pts[j + 1], dx = b[0] - a[0], dy = b[1] - a[1]
+      const a = pts[j],
+        b = pts[j + 1],
+        dx = b[0] - a[0],
+        dy = b[1] - a[1]
       const t = Math.max(0, Math.min(1, ((hit.at[0] - a[0]) * dx + (hit.at[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)))
       const distance = Math.hypot(hit.at[0] - a[0] - t * dx, hit.at[1] - a[1] - t * dy)
-      if (distance < best) { best = distance; end = j + 1 }
+      if (distance < best) {
+        best = distance
+        end = j + 1
+      }
     }
     if (end) pick = `${pick}/pt:${end}`
   }
@@ -247,7 +254,13 @@ export function instancesOf(site: Site, ref: Ref): Ref[] {
 /** Enter the definition of the instance `ref`, shown with its values, selecting `pick` inside it. */
 function enterIsolation(sel: Selection, site: Site, ref: Ref, pick: Ref | null): Selection {
   const refs = pick && pick !== ref ? [pick] : []
-  return { ...sel, isolate: { ref, context: ref, instances: instancesOf(site, ref), preview: false, ...(sel.isolate?.mode ? { mode: sel.isolate.mode } : {}) }, level: ref, refs, anchor: refs[0] ?? null }
+  return {
+    ...sel,
+    isolate: { ref, context: ref, instances: instancesOf(site, ref), preview: false, ...(sel.isolate?.mode ? { mode: sel.isolate.mode } : {}) },
+    level: ref,
+    refs,
+    anchor: refs[0] ?? null,
+  }
 }
 /** Leave the isolation with its instance selected: to the definition of the instance around it, else to the board. */
 function leave(sel: Selection, site: Site): Selection {
@@ -361,10 +374,15 @@ export function isolationView(site: Site, iso: Isolation): IsolationView {
   return { parts, ids, findings, nets, fade, frame, box, boardBox }
 }
 
-/** The chip's words for an isolation: the definition, whose values it shows and how many instances a write reaches. */
-export function isolationLabel(site: Site, iso: Isolation): { def: string; shown: Ref; follow: number } {
+export function isolationName(site: Site, iso: Isolation): string {
   const c = recordOf(site, iso.ref)
-  return { def: c?.layout ? defName(c.layout) : c?.kind === 'circuit' ? c.circuit! : iso.ref, shown: iso.ref, follow: iso.instances.length }
+  return c?.layout ? defName(c.layout) : c?.kind === 'circuit' ? c.circuit! : iso.ref
+}
+
+/** Layout actions require a group; standalone part isolation changes visibility only. */
+export function layoutGroup(site: Site, sel: Selection): Ref | null {
+  const ref = (sel.isolate ?? sel.isolateChoice)?.ref ?? sel.anchor
+  return ref && isGroup(site, ref) ? ref : null
 }
 
 /** What the members draw: parts outlined by courtyard, items by their own outline, whole nets, points; the anchor's alone, and its net as context. */

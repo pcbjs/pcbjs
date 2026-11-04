@@ -8,8 +8,8 @@ import type { MathKind } from './fdlibm.js'
 
 /** The hash of the fixture as Node compiles it, by how its Math rounds; the browser compile test fails with the new value when the compiler changes it. */
 export const SELF_CHECK_HASH: Record<MathKind, string> = {
-  plain: '31a13e39f2023476b0be79247b927fa4e0b56514',
-  fused: '32abe9df007d3e2e76f94ca131977c6fc24c296f',
+  plain: 'c7c2dddf30128d421101878e459d6b7f9b9fd43d',
+  fused: 'b71fd40b6af389ece74caed43c4575f49024bfda',
 }
 
 export interface SelfCheck {

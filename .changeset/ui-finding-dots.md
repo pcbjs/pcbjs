@@ -1,0 +1,5 @@
+---
+'@pcbjs/ui': patch
+---
+
+Findings draw as dots at their spots, coloured by severity, info hollow and ERC a diamond, with no label at rest: one instanced draw facing the camera in 3D, one SVG layer in 2D, any number of them. A hover shows one tooltip with the rule and the message from one pointer test on the whole set, a click focuses the finding, shows its rule and message in the chip, opens its tab and frames it. The ratsnest labels keep their rule, and only the line in focus or under the pointer marches, so an idle view redraws nothing. The views test the pointer once a frame, a hover redraws the outline alone, a hovered or focused line swaps its material instead of rebuilding the ratsnest, a drag moves the dragged meshes and SVG elements by one transform per pointer event, found once per drag, and the 3D tools redraw only the parts whose inputs changed. The zoom variables of the 2D view sit on the overlays that use them, so a wheel step restyles no layer. The heartbeat check compares only the facets the page observes.

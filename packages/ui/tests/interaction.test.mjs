@@ -18,7 +18,7 @@ registerHooks({
     }
   },
 })
-const { click, clickTarget, drawnOf, editNodeOf, emptySelection, enter, escape, hoverOf, instancesOf, isolate, isolationLabel, isolationView, selectRefs } =
+const { click, clickTarget, drawnOf, editNodeOf, emptySelection, enter, escape, hoverOf, instancesOf, isolate, isolationName, isolationView, selectRefs } =
   await import('../src/selection.ts')
 const { reachOf, shownDef } = await import('@pcbjs/core/internal/instances')
 const { jumpButtons, toolsOf, toolsWhy, editClient, sessionMismatch, writtenText } = await import('../src/edit-client.ts')
@@ -90,7 +90,14 @@ test('part body or pad outside any instance: the part, its at, no context, move 
     assert.deepEqual(r.sel.refs, ['J1'])
     assert.deepEqual([...r.drawn.parts], ['J1'])
     assert.equal(r.context, null)
-    assert.equal(r.editor, all.text('blinky.pcb.tsx').split('\n').find(line => /^\s*<J1 at=/.test(line)).trim())
+    assert.equal(
+      r.editor,
+      all
+        .text('blinky.pcb.tsx')
+        .split('\n')
+        .find(line => /^\s*<J1 at=/.test(line))
+        .trim(),
+    )
     assert.ok(r.place, 'the cursor lands on its at')
     assert.deepEqual(r.tools, ['move', 'rotate', 'layer'])
     assert.equal(r.why, null)
@@ -481,12 +488,12 @@ test('isolation of CH1 in Blinky: the definition in its frame with CH1’s value
   assert.equal(v.fade, false)
   // The centered definition frame holds R1 at -4 and D1 at 4.
   assert.ok(v.box[0] < -4 && v.box[0] + v.box[2] > 4 && v.box[1] < 0 && v.box[1] + v.box[3] > 0, JSON.stringify(v.box))
-  assert.deepEqual(isolationLabel(B.site, s.isolate), { def: 'LedChannelRow', shown: 'CH1', follow: 3 })
+  assert.equal(isolationName(B.site, s.isolate), 'LedChannelRow')
   const f = isolate(selectRefs(sel0(F), ['CH2']), F.site)
   const fv = isolationView(F.site, f.isolate)
   assert.equal(fv.fade, true, 'placed once: the board stays, faded')
   assert.deepEqual(fv.frame, [1, 0, 0, 1, 0, 4])
-  assert.deepEqual(isolationLabel(F.site, f.isolate), { def: 'Row', shown: 'CH2', follow: 1 })
+  assert.equal(isolationName(F.site, f.isolate), 'Row')
 })
 
 test('two circuits named alike in two files are two definitions; a nested instance isolates in its frames and leaves to its parent', () => {
@@ -499,19 +506,19 @@ test('two circuits named alike in two files are two definitions; a nested instan
   assert.equal(s.isolate.ref, 'P2/B2')
   const v = isolationView(N.site, s.isolate)
   assert.deepEqual(v.frame, [0, -1, 1, 0, 24, 5], 'P2 at 20 5 90 composed with B2 at 0 4')
-  assert.deepEqual(isolationLabel(N.site, s.isolate), { def: 'Row', shown: 'P2/B2', follow: 4 })
+  assert.equal(isolationName(N.site, s.isolate), 'Row')
   s = escape(s, N.site)
   assert.deepEqual([s.isolate?.ref, s.refs], ['P2', ['P2/B2']], 'Escape at a nested root goes to the parent definition with the instance selected')
   s = escape(s, N.site)
   assert.deepEqual([s.isolate, s.refs], [null, ['P2']], 'then to the board')
 })
 
-test('the chip count and the session reach are one lookup: every node an instance shows, in every fixture board', () => {
+test('isolated instance membership agrees with shared edit reach across fixture boards', () => {
   for (const b of [B, F, all.Nx]) {
     const cs = b.site.schematic.circuits
     for (const c of cs) {
       const ref = c.path.join('/')
-      const follow = isolationLabel(b.site, { ref, context: ref, instances: instancesOf(b.site, ref), preview: false }).follow
+      const follow = instancesOf(b.site, ref).length
       const nodes = (b.site.edit ?? []).filter(e => e.def === shownDef(c) && e.frames?.at(-1)?.inst === ref)
       for (const n of nodes) assert.equal(reachOf(cs, n.def).length, follow, `${b.site.name} ${ref} ${n.ref}`)
     }

@@ -235,15 +235,13 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
     )
   }
   // the watcher follows the files of the last compile, so an edit of any reaches this project
-  const track = () => {
-    const files = new Set<string>(scope.configFile ? [scope.configFile] : [])
+  const track = (stamps: Map<string, string>) => {
     const watched = (f: string) => !f.includes('/node_modules/') && !f.includes('/.pcbjs/') && !f.startsWith(hooks.clientDir + '/') && !f.startsWith('\0')
-    for (const sl of state.slots) for (const f of sl.compiled?.[0]?.files ?? imported(sl.entry.file)) if (watched(f)) files.add(f)
+    const files = new Set([...projectFiles()].filter(watched))
     if (state.preview) for (const f of imported(state.preview.file)) if (watched(f)) files.add(f)
-    for (const f of referenceFiles(state.slots.flatMap(sl => sl.compiled ?? []))) files.add(f)
     scope.files = [...files]
-    scope.stamps = stampFiles(scope.files)
-    scope.stale = sched.unseen().size > 0
+    const discovered = stampFiles(scope.files.filter(f => !stamps.has(f)))
+    scope.stamps = new Map(scope.files.map(f => [f, stamps.get(f) ?? discovered.get(f)!]))
     hooks.watch(scope.files)
   }
 
@@ -300,7 +298,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
       hooks.log(`a compile of ${root} stopped: ${strip(String(e?.message ?? e)).split('\n')[0]}`)
     }
     sched.done(r, { left, partial })
-    track()
+    scope.stale = sched.unseen().size > 0
     if (previewDirty) {
       previewDirty = false
       void refreshPreview()
@@ -385,6 +383,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
     const committed = !cancelled && whole && !hooks.closing()
     if (committed) hooks.flushFeed()
     const snap = committed ? commit(inputs, id) : null
+    track(snap?.stamps ?? inputs.stamps)
     if (cancelled) {
       hooks.log(`an edit cancelled the compile of ${slots.map(s => s.entry.rel).join(', ')}; it compiles again`)
       emit({ t: 'cancelled', project: root, run: id, entries: slots.map(s => s.entry.rel) })

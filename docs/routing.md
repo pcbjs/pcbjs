@@ -1,142 +1,119 @@
 # Routing
 
-`route(a)` and its chain: ends, path grammar, builder methods and corners, teardrops, autoroute parameters, net classes, pairs in short.
-autorouter.md has how copper is placed, failures, keepouts, cache, locks and variants; pairs.md the pairs in full; length.md length targets and matching.
+`route(a, b, …)` and its chain: ends, the chain commands, branches, drawn copper, width and layer, pairs in short.
+Basic. route-options.md has the builder methods, teardrops, autoroute parameters and net classes; autorouter.md how copper is placed, failures, keepouts, cache, holds and variants; pairs.md the pairs in full; length.md length targets and matching.
 
 ```tsx
-{route(J1[3]).X(Q1[1]).width(0.25)}                                              // autorouted all the way
-{route(J1[2]).Z(R1[1]).width(0.3)}                                               // one straight manual track
-{route(J1[3]).V(14).L(5, 16).via('B.Cu').H(24).V(7.5).via('F.Cu').X(Q1[1]).width(0.25)} // manual, two vias, autorouted last hop
-{route(Q1[2]).X('25 12.5 B.Cu').width(0.3)}                                      // to a point of the back pour
+{route(J1[3], Q1[1]).width(0.25)}                                                  // autorouted all the way
+{route(J1[2], R1[1]).width(0.3).Z()}                                               // one straight manual track
+{route(J1[3], Q1[1]).width(0.25).V(14).L(5, 16).via('B.Cu').H(24).V(7.5).via('F.Cu')} // manual, two vias, autorouted last hop
+{route(J1[2], R1[1], R2[1], R3[1]).width(0.3)}                                     // a tree: each end joins where cheapest
+{route(GND)}                                                                       // every pad of the net
 ```
-
-## The chain
-
-| Call | Grammar | Does |
-| --- | --- | --- |
-| `.L(x, y)`, `.l(dx, dy)` | `L`, `l` | manual track to the point |
-| `.H(x)`, `.h(dx)`, `.V(y)`, `.v(dy)` | `H`, `h`, `V`, `v` | manual track along x or y |
-| `.via(layer)` | `@layer` | via at the cursor, continue on `layer` |
-| `.Z(target)` | `Z` | straight manual track to the target |
-| `.X(target)` | `X`, `XZ` | automatic leg to the target |
-
-- Lengths are mm or unit strings, `'10mil'`. The last `.Z` or `.X` is the end `b`, required; an earlier one is a waypoint on the current layer, `'100mil 200mil'`, `[2.54, 5.08]` or a via, never a pin.
-- A one-leg automatic route joins its net's copper where cheapest, growing a tree, autorouter.md Joins and loops.
-- Compatibility form, never with a chain: `route(J1[3], Q1[1], 'V 14 L 5 16 @B.Cu XZ')`, `route(a, b, path?)`.
 
 ## Ends
 
+`route(a, b, …)`: the first end is the root; the chain runs from it toward the second end; every further end is an automatic leg that joins the growing tree where cheapest, in the order the router picks.
+
 | End | Example |
 | --- | --- |
-| pin or pad handle | `J1[3]`, `D1.A`, `J1['B4']`, `J1.pad('B4')` |
+| pin or pad handle | `J1[3]`, `D1.A`, `J1['B4']` |
 | via from `via()`, met on the arriving layer | layout.md Vias |
-| `"REF.PIN"` string | `"J1.3"` |
 | coordinate, first token a number | `"x y"`, `"x y layer"`, `[x, y, layer?]`, `{ at, layer? }` |
-| pair | array ends |
+| an open point after a pad, a stub | `route(J1[2], '5 5').Z()` |
+| a net, as the last end | `route(R2[1], VCC)` joins any copper of VCC |
+| a point of another route | `vccTrunk.end`, `vccTrunk.start`, `vccTrunk.pt(2)`, `ch2.vccTrunk.end`, see Route points |
+| pair | array ends, `route([aP, aN], [bP, bN])` |
 
-The net comes from the pads, else a via end; pads on two nets are a compile error, coordinates alone need `.net(n)`. Type a helper's end as `RouteEnd` from `@pcbjs/core`.
+- `route(NET)` routes every pad of the net as one tree from its first pad in document order, or from `.root(end)`.
+- The net comes from the pads, else a via end; pads on two nets are a compile error, coordinates alone need `.net(n)`. Type a helper's end as `RouteEnd` from `@pcbjs/core`.
+- Coordinates in ends and in the chain are in the enclosing `<g>` frame; pin handles are absolute.
 
-## Path grammar
+## The chain
 
-`L x y`, `H x`, `V y`, `X x y` automatic leg to a point, `@<layer>` or `@ <layer>` a via, `Z` or `z` straight to `b`, `XZ` or `X Z` automatic to `b`; lowercase `l`, `h`, `v`, `x` relative; mm.
-
-- A hidden `M` starts at `a`; a missing end is `XZ`. `A`, `C`, `Q`, `S`, `T` and `M` are compile errors.
-- `Z` must arrive on a layer of `b`: `@` first, or `XZ`.
-- Layer aliases apply, `@bottom` is `@B.Cu`; `U <layer>` is the old spelling.
-- Path and coordinate ends are in the enclosing `<g>` frame; pin handles are absolute.
-
-## Builder methods
-
-| Method | Default |
+| Call | Does |
 | --- | --- |
-| `.width(mm)` | class width, else `minTrackWidth` |
-| `.layer(name)`, start layer | the pad's layer, else `F.Cu` |
-| `.layers([...])`, layers for automatic legs | autorouter.md Layers |
-| `.vias(false)`, `.vias({ drill, size })` | allowed, default via |
-| `.rules({ ... })`, any autoroute parameter | the board's |
-| `.priority(n)` | 0; higher routes first |
-| `.net(net)`, `.net(P, N)` | from the pads |
-| `.lock()` | off; autorouter.md Cache and lock |
-| `.direct()` | off; the leg joins no other copper of its net |
-| `.loop()` | off; the net's loop is intended, no `net-loop` |
-| `.impedance(ohms)` | none; width from the stackup for the start layer unless `.width()` |
-| `.gap(mm)`, `.skew(mm)` | pairs only, pairs.md |
-| `.length(mm)`, `.length({ min, max, target, tolerance })` | none, length.md |
-| `.match(group, tolerance?)` | none, length.md |
-| `.neck({ width, length })` | class `neck`, else on |
-| `.corner(r)`, `.corner('none')` | class `corner`, else square; a pair rounds by its pitch |
-| `.teardrops(false)`, `.teardrops({ … })` | class `teardrops`, else the board's |
+| `.L(x, y)`, `.l(dx, dy)` | manual track to the point |
+| `.L(p)` | manual track to a waypoint, `'5 16'`, `[5, 16]` or a via |
+| `.H(x)`, `.h(dx)`, `.V(y)`, `.v(dy)` | manual track along x or y |
+| `.A(x, y, angle)`, `.a(dx, dy, angle)` | manual arc to the point, turning through `angle`, degrees or `'1.2rad'`, counter-clockwise on screen when positive |
+| `.via(layer, { drill, size })` | via at the cursor, continue on `layer`; `drill` and `size` set this via, default the route's `.vias()`, then the rules |
+| `.cross(layer)` | pairs only, a crossover, pairs.md |
+| `.X(p)` | automatic leg to a waypoint |
+| `.width(w)` | the track width from here on |
+| `.Z()` | straight manual track to the end, which finishes the chain |
+| `.X()` | automatic leg to the end, which finishes the chain |
 
-- `.corner(r)` arcs manual corners on the centre line, shrinking to fit, then a 45 degree chamfer, else square; automatic legs keep the router's.
-- Neck-down: where the route is too wide or crowds nearby pads, the pad's smaller side or `width`, at least `minTrackWidth`, for up to `length` mm, default 2; `{ length: 0 }` is off.
+- Lengths are mm or unit strings, `'10mil'`. A waypoint is on the current layer, never a pin.
+- A chain that stops short of its end finishes with an automatic leg, so `route(a, b).V(14)` and `route(a, b).V(14).X()` are one route. Nothing follows `.Z()` or `.X()`.
+- `.Z()` must arrive on a layer of the end: `.via()` first, or `.X()`.
+- `.width()` before any command is the route's width; after one it holds from there on, so a neck or a wide trunk is written where it starts.
+- A lone automatic leg, `route(a, b)` with no chain, joins its net's copper where cheapest, growing a tree, autorouter.md Joins and loops.
+- A chain from a pad that ends in the open is a compile error: give its end, or end it in `.branch()`.
+- A stub from a pad to an open point starts at the pad and declares the point as its end, `route(J1[2], '5 5').Z()`; one pad as both ends is a compile error naming it.
 
-## Teardrops
+## Branches
 
 ```tsx
-import PCB from '@pcbjs/core'
-export default <PCB name="B" teardrops={{ pads: 'tht', length: 0.5, width: 0.9 }} />
+{route(J1[2], R3[1]).width(0.4).H(9).branch(b => b(R2[1]).width(0.25).V(2).Z()).V(5).Z()}
 ```
 
-- KiCad 7's straight teardrop: `length` past the pad edge, base `width` across the pad centre; a number is a fraction of the pad's smaller side, `'0.6mm'` a length. Bare `teardrops` takes the defaults; `pads` is `'tht'`, `'smd'` or `'all'`, the default; a class `teardrops: true` takes the board's.
-- Net copper drawn after tuning, before pours; none on a track 0.9 of the pad side or wider. One breaking a clearance shrinks to 75%, 50%, else the info `teardrop-dropped`.
+| Case | Spelling |
+| --- | --- |
+| a branch from a point of the chain | `.branch(b => b(end)…)` |
+| a branch whose fork the router chooses | an extra end, `route(J1[2], R3[1], R1[1])` |
+| a manual tail joining the net anywhere | its own route ending on the net, `route(R2[1], VCC).V(-2)` |
 
-## Autoroute parameters
+- `.branch()` forks at the cursor and takes sub-chains only; each `b(end)` declares its end and is anchored at the fork. The trunk continues after the call.
+- A sub-chain takes the chain commands, `.width()`, `.current()` and `.branch()`; it starts at the fork's width and finishes like a route, with `.Z()`, `.X()` or an automatic leg.
+- A route with branches, extra ends or a net as its end takes no `.length()`, `.match()` or `.impedance()`.
 
-`<PCB autoroute={{ … }}>`, a preset, a variant target or `defineDefaultBoard`, merged by key; a route overrides with `.rules()` or the builder.
-
-| Parameter | Default | Meaning |
-| --- | --- | --- |
-| `algorithm` | `'maze'` | `'maze'`, `'straight'` that avoids nothing, or a custom `RouteFn` |
-| `pitch` | width / 2, 0.05 to 0.1 | grid step in mm |
-| `viaCost` | 5 | mm of track one via costs |
-| `layers` | the ends' layers, widened | copper the router may use, first preferred |
-| `via` | the default via | `{ drill, size }` of routed vias |
-| `clearance` | 0.02 | extra mm over the rules around obstacles and the edge |
-| `bend` | `'45'` | `'90'` forbids diagonals |
-| `prefer` | none | `{ 'F.Cu': 'h', 'B.Cu': 'v' }`; across costs 1.5 times |
-| `maxVias` | unlimited | per route |
-| `avoid` | none | soft keepouts: points kept 0.5 mm clear or `{ x, y, w, h, layer? }` |
-| `priority` | 0 | higher runs first |
-| `viaInPad` | false | per route: a via may land in an SMD pad of the net |
-| `ripup` | 12 | negotiation rounds, 0 off, autorouter.md |
-| `maxDetour` | `{ ratio: 3, floor: 10 }` | a leg's limit: the larger of `ratio` times its straight line and line plus `floor` mm; a number sets the ratio, 0 off |
-| `tune` | `{ amplitude: 1, spacing: 0.6, maxAmplitude: 3 }` | meander height, gap between runs, height limit, mm, length.md |
-
-## Net classes
+## Drawn copper
 
 ```tsx
-import PCB from '@pcbjs/core'
-const { VBUS } = nets({ VBUS: { class: 'power' } })
-export default <PCB name="B" classes={{ power: { width: 0.5, clearance: 0.25 } }} />
+{route('3 10').net(VCC).width(0.3).H(9).A(12, 13, 90).V(20)}
+{route('3 25 B.Cu').net(null).width(1).H(30)}
 ```
 
-Tag with `nets({ … })` or `bus(name, n, { class })`; define in `<PCB classes>`, a preset, a variant target or `defineDefaultBoard({ classes })`, merged by class then field.
+- A chain from a coordinate with no other end is copper drawn by hand, for copper with no pad at either end; `.net(n)` gives its net, `.net(null)` puts it on no net, layout.md No net. Copper on no net takes no automatic leg.
+- One call per stroke; a via in the chain joins strokes on two layers.
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `width` | `minTrackWidth` | route width without `.width()` |
-| `clearance` | the rules' | to other nets, the largest of rules and both classes; `{ track: 0.4 }` by kind, rules.md Overrides |
-| `impedance` | none | ohms; without `width`, the start layer's width to 0.01 mm, stackup-and-rules.md |
-| `via` | default via | `{ drill, size }` |
-| `layers` | autorouter.md | router layers |
-| `autoroute` | none | parameters over the board's |
-| `gap` | the width | pair gap, edge to edge |
-| `skew` | 0.1 | pair length difference, `pair-skew` |
-| `uncoupled` | 5 | pair uncoupled length, `pair-uncoupled` |
-| `tolerance` | 0.1 | for `.length(mm)` and `.match()` |
-| `neck` | on, 2 mm | `{ width, length }` |
-| `corner` | none, a pair its pitch | `{ radius }`, a length or `'none'` |
-| `teardrops` | the board's | `true`, an object, `false` |
-| `loops` | false | loops intended, no `net-loop` |
+## Route points
 
-- Route methods beat the class, the class the board. Start layer: `.layer()`, else the first pad's copper, F.Cu first.
-- The router keeps the class clearance, so a class route draws no `clearance` finding of its own.
-- A tag missing from the table is the ERC warning `net-class`; with no table, tags are labels.
+A route bound to a name has points: `.start` is `pt:0`, `.pt(k)` where its k-th chain call ends, `.end` where its last one ends or its end when the chain runs to it. Each is a route end and an `at:follow` near, placement.md, on the layer the route is on there.
+
+```ts
+import { circuit, route, type Ports } from '@pcbjs/core'
+import { R0603 } from '@pcbjs/lib'
+
+export const chan = circuit('chan', ({ VCC, LED }: Ports<'VCC' | 'LED'>) => {
+  const R01 = R0603('330').connect({ 1: VCC, 2: LED })
+  const vccTrunk = route('9 0').net(VCC).width(0.3).H(11.175)
+  return { R01, vccTrunk }
+})
+```
+
+- A route a circuit build binds and returns is a member of each instance, `ch2.vccTrunk`, typed like `ch2.R01`; its layout places it, `{g.vccTrunk}`, and a member route no layout places is a compile error. `{route(J1[2], ch2.vccTrunk.end)}` routes to the end of that instance's trunk.
+- The reference grammar names it `CH2/route:vccTrunk`, its points `CH2/route:vccTrunk/pt:2`, refs.md; `pcbjs inspect` and `pcbjs q` answer them.
+- A route ending on a point waits for the route it names, whatever their order in the tree; two routes that end on each other's points are a compile error.
+
+## Width and layer
+
+```tsx
+{route(J1[2], R1[1]).width(0.3)}
+{route(U1[4], J2[1]).layer('B.Cu')}
+```
+
+- `.width(mm)` sets the track width, else the net class width, else `minTrackWidth` of the rules.
+- `.current('2A')`, or `'500mA'` or amps as a number, on a route or a branch states what it carries; DRC `current-width` checks every width it declares against the IPC-2152 baseline for the thinnest copper its tracks run on, at a 10 °C rise: about 0.29 mm for 1 A and 1.1 mm for 2 A on 1 oz. Currents sum toward the root: a stretch of trunk carries its own current, or the sum of the branches that fork after it when that is more, so a trunk is never thinner than its branches need. An extra end shares the route's current. Automatic pad neck-downs are not included in this check; inspect their widths separately, since `.current()` is not a thermal validation of all resulting copper.
+- `.topology()` is reserved for bus topologies such as fly-by and star and throws until they arrive.
+- A route starts on its first pad's copper layer, else `F.Cu`; `.layer()` picks another, and the router chooses the layers of automatic legs, autorouter.md.
+- Every other method, the autoroute parameters, teardrops and net classes are in route-options.md.
 
 ## Differential pairs
 
 ```tsx
-{route([U1.pad('1'), U1.pad('3')]).V(17.2).via('B.Cu').V(18.5).via('F.Cu').X([J2[3], J2[2]]).impedance(90)}
+{route([U1[1], U1[3]], [J2[3], J2[2]]).impedance(90).V(17.2).via('B.Cu').V(18.5).via('F.Cu')}
 ```
 
-P first; the path is the centre line, offset into tracks `w + g` apart, a via pair per layer change; pairs.md, examples/highspeed.
+P first; the chain is the centre line, offset into tracks `w + g` apart, a via pair per layer change; no branches or arcs; pairs.md, examples/highspeed.

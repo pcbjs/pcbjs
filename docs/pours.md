@@ -1,7 +1,7 @@
 # Pours
 
-Copper pours: how a `<zone>` or `pour()` fills, its thermal reliefs and island removal, and stitching vias from the fill with `stitch()`.
-The `<zone>` props are in the element table of layout.md, the thermal and island rules in rules.md.
+Copper pours: how `pour()` fills, a pour on no net, thermal reliefs and island removal, and stitching vias from the fill with `stitch()`.
+Advanced. The helpers are in layout.md, the thermal and island rules in rules.md.
 
 ```tsx
 {pour(GND, 'F.Cu', rect(60, 60))}
@@ -12,7 +12,7 @@ The `<zone>` props are in the element table of layout.md, the thermal and island
 ```
 
 ```text
-pour(net, layer, d, { clearance?, priority?, minWidth?, connect?, islands? }?)   // <zone />
+pour(net | null, layer, area, { clearance?, priority?, minWidth?, connect?, islands? }?)
 ```
 
 ## Fill
@@ -20,6 +20,13 @@ pour(net, layer, d, { clearance?, priority?, minWidth?, connect?, islands? }?)  
 - The outline, inset by `edgeClearance`, less other nets' copper grown by the clearance between them, their holes grown by `holeClearance`, and keepouts that forbid pours.
 - Highest `priority` fills first and clears the later pours of other nets.
 - A min width pass then removes every neck narrower than `minWidth`.
+
+## No net
+
+`pour(null, layer, area)` fills every part of its area no other copper claims, so a board filled with copper is one call per layer, `pour(null, 'F.Cu', rect(60, 60))`.
+
+- It fills after every pour on a net, whatever its priority, so nets' pours and tracks win; two on one layer fill in board order, the later clearing the earlier.
+- It keeps the clearance from every net and from other copper on no net, takes `clearance` and `minWidth`, and keeps every island.
 
 ## Thermal reliefs
 
@@ -51,10 +58,10 @@ A fill piece that no pad or via of its net joins on its layer is dropped after t
 
 ## Stitching vias
 
-`stitch()`, or `<stitch>`, is a child of `<PCB>` placing vias of a net where its pours overlap, after they fill.
+`stitch()` is a child of `<PCB>` placing vias of a net where its pours overlap, after they fill.
 
 ```text
-stitch(net, { pitch?, layers?, padClearance?, via?, avoid?, area?, grid?, origin? }?)   // or stitch(props) with net
+stitch(net, { pitch?, layers?, padClearance?, via?, avoid?, area?, grid?, origin? }?)
 ```
 
 | Option | Default | Meaning |
@@ -70,6 +77,6 @@ stitch(net, { pitch?, layers?, padClearance?, via?, avoid?, area?, grid?, origin
 - Each via keeps DRC clearance to other nets on every layer, `holeClearance` and `minHoleToHole` to holes, `edgeClearance`, and keepouts that forbid vias.
 - Existing vias and tht pads of the net suppress lattice points within the pitch.
 - Silk refs are placed afterwards and may land on a via; vias are tented.
-- Only pours a via changes refill: other nets clear it, its own net joins solid.
+- Only pours a via changes refill, then every pour on no net: other nets clear it, its own net joins solid.
 - No via placed is the info finding `stitch-empty` with the reason. Calls place in document order, each seeing the ones before. Removed islands do not come back.
 - `pcbjs inspect <net>` lists them as route `stitch` with the count and the 95th percentile nearest-neighbour distance.

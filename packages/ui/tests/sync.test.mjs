@@ -55,3 +55,21 @@ test('a remote hover is replaced by its sender and cleared when that sender leav
   assert.equal(remoteHover(b, { board: 'B', hover: null, from: 'c1' }), b, 'another sender leaving keeps it')
   assert.equal(remoteHover(b, { board: 'B', hover: null, from: 'c2' }), null)
 })
+
+test('rejection restores authoritative selection without echo, but never rolls back a newer intent', () => {
+  const { sync, sent } = harness()
+  sync.receive({ board: 'B', selection: S })
+  sync.select('B', { ...S, refs: ['R2'], anchor: 'R2' })
+  const rejected = sent.at(-1).data
+  assert.equal(sync.reject(rejected), S)
+  sync.select('B', S)
+  assert.equal(sent.length, 1)
+  sync.select('B', rejected.selection)
+  sync.select('B', { ...S, refs: ['R3'], anchor: 'R3' })
+  assert.equal(sync.reject(rejected), null)
+  sync.receive({ board: 'B', selection: { ...S, seq: 8 } })
+  assert.equal(sync.reject(sent.at(-1).data), null)
+  sync.reset()
+  sync.select('C', { ...S, board: 'C' })
+  assert.deepEqual(sync.reject(sent.at(-1).data).refs, [])
+})

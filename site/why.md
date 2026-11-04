@@ -26,12 +26,12 @@ A common way to get some of this today is a Python script that writes or edits a
 | Routing | by hand in the GUI, or tracks computed in the script | manual tracks, automatic legs, pairs and length tuning in one `route()` chain, cached and lockable |
 | Checks | KiCad's DRC, run in the GUI or with `kicad-cli` as a separate step | DRC and ERC in every compile, findings tied to source lines |
 | Feedback loop | run the script, reload the board, look | save, and the viewer recompiles in place |
-| Schematic | a full schematic editor with symbols and sheets | a netlist in code, no drawn schematic |
-| Interactive work | push and shove routing, a mature GUI | none: the code is the interface, the viewer is for looking |
-| Maturity | decades of production use | a proof of concept |
+| Schematic | a full schematic editor with symbols and sheets | typed circuits and source-defined schematic drawings |
+| Interactive work | push and shove routing, a mature GUI | source-linked placement and trace editing in synchronized previews |
+| Maturity | decades of production use | 0.1.0, the first stable release |
 
-KiCad is the better tool for a board that needs a drawn schematic, interactive routing or a team used to its GUI. pcbjs is for boards that are generated, parametric or repetitive, for designs that live in a code review, and for an agent that writes the board as code and reads the findings. Coming from KiCad, [Coming from KiCad](/docs/kicad) says what carries over one to one, and [Importing from KiCad](/docs/import) turns a `.kicad_pcb` or a footprint into pcbjs code.
+KiCad remains a better fit for teams that depend on its full schematic editor, push-and-shove routing or existing GUI workflows. pcbjs is for boards that are generated, parametric or repetitive, for designs that live in a code review, and for an agent that writes the board as code and reads the findings. Coming from KiCad, [Coming from KiCad](/docs/kicad) says what carries over one to one, and [Importing from KiCad](/docs/import) turns a `.kicad_pcb` or a footprint into pcbjs code.
 
 ## What it is not, yet
 
-pcbjs is pre 0.1. There is no drawn schematic, no interactive or push and shove routing, and no KiCad export. Length tuning adds serpentines after routing and never reroutes to make room. [Development](/docs/development) keeps the full list of what is not there yet, and [Design](/docs/design) explains why the compiler is built the way it is.
+Version 0.1.0 supports schematic drawings and interactive source edits, but does not provide push-and-shove routing or KiCad export. Length tuning adds serpentines after routing and never reroutes to make room. [Development](/docs/development) keeps the full list of what is not there yet, and [Design](/docs/design) explains why the compiler is built the way it is.

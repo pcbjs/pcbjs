@@ -30,7 +30,7 @@ export function cliVersion(): string {
   }
 }
 
-/** The dist-tag a version is published under: beta for 0.0.1-beta.2, next for a snapshot, else latest. */
+/** The publication tag: beta, next, or latest for stable versions. */
 export function distTag(version: string): string {
   return /^\d+\.\d+\.\d+-([A-Za-z]+)/.exec(version)?.[1] ?? 'latest'
 }

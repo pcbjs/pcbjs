@@ -5,15 +5,25 @@ description: Design a PCB in pcbjs, TypeScript and JSX that compiles to Gerbers.
 
 # pcbjs basics
 
-A pcbjs board is a TSX module that default-exports `<PCB>`. Nets and parts are values; the JSX places them. One compile routes, fills pours, runs DRC and ERC and, on `build`, writes the fab set and a viewer site. This skill is the working loop. For any detail, print the topic: `npx pcbjs docs <topic>`, or `npx pcbjs docs --grep <word>` to search every topic. Do not read the whole docs folder.
+A pcbjs board is a TSX module that default-exports `<PCB>`. Nets and parts are values; the JSX places them. One compile routes, fills pours, runs DRC and ERC and, on `build`, writes the fab set and a viewer site. This skill is the working loop; the detail is in the docs, the `docs` tool or `npx pcbjs docs <topic>`, and `--grep <word>` searches every topic. Do not read the whole docs folder.
+
+## Tools first
+
+When the pcbjs MCP tools are present, use them: they talk to the session that already compiled the board, see the editor's unsaved text, and need no shell. Without them, the CLI does the same, each command in brackets below.
+
+- Before your first edit, call `session` with your task and a plan of up to five lines; update `progress` as you go. The human sees it at once and can redirect you before you spend anything.
+- A message from the human arrives at the top of a tool result, or of your turn through the hook; act on it first. It names entities as references such as `R1`, `CH2/R01/2`, `net:VCC` or a finding id: `query` or `render` them.
+- Change source with `write`, edits anchored on text you just read, or your harness's edit tool. Never overwrite an existing file with a whole-file Write: it loses the editor's unsaved text and every concurrent change.
+- Pair mode, one agent in the human's tree, is the default. Work in a git worktree only when the human asked for parallel work.
 
 ## The loop
 
 1. Edit the board.
-2. `npx pcbjs check`: compile, route, DRC, ERC and a type check, no files written. Exit code 1 means not orderable.
-3. Need a position? `npx pcbjs inspect U1`, `inspect GND`, `inspect U1.3`. Never compute rotated pad positions by hand and never read `board.json`.
-4. Need to see it? `npx pcbjs shot --select U1` writes PNGs to `.pcbjs/shots`; read them as images.
-5. When check is clean, `npx pcbjs build -q` writes `.pcbjs/fab/<board>/` with `README-fab.txt` saying `STATUS: ORDERABLE`.
+2. `check` [`npx pcbjs check`]: compile, route, DRC, ERC and a type check, no files written. Exit code 1 means not orderable.
+3. Need a position or a detail? `inspect` with `U1`, `GND`, `U1/3` [`npx pcbjs inspect U1`], `query` for one record [`npx pcbjs q R1`]. Never compute rotated pad positions by hand and never read `board.json`.
+4. Need to see it? `render` with `frame` and `highlight` [`npx pcbjs shot --select U1`, PNGs in `.pcbjs/shots`].
+5. What changed since you looked: `events` [`npx pcbjs events --since <next>`].
+6. When check is clean, `npx pcbjs build -q` writes `.pcbjs/fab/<board>/` with `README-fab.txt` saying `STATUS: ORDERABLE`.
 
 ## A new project
 
@@ -35,23 +45,23 @@ import { nets, route, pour, keepout } from '@pcbjs/core'
 import { PinHeader, R0603, LED0603, MountingHole, roundedRect, rect, circle } from '@pcbjs/lib'
 
 const { GND, VCC, LED } = nets()
-const J1 = PinHeader(2).source({ MPN: 'PEC02SAAN' }).connect(GND, VCC)
-const R1 = R0603('330').source({ MPN: 'RC0603FR-07330RL', 'MPN:LCSC': 'C23138' }).connect(VCC, LED)
+const J1 = PinHeader(2)().source({ MPN: 'PEC02SAAN' }).connect({ 1: GND, 2: VCC })
+const R1 = R0603('330').source({ MPN: 'RC0603FR-07330RL', 'MPN:LCSC': 'C23138' }).connect({ 1: VCC, 2: LED })
 const D1 = LED0603('green').source({ MPN: 'LTST-C190GKT' }).connect({ A: LED, K: GND })
-const Hole = MountingHole(2.2)
+const H1 = MountingHole(2.2)()
 
 export default (
-  <PCB name="Hello" revision="0.1.0">
+  <PCB name="Hello" rev="0.1.0">
     <path layer="Edge.Cuts" d={roundedRect(24, 15, 1)} />
     <J1 at="3 4.96" />
     <R1 at="9 7.5" />
     <D1 at="15 7.5 180deg" />
-    <Hole ref="H1" at="20.5 3.5" />
-    {route(J1[2]).Z(R1[1]).width(0.3)}
-    {route(R1[2]).Z(D1.A).width(0.3)}
-    {route(D1.K).X(J1[1]).width(0.3)}
+    <H1 at="20.5 3.5" />
+    {route(J1[2], R1[1]).width(0.3).Z()}
+    {route(R1[2], D1.A).width(0.3).Z()}
+    {route(D1.K, J1[1]).width(0.3)}
     {pour(GND, 'B.Cu', rect(24, 15))}
-    {keepout('all', circle(5, 20.5, 3.5))}
+    {keepout(circle(5, 20.5, 3.5))}
     <text layer="F.SilkS" at="10 12" size={1}>Hello</text>
   </PCB>
 )
@@ -61,26 +71,22 @@ Order in a board file: a header comment with the frame, imports with the fab pre
 
 ## Parts and nets
 
-- `nets()` gives one `Net` per key read. `nets({ VBUS: { class: 'power' } })` tags a net class; `bus('D', 8)` gives D0 to D7.
-- A footprint factory with a value makes a part; `.connect()` takes nets in pin order or an object keyed by pin name or pad number. It throws at the call on a wrong pin, so a bad connection fails before any layout.
-- `NC` marks a pin open on purpose; any other open pin is the ERC warning `unconnected-pin`.
-- A part bound to a module-level const named like a ref, `const R1 = …`, is R1. Parts made in a function or `.map` need `.ref('D3')` to keep a fixed ref.
-- `U1[7]` is the pad numbered 7, never the seventh pin. `D1.A` is the pin named A. `J1['B4']` or `J1.pad('B4')` picks one pad of a pin with several.
-- Declare `defineFootprint` pins inline or `as const`, or the pin names lose their types and `U1.PA9` fails to type-check.
-- `pcbjs docs schematic` has handles and typing; `pcbjs docs stdlib` every footprint family.
+- `.connect({ … })` takes the nets by pin name and throws at the call on a wrong pin, so a bad connection fails before any layout. `NC` marks a pin open on purpose.
+- The constant a part is bound to is its ref, `const R1 = …` is R1; nothing is numbered. A part made in `.map` takes its `ref` from the loop data.
+- `U1[7]` is the pad numbered 7, never the seventh pin; `D1.A` is the pin named A.
+- Declare `defineFootprint` pins inline or `as const`, or `U1.PA9` fails to type-check.
+- Topics `schematic`, `footprints` and `stdlib` have the rest.
 
 ## Routes
 
-`route(a)` starts a chain at a pin or pad handle, a via or a coordinate. `.H(x)`, `.V(y)`, `.L(x, y)` and lowercase relative forms draw manual track; `.via('B.Cu')` changes layer; `.Z(b)` ends with a straight track, `.X(b)` with an automatic leg the autorouter lays after everything else is placed. Then `.width()`, `.layers([...])`, `.priority(n)`, `.lock()`, `.length(mm)`, `.match('GROUP')`, `.impedance(ohms)`. Array ends make a differential pair: `route([J1.DP, J1.DN]).X([U1.DP, U1.DN]).impedance(90)`.
+`route(a, b)` with no chain is left to the autorouter; a chain such as `.H(12).V(5)` draws it your way and `.Z()` finishes it straight. Topic `routing` has the chain, `route-options`, `autorouter`, `pairs` and `length` the rest.
 
-- Lock a route you are happy with so later edits cannot move it.
 - A `route-failed` finding names the nearest obstacles. Fix it cheapest first: a waypoint `.X('12 8')`, more layers, a higher `priority`, move the obstacle, or draw part of it by hand.
 - Use `keepout()` for copper that must stay out; the router's `avoid` is only a cost.
-- `pcbjs docs routing`, `autorouter`, `pairs` and `length` have the rest.
 
 ## Repeated blocks, pours and stitching
 
-references/board-patterns.md has complete, compiling examples of: a channel row made by `.map` and named with `group()`, so findings say `R3 (CH3/R)`; pours on both layers with `stitch()` vias; a net class table; a length-matched group; and a board split into `pcb.sch.ts` and `pcb.tsx`.
+references/board-patterns.md has complete, compiling examples of: a channel row made by `.map`, refs from the loop data and each block in a `<g name>`, so findings say `R3 (CH3/R3)`; pours on both layers with `stitch()` vias; a net class table; a length-matched group; and a board split into `pcb.sch.ts` and `pcb.tsx`.
 
 ## Reading findings
 
@@ -92,20 +98,28 @@ Severity, rule, layer, position in board mm, refs, route id, the source line to 
 
 ## Cache and cold checks
 
-`.pcbjs/routes/<board>.json` caches every automatic leg. A warm check of an unchanged board takes every leg from it. After a large edit, judge the board by a cold check: delete `.pcbjs/routes` and run `pcbjs check` again, since one rerouted leg can move others through negotiation.
+`.pcbjs/cache` keeps every stage's output and, in `route/<board>.json`, every automatic leg. A warm check of an unchanged board reads its result without compiling, and an edit reroutes only the legs it touches. After a large edit, judge the board by a cold check, `pcbjs check --fresh=all`, since one rerouted leg can move others through negotiation.
+
+## Intent kept as tests
+
+When asked to keep a property of the design, such as a capacitor near its pin, a part on one side or a net clean, write it as a board test, never only a comment: a `*.test.ts` beside the board that reads `board()` of `@pcbjs/cli/test` and asserts with the board API. `npx pcbjs test` runs every one, `npx pcbjs check --test` after the checks, so the next edit that breaks it fails. `npx pcbjs test --update` writes goldens of the fab set, which then fail on any change to the copper.
+
+```ts
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { board } from '@pcbjs/cli/test'
+
+test('C1 within 2 mm of U1 pin 4', () => {
+  assert.ok(board().distance('C1', 'U1/4').d <= 2)
+})
+```
+
+`script` [`npx pcbjs script <code>`] runs the same API once, for a question no query answers.
+
+## Report a missing detail
+
+When a finding made you compute something it should have said, such as a distance, a pad position or the item in the way, say which detail you computed in your answer: that message is a bug to fix in pcbjs.
 
 ## Topics
 
-| Need | `pcbjs docs` topic |
-| --- | --- |
-| install, project files, config | `quickstart` |
-| `<PCB>` props, layers, stackup, defaults | `board` |
-| nets, parts, handles, `defineFootprint` | `schematic`, `circuits` |
-| elements, pads, vias, keepouts, text | `layout` |
-| pours, reliefs, islands, `stitch()` | `pours` |
-| routes, autorouter, pairs, length | `routing`, `autorouter`, `pairs`, `length` |
-| rule values and overrides | `rules`, `findings` |
-| presets, variants, fab set | `fab`, `fab-set` |
-| commands and flags | `cli` |
-| 3D and part models | `3d`, `models` |
-| another board as a mechanical reference | `references` |
+`docs` with no arguments [`npx pcbjs docs`] lists every topic with its summary; start with `basics`, and `advanced` lists the rest by need. `check` reads the check output, `findings` lists every rule, `mcp` the tools.

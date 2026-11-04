@@ -8,9 +8,11 @@
     "boards": "node scripts/boards.mjs",
     "dev": "node scripts/boards.mjs && vitepress dev .",
     "build": "node scripts/boards.mjs && vitepress build .",
-    "preview": "vitepress preview ."
+    "preview": "vitepress preview .",
+    "test": "node --import ../scripts/test-watchdog.mjs --test \"tests/**/*.test.mjs\""
   },
   "devDependencies": {
+    "@vscode/codicons": "^0.0.46-24",
     "@zhangyx1998/svg-loader": "^0.0.3",
     "shiki": "^2.5.0",
     "vitepress": "^1.6.4"

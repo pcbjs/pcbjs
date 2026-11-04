@@ -30,7 +30,7 @@ const board = (o = {}) =>
     route(R1[1], R2[1]).width(o.width ?? 0.25),
     pour(GND, 'B.Cu', 'M0 0 H30 V20 H0 Z'),
   )
-const checker = version => ({ name: 'probe', version, checks: [{ rule: 'probe.none', reads: ['parts'], run: () => [] }] })
+const checker = version => ({ name: 'probe', version, cache: true, checks: [{ rule: 'probe.none', reads: ['parts'], run: () => [] }] })
 
 /** One compile as a fresh process makes it: nothing kept in memory, everything read from `dir`. */
 function compile(dir, o = {}) {
@@ -235,6 +235,42 @@ test('stage cache: the stages a cancel lets finish are stored and the next compi
   stop = false
   const next = compile(dir, { plugins: [stopper] })
   assert.deepEqual(outcome(next), { ...all('hit'), finish: 'miss', checks: 'miss', exports: 'miss' })
+})
+
+test('configured plugins key closure inputs; plugins without an explicit cache contract rerun', () => {
+  fresh()
+  let calls = 0
+  const plugin = (limit, keyed) => ({
+    name: 'limit',
+    version: '1',
+    ...(keyed ? { cacheKey: JSON.stringify({ limit }) } : {}),
+    checks: [
+      {
+        rule: 'limit.width',
+        reads: ['outline'],
+        run: () => {
+          calls++
+          return limit < 30 ? [{ rule: 'limit.width', severity: 'warning', message: `limit ${limit}` }] : []
+        },
+      },
+    ],
+  })
+  const run = (limit, keyed) => compile(dir, { plugins: [plugin(limit, keyed)] })
+  run(80, true)
+  run(80, true)
+  assert.equal(calls, 1, 'same configuration hits')
+  const warm = run(20, true)
+  assert.equal(calls, 2, 'changed configuration misses')
+  assert.ok(warm.board.drc.some(f => f.rule === 'limit.width'))
+  const previous = dir
+  fresh()
+  assert.equal(canonical(warm.board), canonical(run(20, true).board), 'warm and cold outputs agree')
+  rmSync(previous, { recursive: true, force: true })
+  calls = 0
+  run(80, false)
+  run(20, false)
+  assert.equal(calls, 2, 'unkeyed closures are uncached by default')
+  assert.equal(index(dir).complete, false, 'startup cannot bypass uncached plugin execution')
 })
 
 test('stage cache: a model file that appears, changes or goes misses the model check and the exports, and the index lists it', () => {

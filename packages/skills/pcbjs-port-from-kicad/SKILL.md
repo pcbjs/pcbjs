@@ -5,16 +5,16 @@ description: Port a KiCad board or footprint to pcbjs and prove the port matches
 
 # Port a KiCad board to pcbjs
 
-The importer writes a pcbjs project that compiles and matches the KiCad board pad for pad; the work is then to check that claim three ways and to fold the transcript back into intent. Keep the KiCad files untouched beside the port: they stay the source of truth until every check passes.
+The importer writes a pcbjs project that compiles and matches the KiCad board pad for pad; the work is then to check that claim three ways and to fold the transcript back into intent. Keep the KiCad files untouched beside the port: they stay the source of truth until every check passes. With the pcbjs MCP tools present, run the checks with `check`, `inspect` and `render` rather than the CLI; after the import, change its files by edits, never by a whole-file Write.
 
 ## Steps
 
 1. **Branch.** Work on a branch or worktree; leave the KiCad flow and its outputs as they are.
 2. **Import.** `npx pcbjs import board path/to/board.kicad_pcb -o pcb/board.tsx`. It reads the `.kicad_pro`, `.kicad_dru` and `.kicad_sch` of the same name, writes `pcb.config.ts` and `tsconfig.json` at the project root, and the board's files beside `-o`. Commit the raw output as it is, so every later edit is a diff against it.
-3. **Check 1, DRC and ERC.** `npx pcbjs check --fab`, with `.pcbjs/routes` deleted and again warm. `--fab` reads the Gerbers back. Decide every finding: a KiCad rule the importer could not map, a pair where KiCad lowered one side only, or a check KiCad lacks such as silk width on lines.
+3. **Check 1, DRC and ERC.** `npx pcbjs check --fab --fresh=all`, then again warm. `--fab` reads the Gerbers back. Decide every finding: a KiCad rule the importer could not map, a pair where KiCad lowered one side only, or a check KiCad lacks such as silk width on lines.
 4. **Check 2, netlist and copper.** Every KiCad pad at the same board position with the same net, size and drill; then tracks and vias. references/netcheck.md has the script.
 5. **Check 3, Gerbers.** Both fab sets rendered on one frame, layer by layer. references/gerbers.md has the method and the expected differences.
-6. **Refine.** Run checks 1 and 2 after every step: pin names on the footprints you connect by name, `kicadFootprint('Lib:Name')` for footprints that match a library you have, standard library families where they fit, routes you want redone as `.X()` legs and the rest `.lock()`ed, the fab preset in place of the imported stackup and rules.
+6. **Refine.** Run checks 1 and 2 after every step: pin names on the footprints you connect by name, `kicadFootprint('Lib:Name')` for footprints that match a library you have, standard library families where they fit, routes you want redone as `.X()` legs, frozen with `pcbjs patch hold` once they route as wanted, the fab preset in place of the imported stackup and rules.
 7. **Write it up.** A table per check with the result, each remaining difference with its cause and whether it is acceptable, and the time it took.
 
 ## The mapping

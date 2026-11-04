@@ -174,7 +174,9 @@ const line = (text, re) =>
     ?.trim()
 
 test('trace primitive case conversions preserve world endpoints and layer changes update the initial route stage', { timeout: 120000 }, async () => {
-  const root = project(), s = await serve(root), file = join(root, 'pcb.tsx')
+  const root = project(),
+    s = await serve(root),
+    file = join(root, 'pcb.tsx')
   try {
     const c = await client(s.info, 'editor', root)
     c.type(file, readFileSync(file, 'utf8'))
@@ -198,12 +200,18 @@ test('trace primitive case conversions preserve world endpoints and layer change
     await assert.rejects(drag(c, begin, { command: 'eval' }), /cannot be converted/)
     assert.equal(c.docs.get(file), start)
     c.close()
-  } finally { await s.stop() }
+  } finally {
+    await s.stop()
+  }
 })
 
 test('segment deletion and insertion preserve downstream relative endpoints through a rotated frame and via boundary', { timeout: 120000 }, async () => {
-  const root = project(), file = join(root, 'pcb.tsx')
-  const initial = BOARD.replace("    {route(TP1[1], TP2[1]).width(0.3).V(14).H(20).X()}", "    <g at=\"10 20 90\">{route('0 0').net(V).width(0.3).h(5).via('B.Cu').width(0.4).v(4).l(3, 2)}</g>")
+  const root = project(),
+    file = join(root, 'pcb.tsx')
+  const initial = BOARD.replace(
+    '    {route(TP1[1], TP2[1]).width(0.3).V(14).H(20).X()}',
+    "    <g at=\"10 20 90\">{route('0 0').net(V).width(0.3).h(5).via('B.Cu').width(0.4).v(4).l(3, 2)}</g>",
+  )
   writeFileSync(file, initial)
   const s = await serve(root)
   try {
@@ -242,7 +250,9 @@ test('segment deletion and insertion preserve downstream relative endpoints thro
     await c.request('session/check')
     assert.deepEqual((await points()).slice(-2), absoluteBefore.slice(-2), 'absolute axis endpoint is retained after deleting its orthogonal predecessor')
     c.close()
-  } finally { await s.stop() }
+  } finally {
+    await s.stop()
+  }
 })
 
 test(
@@ -601,7 +611,10 @@ test('a nested element two pairs share: refused on the board, written in the iso
 // ---- isolation: every edit writes the definition, all instances follow ----
 
 const LAYOUT = 'lib/led-channel.tsx'
-const layoutLine = needle => readFileSync(join(REPO, 'examples/demo', LAYOUT), 'utf8').split('\n').findIndex(line => line.includes(needle)) + 1
+const layoutLine = needle =>
+  readFileSync(join(REPO, 'examples/demo', LAYOUT), 'utf8')
+    .split('\n')
+    .findIndex(line => line.includes(needle)) + 1
 const x = async (c, ref) => (await c.request('session/q', { reference: ref })).value.record.at
 
 test('in isolation of CH1 a drag and a turn of R1 write <g.R at> in the layout, no own placement, and the three channels follow', { timeout: 180000 }, async () => {
@@ -720,7 +733,13 @@ test('in isolation a part with an own placement in its instance says so and the 
 test('a named group rotation writes a pose about its translated internal grid origin', { timeout: 180000 }, async () => {
   const root = project()
   const file = join(root, 'pcb.tsx')
-  writeFileSync(file, BOARD.replace("const G = defineGrid('g', { pitch: 2.54 })", "const G = defineGrid('g', { pitch: 2.54, origin: '2 3' })").replace('<g grid={G} at="0 20">', '<g name="Group" grid={G} at="10 20 0">'))
+  writeFileSync(
+    file,
+    BOARD.replace("const G = defineGrid('g', { pitch: 2.54 })", "const G = defineGrid('g', { pitch: 2.54, origin: '2 3' })").replace(
+      '<g grid={G} at="0 20">',
+      '<g name="Group" grid={G} at="10 20 0">',
+    ),
+  )
   const s = await serve(root)
   try {
     const cli = await client(s.info, 'cli', root)
@@ -736,14 +755,31 @@ test('a named group rotation writes a pose about its translated internal grid or
 })
 
 test('library layout edits shared placement under an overridden instance without changing its own placement', { timeout: 180000 }, async () => {
-  const root = blinky(), board = join(root, 'blinky.pcb.tsx'), layout = join(root, LAYOUT)
+  const root = blinky(),
+    board = join(root, 'blinky.pcb.tsx'),
+    layout = join(root, LAYOUT)
   writeFileSync(board, readFileSync(board, 'utf8').replace('<LedChannelRow g={CH1} at="16 5" label="LED1" />', OWN))
   const originalBoard = readFileSync(board, 'utf8')
   const s = await serve(root)
   try {
     const c = await client(s.info, 'cli', root)
     await c.request('session/check')
-    await c.request('session/select', { board: 'Blinky', selection: { board: 'Blinky', target: null, snapshot: '', refs: ['R1'], anchor: 'R1', level: 'CH1', isolate: { ref: 'CH1', context: 'CH1', instances: ['CH1', 'CH2', 'CH3'], preview: false, mode: 'library' }, finding: null, by: 'viewer', client: null, seq: 0 } })
+    await c.request('session/select', {
+      board: 'Blinky',
+      selection: {
+        board: 'Blinky',
+        target: null,
+        snapshot: '',
+        refs: ['R1'],
+        anchor: 'R1',
+        level: 'CH1',
+        isolate: { ref: 'CH1', context: 'CH1', instances: ['CH1', 'CH2', 'CH3'], preview: false, mode: 'library' },
+        finding: null,
+        by: 'viewer',
+        client: null,
+        seq: 0,
+      },
+    })
     const before = await c.request('session/layout', { board: 'Blinky', target: null, ref: 'CH1' })
     const at = before.footprints.find(f => f.ref === 'R1').at
     const moved = await drag(c, { board: 'Blinky', tool: 'move', refs: ['R1'], anchor: 'R1', isolate: 'CH1' }, { delta: [2, 0] })
@@ -758,12 +794,14 @@ test('library layout edits shared placement under an overridden instance without
     assert.equal(readFileSync(board, 'utf8'), originalBoard)
     assert.match(readFileSync(layout, 'utf8'), /<g.R at="-2mm 0 90" \/>/)
     c.close()
-  } finally { await s.stop() }
+  } finally {
+    await s.stop()
+  }
 })
 
-
 test('placement grid edits persist through the editor without moving parts or named group contents', { timeout: 180000 }, async () => {
-  const root = project(), file = join(root, 'pcb.tsx')
+  const root = project(),
+    file = join(root, 'pcb.tsx')
   writeFileSync(file, BOARD.replace('<g grid={G}', '<g name="Bank" grid={G}'))
   const s = await serve(root)
   try {
@@ -779,19 +817,26 @@ test('placement grid edits persist through the editor without moving parts or na
     const after = await meta()
     assert.deepEqual(after.edit.find(n => n.ref === 'TP3').snap, { pitch: 0.25 })
     assert.deepEqual(after.edit.find(n => n.ref === 'Bank').snap, { pitch: 0.5 })
-    assert.deepEqual(after.footprints.map(f => [f.ref, f.at, f.rot]), before.footprints.map(f => [f.ref, f.at, f.rot]))
+    assert.deepEqual(
+      after.footprints.map(f => [f.ref, f.at, f.rot]),
+      before.footprints.map(f => [f.ref, f.at, f.rot]),
+    )
     assert.equal(after.grids.find(g => g.name === 'g').pitch, 2.54)
     assert.equal(readFileSync(file, 'utf8').includes('snap:'), false, 'unsaved editor ownership is preserved')
     const { txn } = await ed.request('session/edit/begin', { board: 'Edit', tool: 'move', refs: ['TP1'], anchor: 'TP1' })
     await assert.rejects(ed.request('session/edit/update', { txn, grid: 0 }), /positive/)
     await ed.request('session/edit/cancel', { txn })
     ed.close()
-  } finally { await s.stop() }
+  } finally {
+    await s.stop()
+  }
 })
 
 test('placement grid ownership distinguishes an instance part, its library and the layout component', { timeout: 180000 }, async () => {
-  const root = blinky(), s = await serve(root)
-  const file = join(root, 'blinky.pcb.tsx'), layout = join(root, 'lib/led-channel.tsx')
+  const root = blinky(),
+    s = await serve(root)
+  const file = join(root, 'blinky.pcb.tsx'),
+    layout = join(root, 'lib/led-channel.tsx')
   try {
     const c = await client(s.info, 'cli', root)
     const meta = async () => (await c.request('session/facets', { entry: file, facets: ['meta'] })).facets[0].data
@@ -807,11 +852,38 @@ test('placement grid ownership distinguishes an instance part, its library and t
     assert.deepEqual(after.edit.find(n => n.ref === 'R1').snap, { pitch: 0.25 })
     assert.deepEqual(after.edit.find(n => n.ref === 'R2').snap, { pitch: 0.5 })
     assert.deepEqual(after.edit.find(n => n.ref === 'R3').snap, { pitch: 0.5 })
-    assert.deepEqual(after.footprints.map(f => [f.ref, f.at, f.rot]), before.footprints.map(f => [f.ref, f.at, f.rot]))
+    assert.deepEqual(
+      after.footprints.map(f => [f.ref, f.at, f.rot]),
+      before.footprints.map(f => [f.ref, f.at, f.rot]),
+    )
     await c.request('session/edit/undo')
     assert.equal((await meta()).edit.find(n => n.ref === 'CH3').snap, undefined)
     await c.request('session/edit/redo')
     assert.deepEqual((await meta()).edit.find(n => n.ref === 'CH3').snap, { pitch: 0.1 })
     c.close()
-  } finally { await s.stop() }
+  } finally {
+    await s.stop()
+  }
+})
+
+test('one preview gesture spanning source files is refused before either file changes', { timeout: 120000 }, async () => {
+  const root = project(),
+    file = join(root, 'pcb.tsx'),
+    other = join(root, 'second.tsx')
+  const original = BOARD.replace('const TP2 =', 'export const TP2 =').replace('<TP2 at={`${x} 10`} />', '<Second />')
+  writeFileSync(file, "import { Second } from './second'\n" + original)
+  writeFileSync(other, 'import { TP2 } from \'./pcb\'\nexport function Second() { return <TP2 at="30 10" /> }\n')
+  const before = [readFileSync(file, 'utf8'), readFileSync(other, 'utf8')]
+  const s = await serve(root)
+  const c = await client(s.info, 'cli', root)
+  try {
+    const { plan, done } = await drag(c, { tool: 'move', refs: ['TP1', 'TP2'], anchor: 'TP1' }, { delta: [1, 2] })
+    assert.equal(new Set(plan.files.map(f => f.file)).size, 2)
+    assert.match(done.error, /only one source document/)
+    assert.deepEqual(done.written, [])
+    assert.deepEqual([readFileSync(file, 'utf8'), readFileSync(other, 'utf8')], before)
+  } finally {
+    c.close()
+    await s.stop()
+  }
 })

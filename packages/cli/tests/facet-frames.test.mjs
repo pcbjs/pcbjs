@@ -34,12 +34,16 @@ test('one encoding, every connection its own seq', () => {
   assert.deepEqual(b.frames()[1], { seq: 2, event: 'pcbjs:facet', data: facet })
 })
 
-test('a held facet a later run keeps carries that run in its frame', () => {
+test('cached reconciliation retains current facets without resending unchanged content', () => {
   const store = facetStore()
   store.put(facet)
   const site = { name: 'B', layers: [], items: [] }
-  store.reconcile({ site, hashes: { layers: 'h1' } }, 7)
-  const [held] = store.lacking('B', null, null, {}, true)
+  const emitted = store.reconcile({ site, hashes: { layers: 'h1' } }, 7)
+  assert.deepEqual(emitted, [], 'a successful cached compile need not stream a new facet')
+  const observing = { board: 'B', target: null, facets: ['layers'] }
+  assert.deepEqual(store.lacking('B', null, observing, { layers: 'h1' }, false), [], 'the current viewer retains matching content')
+  const [held] = store.lacking('B', null, observing, {}, false)
+  assert.deepEqual(held.data, facet.data, 'a late viewer receives the retained geometry')
   assert.equal(held.run, 7)
   assert.equal(JSON.parse('{' + facetFrame(held).tail).data.run, 7)
   assert.equal(facet.run, 3, 'the message first encoded is never changed')

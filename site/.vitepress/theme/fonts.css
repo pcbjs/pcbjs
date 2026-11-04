@@ -1,0 +1,15 @@
+/* Inter as the default theme loads it, its Latin files only: the site is English, and each other script's files cost the artifact half a megabyte */
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../../../node_modules/vitepress/dist/client/theme-default/fonts/inter-roman-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: Inter;
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../../../node_modules/vitepress/dist/client/theme-default/fonts/inter-italic-latin.woff2") format("woff2");
+}

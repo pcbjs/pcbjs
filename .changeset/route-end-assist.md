@@ -1,0 +1,8 @@
+---
+'@pcbjs/lsp': patch
+'@pcbjs/cli': patch
+'@pcbjs/ui': patch
+'@pcbjs/viewer': patch
+---
+
+The route end assist: with the editor cursor in `route(|)`, `route(A, |)` or the ends list `route(A, B, |)`, the assist context names the ends the netlist leaves open there, each with its handle, number, name, net and position. After a first end they are the pads and bound route points of its net not yet joined to it by copper, such as `C1[1]`, `vccTrunk.end` or `ch2.vccTrunk.pt(2)`, never another net; in the first slot, every terminal with an open ratsnest line. The language server derives them from the ratsnest and the routed copper, and an end the router could not reach for a layer reason stays listed. The 2D and 3D views label each with its pin number, name and net and fade the rest of the board; the ratsnest lines of the first end's net stay lit and the others dim, and the chip reads `4 open ends on VCC`. Hovering one shows its handle, and a click fills the slot through `session/edit` with the tool `assist` and `end`, moving the cursor on, a later click adding another end with a comma. The language server completes the same slot with the same set and labels, and the item in focus, which the editor resolves, lights in every view as a hover does through `pcbjs:assist:focus`, following the arrow keys and clearing when the cursor leaves the slot or a second after the item is accepted. Each handle names its part or instance through the identifier in scope at the cursor that holds it, which the language server finds through the TypeScript service, `ch2.R[1]` for `const ch2 = ledChannel(ports, 'CH2')`, else its own name when that is in scope; an end nothing in scope reaches is left out, and the chip says `CH3 is not in scope here`.

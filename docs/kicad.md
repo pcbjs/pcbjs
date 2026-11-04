@@ -1,15 +1,14 @@
 # Coming from KiCad
 
 What carries over from KiCad one to one and what does not: the frame, the back side, refs, text, pads in the Gerbers, models and silk.
-Read it before porting a KiCad board or footprint; import.md has the importer.
+Advanced. Read it before porting a KiCad board or footprint; import.md has the importer.
 
 ```tsx
 import { JST_PH, MountingHole } from '@pcbjs/lib'
 
-const J2 = JST_PH(6, 'side', { drill: 0.8 }).ref('J_PH')   // keep KiCad's ref
-const Hole = MountingHole(3.2)
-// KiCad (layer "B.Cu") (at 9 -5 -90) is  <J2 at="9 -5 90deg" side="B" />
-// a plain footprint takes ref where placed: <Hole ref="H1" at="3.5 3.5" />
+const J_PH = JST_PH(6, 'side', { drill: 0.8 })()   // the constant's name is KiCad's ref
+const H1 = MountingHole(3.2)()
+// KiCad (layer "B.Cu") (at 9 -5 -90) is  <J_PH at="9 -5 90deg" side="B" />
 ```
 
 ## The frame
@@ -32,7 +31,7 @@ Back text follows the part and reads mirrored from the front in both.
 
 ## Refs
 
-Parts are numbered by prefix at compile; `.ref()` pins one: letters, digits and underscores from a letter, `J_HR`.
+A part's ref is the name of its constant, KiCad's ref as it is, `J_HR`; a part made in a loop takes `{ ref }`. Letters, digits and underscores from a letter.
 
 ## Text
 
@@ -52,7 +51,7 @@ Parts are numbered by prefix at compile; `.ref()` pins one: letters, digits and 
 ## Models
 
 - `(offset (xyz 10 0 0)) (scale (xyz -1 1 1)) (rotate (xyz 0 0 0))` is `model: { file, offset: [10, 0, 0], scale: [-1, 1, 1], rotate: [0, 0, 0] }`, same order.
-- `kicadModel('${KICAD10_3DMODEL_DIR}/…')` of `@pcbjs/kicad` resolves that path, or `KICAD9` or `KICAD8`, to the installed `3dmodels`, as an import writes it. `pcbjs model add` copies the file into `models/`, then relative to the footprint's file, `../models/...` from `lib/footprints.tsx`.
+- A KiCad file's `${KICAD10_3DMODEL_DIR}/<Lib>.3dshapes/<Name>.wrl`, or `KICAD9` or `KICAD8`, is `kicad:<Lib>.3dshapes/<Name>.step` in code, as an import writes it: the installed `3dmodels`, else fetched, 3d.md. `pcbjs model add` copies the file into `models/`, then relative to the footprint's file, `../models/...` from `lib/footprints.tsx`.
 - `${KIPRJMOD}` is the project root: the folder of pcb.config.ts for `kicadFootprint`, of the `.kicad_pcb` in an import. Any other relative path, a `kicadFootprint` `model` option included, is relative to the file that writes it.
 - A KiCad model fits a stdlib part untransformed where origins agree: passives, `PinHeader`, `USBC`; centred JST needs the offset.
 
@@ -60,7 +59,7 @@ Parts are numbered by prefix at compile; `.ref()` pins one: letters, digits and 
 
 - Silk is cleared from mask openings in the Gerbers, as `--subtract-soldermask`, and `silk-over-pad` warns per stroke. Stdlib silk is already broken around pads.
 - Every silk stroke is checked against `silkMinWidth`, KiCad checks only text, so the importer sets it to the thinnest silk drawn.
-- KiCad's NoSilkScreen footprint is `silk: 'none'`, `JST_PH(6, 'side', { silk: 'none' })`; a side entry's default leaves the mating face open.
+- KiCad's NoSilkScreen footprint is `silk: 'none'`, `JST_PH(6, 'side', { silk: 'none' })`, a footprint factory as every generator; a side entry's default leaves the mating face open.
 
 ## Gerbers against KiCad's
 

@@ -17,10 +17,12 @@ function fixture(nested = false) {
   const viewers = runtimes.map(rt => ({
     observe: { scope: rt.scope.slug, board: 'Same', target: null, facets: [] },
     got: [],
-    event(event, data) { this.got.push({ event, ...data }) },
+    event(event, data) {
+      this.got.push({ event, ...data })
+    },
     by: () => null,
   }))
-  const runtimeOfClient = c => runtimes.find(rt => c.observe ? rt.scope.slug === c.observe.scope : rt.root === c.hello?.project)
+  const runtimeOfClient = c => runtimes.find(rt => (c.observe ? rt.scope.slug === c.observe.scope : rt.root === c.hello?.project))
   const viewersOf = (root, board) => viewers.filter(c => runtimeOfClient(c)?.root === root && (!board || c.observe.board === board))
   const h = {
     shared: {},
@@ -34,6 +36,7 @@ function fixture(nested = false) {
     sendTo: (root, event, data, board) => viewersOf(root, board).forEach(c => c.event(event, data)),
     payload: () => ({ boards: [] }),
     focusFor: () => null,
+    lsp: () => null,
     beatTo() {},
     demand() {},
   }
@@ -45,7 +48,8 @@ function fixture(nested = false) {
 
 test('assist, completion focus, grid and hover stay in their project with duplicate board names', () => {
   const { roots, viewers, tools, context, clear } = fixture()
-  const a = context(0), b = context(1)
+  const a = context(0),
+    b = context(1)
   tools.assist(a.file, [a])
   assert.equal(viewers[0].got[0].assist.file, a.file)
   assert.deepEqual(viewers[1].got, [])
@@ -55,11 +59,17 @@ test('assist, completion focus, grid and hover stay in their project with duplic
   tools.endFocus(a.file, [{ project: roots[0], board: 'Same', handle: 'TP1[1]' }])
   tools.grid(roots[0], 'Same', 'A')
   tools.views['session/hover']({ board: 'Same', hover: { ref: 'TP1' } }, viewers[0])
-  assert.deepEqual(viewers[0].got.map(m => m.event), ['pcbjs:assist:focus', 'pcbjs:grid'])
+  assert.deepEqual(
+    viewers[0].got.map(m => m.event),
+    ['pcbjs:assist:focus', 'pcbjs:grid'],
+  )
   assert.deepEqual(viewers[1].got, [])
   clear()
   tools.close(a.file)
-  assert.deepEqual(viewers[0].got, [{ event: 'pcbjs:assist', board: 'Same', assist: null }, { event: 'pcbjs:assist:focus', board: 'Same', handle: null }])
+  assert.deepEqual(viewers[0].got, [
+    { event: 'pcbjs:assist', board: 'Same', assist: null },
+    { event: 'pcbjs:assist:focus', board: 'Same', handle: null },
+  ])
   assert.deepEqual(viewers[1].got, [])
   delete viewers[1].observe
   tools.views['session/observe']({ board: 'Same', scope: 'beta', facets: [] }, viewers[1])
@@ -72,18 +82,26 @@ test('an observe switches projects even when the board name stays the same, clea
   tools.assist(a.file, [a])
   clear()
   tools.views['session/observe']({ board: 'Same', scope: 'beta', facets: [] }, viewers[0])
-  assert.deepEqual(viewers[0].got.filter(m => ['pcbjs:assist', 'pcbjs:assist:focus', 'pcbjs:grid'].includes(m.event)), [
-    { event: 'pcbjs:assist', board: 'Same', assist: null },
-    { event: 'pcbjs:assist:focus', board: 'Same', handle: null },
-    { event: 'pcbjs:grid', board: 'Same', grid: null },
-  ])
+  assert.deepEqual(
+    viewers[0].got.filter(m => ['pcbjs:assist', 'pcbjs:assist:focus', 'pcbjs:grid'].includes(m.event)),
+    [
+      { event: 'pcbjs:assist', board: 'Same', assist: null },
+      { event: 'pcbjs:assist:focus', board: 'Same', handle: null },
+      { event: 'pcbjs:grid', board: 'Same', grid: null },
+    ],
+  )
 })
 
 test('shared-file assist cleanup preserves the other project and a dropped runtime loses its tools', async () => {
   const { roots, viewers, tools, context, clear } = fixture()
-  const file = '/shared/lib.tsx', a = context(0, file), b = context(1, file)
+  const file = '/shared/lib.tsx',
+    a = context(0, file),
+    b = context(1, file)
   tools.assist(file, [a, b])
-  tools.endFocus(file, roots.map(project => ({ project, board: 'Same', handle: 'TP1[1]' })))
+  tools.endFocus(
+    file,
+    roots.map(project => ({ project, board: 'Same', handle: 'TP1[1]' })),
+  )
   clear()
   tools.assist(file, [b])
   tools.endFocus(file, [{ project: roots[1], board: 'Same', handle: 'TP1[1]' }])
@@ -106,7 +124,10 @@ test('a nested project assist cannot begin an edit in its parent project', async
 })
 
 test('unknown or dropped explicit scopes and projects never fall back to the recent project', async () => {
-  const scopes = [{ slug: 'alpha', dir: '/projects/alpha' }, { slug: 'beta', dir: '/projects/beta' }]
+  const scopes = [
+    { slug: 'alpha', dir: '/projects/alpha' },
+    { slug: 'beta', dir: '/projects/beta' },
+  ]
   const ws = { folders: ['/projects'], scopes, recent: scopes[0] }
   const h = sessionHub({ watcher: { on() {} } }, ws, { slots: [], session: { id: 'test' } }, '/client')
   assert.equal(h.projectOf({ observe: { scope: 'gone' } }), null)
@@ -160,7 +181,6 @@ test('a divergent second target refuses source tools and switching targets clear
   assert.ok(first.txn)
 })
 
-
 for (const role of ['editor', 'agent']) {
   test(`${role} edit requests without observe validate the requested target`, async () => {
     const { roots, runtimes, viewers, tools, context } = fixture()
@@ -185,25 +205,43 @@ test('finding focus opens checks without source reveal, affected entity reveals 
   const { viewerTools } = await import('../dist/session/viewers.js')
   const { emptySelection } = await import('@pcbjs/core/internal/selection')
   const src = { file: 'second.tsx', line: 2, col: 3, endLine: 2, endCol: 8 }
-  const make = name => ({ name: 'B', variant: { name, index: name === 'First' ? 0 : 1 }, items: [], nets: [], footprints: [{ ref: 'R1', pads: [], src: { ...src, file: name === 'First' ? 'first.tsx' : src.file } }], drc: [{ id: 'drc:a', refs: ['R1'] }], erc: [] })
+  const make = name => ({
+    name: 'B',
+    variant: { name, index: name === 'First' ? 0 : 1 },
+    items: [],
+    nets: [],
+    footprints: [{ ref: 'R1', pads: [], src: { ...src, file: name === 'First' ? 'first.tsx' : src.file } }],
+    drc: [{ id: 'drc:clearance:0123456789ab', refs: ['R1'] }],
+    erc: [],
+  })
   const rt = { root: '/p', state: { slots: [{ compiled: [{ board: make('First') }, { board: make('Second') }] }] }, stale: () => false }
-  const events = [], calls = [], viewer = { by: () => null, event() {} }
-  const tools = viewerTools({ shared: { clients: { relay: (event, data) => events.push(data) } }, sources: {}, runtimes: () => [rt], runtimeOfClient: () => rt, viewersOf: () => [viewer], lsp: () => ({ keys: () => ['editor'], select: (...args) => calls.push(args) }) })
-  const selection = { ...emptySelection('B', 'Second'), finding: 'drc:a', refs: ['drc:a'], anchor: 'drc:a' }
+  const events = [],
+    calls = [],
+    viewer = { by: () => null, event() {} }
+  const tools = viewerTools({
+    shared: { clients: { relay: (event, data) => events.push(data) } },
+    sources: {},
+    runtimes: () => [rt],
+    runtimeOfClient: () => rt,
+    viewersOf: () => [viewer],
+    lsp: () => ({ keys: () => ['editor'], select: (...args) => calls.push(args) }),
+  })
+  const selection = { ...emptySelection('B', 'Second'), finding: 'drc:clearance:0123456789ab', refs: ['drc:clearance:0123456789ab'], anchor: 'drc:clearance:0123456789ab' }
   tools.views['session/select']({ board: 'B', selection }, viewer)
   await new Promise(r => setImmediate(r))
   assert.equal(calls.length, 0)
   tools.views['session/select']({ board: 'B', selection: { ...selection, refs: ['R1'], anchor: 'R1' } }, viewer)
   await new Promise(r => setImmediate(r))
   assert.equal(events.at(-1).target, 'Second')
-  assert.equal(events.at(-1).finding.id, 'drc:a')
+  assert.equal(events.at(-1).finding.id, 'drc:clearance:0123456789ab')
   assert.equal(calls.length, 1)
   assert.equal(calls[0][1][0].file, '/p/second.tsx')
 })
 
 test('lazy library requests validate ownership and share only the matching target/run cache', async () => {
   const { runtimes, viewers, tools } = fixture()
-  let run = 1, calls = 0
+  let run = 1,
+    calls = 0
   const rt = runtimes[0]
   rt.compiledOnce = async () => {}
   rt.current = () => ({ run })
@@ -228,13 +266,74 @@ test('lazy library requests validate ownership and share only the matching targe
 test('library entity source reveal uses the shared source beneath an own placement', async () => {
   const { emptySelection } = await import('@pcbjs/core/internal/selection')
   const src = file => ({ file, line: 2, col: 3, endLine: 2, endCol: 8 })
-  const original = { name: 'B', items: [], nets: [], footprints: [{ ref: 'R1', pads: [], src: src('override.tsx') }], drc: [], erc: [], schematic: { circuits: [{ path: ['CH1'] }] } }
+  const original = {
+    name: 'B',
+    items: [],
+    nets: [],
+    footprints: [{ ref: 'R1', pads: [], src: src('override.tsx') }],
+    drc: [],
+    erc: [],
+    schematic: { circuits: [{ path: ['CH1'] }] },
+  }
   const baseline = { ...original, footprints: [{ ...original.footprints[0], src: src('shared.tsx') }] }
-  const calls = [], rt = { root: '/p', state: { slots: [{ entry: { file: '/p/pcb.tsx' }, compiled: [{ board: original }] }] }, stale: () => false, compiledOnce: async () => {}, current: () => ({ run: 1 }), compiler: () => ({ layout: async () => ({ board: baseline, site: {} }) }) }
+  const calls = [],
+    rt = {
+      root: '/p',
+      state: { slots: [{ entry: { file: '/p/pcb.tsx' }, compiled: [{ board: original }] }] },
+      stale: () => false,
+      compiledOnce: async () => {},
+      current: () => ({ run: 1 }),
+      compiler: () => ({ layout: async () => ({ board: baseline, site: {} }) }),
+    }
   const viewer = { by: () => null, event() {} }
-  const tools = viewerTools({ shared: {}, sources: {}, runtimes: () => [rt], runtimeOfClient: () => rt, viewersOf: () => [viewer], lsp: () => ({ keys: () => ['editor'], select: (...args) => calls.push(args) }) })
-  tools.views['session/select']({ board: 'B', selection: { ...emptySelection('B'), refs: ['R1'], anchor: 'R1', level: 'CH1', isolate: { ref: 'CH1', context: 'CH1', instances: ['CH1'], preview: false, mode: 'library' } } }, viewer)
+  const tools = viewerTools({
+    shared: {},
+    sources: {},
+    runtimes: () => [rt],
+    runtimeOfClient: () => rt,
+    viewersOf: () => [viewer],
+    lsp: () => ({ keys: () => ['editor'], select: (...args) => calls.push(args) }),
+  })
+  tools.views['session/select'](
+    {
+      board: 'B',
+      selection: { ...emptySelection('B'), refs: ['R1'], anchor: 'R1', level: 'CH1', isolate: { ref: 'CH1', context: 'CH1', instances: ['CH1'], preview: false, mode: 'library' } },
+    },
+    viewer,
+  )
   await new Promise(r => setImmediate(r))
   assert.equal(calls.length, 1)
   assert.equal(calls[0][1][0].file, '/p/shared.tsx')
+})
+
+test('selection offers validate board, target, snapshot and references before broadcasting', async () => {
+  const { emptySelection } = await import('@pcbjs/core/internal/selection')
+  const { runtimes, viewers, tools } = fixture()
+  const board = {
+    name: 'Same',
+    items: [],
+    nets: [],
+    footprints: [{ ref: 'R1', pads: [] }],
+    drc: [],
+    erc: [],
+    schematic: { parts: [{ ref: 'R1', path: ['CH1'], local: 'R' }], circuits: [{ path: ['CH1'] }] },
+  }
+  runtimes[0].state.slots[0].compiled[0].board = board
+  const select = selection => tools.views['session/select']({ board: selection.board, selection }, viewers[0])
+  const state = { ...emptySelection('Same'), refs: ['CH1', 'R1', 'CH1/R'], anchor: 'R1' }
+  assert.throws(() => select({ ...state, board: 'Missing' }), /no board/)
+  assert.throws(() => select({ ...state, target: 'missing' }), /no board/)
+  assert.throws(() => select({ ...state, snapshot: 'garbage' }), /snapshot/)
+  assert.throws(() => select({ ...state, refs: ['not a ref'] }), /name/)
+  assert.throws(() => select({ ...state, refs: ['R999'] }), /R999/)
+  assert.equal(viewers[0].got.length, 0)
+  const accepted = select(state)
+  assert.deepEqual(accepted.refs, ['CH1/R'])
+  assert.equal(accepted.anchor, 'CH1/R')
+  const ancestor = select({ ...state, anchor: 'CH1' })
+  assert.deepEqual(ancestor.refs, ['CH1'])
+  const variant = { ...board, variant: { name: 'Second', index: 1 } }
+  runtimes[0].state.slots[0].compiled.push({ board: variant })
+  const target = await tools.views['session/select']({ board: 'Same', target: 'Second', refs: ['R1'] }, viewers[0])
+  assert.equal(target.target, 'Second')
 })

@@ -5,7 +5,8 @@ import { isAbsolute, join } from 'node:path'
 import type { Board } from '@pcbjs/core/model'
 import type { EditorSelection } from '@pcbjs/lsp'
 import type { Selection, SetBy } from '@pcbjs/core/internal/selection'
-import { cursorOf, type AssistContext, type By, type Events, type HoverMsg, type Observe, type Params, type Result, type Run } from '@pcbjs/core/protocol'
+import { cursorOf, parseSnapshot, type AssistContext, type By, type Events, type HoverMsg, type Observe, type Params, type Result, type Run } from '@pcbjs/core/protocol'
+import { refsSelection, validateSelection } from './selection.js'
 import { FACET_NAMES } from '@pcbjs/core/site-facets'
 import { liveSlots } from '../project/boards.js'
 import type { ViewMethod } from './plugin.js'
@@ -17,7 +18,7 @@ import { editHistory } from './history.js'
 import type { Hub, ToolHooks } from './hub.js'
 import { CONDITIONS, issueUrl, ownVersion, writeIncident, type Condition } from './incident.js'
 import type { ProjectRuntime } from './runtime.js'
-import { boardOnly, canonicalRef, editorContext, isView, netDecl, pcbRange, selectionRanges, selectionStore, type MemberRange, type View as SelView } from './selection.js'
+import { boardOnly, editorContext, isView, netDecl, pcbRange, selectionRanges, selectionStore, type MemberRange, type View as SelView } from './selection.js'
 
 type EditMethod = 'session/edit/begin' | 'session/edit/update' | 'session/edit/commit' | 'session/edit/cancel' | 'session/edit/undo' | 'session/edit/redo'
 
@@ -49,7 +50,7 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
 
   // --- the project of a board
 
-  /** The runtime whose live boards include `name`, `prefer`'s first. */
+  /** Explicit project ownership wins over board-name lookup. */
   const runtimeOfBoard = (name: string, prefer?: ProjectRuntime | null): ProjectRuntime | null => {
     const has = (rt: ProjectRuntime) => liveSlots(rt.state.slots).some(sl => sl.compiled!.some(c => c.board.name === name))
     if (prefer) return prefer
@@ -100,56 +101,87 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
     const model = boardModel(rt, board, target)
     if (!model || !model.schematic?.circuits.some(c => c.path.join('/') === ref)) throw new Error(`no layout ${ref} on ${board}`)
     const slot = liveSlots(rt.state.slots).find(sl => sl.compiled?.some(b => b.board === model))!
-    const key = JSON.stringify([rt.root, rt.current()?.run, board, target, ref])
+    const key = libraryKey(rt, board, target, ref)
     let pending = layouts.get(key)
     if (!pending) {
-      for (const k of layouts.keys()) { const [root, run] = JSON.parse(k); if (root === rt.root && run !== rt.current()?.run) layouts.delete(k) }
-      const modelKey = libraryKey(rt, board, target, ref)
-      pending = rt.compiler().layout(slot.entry, board, target, ref).then(v => {
-        if (modelKey === libraryKey(rt, board, target, ref)) {
-          for (const k of libraryBoards.keys()) { const [root, run] = JSON.parse(k); if (root === rt.root && run !== rt.current()?.run) libraryBoards.delete(k) }
-          libraryBoards.set(modelKey, v.board)
-          if (libraryBoards.size > 16) libraryBoards.delete(libraryBoards.keys().next().value!)
-        }
-        return v
-      })
+      for (const k of layouts.keys()) {
+        const [root, run] = JSON.parse(k)
+        if (root === rt.root && run !== rt.current()?.run) layouts.delete(k)
+      }
+      pending = rt
+        .compiler()
+        .layout(slot.entry, board, target, ref)
+        .then(v => {
+          if (key === libraryKey(rt, board, target, ref)) {
+            for (const k of libraryBoards.keys()) {
+              const [root, run] = JSON.parse(k)
+              if (root === rt.root && run !== rt.current()?.run) libraryBoards.delete(k)
+            }
+            libraryBoards.set(key, v.board)
+            if (libraryBoards.size > 16) libraryBoards.delete(libraryBoards.keys().next().value!)
+          }
+          return v
+        })
       layouts.set(key, pending)
       if (layouts.size > 16) layouts.delete(layouts.keys().next().value!)
-      pending.catch(() => { if (layouts.get(key) === pending) layouts.delete(key) })
+      pending.catch(() => {
+        if (layouts.get(key) === pending) layouts.delete(key)
+      })
     }
     return pending
   }
   const stores = new Map<string, ReturnType<typeof selectionStore>>()
   const selectionsOf = (rt: ProjectRuntime) => {
     let st = stores.get(rt.root)
-    if (!st) stores.set(rt.root, (st = selectionStore(s => { const b = boardModel(rt, s.board, s.target); return b?.drc && b.erc ? [...b.drc, ...b.erc] : undefined })))
+    if (!st)
+      stores.set(
+        rt.root,
+        (st = selectionStore(s => {
+          const b = boardModel(rt, s.board, s.target)
+          return b?.drc && b.erc ? [...b.drc, ...b.erc] : undefined
+        })),
+      )
     return st
   }
-  /** A selection the session took: every viewer of the board gets it, the log records it, and unless the editor set it each editor gets its ranges, revealed when the anchor changed, the placements of the view it was made in. */
+  /** Publish canonical state to viewers, findings panels and source editors. */
   const selected = (rt: ProjectRuntime, sel: Selection, by: By | null, was?: Selection | null, view?: SelView | null) => {
     for (const c of h.viewersOf(rt.root)) if ((c.observe?.board ?? sel.board) === sel.board) c.event('pcbjs:select', { board: sel.board, selection: sel })
     shared.feed?.selection(rt.root, { board: sel.board, refs: sel.refs, anchor: sel.anchor, level: sel.level, isolate: sel.isolate?.ref ?? null }, by)
     const model = boardModel(rt, sel.board, sel.target)
     const finding = sel.finding ? [...(model?.drc ?? []), ...(model?.erc ?? [])].find(f => f.id === sel.finding) : null
-    shared.clients?.relay('pcbjs:ide:finding', { project: rt.root, board: sel.board, target: sel.target, snapshot: sel.snapshot, finding: finding?.id ? { ...finding, id: finding.id, refs: finding.refs ?? [] } : null, refs: sel.refs, anchor: sel.anchor })
+    shared.clients?.relay('pcbjs:ide:finding', {
+      project: rt.root,
+      board: sel.board,
+      target: sel.target,
+      snapshot: sel.snapshot,
+      finding: finding?.id ? { ...finding, id: finding.id, refs: finding.refs ?? [] } : null,
+      refs: sel.refs,
+      anchor: sel.anchor,
+    })
     if (finding && (!sel.anchor || sel.anchor === finding.id)) return
     if (sel.by === 'editor' || !h.lsp()) return
     void toEditors(rt, sel, was, view).catch(() => undefined)
   }
-  /** The selection's ranges to every editor; a click while the board recompiles waits for the compile rather than jumping nowhere. */
+  /** Wait for current geometry before resolving source; discard superseded selections. */
   const toEditors = async (rt: ProjectRuntime, sel: Selection, was?: Selection | null, view?: SelView | null) => {
     await freshModel(rt, sel.board, sel.target)
     if (selectionsOf(rt).get(sel.board)?.seq !== sel.seq) return
     const model = sel.isolate?.mode === 'library' ? (await loadLayout(rt, sel.board, sel.target, sel.isolate.ref)).board : boardModel(rt, sel.board, sel.target)
     if (selectionsOf(rt).get(sel.board)?.seq !== sel.seq) return
-    const found = model ? selectionRanges(model, sel.finding ? { ...sel, refs: sel.refs.filter(ref => ref !== sel.finding) } : sel, { view, decl: decl(rt, model), text: file => textOf(isAbsolute(file) ? file : join(rt.root, file)) }) : []
+    const found = model
+      ? selectionRanges(model, sel.finding ? { ...sel, refs: sel.refs.filter(ref => ref !== sel.finding) } : sel, {
+          view,
+          decl: decl(rt, model),
+          text: file => textOf(isAbsolute(file) ? file : join(rt.root, file)),
+        })
+      : []
     const lsp = h.lsp()
     if (!found.length || !lsp) return
     const reveal = sel.anchor !== was?.anchor || sel.target !== was?.target
     const ranges = found.map(r => ({ ...r, file: isAbsolute(r.file) ? r.file : join(rt.root, r.file) }))
     for (const k of lsp.keys()) lsp.select(k, ranges, reveal)
   }
-  /** What the editor's selections name on one board: the selection unless it names nothing, which clears one the editor set and keeps any other. */
+  /** Empty editor focus clears only a selection owned by the editor. */
   const editorSelect = (rt: ProjectRuntime, b: EditorSelection, by: By | null) => {
     const st = selectionsOf(rt)
     const was = st.get(b.board)
@@ -174,17 +206,29 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
     if (typeof p?.board !== 'string' || !p.selection || !Array.isArray(p.selection.refs)) throw new Error('session/select needs { board, selection, base?, view? }')
     const rt = p.project ? h.runtimes().find(rt => rt.root === p.project) : runtimeOfClient(c)
     if (!rt) throw new Error(`no project ${p.project ?? 'for this client'} in this session`)
-    if (typeof p.selection.target === 'string' && !boardModel(rt, p.board, p.selection.target)) throw new Error(`no target ${p.selection.target} of board ${p.board}`)
+    const model = boardModel(rt, p.board, p.selection.target)
+    if (!model) throw new Error(`no board ${p.board} or target ${p.selection.target ?? 'default'} in project ${rt.root}`)
     const by = c.by()
-    const sel = selectionsOf(rt).offer(c, p, by)
-    if (sel) selected(rt, sel, by, undefined, isView(p.view) ? p.view : null)
-    return sel
+    const commit = selectionsOf(rt).begin(c, p, by)
+    if (!commit) return null
+    const accept = (focused = model) => {
+      const selection = validateSelection(model, p.selection, focused)
+      const snapshot = parseSnapshot(selection.snapshot)
+      if (snapshot && shared.session?.id && snapshot.session !== shared.session.id) throw new Error('selection belongs to another session; resync the view')
+      const sel = commit(selection)
+      if (sel) selected(rt, sel, by, undefined, isView(p.view) ? p.view : null)
+      return sel
+    }
+    if (p.selection.isolate?.mode !== 'library') return accept()
+    const run = rt.current()?.run
+    return loadLayout(rt, p.board, p.selection.target, p.selection.isolate.ref).then(({ board }) => (run !== rt.current()?.run ? null : accept(board)))
   }
   /** `session/select`: a selection named by references, or with `board:<name>` alone a jump to the board's entry. */
   const select = async (p: any, by: By | null, setBy: SetBy, prefer: ProjectRuntime | null) => {
     if (typeof p?.board !== 'string' || !Array.isArray(p.refs) || !p.refs.every((r: unknown) => typeof r === 'string'))
       throw new Error('session/select needs { board, refs: string[], anchor?, level?, focus? }')
-    for (const field of ['target', 'finding', 'anchor', 'level']) if (p[field] !== undefined && p[field] !== null && typeof p[field] !== 'string') throw new Error(`session/select ${field} must be a string or null`)
+    for (const field of ['target', 'finding', 'anchor', 'level'])
+      if (p[field] !== undefined && p[field] !== null && typeof p[field] !== 'string') throw new Error(`session/select ${field} must be a string or null`)
     // the first compile may still run: the board is waited for
     if (p.project !== undefined) {
       prefer = h.runtimes().find(rt => rt.root === p.project) ?? null
@@ -195,21 +239,15 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
     let rt = runtimeOfBoard(p.board, prefer)
     if (rt && !boardModel(rt, p.board)) await rt.compiledOnce()
     rt = runtimeOfBoard(p.board, prefer)
-    const model = rt ? boardModel(rt, p.board, p.target !== undefined ? typeof p.target === 'string' ? p.target : null : selectionsOf(rt).get(p.board)?.target) : null
+    const model = rt ? boardModel(rt, p.board, p.target !== undefined ? p.target : selectionsOf(rt).get(p.board)?.target) : null
     if (!rt || !model) throw new Error(`no board ${p.board} in this session`)
     if (p.refs.length === 1 && boardOnly(p.refs[0]) === p.board) {
       openEntry(rt, p.board, p.focus === true)
       return selectionsOf(rt).get(p.board)
     }
-    const refs = [...new Set((p.refs as string[]).map(r => canonicalRef(model, r)))]
     const st = selectionsOf(rt)
     const was = st.get(p.board)
-    const sel = st.set(
-      p.board,
-      { ...(p.target !== undefined ? { target: typeof p.target === 'string' ? p.target : null } : {}), refs, anchor: typeof p.anchor === 'string' ? canonicalRef(model, p.anchor) : undefined, level: typeof p.level === 'string' ? p.level : null, marks: undefined, ...(p.finding !== undefined ? { finding: typeof p.finding === 'string' ? p.finding : null } : refs.some(r => [...model.drc, ...model.erc].some(f => f.id === r)) ? { finding: refs.find(r => [...model.drc, ...model.erc].some(f => f.id === r)) } : {}) },
-      setBy,
-      by,
-    )
+    const sel = st.set(p.board, refsSelection(model, was, p), setBy, by)
     if (sel) selected(rt, sel, by, was)
     return sel ?? st.get(p.board)
   }
@@ -277,7 +315,9 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
           root: rt.root,
           board: (name, isolate) => {
             const sel = selectionsOf(rt).get(name)
-            return isolate && sel?.isolate?.mode === 'library' && sel.isolate.ref === isolate ? libraryBoards.get(libraryKey(rt, name, sel.target, isolate)) ?? null : boardModel(rt, name)
+            return isolate && sel?.isolate?.mode === 'library' && sel.isolate.ref === isolate
+              ? (libraryBoards.get(libraryKey(rt, name, sel.target, isolate)) ?? null)
+              : boardModel(rt, name)
           },
           entry: name => liveSlots(rt.state.slots).find(sl => sl.compiled!.some(c => c.board.name === name))?.entry.file ?? null,
           run: () => rt.current()?.run ?? null,
@@ -345,7 +385,7 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
       const rt = runtimeOfClient(c)
       if (!rt) throw new Error('the project is no longer available; reload its view')
       if (m !== 'session/edit/cancel') {
-        const requested = m === 'session/edit/begin' ? p as Params<'session/edit/begin'> : null
+        const requested = m === 'session/edit/begin' ? (p as Params<'session/edit/begin'>) : null
         const board = requested?.board ?? c.observe?.board
         if (requested && c.observe?.board && requested.board !== c.observe.board)
           throw new Error('the requested board differs from the observed board; switch views before editing')
@@ -501,6 +541,7 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
       for (const board of endFocused.get(root)?.keys() ?? []) toBoard(root, board, 'pcbjs:assist:focus', { board, handle: null })
       assists.delete(root)
       endFocused.delete(root)
+      stores.get(root)?.cancel()
       stores.delete(root)
       const rt = h.runtimes().find(r => r.root === root)
       if (rt) {
@@ -524,7 +565,8 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
         return 'selection' in p ? offer(p, c) : select(p, c.by(), c.hello?.role === 'agent' ? 'agent' : isViewer(c) ? 'viewer' : 'sync', rt)
       },
       'session/layout': async (p, c) => {
-        if (typeof p?.board !== 'string' || typeof p.ref !== 'string' || (p.target !== null && typeof p.target !== 'string')) throw new Error('session/layout needs board, target and ref')
+        if (typeof p?.board !== 'string' || typeof p.ref !== 'string' || (p.target !== null && typeof p.target !== 'string'))
+          throw new Error('session/layout needs board, target and ref')
         const rt = runtimeOfClient(c)
         if (!rt) throw new Error('the project is no longer available')
         return (await loadLayout(rt, p.board, p.target, p.ref)).site

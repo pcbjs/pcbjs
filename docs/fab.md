@@ -1,12 +1,12 @@
 # Fab
 
 Fab presets, custom presets with `bindPCB` and one design for several fabs with `variants`.
-Every file of the fab set is in fab-set.md; stackup and rule values in board.md and rules.md; sourcing tags in sourcing.md.
+Advanced. Every file of the fab set is in fab-set.md; stackup and rule values in stackup.md and rules.md; sourcing tags in sourcing.md.
 
 ```tsx
 import PCB from '@pcbjs/fab/JLCPCB/2-Layer'
 
-export default <PCB name="Blinky" revision="A" color="black" silk="white" finish="ENIG">{/* … */}</PCB>
+export default <PCB name="Blinky" rev="A" color="Black" silk="White" finish="ENIG">{/* … */}</PCB>
 ```
 
 ## Presets
@@ -15,11 +15,11 @@ A `<PCB>` with the fab's stackup, rules and sourcing tags, plus three props:
 
 | Prop | Takes |
 | --- | --- |
-| `color` | mask colour: a palette name in any case, `"matte green"`, or any CSS colour |
+| `color` | mask colour: a name of the fab's palette, `"Matte Green"`, or any CSS colour; a name matches whatever its case, spaces, `_` or `-` |
 | `silk` | legend colour, the same way |
 | `finish` | `'HASL'`, `'LeadFreeHASL'`, `'ENIG'`, `'ImmersionSilver'`, `'ImmersionTin'`, `'OSP'`, `'HardGold'` |
 
-- Order: base, project defaults, preset, element props. `defineDefaultRules` never changes a preset's rules, `rules={{ clearance: 0.2 }}` merges over them, an explicit `stackup` replaces the preset's.
+- Order: base, project defaults, preset, element props. The rules of `defineDefaultBoard` never change a preset's, `rules={{ clearance: 0.2 }}` merges over them, an explicit `stackup` replaces the preset's.
 - JLCPCB `minHoleToHole: { pad: 0.45, via: 0.2 }`: the router keeps 0.45 between its vias, DRC lets hand-placed vias closer.
 - JLCPCB at 1 oz: `maskWeb: 0.1`, `maskWebByColor: { Black: 0.13, White: 0.13 }`, picked by the mask colour of `<PCB>` or the target; README-fab prints `mask web 0.13, black mask`. A board `maskWeb` overrides it, 0.20 for 2 oz; other presets leave the rule out.
 
@@ -33,7 +33,7 @@ Modules are `@pcbjs/fab/<Fab>/<n>-Layer`:
 | `Eurocircuits` | `EUROCIRCUITS` | `2-Layer`: `twoLayer`; `4-Layer`: `fourLayer`; lead-free HASL, green | green, red, blue, white, black |
 | `AdvancedPCB` | `ADVANCEDPCB` | `2-Layer`: `twoLayer`; `4-Layer`: `fourLayer`; ENIG, black | green, red, blue, white, black |
 
-Each module also exports `name`, `stackup`, `rules`, `colors`, `silkColors`, `finishes` and `sourcing`, frozen as `PCB.preset`; `@pcbjs/fab` exports `FABS`, every preset path.
+`PCB.preset` holds the preset's `name`, `stackup`, `rules`, `colors`, `silkColors`, `finishes` and `sourcing`, frozen; `@pcbjs/fab` exports `FABS`, every preset path.
 
 ## Your own preset
 
@@ -49,7 +49,7 @@ const PCB = bindPCB({
   colors: { Blue: '#173a7a', Black: '#1a1a1a' },
 })
 
-export default <PCB name="Probe" color="black">{/* … */}</PCB>
+export default <PCB name="Probe" rev="0.1.0" color="black">{/* … */}</PCB>
 ```
 
 Also `silkColors`, `finishes`, `sourcing`, `autoroute`, `cpl` and `fabNotes`. `bindPCB({ ...PCB.preset, name: 'House 2-Layer' })` copies a preset; `isBoundPCB(fn)` tells a bound component from a plain one.
@@ -58,13 +58,14 @@ Also `silkColors`, `finishes`, `sourcing`, `autoroute`, `cpl` and `fabNotes`. `b
 
 ```tsx
 import { variants } from '@pcbjs/core'
+import { twoLayer } from '@pcbjs/lib/stackups'
 import JLCPCB from '@pcbjs/fab/JLCPCB/2-Layer'
 import OSHPark from '@pcbjs/fab/OSHPark/2-Layer'
 
-const House = { name: 'House', board: { thickness: 1.2 }, rules: { clearance: 0.2 }, color: 'black', sourcing: ['US'] }
+const House = { name: 'House', board: { stackup: twoLayer({ thickness: 1.2 }) }, rules: { clearance: 0.2 }, color: 'Black', sourcing: ['US'] }
 const PCB = variants(JLCPCB, OSHPark, House)
 
-export default <PCB name="Multi" revision="A">{/* … */}</PCB>
+export default <PCB name="Multi" rev="A">{/* … */}</PCB>
 ```
 
 One compile per target, each with its own DRC, fab set and viewer entry. A target is a preset, the plain `PCB` of `@pcbjs/core` named `Base`, or an object:
@@ -72,18 +73,19 @@ One compile per target, each with its own DRC, fab set and viewer entry. A targe
 | Key | Takes |
 | --- | --- |
 | `name`, `fab` | strings; unnamed is `Target N`; a repeated name or slug throws |
-| `board` | a partial `<PCB>` spec |
+| `board` | a partial `<PCB>` spec without `rules`, `fabNotes` and `fonts`, such as `{ stackup }` or `{ place: { seed: 2 } }`; the element's own props win |
 | `rules`, `color`, `silk`, `finish`, `sourcing`, `fabNotes` | as on a preset |
 | `routeSeparately` | `true` routes this target on its own |
 
 - The element's `rules`, `color`, `silk` and `finish` apply to every target.
-- Targets with the same copper count and autoroute parameters share one routing under the strictest rules, so identical copper.
+- Targets with the same copper count, autoroute parameters and auto placements share one routing under the strictest rules, so identical copper.
 - `PCB.targets` holds the resolved targets; `isVariants(fn)` tells such a component apart; `compileBoards(root)` returns one board per target with `board.variant = { name, index, names, fab }`.
 - Orderable only when every target is. The slug is the name in lower case, each run of other characters a `-`: `osh-park-2-layer`.
 
 | What | Single board | Target |
 | --- | --- | --- |
 | fab set | `.pcbjs/fab/Multi/` | `.pcbjs/fab/Multi/<slug>/` |
-| fab zip | `Multi-fab-<revision>.zip` | `Multi-fab-<revision>-<slug>.zip` |
+| fab zip | `Multi-fab-<rev>.zip` | `Multi-fab-<rev>-<slug>.zip` |
 | site data | `boards/Multi.json` | `boards/Multi/<slug>.json` |
+| 3D, 3d.md | `boards/Multi.glb` | `boards/Multi/<slug>.glb` |
 | dev board data | `/__pcbjs/Multi/board.json` | `/__pcbjs/Multi/<slug>/board.json` |

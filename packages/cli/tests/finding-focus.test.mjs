@@ -4,17 +4,39 @@ import { viewerTools } from '../dist/session/viewers.js'
 import { emptySelection } from '@pcbjs/core/internal/selection'
 
 function fixture() {
-  const model = { name: 'B', drc: [{ id: 'drc:clearance:a', rule: 'clearance', message: 'too close', severity: 'error', refs: ['R1'], at: [3, 4] }], erc: [] }
+  const model = {
+    name: 'B',
+    items: [],
+    nets: [],
+    footprints: [{ ref: 'R1', pads: [] }],
+    schematic: { parts: [], circuits: [{ path: ['CH1'] }, { path: ['CH2'] }] },
+    drc: [{ id: 'drc:clearance:0123456789ab', rule: 'clearance', message: 'too close', severity: 'error', refs: ['R1'], at: [3, 4] }],
+    erc: [],
+  }
   const rt = { root: '/p', state: { slots: [{ compiled: [{ board: model }] }] }, stale: () => false }
-  const viewers = [0, 1, 2].map(() => ({ observe: { board: 'B' }, by: () => null, got: [], event(event, data) { this.got.push({ event, data }) } }))
+  const viewers = [0, 1, 2].map(() => ({
+    observe: { board: 'B' },
+    by: () => null,
+    got: [],
+    event(event, data) {
+      this.got.push({ event, data })
+    },
+  }))
   const editor = []
-  const h = { shared: { clients: { relay: (event, data) => editor.push({ event, data }) } }, sources: {}, runtimes: () => [rt], runtimeOfClient: () => rt, viewersOf: () => viewers, lsp: () => null }
+  const h = {
+    shared: { clients: { relay: (event, data) => editor.push({ event, data }) } },
+    sources: {},
+    runtimes: () => [rt],
+    runtimeOfClient: () => rt,
+    viewersOf: () => viewers,
+    lsp: () => null,
+  }
   return { tools: viewerTools(h), viewers, editor }
 }
 
 test('finding focus is canonical across three views and editor, independent of entity selection, and clears everywhere', () => {
   const { tools, viewers, editor } = fixture()
-  const focus = { ...emptySelection('B'), finding: 'drc:clearance:a' }
+  const focus = { ...emptySelection('B'), finding: 'drc:clearance:0123456789ab' }
   tools.views['session/select']({ board: 'B', selection: focus }, viewers[0])
   assert.ok(viewers.every(v => v.got.at(-1).data.selection.finding === focus.finding))
   assert.equal(editor.at(-1).data.finding.id, focus.finding)
@@ -37,6 +59,9 @@ test('pending isolation choice and explicit instance mode propagate to all PCB v
 
 test('a viewer cannot establish focus on an unknown named target', () => {
   const { tools, viewers } = fixture()
-  assert.throws(() => tools.views['session/select']({ board: 'B', selection: { ...emptySelection('B', 'missing'), finding: 'drc:clearance:a' } }, viewers[0]), /no target missing/)
+  assert.throws(
+    () => tools.views['session/select']({ board: 'B', selection: { ...emptySelection('B', 'missing'), finding: 'drc:clearance:0123456789ab' } }, viewers[0]),
+    /target missing/,
+  )
   assert.equal(viewers[0].got.length, 0)
 })

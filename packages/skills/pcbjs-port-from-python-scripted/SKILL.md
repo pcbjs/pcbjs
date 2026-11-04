@@ -5,7 +5,7 @@ description: Move a board whose KiCad files are written by Python scripts, a lay
 
 # Port a Python-generated board to pcbjs
 
-A Python generator already treats the board as code: constants for placement, tables for routes, loops for repeated parts, asserts for the mechanical rules. pcbjs keeps all of that as TypeScript, so the port is mostly a translation of intent, checked against the board the generator writes.
+A Python generator already treats the board as code: constants for placement, tables for routes, loops for repeated parts, asserts for the mechanical rules. pcbjs keeps all of that as TypeScript, so the port is mostly a translation of intent, checked against the board the generator writes. With the pcbjs MCP tools present, run the checks below with `check`, `inspect` and `render` rather than the CLI; once a pcbjs file exists, change it by edits, never by a whole-file Write.
 
 ## Steps
 

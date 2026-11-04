@@ -3,10 +3,10 @@ import { nets, Schematic } from '@pcbjs/core'
 import { PinHeader, R0603, C0603 } from '@pcbjs/lib'
 
 export const { GND, VIN, OUT } = nets()
-export const J1 = PinHeader(3).connect(GND, VIN, OUT)
-export const R1 = R0603('10k').connect(VIN, OUT)
-export const R2 = R0603('4k7').connect(OUT, GND)
-export const C1 = C0603('100n').connect(OUT, GND)
+export const J1 = PinHeader(3)().connect({ 1: GND, 2: VIN, 3: OUT })
+export const R1 = R0603('10k').connect({ 1: VIN, 2: OUT })
+export const R2 = R0603('4k7').connect({ 1: OUT, 2: GND })
+export const C1 = C0603('100n').connect({ 1: OUT, 2: GND })
 
 // #region show
 export const drawing = (

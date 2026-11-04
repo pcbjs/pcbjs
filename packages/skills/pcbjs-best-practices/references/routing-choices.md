@@ -18,16 +18,16 @@ import { nets, route } from '@pcbjs/core'
 import { PinHeader } from '@pcbjs/lib'
 
 const { A, B } = nets()
-const J1 = PinHeader(2).connect(A, B)
-const J2 = PinHeader(2).connect(A, B)
+const J1 = PinHeader(2)().connect({ 1: A, 2: B })
+const J2 = PinHeader(2)().connect({ 1: A, 2: B })
 
 export default (
-  <PCB name="Trial">
+  <PCB name="Trial" rev="0.1.0">
     <rect layer="Edge.Cuts" x={0} y={0} w={30} h={15} />
     <J1 at="3 5" />
     <J2 at="27 5" />
-    {route(J1[1]).V(2).H(27).Z(J2[1]).width(0.3)}
-    {route(J1[2]).layers(['F.Cu']).X(J2[2]).width(0.3)}
+    {route(J1[1], J2[1]).width(0.3).V(2).H(27).Z()}
+    {route(J1[2], J2[2]).layers(['F.Cu']).width(0.3)}
   </PCB>
 )
 ```
@@ -46,16 +46,16 @@ import { PinHeader, SOIC } from '@pcbjs/lib'
 const PS_PER_MM = 5.8               // FR-4 outer layer
 const SKEW = +(60 / PS_PER_MM).toFixed(2)  // 60 ps budget, in mm
 const { SCLK, MOSI } = nets()
-const J1 = PinHeader(2).connect(SCLK, MOSI)
+const J1 = PinHeader(2)().connect({ 1: SCLK, 2: MOSI })
 const U1 = SOIC(8)('driver').connect({ 1: NC, 2: NC, 3: SCLK, 4: MOSI, 5: NC, 6: NC, 7: NC, 8: NC })
 
 export default (
-  <PCB name="Budget">
+  <PCB name="Budget" rev="0.1.0">
     <rect layer="Edge.Cuts" x={0} y={0} w={30} h={20} />
     <J1 at="3 5" />
     <U1 at="20 10" />
-    {route(J1[1]).H(10).Z(U1[3]).match('SPI', SKEW)}
-    {route(J1[2]).H(12).Z(U1[4]).match('SPI', SKEW)}
+    {route(J1[1], U1[3]).match('SPI', SKEW).H(10).Z()}
+    {route(J1[2], U1[4]).match('SPI', SKEW).H(12).Z()}
   </PCB>
 )
 ```
@@ -64,7 +64,7 @@ Keep the tolerance at the real budget. A tight window makes the tuner add meande
 
 ## Rules of thumb
 
-- `.lock()` an automatic leg once it is right; a locked leg never moves, and a collision then shows as a finding instead.
+- Freeze an automatic route once it is right with `pcbjs patch hold route:<n>`; a held route never moves, and a collision then shows as a finding instead.
 - A failed leg wants a waypoint into free board before anything else.
 - A width from current: check the class width against the real current with IPC-2221 and write the numbers in a comment beside the class; change it only when the numbers say so.
 - Routes made in helpers are attributed to the call site; keep helpers small so findings point somewhere useful.

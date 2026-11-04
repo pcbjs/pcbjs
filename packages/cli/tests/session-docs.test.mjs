@@ -1,5 +1,4 @@
-// The session's documents and snapshots: an editor's unsaved text in check and tsc, a write to a restored buffer made on the disk and
-// replacing the buffer at its version, a CLI writer through the session into the editor's buffer, an agent kept off a file an editor holds,
+// The session's documents and snapshots: recovered editor text stays authoritative, with versioned edits, a CLI writer through the session into the editor's buffer, an agent kept off a file an editor holds,
 // a disk write seen by the next check and shadowed under an editor, gapless frames and the heartbeat, an old reference resolved.
 import { parseSnapshot } from '@pcbjs/core/protocol'
 import { test, after } from 'node:test'
@@ -168,35 +167,27 @@ test('an editor’s unsaved text shows in check and tsc, and the save hands the 
   }
 })
 
-test('an unedited editor text unlike the disk, as a restored backup, compiles the disk until the editor edits it', { timeout: 120000 }, async () => {
+test('a restored buffer is authoritative immediately, before its first edit', { timeout: 120000 }, async () => {
   const root = project('Restored')
   const s = await serve(root)
   try {
     const ed = await client(s.info, 'editor', root)
     await init(ed, root)
     const file = join(root, 'pcb.tsx')
-    // the text an editor restores from before a write on disk: version 1, no edit of it ever reached the session
     open(ed, file, moved('Restored') + wrongType)
     const r = await ed.request('session/check')
-    assert.deepEqual(r.overlay, [])
-    assert.equal(r.value.exitCode, 0, r.value.stdout)
-    assert.match(s.log(), /pcb\.tsx: test editor opened unsaved text unlike the disk that no edit of it produced; the session compiles the disk/)
-    const warned = await ed.next(m => m.method === 'textDocument/publishDiagnostics' && m.params.diagnostics.some(d => d.code === 'shadowed'))
-    assert.match(warned.params.diagnostics.find(d => d.code === 'shadowed').message, /restored unlike the disk/)
-    // the first edit makes it the editor's unsaved text again
-    ed.notify('textDocument/didChange', { textDocument: { uri: pathToFileURL(file).href, version: 2 }, contentChanges: [{ text: moved('Restored') + wrongType + '\n' }] })
-    const edited = await ed.request('session/check')
-    assert.deepEqual(edited.overlay, ['pcb.tsx'])
-    assert.equal(edited.value.exitCode, 1)
-    assert.match(edited.value.stdout, /edge-clearance/)
-    assert.match(s.log(), /test editor edited, saved or closed the unsaved text it opened/)
+    assert.deepEqual(r.overlay, ['pcb.tsx'])
+    assert.equal(r.value.exitCode, 1)
+    assert.match(r.value.stdout, /edge-clearance/)
+    assert.match(r.value.stdout, /TS2322/)
+    assert.equal(readFileSync(file, 'utf8'), board('Restored'))
     ed.close()
   } finally {
     await s.stop()
   }
 })
 
-test('a write to a restored buffer is made on the disk text and replaces the buffer at the version it opened', { timeout: 120000 }, async () => {
+test('a write preserves unrelated recovered buffer text and uses its opening version', { timeout: 120000 }, async () => {
   const root = project('RestoredWrite')
   const s = await serve(root)
   try {
@@ -211,22 +202,20 @@ test('a write to a restored buffer is made on the disk text and replaces the buf
     const uri = pathToFileURL(file).href
     const buffer = moved('RestoredWrite') + wrongType
     open(ed, file, buffer)
-    await until(() => /pcb\.tsx: test editor opened unsaved text unlike the disk/.test(s.log()))
     const agent = await client(s.info, 'agent', root)
     const read = await agent.request('session/read', { file })
-    assert.deepEqual([read.authority, read.version, read.text], ['restored', 1, board('RestoredWrite')])
-    const writing = agent.request('session/write', { file, edits: [{ old: '15mm 10mm', new: '35mm 10mm' }] })
+    assert.deepEqual([read.authority, read.version, read.text], ['editor', 1, buffer])
+    const writing = agent.request('session/write', { file, edits: [{ old: 'RestoredWrite', new: 'RecoveredWrite' }] })
     const asked = await ed.next(m => m.method === 'workspace/applyEdit')
     const [change] = asked.params.edit.documentChanges
     assert.deepEqual(change.textDocument, { uri, version: 1 })
     const next = textDoc(buffer).apply(change.edits)
-    assert.equal(next, board('RestoredWrite').replace('15mm 10mm', '35mm 10mm'), 'the disk text with the edit, in place of the buffer')
+    assert.equal(next, buffer.replace('RestoredWrite', 'RecoveredWrite'), 'unrelated recovered changes survive the edit')
     ed.reply(asked.id, { applied: true })
     ed.notify('textDocument/didChange', { textDocument: { uri, version: 2 }, contentChanges: [{ text: next }] })
     const w = await writing
     assert.deepEqual([w.via, w.applied], ['editor', true])
     assert.equal(readFileSync(file, 'utf8'), board('RestoredWrite'), 'the disk stays until the editor saves')
-    await until(() => /test editor edited, saved or closed the unsaved text it opened/.test(s.log()))
     const after = await agent.request('session/read', { file })
     assert.deepEqual([after.authority, after.version, after.text], ['editor', 2, next])
     agent.close()

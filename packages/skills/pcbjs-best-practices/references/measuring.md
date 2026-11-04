@@ -1,23 +1,23 @@
 # Measuring with inspect
 
-Every number about a board comes from `pcbjs inspect`, never from reading `board.json` or the Gerbers by hand. One compile answers several queries; `--json` gives the same answers to a script.
+Every number about a board comes from `pcbjs inspect`, never from reading `board.json` or the Gerbers by hand. One compile answers several queries; `--json` gives the same answers to a script as the records `pcbjs q` prints.
 
 ## What to ask
 
 | Question | Command |
 | --- | --- |
-| where a part and its pads are, in board mm | `pcbjs inspect U1`, `inspect part:U1` when a net has the same name |
-| one pad | `pcbjs inspect U1.3` |
+| where a part and its pads are, in board mm | `pcbjs inspect U1`; a name that is both a part and a net prints both |
+| one pad | `pcbjs inspect U1/3` |
 | a net: pads, tracks, vias, copper per layer, pour pieces, islands removed, stitching | `pcbjs inspect GND` |
 | every route with length, target, group, skew, tuning, status | `pcbjs inspect --lengths`, or `--lengths DATA` for one net, pair or group |
 | every item on a layer, with ink bounds and source | `pcbjs inspect --layer F.SilkS`, filtered by `U1` or a net |
-| the board stack: mates, gaps, body heights by source | `pcbjs inspect references` |
+| the board stack: mates, gaps, body heights by source | `pcbjs inspect --references` |
 | every ref and net name | `pcbjs inspect --json nothing`: an unknown query exits 1 and lists `refs` and `nets` |
 
 - Name the entry first when the config lists several: `pcbjs inspect sense.tsx U1`.
 - With `--lengths` or `--layer`, the other queries become filters, so ask for lengths and for nets in two calls.
 - `--fresh` compiles here even when a dev server holds a current board.
-- Coordinates come to 3 decimals; compare against another tool within 1 to 2 µm, not exactly.
+- Coordinates in `--json` come to 4 decimals, 0.1 µm, the text to 2; compare against another tool within 1 µm, not exactly.
 
 ## Contracts over inspect --json
 
@@ -28,8 +28,8 @@ import { execFileSync } from 'node:child_process'
 
 const REFS = ['J1', 'J2', 'U1', 'H1']
 const run = args => JSON.parse(execFileSync('npx', ['pcbjs', 'inspect', ...args, '--json', '--fresh'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }))
-const { frame, results } = run(REFS.map(r => `part:${r}`).concat('net:GND'))
-const part = Object.fromEntries(results.filter(r => r.footprint).map(r => [r.footprint.ref, r.footprint]))
+const { frame, results } = run(REFS.concat('net:GND'))
+const part = Object.fromEntries(results.filter(r => r.part).map(r => [r.part.ref, { ...r.part, graphics: r.graphics ?? [] }]))
 const gnd = results.find(r => r.net)
 
 function box(ref, kind) {
@@ -53,8 +53,8 @@ for (const v of violations) console.log(`  ${v}`)
 process.exitCode = violations.length ? 1 : 0
 ```
 
-- Read the shape of `frame` and each result once with `pcbjs inspect <query> --json` before writing the checks; the queries above give `footprint` with `pads`, `graphics` and `side`, and `net` with `pads`, `tracks`, `vias`, `copper` and `zones`.
-- Footprint pads in the JSON carry no `ref`; add it when you flatten them.
+- Read the shape of `frame` and each result once with `pcbjs inspect <query> --json` before writing the checks; the queries above give `part` with `pads` and `side` and its drawings as `graphics` beside it, and a net its record as `net` with `pads`, `tracks`, `vias`, `copper` and `zones` beside it.
+- Each pad record names its `part` and its `ref`, `J1/2`, so flattened pads keep their part.
 - Share the numbers with whatever else uses them: import the constants module the board uses, so a contract and a placement never drift apart.
 - Probe every contract: move a part 0.1 mm in a scratch edit that DRC passes and see exactly the expected violation.
 - Check drawings per stroke segment, not by bounding box: an L-shaped bracket's box overlaps the body it frames.

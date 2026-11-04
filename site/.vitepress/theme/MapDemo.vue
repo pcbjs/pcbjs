@@ -1,14 +1,25 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { withBase } from 'vitepress'
 import type { View } from '../../examples.data'
 import type { Home } from '../../home.data'
+import type { Hover } from '@pcbjs/ui'
+import boards from 'virtual:site-boards'
 import BoardSvg from './BoardSvg.vue'
+import LiveBoard from './LiveBoard.vue'
+import ViewTabs from './ViewTabs.vue'
+import { excerptRange } from '../../scripts/source-selection.mjs'
 
-const props = defineProps<{ hero: Home['hero'] }>()
+const props = defineProps<{ hero: Home['hero']; initialView?: View }>()
 
 const root = ref<HTMLElement | null>(null)
 const code = ref<HTMLElement | null>(null)
-const view = ref<View>('2d')
+const view = ref<View>(props.initialView ?? '3d')
+// the 3D view mounts on first use and then stays, hidden behind the SVGs
+const framed = ref(false)
+watch(view, v => (framed.value ||= v === '3d'), { immediate: true })
+const NONE: Hover = { uids: [], refs: [], net: null }
+const hover = ref<Hover>(NONE)
 const chip = ref('')
 const active = ref(false)
 const pinned = ref(false)
@@ -19,16 +30,21 @@ const all = (sel: string) => [...(root.value?.querySelectorAll<HTMLElement>(sel)
 const spansOf = (k: number) => all(`.code [data-r="${k}"]`)
 const width = (k: number) => spansOf(k).reduce((n, s) => n + (s.textContent?.length ?? 0), 0)
 
-function clear() {
+function unlight() {
   for (const e of all('.hl')) e.classList.remove('hl')
   for (const e of all('.dim')) e.classList.remove('dim')
   active.value = false
   chip.value = ''
 }
 
+function clear() {
+  unlight()
+  hover.value = NONE
+}
+
 /** Lights range `k` in the code and its items in both drawings; `label` overrides its chip. */
-function show(k: number, label?: string) {
-  clear()
+function light(k: number, label?: string) {
+  unlight()
   const r = props.hero.ranges[k]
   if (!r) return
   for (const s of spansOf(k)) s.classList.add('hl')
@@ -39,12 +55,47 @@ function show(k: number, label?: string) {
   active.value = true
 }
 
-/** The innermost range that drew the element: by item id, else by part ref. */
+/** Lights range `k` and its items in the 3D view too. */
+function show(k: number, label?: string) {
+  light(k, label)
+  const r = props.hero.ranges[k]
+  hover.value = r ? { uids: r.uids, refs: r.refs, net: null } : NONE
+}
+
+/** The innermost range that drew one of the items: by SVG data-id or frame uid, else by part ref. */
+function rangeFor(items: (number | string)[], refs: string[]): number {
+  return excerptRange(props.hero.ranges, items, refs, width)
+}
+
 function rangeOf(el: Element): number {
   const id = Number(el.getAttribute('data-id'))
   const ref = el.getAttribute('data-ref')
-  const hits = props.hero.ranges.flatMap((r, k) => ((id ? r.ids.includes(id) : ref && r.refs.includes(ref)) ? [k] : []))
-  return hits.sort((a, b) => width(a) - width(b))[0] ?? -1
+  return rangeFor(id ? [id] : [], ref ? [ref] : [])
+}
+
+/** A hover in the 3D view lights its range without echoing it back to the view. */
+function onFrame(h: Hover) {
+  stopTour()
+  if (pinned.value) return
+  const k = rangeFor(h.uids, h.refs)
+  if (k < 0) {
+    unlight()
+    chip.value = h.refs.join(', ') || (h.net ? `net ${h.net}` : '')
+    return
+  }
+  light(k)
+  reveal(k)
+}
+
+/** A click in the 3D view pins the range of the part, or lets go. */
+function onPick(refs: string[]) {
+  stopTour()
+  const part = refs[0]?.split('/')[0]
+  const k = part ? rangeFor([], [part]) : -1
+  pinned.value = k >= 0
+  if (k < 0) return unlight()
+  light(k)
+  reveal(k)
 }
 
 function stopTour() {
@@ -129,15 +180,24 @@ onBeforeUnmount(() => {
     </div>
     <div class="board">
       <div class="bar">
-        <div class="tabs" role="tablist" aria-label="Blinky view">
-          <button role="tab" :aria-selected="view === '2d'" :class="{ on: view === '2d' }" @click="view = '2d'">Board</button>
-          <button role="tab" :aria-selected="view === 'sch'" :class="{ on: view === 'sch' }" @click="view = 'sch'">Schematic</button>
-        </div>
+        <ViewTabs v-model="view" :views="hero.views" :label="`${hero.name} view`" :full="withBase(`/examples/${hero.id}`)" />
         <code class="chip" :class="{ shown: chip }">{{ chip || ' ' }}</code>
       </div>
       <div class="draw" @mouseover="onDraw" @mouseleave="leave" @click="pin">
-        <BoardSvg v-show="view === '2d'" :id="hero.id" view="2d" label="The Blinky board: copper, silkscreen and outline" />
-        <BoardSvg v-show="view === 'sch'" :id="hero.id" view="sch" label="Blinky's schematic" />
+        <BoardSvg v-show="view === '2d'" view="2d" :aspect="hero.aspect['2d']" label="The Blinky board: copper, silkscreen and outline" />
+        <BoardSvg v-if="hero.aspect.sch" v-show="view === 'sch'" view="sch" :aspect="hero.aspect.sch" label="Blinky's schematic" />
+        <LiveBoard
+          v-if="framed"
+          class="frame"
+          :class="{ off: view !== '3d' }"
+          :board="boards[hero.id]"
+          view="3d"
+          armed
+          :label="`The ${hero.name} board in 3D`"
+          :highlight="hover.refs"
+          @hover="onFrame"
+          @select="onPick"
+        />
       </div>
     </div>
   </section>
@@ -146,7 +206,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .map-demo {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
   border: 1px solid var(--vp-c-divider);
   border-radius: 12px;
   overflow: hidden;
@@ -190,27 +250,11 @@ pre :deep([data-r].hl) {
   box-shadow: 0 0 0 1px var(--vp-c-brand-1);
 }
 .board {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   min-width: 0;
   background: var(--pcb-canvas);
-}
-.tabs {
-  display: flex;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
-  overflow: hidden;
-  font-family: var(--vp-font-family-base);
-}
-.tabs button {
-  padding: 2px 10px;
-  font-size: 12px;
-  color: var(--vp-c-text-2);
-  background: var(--vp-c-bg);
-}
-.tabs button.on {
-  background: var(--vp-c-brand-3);
-  color: #fff;
 }
 .chip {
   padding: 2px 8px;
@@ -228,10 +272,19 @@ pre :deep([data-r].hl) {
   opacity: 1;
 }
 .draw {
+  position: relative;
   flex: 1;
+  min-height: 360px;
   display: grid;
   place-items: center;
   padding: 16px;
+}
+.draw > .frame {
+  position: absolute;
+  inset: 0;
+}
+.draw > .frame.off {
+  visibility: hidden;
 }
 .draw :deep([data-id]),
 .draw :deep(.sch-sym) {

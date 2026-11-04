@@ -1,6 +1,6 @@
 # Licences
 
-The pcbjs code is under the MIT licence in `LICENSE`, which every `@pcbjs/*` package ships. This file names the licence of every piece of data pcbjs ships or keeps in this repository that is not its own code.
+The pcbjs code is under the MIT licence in `LICENSE`, which every `@pcbjs/*` package ships; `@pcbjs/lib` ships this file beside it. This file names the licence of every piece of data pcbjs ships or keeps in this repository that is not its own code.
 
 ## Shipped in the npm packages
 

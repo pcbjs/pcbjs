@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { gridChoices, lengthValue, localPose, worldDelta, segmentIndices } from '../src/edit-toolbar.ts'
+import { gridChoices, lengthValue, angleValue, localPose, worldDelta, segmentIndices } from '../src/edit-toolbar.ts'
 
 test('placement fields use their translated, rotated or mirrored source frame', () => {
   assert.deepEqual(localPose({ at: [12, 5, 0], m: [1, 0, 0, 1, 16, 5] }), [-4, 0, 0])
@@ -18,6 +18,14 @@ test('placement inputs accept lengths and custom grids retain their subdivisions
 })
 
 test('trace navigation skips width and via boundaries and retains first and last geometric indices', () => {
-  assert.deepEqual(segmentIndices([{op:'H'}, {op:'width'}, {op:'via'}, {op:'v'}, {op:'X'}, {op:'Z'}]), [0, 3, 4, 5])
+  assert.deepEqual(segmentIndices([{ op: 'H' }, { op: 'width' }, { op: 'via' }, { op: 'v' }, { op: 'X' }, { op: 'Z' }]), [0, 3, 4, 5])
   assert.deepEqual(segmentIndices([]), [])
+})
+
+test('rotation fields reject empty values and accept explicit angle units', () => {
+  for (const value of ['', ' ', 'mm', '90mm', 'Infinity']) assert.equal(angleValue(value), null, value)
+  assert.equal(angleValue('90°'), 90)
+  assert.equal(angleValue('-45deg'), -45)
+  assert.equal(angleValue('90'), 90)
+  assert.equal(angleValue(`${Math.PI}rad`), 180)
 })

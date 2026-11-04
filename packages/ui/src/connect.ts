@@ -52,7 +52,10 @@ export function connect(shell: Shell, t: Transport | null): () => void {
       session(shell, t)
       live(t, shellLive(shell), !!(q.select || q.isolate))
       sync(shell, t)
-      connectLibrary(t, () => { const b = shell.shown.value; return b && ['2d', '3d', 'sch'].includes(shell.pane(b.name).mode) ? b : null })
+      connectLibrary(t, () => {
+        const b = shell.shown.value
+        return b && ['2d', '3d', 'sch'].includes(shell.pane(b.name).mode) ? b : null
+      })
       agents(shell, t)
     }
     if (window.parent !== window) frame(shell, off.signal)
@@ -67,7 +70,10 @@ export function connect(shell: Shell, t: Transport | null): () => void {
 /** A board on a page of its own taking its facets, invalidates and heartbeat over `t`, as a page's boards do, then opening `t`. Returns the disconnect. */
 export function connectBoard(board: BoardStore, t: Transport): () => void {
   const scope = effectScope(true)
-  scope.run(() => { live(t, boardLive(board)); connectLibrary(t, () => board.wanted.has('layers') || board.wanted.has('model') || board.wanted.has('sch') ? board : null) })
+  scope.run(() => {
+    live(t, boardLive(board))
+    connectLibrary(t, () => (board.wanted.has('layers') || board.wanted.has('model') || board.wanted.has('sch') ? board : null))
+  })
   t.open()
   return () => scope.stop()
 }
@@ -111,7 +117,10 @@ function page(shell: Shell, built: boolean, signal: AbortSignal) {
       if (!look) return
       // a selection made on this board, not one the board brings along when it shows
       const side = sideSearch(location.search, look[0], look[1])
-      let search = was && was[3] === look[3] && (was[2] !== look[2] || was[4] !== look[4] || was[5] !== look[5] || was[6] !== look[6]) ? selectSearch(side, look[2], look[4], look[5], look[6]) : side
+      let search =
+        was && was[3] === look[3] && (was[2] !== look[2] || was[4] !== look[4] || was[5] !== look[5] || was[6] !== look[6])
+          ? selectSearch(side, look[2], look[4], look[5], look[6])
+          : side
       if (was && was[3] === look[3] && was[7] !== look[7]) {
         const query = new URLSearchParams(search)
         query.set('view', look[7])
@@ -373,7 +382,15 @@ function live(t: Transport, l: Live, own = false) {
 function sync(shell: Shell, t: Transport) {
   const relay = createSync(
     {
-      select: m => void t.request('session/select', m).catch(() => undefined),
+      select: m =>
+        void t.request('session/select', m).catch(error => {
+          const selection = relay.reject(m)
+          if (!selection || shell.current.value?.name !== m.board) return
+          shell.selectTarget(m.board, selection.target)
+          const board = shell.board(m.board)
+          board.takeSel(selection)
+          editNote(board.edit, error instanceof Error ? error.message : String(error), true)
+        }),
       hover: m => t.notify('session/hover', m),
     },
     cb => requestAnimationFrame(cb),
@@ -466,7 +483,10 @@ function agents(shell: Shell, t: Transport) {
 /** Post ready once the first view has painted the board, a view each time a switch has painted, and every hover and click selection. */
 function frame(shell: Shell, signal: AbortSignal) {
   const post = (m: PagePost) => window.parent.postMessage(m, '*')
-  watch(() => shell.shown.value ? shell.pane(shell.shown.value.name).devtools : false, enabled => post({ type: 'pcbjs:devtools', enabled }))
+  watch(
+    () => (shell.shown.value ? shell.pane(shell.shown.value.name).devtools : false),
+    enabled => post({ type: 'pcbjs:devtools', enabled }),
+  )
   // an editor's pane: the selection goes to the page around, which hands it to the extension's tree
   if (shell.ide.on)
     watch(

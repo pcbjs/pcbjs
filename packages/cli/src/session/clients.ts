@@ -1,7 +1,7 @@
 // The connections of a server: socket, pipe and the WebSocket at /__pcbjs/session, editors, agents, the CLI and viewer pages alike. Each
 // says hello, gets ready with its mode, and sends `session/*` requests, answered here, or LSP, one language server per connection.
 import { timingSafeEqual } from 'node:crypto'
-import { WRITE, type By, type Events, type Hello, type Method, type Mode, type Observe, type Params, type Ready, type Result, type Run } from '@pcbjs/core/protocol'
+import { WRITE, compat, type By, type Events, type Hello, type Method, type Mode, type Observe, type Params, type Ready, type Result, type Run } from '@pcbjs/core/protocol'
 import type { LspHub } from './lsp.js'
 import { RPC_ERRORS, isRequest, isRpc, parseSessionHello, type EditMode } from './frames.js'
 import { NO_HELLO, STICKY, helloWarning } from './ide-protocol.js'
@@ -135,6 +135,8 @@ export function clientsOf(o: ClientsOptions): Clients {
   const viewer = (c: Client) => c.hello?.role === 'viewer'
 
   const request = async (c: Client, m: { id?: number | string; method: string; params?: any }) => {
+    if (compat(c.hello) === 'incompatible' && !(c.transport.kind === 'socket' && (m.method === 'session/status' || m.method === 'session/stop')))
+      return fail(c, m.id, RPC_ERRORS.invalid, 'A compatible pcbjs hello is required before session requests; update the client or restart the server.')
     const local = LOCAL_METHODS.has(m.method)
     if (c.mode === 'ro' && ((WRITE as ReadonlySet<string>).has(m.method) || (local && c.transport.kind !== 'socket')))
       return fail(c, m.id, RPC_ERRORS.readOnly, `${m.method} needs a read-write connection; this one is read-only, see pcbjs docs session`)
@@ -232,7 +234,7 @@ export function clientsOf(o: ClientsOptions): Clients {
       const first = !hello
       hello = h
       mode = modeOf(t, o.info().edit, o.info().token, h.token ?? t.token)
-      if (h.project) await o.attach?.(h.project)
+      if (compat(h) !== 'incompatible' && h.project) await o.attach?.(h.project)
       const r = o.ready()
       if (r) c.event('pcbjs:ide:ready', { ...r, session: o.info().session, mode } satisfies Ready)
       for (const name of STICKY) if (sticky.has(name) && takes(c, name)) c.event(name, sticky.get(name) as Events[typeof name])

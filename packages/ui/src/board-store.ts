@@ -7,7 +7,22 @@ import type { BoardRef, FacetName, FacetSet } from '@pcbjs/core/site-facets'
 import type { AssistContext, EditModeMsg, FacetMsg, Invalidate, Run, ToolId } from '@pcbjs/core/protocol'
 import { emptySelection, normalizeSelection, parseSelectParam, selectParam, type Selection, type SetBy } from '@pcbjs/core/internal/selection'
 import { refNet } from '@pcbjs/core/ref'
-import { anchorGroup, anchorPart, click, drawnOf, enter, escape, isolate, isolationView, showInstance, withoutRef, type Hit, type IsolationView, type Mods } from './selection'
+import {
+  anchorGroup,
+  layoutGroup,
+  anchorPart,
+  click,
+  drawnOf,
+  enter,
+  escape,
+  isolate,
+  isolationView,
+  showInstance,
+  withoutRef,
+  type Hit,
+  type IsolationView,
+  type Mods,
+} from './selection'
 import { refocus, siteTarget, targetBox, type FindingFocus } from './refs'
 import { endIso, endsOf, type EndsCtx } from './ends'
 import { heldRun, keyOfSite, mergeLive, NONE, runN, siteOfLive, staleOf, takeFacet, takeInvalidate, type LiveBoard, type Stale } from './live'
@@ -104,7 +119,7 @@ export interface BoardStore {
   targets: SiteData[]
   /** the target shown, by variant name; null for the first, and for a board without variants */
   target: string | null
-  libraryState: 'idle' | 'loading' | 'ready' | 'error'
+  libraryState: 'idle' | 'loading' | 'ready' | 'error' | 'unsupported'
   libraryError: string | null
   libraryN: number
   library: { ref: string; target: string | null; run: Run | null; site: SiteData } | null
@@ -265,7 +280,7 @@ function makeBoard(name: string, edit: EditSession, stop: () => void): BoardStor
     /** the route end slot the editor waits on, with its candidates */
     ends: computed(() => (s.site ? endsOf(edit, s.site, s.sel.isolate) : null)),
     /** the selection's isolation, its definition in its own frame; else a route end slot isolates its candidates */
-    layoutDrawn: computed(() => s.layoutSite ? drawnOf(s.layoutSite, s.sel) : null),
+    layoutDrawn: computed(() => (s.layoutSite ? drawnOf(s.layoutSite, s.sel) : null)),
     iso: computed(() => (s.layoutSite && s.sel.isolate ? isolationView(s.layoutSite, s.sel.isolate) : s.ends && s.site ? endIso(s.site, s.ends) : null)),
 
     /** The board's item index by id, part, net and route; null before its first facets. */
@@ -408,7 +423,7 @@ function makeBoard(name: string, edit: EditSession, stop: () => void): BoardStor
       const base = pickTarget(s.targets, s.target)
       if (!base) return
       const choice = s.sel.isolateChoice ?? s.sel.isolate ?? isolate(s.sel, base).isolate
-      if (!choice) return
+      if (!choice || !layoutGroup(base, { ...s.sel, isolate: choice })) return
       s.setSel({ ...s.sel, isolateChoice: null, isolate: { ...choice, mode }, level: choice.ref })
       if (mode === 'library' && !s.edit.client && base.edit?.some(n => n.owned && (n.owned === choice.ref || n.owned.startsWith(choice.ref + '/')))) {
         s.libraryState = 'error'
@@ -465,11 +480,20 @@ function makeBoard(name: string, edit: EditSession, stop: () => void): BoardStor
     s.frame = box ? { ref: null, box: [box[0] - m, box[1] - m, box[2] + 2 * m, box[3] + 2 * m] } : null
   }
 
-  watch(() => s.target, target => {
-    if (s.sel.target !== target) s.sel = { ...s.sel, target }
-  }, { flush: 'sync' })
+  watch(
+    () => s.target,
+    target => {
+      if (s.sel.target !== target) s.sel = { ...s.sel, target }
+    },
+    { flush: 'sync' },
+  )
 
-  watch(() => s.layoutSite, () => { if (s.sel.isolate?.mode === 'library') frameIsolation(s.sel) })
+  watch(
+    () => s.layoutSite,
+    () => {
+      if (s.sel.isolate?.mode === 'library') frameIsolation(s.sel)
+    },
+  )
 
   // hovers go with an update, and a recompile renumbers findings: the one in focus is found again by its fingerprint, nearest its position
   watch(
@@ -479,11 +503,14 @@ function makeBoard(name: string, edit: EditSession, stop: () => void): BoardStor
       s.hover.net = null
       s.hover.refs = []
       if (held.has(keyOfSite(b)) && !s.facets.findings) return
-      if (!s.finding) { syncFinding(s.sel.finding ?? null); return }
+      if (!s.finding) {
+        syncFinding(s.sel.finding ?? null)
+        return
+      }
       const m = refocus(s.finding, [...b.drc, ...b.erc])
       const old = s.sel.finding
       const id = m?.id ?? null
-      s.setSel({ ...s.sel, finding: id, refs: s.sel.refs.flatMap(ref => ref === old ? id ? [id] : [] : [ref]), anchor: s.sel.anchor === old ? id : s.sel.anchor })
+      s.setSel({ ...s.sel, finding: id, refs: s.sel.refs.flatMap(ref => (ref === old ? (id ? [id] : []) : [ref])), anchor: s.sel.anchor === old ? id : s.sel.anchor })
     },
   )
   return s

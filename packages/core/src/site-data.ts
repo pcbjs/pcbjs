@@ -136,7 +136,10 @@ export interface SiteSrc {
   endCol?: number
 }
 /** An edit node as the viewer gets it, sources relative to the root. */
-export type SiteEditNode = Omit<import('./model.js').EditNode, 'src' | 'steps'> & { src: { at?: SiteSrc; chain?: SiteSrc }; steps?: { op: string; layer?: string; angle?: number; src?: SiteSrc }[] }
+export type SiteEditNode = Omit<import('./model.js').EditNode, 'src' | 'steps'> & {
+  src: { at?: SiteSrc; chain?: SiteSrc }
+  steps?: { op: string; layer?: string; angle?: number; src?: SiteSrc }[]
+}
 
 /** One route as the viewer reports it: `length` in mm, of the longer track for a pair; `skew` longer minus shorter; `nets` every net of a pair's group, both sides of a series part; `call` where a helper was called; `path` the instance whose layout made it. */
 export interface RouteInfo {
@@ -298,6 +301,8 @@ export interface PackedRings {
 }
 /** The items' rings in board mm, y down; an item's outers have a positive signed area, its holes a negative one. */
 export interface SiteShapes {
+  /** Hash of the item rows these numeric ids belong to; absent on legacy exports. */
+  itemsHash?: string
   /** the stroked outline, pad shape or zone fill of each item */
   rings: PackedRings
   /** on outer copper, the rings under each side's mask of the items that have some open; an item left out is wholly covered */

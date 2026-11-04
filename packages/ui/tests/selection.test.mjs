@@ -15,7 +15,7 @@ registerHooks({
     }
   },
 })
-const { chipPath, click, clickTarget, drawnOf, emptySelection, enter, escape, hitPath, isolate, isolationLabel, isolationView, showInstance, withoutRef } =
+const { chipPath, click, clickTarget, drawnOf, emptySelection, enter, escape, hitPath, isolate, isolationName, isolationView, showInstance, withoutRef } =
   await import('../src/selection.ts')
 
 const B = fixture()
@@ -163,7 +163,8 @@ test('Isolate on an instance of two: its definition in its own frame, the board 
     v.box.map(n => +n.toFixed(6)),
     [Math.min(cs[0][0], cs[1][0]), Math.min(cs[0][1], cs[1][1]), bh, bw].map(n => +n.toFixed(6)),
   )
-  assert.deepEqual(isolationLabel(F, s.isolate), { def: 'Chan', shown: 'CH1', follow: 2 })
+  assert.equal(isolationName(F, s.isolate), 'Chan')
+  assert.equal(s.isolate.instances.length, 2)
   // the picker shows another instance's values, the selection following to the same place
   s = showInstance(s, 'CH2')
   assert.deepEqual([s.isolate.ref, s.level, s.refs], ['CH2', 'CH2', ['CH2/R01']])
@@ -174,5 +175,5 @@ test('Isolate on an instance of two: its definition in its own frame, the board 
   // a named group placed once: the board stays, faded
   const g = isolate(click(emptySelection('Fx'), B, pad(1, 'R1', 'A'), plain), B)
   assert.equal(isolationView(B, g.isolate).fade, true)
-  assert.equal(isolationLabel(B, g.isolate).follow, 1)
+  assert.equal(g.isolate.instances.length, 1)
 })

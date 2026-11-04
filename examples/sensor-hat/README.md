@@ -10,3 +10,23 @@ npm run preview   # serve the built site
 ```
 
 `npm run build` prints the DRC and ERC summary and fails when the board has errors or unconnected nets. The fab zip in `.pcbjs/fab/sensor-hat` is what you upload to the fab.
+
+## Learning goal
+
+A Raspberry Pi HAT in the official outline with 11 model files from KiCad and LCSC
+
+## Run this example
+
+From the repository root, run `npm install` and `npm run build` once. Then:
+
+```sh
+cd examples/sensor-hat
+node ../../packages/pcbjs/bin/pcbjs.js check
+node ../../packages/pcbjs/bin/pcbjs.js dev
+```
+
+Use the viewer to compare the source with the board, schematic and findings. `pcbjs build` writes the fabrication output when ready.
+
+## Expected findings
+
+None: the 0.5 mm pitch accelerometer has one gang mask opening per pad row.

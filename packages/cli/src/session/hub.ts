@@ -19,12 +19,11 @@ import { drafts as draftsOf, holdIn, skippedRanges, tiersOf, type Drafts, type H
 import { lspHub, LSP_VERSION, type LspHub } from './lsp.js'
 import { previewable, type DevState, type ProjectApi, type ProjectsApi } from './plugin.js'
 import { loadScope, scopeRoute, scopesInfo, type Scope, type Workspace } from './scope-state.js'
-import { scopeOf } from './scopes.js'
+import { changedSince, scopeOf } from './scopes.js'
 import { clientsOf, type Client } from './clients.js'
 import { eventLog, type EventLog } from './events.js'
 import { eventFeed } from './feed.js'
 import { facetFrame, wants } from './facet-store.js'
-import type { Restored } from './restored.js'
 import { projectRuntime, relTo, type ProjectRuntime } from './runtime.js'
 import type { Demand } from './scheduler.js'
 import { boardKey, snapshots, type Snapshot } from './snapshots.js'
@@ -175,9 +174,19 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
     announce()
     return rt
   }
+  const configChanged = (rt: ProjectRuntime) => {
+    const file = rt.scope.configFile,
+      stamp = rt.scope.stamps.get(file)
+    return !!stamp && changedSince(new Map([[file, stamp]]))
+  }
   const show = async (sc: Scope): Promise<ProjectRuntime | null> => {
-    const rt = await load(sc)
+    let rt = await load(sc)
     if (!rt) return null
+    if (configChanged(rt)) {
+      await reload(sc)
+      rt = await load(sc)
+      if (!rt) return null
+    }
     rt.catchUp()
     // a scope shown compiles what it never compiled or no one observed, every view of it
     void rt.compiledOnce()
@@ -331,7 +340,14 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
   const beat = (project?: string) => {
     for (const c of shared.clients?.list() ?? []) if (c.hello && (!project || projectOf(c) === project)) beatTo(c)
   }
-  const beating = setInterval(() => beat(), BEAT_MS)
+  const beating = setInterval(() => {
+    for (const rt of runtimes.values()) {
+      if (!viewersOf(rt.root).length || rt.busy()) continue
+      if (configChanged(rt)) void reload(rt.scope)
+      else rt.catchUp()
+    }
+    beat()
+  }, BEAT_MS)
   beating.unref()
   server.httpServer?.once('close', () => clearInterval(beating))
 
@@ -609,14 +625,6 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
     })
     lsp?.refresh()
   }
-  // an editor's unedited open text unlike the disk, held back so the disk compiles
-  const onRestored = (r: Restored, held: boolean) => {
-    const rel = relTo(rootOf(r.file) ?? recent()?.root ?? ws.folders[0], r.file)
-    const editor = r.holder.name ?? 'an editor'
-    if (held) muted(`${rel}: ${editor} opened unsaved text unlike the disk that no edit of it produced; the session compiles the disk until the editor edits, saves or reverts it`)
-    else muted(`${rel}: ${editor} edited, saved or closed the unsaved text it opened; the session compiles what it holds`)
-    lsp?.refresh()
-  }
   const unshadow = (file: string, text: string | null) => {
     if (!shadowed.has(file) || (text !== null && diskText(file) !== text)) return
     shadowed.delete(file)
@@ -627,9 +635,7 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
     hub: () => lsp,
     rootOf: f => rootOf(f) ?? recent()?.root ?? ws.folders[0],
     projectOf: k => (k as Client)?.hello?.project ?? null,
-    realFile: realOf,
     claim: (f, by) => shared.feed?.claim(f, by),
-    restored: onRestored,
   })
   // the session's watcher reaches every compile thread, and finds what it wrote under an editor
   server.watcher.on('change', file => {
@@ -694,17 +700,10 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
         return placed.length ? { lines: placed.map(p => p.src!.line), edits: freezeEdits(file, text, placed).edits } : null
       },
       shadowed: () =>
-        [...shadowed.values()]
-          .map(v => ({
-            file: v.named,
-            message: `changed on disk at ${new Date(v.at).toLocaleTimeString()} under your unsaved text; the session compiles your text until you save, revert or merge`,
-          }))
-          .concat(
-            sources.restored().map(r => ({
-              file: r.named,
-              message: 'this unsaved text was restored unlike the disk and no edit of it reached the session; the session compiles the disk until you edit, save or revert',
-            })),
-          ),
+        [...shadowed.values()].map(v => ({
+          file: v.named,
+          message: `changed on disk at ${new Date(v.at).toLocaleTimeString()} under your unsaved text; the session compiles your text until you save, revert or merge`,
+        })),
     }
     // a connection's focus and cursor name it; a read-only one serves its own positions and never syncs into the store
     const clientOf = (key: unknown): Client | null => (shared.clients?.get((key as Client)?.id) === key ? (key as Client) : null)
@@ -739,7 +738,6 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
       },
       roleOf,
       log: muted,
-      wrap: sources.wrap,
       // the store feeds the drafts, which feed every compile
       onStore: st =>
         st.onChange(c => {

@@ -2,24 +2,12 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { development, developmentTopics, developmentLinks } from '../scripts/development.mjs'
 
 export const repo = fileURLToPath(new URL('../..', import.meta.url))
 export const docsDir = join(repo, 'docs')
 
-/** Sidebar groups in the order of the README topic table; a topic left out lands in Background. */
-export const groups: [string, string[]][] = [
-  ['Start', ['quickstart']],
-  ['Schematic', ['board', 'schematic', 'circuits', 'schematic-graphic', 'sourcing']],
-  ['Layout', ['layout', 'pours']],
-  ['Routing', ['routing', 'autorouter', 'pairs', 'length']],
-  ['Checks', ['rules', 'findings']],
-  ['Output', ['fab', 'fab-set', 'cli', 'inspect']],
-  ['Viewer and editor', ['viewer', 'editor', 'highlight', '3d', 'models', 'references']],
-  ['Agents', ['skills']],
-  ['Library', ['stdlib']],
-  ['From KiCad', ['kicad', 'import']],
-  ['Background', ['workspace', 'stackup-and-rules', 'fonts', 'ide-bridge', 'design', 'development']],
-]
+export type Level = 'Basics' | 'Advanced'
 
 export interface Topic {
   topic: string
@@ -50,7 +38,7 @@ export function readTopic(topic: string): Topic {
     if (l.startsWith('#') || l.startsWith('```')) break
     summary.push(l.trim())
   }
-  return { topic, title, description: summary.join(' ').replace(/`/g, ''), body: linkTopics(text, new Set(topicNames())) }
+  return { topic, title, description: summary.join(' ').replace(/`/g, ''), body: developmentLinks(linkTopics(text, new Set(topicNames())), new Set(topicNames())) }
 }
 
 /** `see board.md` in prose becomes a link to that page; code spans and fences are left alone. */
@@ -61,27 +49,52 @@ function linkTopics(text: string, topics: Set<string>): string {
       i % 2
         ? part
         : part
-            .split(/(`[^`\n]*`)/)
+            .split(/(`[^`\n]*`|\[[^\]]*\]\([^)]+\))/)
             .map((s, j) => (j % 2 ? s : s.replace(/(?<![\w/.[-])([a-z0-9-]+)\.md\b(?!\])/g, (m, t) => (topics.has(t) ? `[${m}](./${t})` : m))))
             .join(''),
     )
     .join('')
 }
 
+/** A topic's level, the `Basic.` or `Advanced.` that starts the second line of its summary. */
+export function levelOf(topic: string): Level {
+  const text = readFileSync(join(docsDir, `${topic}.md`), 'utf8')
+  const summary = text.split('\n## ')[0]
+  return /^Basic\.\s/m.test(summary) ? 'Basics' : 'Advanced'
+}
+
+/** The Basics in the order of the README's Basics table. */
+function basicsOrder(): string[] {
+  const text = readFileSync(join(repo, 'README.md'), 'utf8')
+  const table = text.split('\n### Basics\n')[1]?.split('\n### ')[0] ?? ''
+  return [...table.matchAll(/^\| `([\w-]+)` \|/gm)].map(m => m[1])
+}
+
+/** The sections of advanced.md with their topics in order, advanced.md itself first. */
+function advancedSections(): [string, string[]][] {
+  const text = readFileSync(join(docsDir, 'advanced.md'), 'utf8')
+  return text
+    .split('\n## ')
+    .slice(1)
+    .map(s => [s.split('\n')[0].trim(), [...s.matchAll(/^- ([\w-]+)\.md:/gm)].map(m => m[1])] as [string, string[]])
+}
+
+const item = (t: string) => ({ text: readTopic(t).title, link: `/docs/${t}` })
+
+/** Basics, then Advanced by the sections of advanced.md; each topic by its marker, one in no list at the end of its level. */
 export function sidebar() {
-  const names = topicNames()
-  const listed = new Set(groups.flatMap(([, t]) => t))
-  const extra = names.filter(t => !listed.has(t))
-  return groups
-    .map(([text, topics], i) => ({
-      text,
-      collapsed: false,
-      items: topics
-        .concat(i === groups.length - 1 ? extra : [])
-        .filter(t => names.includes(t))
-        .map(t => ({ text: readTopic(t).title, link: `/docs/${t}` })),
-    }))
-    .filter(g => g.items.length)
+  const names = topicNames().filter(t => t !== 'quickstart' && !developmentTopics.has(t))
+  const basics = names.filter(t => levelOf(t) === 'Basics')
+  const ordered = [...new Set([...basicsOrder(), ...basics])].filter(t => basics.includes(t))
+  const advanced = names.filter(t => levelOf(t) === 'Advanced' && t !== 'advanced')
+  const sections = advancedSections().map(([text, ts]) => ({ text, collapsed: true, items: ts.filter(t => advanced.includes(t)).map(item) }))
+  const placed = new Set(advancedSections().flatMap(([, ts]) => ts))
+  const rest = advanced.filter(t => !placed.has(t))
+  if (rest.length) sections.push({ text: 'More', collapsed: true, items: rest.map(item) })
+  return [
+    { text: 'Basics', collapsed: false, items: ordered.map(item) },
+    { text: 'Advanced', collapsed: false, items: [...(names.includes('advanced') ? [item('advanced')] : []), ...sections.filter(s => s.items.length)] },
+  ]
 }
 
 /** The README's `## For agents` section, its heading kept. */
@@ -128,7 +141,10 @@ ${changelog() ?? 'No release yet. The first train is 0.1.0-beta.1; its notes app
 /** The markdown of a page that has no file of its own, by its path under site/. */
 export function dynamicPage(rel: string): string | undefined {
   const topic = /^docs\/([\w-]+)\.md$/.exec(rel)?.[1]
+  if (topic && developmentTopics.has(topic)) return ''
   if (topic && topicNames().includes(topic)) return readTopic(topic).body
+  const spec = /^development\/([\w-]+)\/([\w-]+)\.md$/.exec(rel)
+  if (spec && developmentTopics.get(spec[2])?.section === spec[1]) return readTopic(spec[2]).body.replace(/^# .+$/m, `# ${developmentTopics.get(spec[2]).title}`)
   if (rel === 'agents.md') return agentsPage()
   if (rel === 'changelog.md') return changelogPage()
 }
@@ -170,4 +186,29 @@ export function searchSections(markdown: string) {
     } else if (out.length) out[out.length - 1].text += plain(line) + ' '
   }
   return out
+}
+
+const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/** A topic made safe for Vue: inline code holding `{{` or `}}` becomes `<code v-pre>`, fenced code stays as VitePress marks it; the rest compiles to static HTML, which the lean page chunks leave out. */
+export function vueSafe(md: string): string {
+  return md
+    .split(/(^(?:```|~~~)[\s\S]*?^(?:```|~~~)$)/m)
+    .map((part, i) => (i % 2 ? part : part.replace(/`([^`\n]+)`/g, (code, text: string) => (/\{\{|\}\}/.test(text) ? `<code v-pre>${escapeHtml(text)}</code>` : code))))
+    .join('')
+}
+
+/** Full contract pages share the CLI's Markdown source, with one canonical website route. */
+export function developmentPaths(section: string) {
+  const group = development.find(s => s.id === section)
+  if (!group) throw new Error(`Unknown specification section: ${section}`)
+  return group.groups.flatMap(g =>
+    g.topics.map(([topic, title]) => {
+      const source = readTopic(topic)
+      const oldAnchor = slugify(source.title)
+      const anchor = oldAnchor === slugify(title) ? '' : `<span id="${oldAnchor}"></span>\n\n`
+      const body = anchor + source.body.replace(/^# .+$/m, `# ${title}`)
+      return { params: { topic, title, description: source.description }, content: vueSafe(body) }
+    }),
+  )
 }

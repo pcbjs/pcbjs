@@ -59,8 +59,8 @@ test('two viewers see each other’s hover; the session stamps a selection, send
     const a = await viewer('Sync'),
       b = await viewer('Sync'),
       other = await viewer('Else')
-    await new Promise(r => setTimeout(r, 200))
-    const hover = { ids: [3], refs: ['R1'], net: 'VCC' }
+    await b.request('session/check')
+    const hover = { ids: [3], refs: ['TP1'], net: 'VCC' }
     a.notify('session/hover', { board: 'Sync', hover })
     const h = await b.next('pcbjs:sync:hover')
     assert.deepEqual(h.hover, hover)
@@ -69,31 +69,31 @@ test('two viewers see each other’s hover; the session stamps a selection, send
     assert.equal((await b.next('pcbjs:sync:hover')).hover, null, 'the pointer leaving clears it')
     assert.equal(await a.next('pcbjs:sync:hover', 300), null, 'nothing comes back to the sender')
     // a viewer's selection reaches both viewers of the board, the sender learning its seq
-    await b.request('session/select', { board: 'Sync', selection: sel(['R1', 'net:GND'], 'net:GND'), base: 0 })
+    await b.request('session/select', { board: 'Sync', selection: sel(['TP1', 'net:V'], 'net:V'), base: 0 })
     const toA = await a.next('pcbjs:select'),
       toB = await b.next('pcbjs:select')
-    assert.deepEqual([toA.selection.refs, toA.selection.anchor, toA.selection.by], [['R1', 'net:GND'], 'net:GND', 'viewer'])
+    assert.deepEqual([toA.selection.refs, toA.selection.anchor, toA.selection.by], [['TP1', 'net:V'], 'net:V', 'viewer'])
     assert.ok(toA.selection.seq > 0)
     assert.equal(toB.selection.seq, toA.selection.seq, 'the sender gets the same stamp')
     assert.equal(toA.selection.client.role, 'viewer')
     assert.equal(await other.next('pcbjs:select', 300), null, 'another board hears nothing')
     // a change based on the seq it saw goes; one from the same viewer based on an older seq than its last is dropped
-    await a.request('session/select', { board: 'Sync', selection: sel(['R1'], 'R1'), base: toA.selection.seq })
+    await a.request('session/select', { board: 'Sync', selection: sel(['TP1'], 'TP1'), base: toA.selection.seq })
     const next = await b.next('pcbjs:select')
-    assert.deepEqual(next.selection.refs, ['R1'])
+    assert.deepEqual(next.selection.refs, ['TP1'])
     assert.ok(next.selection.seq > toA.selection.seq)
     await a.next('pcbjs:select')
-    await a.request('session/select', { board: 'Sync', selection: sel(['net:VCC'], 'net:VCC'), base: 0 })
+    await a.request('session/select', { board: 'Sync', selection: sel(['net:V'], 'net:V'), base: 0 })
     assert.equal(await b.next('pcbjs:select', 400), null, 'a stale change is dropped')
     // an agent selects through session/select, by references; every viewer gets it with by: agent
     const agent = await connectSession(socketOf(root), { name: 'agent', role: 'agent', project: root })
-    const set = await agent.request('session/select', { board: 'Sync', refs: ['R2', 'R1'], anchor: 'R2' })
-    assert.deepEqual([set.refs, set.anchor, set.by], [['R2', 'R1'], 'R2', 'agent'])
-    for (const v of [a, b]) assert.deepEqual((await v.next('pcbjs:select')).selection.refs, ['R2', 'R1'])
+    const set = await agent.request('session/select', { board: 'Sync', refs: ['TP2', 'TP1'], anchor: 'TP2' })
+    assert.deepEqual([set.refs, set.anchor, set.by], [['TP2', 'TP1'], 'TP2', 'agent'])
+    for (const v of [a, b]) assert.deepEqual((await v.next('pcbjs:select')).selection.refs, ['TP2', 'TP1'])
     await assert.rejects(agent.request('session/select', { board: 'Nope', refs: [] }), /no board Nope/)
     agent.close()
     const late = await viewer('Sync')
-    assert.deepEqual((await late.next('pcbjs:select')).selection.refs, ['R2', 'R1'])
+    assert.deepEqual((await late.next('pcbjs:select')).selection.refs, ['TP2', 'TP1'])
     for (const v of [a, b, other, late]) v.close()
   } finally {
     await stop(child)

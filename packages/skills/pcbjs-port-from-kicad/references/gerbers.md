@@ -29,7 +29,7 @@ export const inner = svg => svg
 | copper on pads | polygon chords: pcbjs writes non-round pads as regions where KiCad flashes apertures | yes, a thin rim |
 | silk | glyph shapes when the port draws Hershey; `font="newstroke"` with KiCad's size, width and thickness removes it | yes; or fix it |
 | mask | an opening KiCad writes over NPTH pads, or a different `maskExpansion` | check the pad's mask margin |
-| paste | windows on hand-solder lands, ratio margins | must match; it was wrong on early imports |
+| paste | windows on hand-solder lands, ratio margins | must match |
 | Edge.Cuts, drills | none | must be identical, hole for hole |
 
 pcbjs also writes files KiCad's set may not have: an IPC-D-356 netlist, drill maps, a drill report and a manifest. Count them, do not compare them.

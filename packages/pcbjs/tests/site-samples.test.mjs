@@ -1,10 +1,11 @@
 // Every TypeScript sample on the docs site's own pages in site/ type checks as a module of its own, as the skill samples do.
-// The README's example and Getting started show the `example` region of Blinky's layout; the home page takes it in scripts/boards.mjs.
+// The README shows the created board; the guide compiles complete progressive source modules.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { guideExamples } from '../../../site/scripts/guide-examples.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..', '..', '..')
@@ -68,12 +69,17 @@ test('site: every TypeScript sample on a site page type checks', async () => {
 
 /** The lines between `// #region example` and `// #endregion example` of a file, as VitePress includes them. */
 const region = file => /^\/\/ #region example\n([\s\S]*?)^\/\/ #endregion example$/m.exec(readFileSync(join(repo, file), 'utf8'))?.[1]
-const include = file => `<<< @/../${file}#example{tsx}`
 
-test('site: the README and Getting started show the Blinky region', () => {
-  const layout = region('examples/demo/blinky.pcb.tsx')
-  assert.ok(layout, 'blinky.pcb.tsx has no example region')
-  assert.equal(samples(readFileSync(join(repo, 'README.md'), 'utf8')).find(s => s.lang === 'tsx')?.code, layout)
-  const page = file => readFileSync(join(site, file), 'utf8').split('\n')
-  assert.ok(page('getting-started.md').includes(include('examples/demo/blinky.pcb.tsx')))
+test('site: README matches the template and guide uses complete progressive sources', () => {
+  const template = readFileSync(join(repo, 'packages/cli/templates/board/pcb.tsx'), 'utf8')
+  assert.equal(samples(readFileSync(join(repo, 'README.md'), 'utf8')).find(s => s.lang === 'tsx')?.code, template)
+  const examples = guideExamples()
+  const board = examples.find(e => e.id === 'blinky-board')
+  const placement = examples.find(e => e.id === 'blinky-placement')
+  assert.match(board.files['pcb.tsx'], /export default \(/)
+  assert.doesNotMatch(board.files['pcb.tsx'], /<J1|route\(/)
+  assert.match(placement.files['pcb.tsx'], /<J1 at="3 8"/)
+  assert.match(placement.files['blinky.sch.tsx'], /export const J1/)
+  assert.doesNotMatch(placement.files['pcb.tsx'], /<LedChannelRow|route\(/)
+  assert.match(readFileSync(join(site, 'guide/getting-started/placement.md'), 'utf8'), /<GuideDemo example="blinky-placement"/)
 })

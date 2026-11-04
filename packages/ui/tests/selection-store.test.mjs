@@ -115,8 +115,10 @@ test('canonical finding focus clears on empty canvas, Escape and removing its la
 })
 
 test('area frames clear with their selection and remote isolation uses the same framing lifecycle', async () => {
-  const p = page(), remote = page()
-  const b = p.board('Fx'), r = remote.board('Fx')
+  const p = page(),
+    remote = page()
+  const b = p.board('Fx'),
+    r = remote.board('Fx')
   b.selectRef('net:B', true)
   assert.ok(b.frame?.box)
   b.selectRef(null)
@@ -139,13 +141,16 @@ test('area frames clear with their selection and remote isolation uses the same 
   r.takeSel({ ...b.sel })
   assert.equal(r.frame, null)
   await tick()
-  p.stop(); remote.stop()
+  p.stop()
+  remote.stop()
 })
 
 test('pane focus cancellation queues rollback for hidden views and keeps a new explicit request', async () => {
   const { focusTransaction } = await import('../src/focus-transaction.ts')
   const { focusAt } = await import('../src/pane.ts')
-  const p = page(), b = p.board('Fx'), pane = p.pane('Fx')
+  const p = page(),
+    b = p.board('Fx'),
+    pane = p.pane('Fx')
   const tx = focusTransaction(pane.focusViews, 'Fx', '2d')
   b.selectRef('G')
   pane.focus = focusAt([1, 2], 4, false)
@@ -160,7 +165,9 @@ test('pane focus cancellation queues rollback for hidden views and keeps a new e
 })
 
 test('same-ID finding updates keep stable focus requests and cancel inapplicable views', async () => {
-  const p = page(), b = p.board('Fx'), pane = p.pane('Fx')
+  const p = page(),
+    b = p.board('Fx'),
+    pane = p.pane('Fx')
   b.site.schematic.drawing = { grid: 1, symbols: [{ ref: 'R1', box: [0, 0, 2, 4] }] }
   const finding = { id: 'drc:test:stable', fingerprint: 'stable', rule: 'test', message: 'test', severity: 'error', refs: ['R1'], at: [1, 2] }
   b.site.drc.push(finding)
@@ -191,7 +198,9 @@ test('same-ID finding updates keep stable focus requests and cancel inapplicable
 test('a point-only focus remains active until an explicit empty selection cancels it', async () => {
   const { focusTransaction } = await import('../src/focus-transaction.ts')
   const { focusAt } = await import('../src/pane.ts')
-  const p = page(), b = p.board('Fx'), pane = p.pane('Fx')
+  const p = page(),
+    b = p.board('Fx'),
+    pane = p.pane('Fx')
   const tx = focusTransaction(pane.focusViews, 'Fx', '2d')
   pane.focus = focusAt([3, 4], 2, true)
   await tick()
@@ -205,7 +214,9 @@ test('a point-only focus remains active until an explicit empty selection cancel
 })
 
 test('target-only and snapshot-only changes relay once and remote target replay has no echo', () => {
-  const p = page(), b = p.board('Fx'), sent = []
+  const p = page(),
+    b = p.board('Fx'),
+    sent = []
   const sync = createSync({ select: m => sent.push(m), hover() {} }, cb => cb())
   sync.select('Fx', b.sel)
   b.target = 'other'
@@ -221,7 +232,9 @@ test('target-only and snapshot-only changes relay once and remote target replay 
 })
 
 test('group focus offers layout editing and a second click enters instance layout immediately', () => {
-  const p = page(), b = p.board('Fx'), hit = pad(5, 'R101', 'S1')
+  const p = page(),
+    b = p.board('Fx'),
+    hit = pad(5, 'R101', 'S1')
   b.pick(hit, { shift: false, deep: false })
   assert.equal(b.sel.anchor, 'CH1')
   assert.equal(b.sel.isolate, null)
@@ -245,9 +258,23 @@ test('group focus offers layout editing and a second click enters instance layou
 test('lazy library geometry is target-aware and ignores replies after leaving or changing snapshots', async () => {
   const { effectScope } = await import('vue')
   const { connectLibrary } = await import('../src/layout.ts')
-  const p = page(), b = p.board('Fx'), pending = []
+  const p = page(),
+    b = p.board('Fx'),
+    pending = []
   const scope = effectScope()
-  scope.run(() => connectLibrary({ request(method, params) { return new Promise(resolve => pending.push({ method, params, resolve })) } }, () => b))
+  scope.run(() =>
+    connectLibrary(
+      {
+        on(_event, ready) {
+          ready({ capabilities: ['layout'] })
+        },
+        request(method, params) {
+          return new Promise(resolve => pending.push({ method, params, resolve }))
+        },
+      },
+      () => b,
+    ),
+  )
   b.pick(pad(5, 'R101', 'S1'), { shift: false, deep: false })
   b.chooseIsolation('library')
   await tick()
@@ -277,12 +304,15 @@ test('lazy library geometry is target-aware and ignores replies after leaving or
 
 test('library geometry applies to all drawing panes while checks retain the full canonical board', async () => {
   const { useActions } = await import('../src/use/actions.ts')
-  const p = page(), b = p.board('Fx'), base = b.site
+  const p = page(),
+    b = p.board('Fx'),
+    base = b.site
   b.pick(pad(5, 'R101', 'S1'), { shift: false, deep: false })
   b.chooseIsolation('library')
   const local = { ...base, footprints: base.footprints.filter(f => f.ref === 'R101'), drc: [], erc: [] }
   b.library = { ref: 'CH1', target: null, run: b.run, site: local }
-  const ctx = p.context('Fx'), action = useActions(ctx)
+  const ctx = p.context('Fx'),
+    action = useActions(ctx)
   assert.equal(b.site.footprints.length, base.footprints.length)
   assert.equal(action.site.value.footprints.length, 1)
   ctx.pane.mode = 'sch'
@@ -296,8 +326,23 @@ test('library geometry applies to all drawing panes while checks retain the full
 test('library errors stay readable and retry without changing canonical mode', async () => {
   const { effectScope } = await import('vue')
   const { connectLibrary } = await import('../src/layout.ts')
-  const p = page(), b = p.board('Fx'), pending = [], scope = effectScope()
-  scope.run(() => connectLibrary({ request() { return new Promise((resolve, reject) => pending.push({ resolve, reject })) } }, () => b))
+  const p = page(),
+    b = p.board('Fx'),
+    pending = [],
+    scope = effectScope()
+  scope.run(() =>
+    connectLibrary(
+      {
+        on(_event, ready) {
+          ready({ capabilities: ['layout'] })
+        },
+        request() {
+          return new Promise((resolve, reject) => pending.push({ resolve, reject }))
+        },
+      },
+      () => b,
+    ),
+  )
   b.pick(pad(5, 'R101', 'S1'), { shift: false, deep: false })
   b.chooseIsolation('library')
   await tick()
@@ -322,13 +367,16 @@ test('library errors stay readable and retry without changing canonical mode', a
 
 test('standalone schematic actions use library geometry and preserve canonical selections', async () => {
   const { useActions } = await import('../src/use/actions.ts')
-  const p = page(), b = p.board('Fx'), base = b.site
+  const p = page(),
+    b = p.board('Fx'),
+    base = b.site
   b.pick(pad(5, 'R101', 'S1'), { shift: false, deep: false })
   b.chooseIsolation('library')
   b.library = { ref: 'CH1', target: null, run: b.run, site: { ...base, footprints: base.footprints.filter(f => f.ref === 'R101'), drc: [], erc: [] } }
   const ctx = p.context('Fx')
   ctx.pane.mode = '2d'
-  const schematic = useActions(ctx, 'sch'), pcb = useActions(ctx, '2d')
+  const schematic = useActions(ctx, 'sch'),
+    pcb = useActions(ctx, '2d')
   assert.equal(schematic.site.value, pcb.site.value)
   assert.equal(pcb.site.value.footprints.length, 1)
   schematic.onPick(pad(5, 'R101', 'S1'), { shift: false, deep: true })
@@ -340,8 +388,24 @@ test('standalone schematic actions use library geometry and preserve canonical s
 test('standalone schematic facet demand fetches library geometry', async () => {
   const { effectScope } = await import('vue')
   const { connectLibrary } = await import('../src/layout.ts')
-  const p = page(), b = p.board('Fx'), calls = [], scope = effectScope()
-  scope.run(() => connectLibrary({ request(method, params) { calls.push(params); return Promise.resolve(fixture()) } }, () => b.wanted.has('layers') || b.wanted.has('model') || b.wanted.has('sch') ? b : null))
+  const p = page(),
+    b = p.board('Fx'),
+    calls = [],
+    scope = effectScope()
+  scope.run(() =>
+    connectLibrary(
+      {
+        on(_event, ready) {
+          ready({ capabilities: ['layout'] })
+        },
+        request(method, params) {
+          calls.push(params)
+          return Promise.resolve(fixture())
+        },
+      },
+      () => (b.wanted.has('layers') || b.wanted.has('model') || b.wanted.has('sch') ? b : null),
+    ),
+  )
   b.pick(pad(5, 'R101', 'S1'), { shift: false, deep: false })
   b.chooseIsolation('library')
   b.want(['meta', 'sch', 'findings'])
@@ -354,10 +418,12 @@ test('standalone schematic facet demand fetches library geometry', async () => {
   p.stop()
 })
 
-
 test('clearing part focus exits instance layout and its framing locally and on remote replay', () => {
   for (const clear of [b => b.pick(null, { shift: false, deep: false }), b => b.selectRef(null, false, 'editor'), b => b.dropMember(b.sel.anchor)]) {
-    const p = page(), other = page(), b = p.board('Fx'), remote = other.board('Fx')
+    const p = page(),
+      other = page(),
+      b = p.board('Fx'),
+      remote = other.board('Fx')
     const hit = pad(5, 'R101', 'S1')
     b.pick(hit, { shift: false, deep: false })
     b.pick(hit, { shift: false, deep: false })
@@ -368,12 +434,14 @@ test('clearing part focus exits instance layout and its framing locally and on r
     assert.deepEqual([b.sel.refs, b.sel.anchor, b.sel.level, b.sel.isolate, b.frame], [[], null, null, null, null])
     remote.takeSel({ ...b.sel })
     assert.deepEqual([remote.sel.isolate, remote.sel.level, remote.frame], [null, null, null])
-    p.stop(); other.stop()
+    p.stop()
+    other.stop()
   }
 })
 
 test('blur keeps library context and a newly entered instance can wait for its first member', () => {
-  const p = page(), b = p.board('Fx')
+  const p = page(),
+    b = p.board('Fx')
   b.isolateRef('CH1')
   assert.equal(b.sel.isolate.mode, 'instance')
   assert.equal(b.sel.refs.length, 0)

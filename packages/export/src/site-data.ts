@@ -1,5 +1,5 @@
 import type { Board, Footprint, Pad, Pt, Ratsnest, SchematicExport, Track } from '@pcbjs/core/model'
-import { joinSite, type FacetData } from '@pcbjs/core/site-facets'
+import { itemsHash, joinSite, type FacetData } from '@pcbjs/core/site-facets'
 import type { Src } from '@pcbjs/core'
 import type { RouteInfo, SiteData, SiteFootprint, SiteItem, SiteSrc, SourceIndex, SourceRange } from '@pcbjs/core/site-data'
 import { filledRings, holesMarkup, layerMarkup, viewBox } from './svg.js'
@@ -123,7 +123,16 @@ export function metaFacet(board: Board, opts: SiteOptions): FacetData['meta'] {
             ...e,
             src: srcs(rel, e.src),
             ...(e.def ? { def: relKey(rel, e.def) } : {}),
-            ...(e.steps ? { steps: e.steps.map(s => ({ op: s.op, ...(s.layer ? { layer: s.layer } : {}), ...(s.angle !== undefined ? { angle: s.angle } : {}), ...srcs(rel, { src: s.src }) })) } : {}),
+            ...(e.steps
+              ? {
+                  steps: e.steps.map(s => ({
+                    op: s.op,
+                    ...(s.layer ? { layer: s.layer } : {}),
+                    ...(s.angle !== undefined ? { angle: s.angle } : {}),
+                    ...srcs(rel, { src: s.src }),
+                  })),
+                }
+              : {}),
           })),
         }
       : {}),
@@ -202,7 +211,12 @@ export function shapesFacet(board: Board, items: ShapedItem[]): FacetData['shape
   const covered = (side: 'F' | 'B') => pack(items.flatMap(it => (it.covered?.[side] ? [[it.row.id, it.covered[side]] as const] : [])))
   const openings = (side: 'F' | 'B') => pack(filledRings(board, `${side}.Mask`))
   return {
-    shapes: { rings: pack(items.map(it => [it.row.id, it.rings] as const)), covered: { F: covered('F'), B: covered('B') }, openings: { F: openings('F'), B: openings('B') } },
+    shapes: {
+      itemsHash: itemsHash(rowsOf(board, items)),
+      rings: pack(items.map(it => [it.row.id, it.rings] as const)),
+      covered: { F: covered('F'), B: covered('B') },
+      openings: { F: openings('F'), B: openings('B') },
+    },
   }
 }
 

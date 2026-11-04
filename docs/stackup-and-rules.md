@@ -1,19 +1,19 @@
 # Stackup and design rules
 
 Why the stackup builders, presets and rule values are what they are, with the source of every number.
-The reference for props and rule names is in board.md, rules.md, findings.md and fab.md; this file is the background.
+Advanced. The reference for props and rule names is in board.md, stackup.md, rules.md, findings.md and fab.md; this file is the background.
 
 ```tsx
 import PCB from '@pcbjs/core'
 import { fourLayer } from '@pcbjs/lib/stackups'
 
 // JLCPCB_4L_7628 and the other presets go straight into stackup={…}; a builder makes a variant of the generic one
-export default <PCB name="Thin" stackup={fourLayer({ thickness: 1.0, finish: 'ENIG', maskColor: 'Black' })}>{/* … */}</PCB>
+export default <PCB name="Thin" rev="0.1.0" stackup={fourLayer({ thickness: 1.0, finish: 'ENIG', maskColor: 'Black' })}>{/* … */}</PCB>
 ```
 
 ## Stackups
 
-The `Stackup` type is in board.md. Thickness in mm, copper weight in oz, 1 oz being 0.035 mm, `er` the dielectric constant, `lossTangent` the dissipation factor; `thickness` is the nominal order, else the sum of the layers, which may differ by 10%.
+The `Stackup` type is in stackup.md. Thickness in mm, copper weight in oz, 1 oz being 0.035 mm, `er` the dielectric constant, `lossTangent` the dissipation factor; `thickness` is the nominal order, else the sum of the layers, which may differ by 10%.
 
 | Builder option | Default |
 | --- | --- |
@@ -103,7 +103,8 @@ export const rules = mergeRules(JLCPCB, { clearance: 0.2 }) // a fab's set with 
 ## Impedance
 
 ```ts
-import { impedanceOf, traceWidth, pairGeometry, JLCPCB_4L_7628 } from '@pcbjs/lib'
+import { impedanceOf, traceWidth, pairGeometry } from '@pcbjs/lib/impedance'
+import { JLCPCB_4L_7628 } from '@pcbjs/lib/stackups'
 
 impedanceOf(JLCPCB_4L_7628, 'F.Cu', 0.2)            // 68.0, single ended
 impedanceOf(JLCPCB_4L_7628, 'F.Cu', 0.2, 0.15)      // 103.0, differential with a 0.15 mm gap
@@ -136,10 +137,10 @@ From `traceWidth` and `pairGeometry` with gap equal to width, in mm; B.Cu matche
 - A fixed 0.15 mm gap gives 90 ohm at 0.27 mm on 7628, 0.17 mm on 3313 and 1.10 mm on a 1.6 mm 2-layer board, too wide for fine pitch pads. Such a route necks down at the pads, `route(a, b).neck({ width, length })`, off impedance there; see pairs.md.
 - Real 2-layer boards reach 90 ohm with a coplanar waveguide, which pcbjs does not model. Use 4 layers for anything faster, 3313 at fine pitch.
 - The ERC warning `impedance-width` fires when a solved width is over twice the smaller side of the start pad, with both numbers.
-- A class `impedance` with no `width`, or `route(a, b).impedance(ohms)`, takes its width from `traceWidth` for the start layer, see routing.md; on a pair, width and gap from `pairGeometry`.
+- A class `impedance` with no `width`, or `route(a, b).impedance(ohms)`, takes its width from `traceWidth` for the start layer, see route-options.md; on a pair, width and gap from `pairGeometry`.
 
 ## Defaults
 
-The levels are in board.md. `defineDefaultBoard` and `defineDefaultRules` take a partial, set the default to the base plus it, and return the full merged result, frozen. Build on one by spreading, `defineDefaultRules({ ...tight, minDrill: 0.25 })`; spreading a full result sets every key and hides `defineDefaultBoard`'s rules, so pass a partial when both are used.
+The levels are in stackup.md. `defineDefaultBoard` takes a partial board, its `rules` included, sets the default to the base plus it, and returns the full merged result, frozen. Build on a rule set with `mergeRules`, `defineDefaultBoard({ rules: mergeRules(JLCPCB, { minDrill: 0.25 }) })`.
 
 Presets, fab sets and helper results are deeply frozen, each board gets its own copy, and the registry is on `globalThis`, shared by `pcb.config.ts`, modules and entries.

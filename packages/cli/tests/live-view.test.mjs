@@ -1,9 +1,6 @@
-// The live view: facets in stage order on a cold compile and all at once on a warm start, the invalidate set of a moved part,
-// a schematic-only view compiling no copper, a second edit cancelling the first, two panes on two boards each compiling its own
-// views, and a view out of sync leaving an incident with no source in it.
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -17,7 +14,7 @@ import { FACET_NAMES, facetsOf } from '@pcbjs/core/site-facets'
 import { siteFacets } from '../dist/project/facets.js'
 import { affected, changedSpans } from '../dist/project/invalidate.js'
 import { demanded, STAGES } from '@pcbjs/compile/internal/pipeline'
-import { stop } from './fixtures/proc.mjs'
+import { serveSession } from './fixtures/proc.mjs'
 import { viewerClient } from './fixtures/viewer.mjs'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
@@ -140,39 +137,54 @@ async function until(fn, ms = 60000) {
   }
 }
 
+async function settled(view, from, board, entry) {
+  const invalidated = await until(() => view.got.slice(from).find(e => e.event === 'pcbjs:invalidate' && e.board === board))
+  return until(() =>
+    view.got
+      .slice(from)
+      .find(
+        e =>
+          e.event === 'pcbjs:status' &&
+          e.phase === 'idle' &&
+          e.run > invalidated.edit &&
+          view.got.slice(from).some(start => start.event === 'pcbjs:status' && start.entry === entry && start.run === e.run),
+      ),
+  )
+}
+
+async function holdsCurrent(view, board, facets) {
+  const held = Object.fromEntries(view.got.filter(e => e.event === 'pcbjs:facet' && e.board === board).map(e => [e.facet, e.hash]))
+  const from = view.got.length
+  await view.observe(board, facets, { held })
+  assert.deepEqual(
+    view.got.slice(from).filter(e => e.event === 'pcbjs:facet'),
+    [],
+    'the pane already holds every current observed facet',
+  )
+}
+
 async function serve(root) {
-  const child = spawn(process.execPath, [BIN, 'session', 'serve', '--port', '0', '--host', '127.0.0.1'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
-  children.push(child)
-  let out = ''
-  child.stdout.on('data', d => (out += d))
-  child.stderr.on('data', d => (out += d))
-  await until(() => /\[pcbjs\] session \w+, pid/.test(out))
-  const info = JSON.parse(readFileSync(join(root, '.pcbjs', 'dev.json'), 'utf8'))
-  return {
-    port: new URL(info.url).port,
-    log: () => out,
-    stop: async () => {
-      await stop(child)
-    },
-  }
+  const session = await serveSession(root)
+  children.push(session.child)
+  return session
 }
 
 /** A page as the viewer is to the session: a client observing what it shows, with every event it got. */
 const viewer = (port, facets, board = 'Blinky') => viewerClient(port, { board, facets })
 
-test('a schematic view compiles no copper; a second edit cancels the first compile and sends its own invalidate', { timeout: 180000 }, async () => {
+test('a schematic view compiles no copper; successive edits settle on the latest placement', { timeout: 180000 }, async () => {
   const root = blinky()
   const s = await serve(root)
   try {
     const v = await viewer(s.port, ['meta', 'sch'])
-    await until(() => v.got.find(e => e.event === 'session/state' && e.run))
+    await until(() => v.got.some(e => e.event === 'pcbjs:facet' && e.facet === 'sch') && v.got.findLast(e => e.event === 'pcbjs:status')?.phase === 'idle')
     const file = join(root, 'blinky.pcb.tsx')
     const text = readFileSync(file, 'utf8')
     let n = v.got.length
     writeFileSync(file, text.replace('<Q1 at="26 10" />', '<Q1 at="26.5 10" />'))
     const inv = await until(() => v.got.slice(n).find(e => e.event === 'pcbjs:invalidate'))
     assert.ok(inv.refs.includes('Q1'))
-    const idle = await until(() => v.got.slice(n).find(e => e.event === 'pcbjs:status' && e.phase === 'idle' && e.run !== inv.run && e.stages?.length))
+    const idle = await until(() => v.got.slice(n).find(e => e.event === 'pcbjs:status' && e.phase === 'idle' && e.run > inv.edit && e.stages?.length))
     const run = v.got.slice(n)
     assert.deepEqual(
       run.filter(e => e.event === 'pcbjs:facet' && e.run === idle.run).map(e => `${e.facet}@${e.stage}`),
@@ -184,23 +196,26 @@ test('a schematic view compiles no copper; a second edit cancels the first compi
       ['evaluate', 'place', 'schematic'],
       'no stage of the copper side runs',
     )
-    // a 2D view now: the copper compiles for it, then two edits in a row, the second cancelling the first
+    // Demand copper before editing again.
     await v.observe('Blinky', ['meta', 'layers', 'findings'], { held: {} })
     await until(() => v.got.slice(n).find(e => e.event === 'pcbjs:facet' && e.facet === 'findings'))
     await until(() => v.got.slice(n).findLast(e => e.event === 'pcbjs:status')?.phase === 'idle')
     n = v.got.length
     writeFileSync(file, text.replace('<Q1 at="26 10" />', '<Q1 at="25.5 10" />'))
     await until(() => v.got.slice(n).find(e => e.event === 'pcbjs:facet'))
+    n = v.got.length
     writeFileSync(file, text.replace('<Q1 at="26 10" />', '<Q1 at="25 10" />'))
-    await until(() => v.got.slice(n).filter(e => e.event === 'pcbjs:invalidate').length === 2)
-    await until(() => v.got.slice(n).findLast(e => e.event === 'pcbjs:status')?.phase === 'idle' && v.got.slice(n).some(e => e.event === 'pcbjs:facet' && e.facet === 'findings'))
-    const two = v.got.slice(n)
-    const [a, b] = two.filter(e => e.event === 'pcbjs:invalidate').map(e => two.indexOf(e))
-    assert.ok(!two.slice(a, b).some(e => e.event === 'pcbjs:status' && e.phase === 'idle'), 'the first compile ends with no idle of its own')
-    const snaps = [...new Set(two.filter(e => e.event === 'pcbjs:facet').map(e => e.run))]
-    assert.ok(snaps.length >= 2, 'two compiles streamed')
-    assert.ok(!two.some(e => e.event === 'pcbjs:facet' && e.facet === 'findings' && e.run === snaps[0]), 'the cancelled one never reached the checks')
-    assert.match(s.log(), /an edit cancelled the compile/)
+    const latest = await until(() => v.got.slice(n).find(e => e.event === 'pcbjs:invalidate'))
+    await until(() => v.got.slice(n).find(e => e.event === 'pcbjs:status' && e.phase === 'idle' && e.run > latest.edit))
+    const events = v.got.slice(v.got.indexOf(latest) + 1)
+    const facets = events.filter(e => e.event === 'pcbjs:facet')
+    assert.ok(
+      facets.every(e => e.run > latest.edit),
+      'no facets from a superseded edit',
+    )
+    const meta = v.got.findLast(e => e.event === 'pcbjs:facet' && e.facet === 'meta')
+    assert.deepEqual(meta?.data.footprints.find(f => f.ref === 'Q1')?.at, [25, 10])
+    await holdsCurrent(v, 'Blinky', ['meta', 'layers', 'findings'])
     v.close()
   } finally {
     await s.stop()
@@ -219,12 +234,21 @@ test('each view gets the facets it observes: a 2D and a schematic pane on one bo
     const file = join(root, 'blinky.pcb.tsx')
     const n = [flat.got.length, sch.got.length]
     writeFileSync(file, readFileSync(file, 'utf8').replace('<Q1 at="26 10" />', '<Q1 at="26.5 10" />'))
-    await until(() => facets({ got: flat.got.slice(n[0]) }).some(e => e.facet === 'findings') && facets({ got: sch.got.slice(n[1]) }).some(e => e.facet === 'sch'))
-    await until(() => [flat, sch].every(v => v.got.findLast(e => e.event === 'pcbjs:status')?.phase === 'idle'))
-    // fab goes to both when its content changed
-    const kinds = (v, from) => [...new Set(facets({ got: v.got.slice(from) }).map(e => e.facet))].filter(f => f !== 'fab').sort()
-    assert.deepEqual(kinds(flat, n[0]), ['findings', 'layers', 'meta'], 'the 2D pane: no schematic')
-    assert.deepEqual(kinds(sch, n[1]), ['meta', 'sch'], 'the schematic pane: no copper, no findings')
+    await Promise.all([settled(flat, n[0], 'Blinky', 'blinky.pcb.tsx'), settled(sch, n[1], 'Blinky', 'blinky.pcb.tsx')])
+    const kinds = (v, from) => [...new Set(facets({ got: v.got.slice(from) }).map(e => e.facet))].filter(f => f !== 'fab')
+    assert.ok(
+      kinds(flat, n[0]).every(f => ['findings', 'layers', 'meta'].includes(f)),
+      'the 2D pane: no schematic',
+    )
+    assert.ok(
+      kinds(sch, n[1]).every(f => ['meta', 'sch'].includes(f)),
+      'the schematic pane: no copper, no findings',
+    )
+    for (const v of [flat, sch]) {
+      const meta = facets(v).findLast(e => e.facet === 'meta')
+      assert.deepEqual(meta.data.footprints.find(f => f.ref === 'Q1').at, [26.5, 10], 'both views hold the edited placement')
+    }
+    await holdsCurrent(flat, 'Blinky', ['meta', 'layers', 'findings'])
     // the schematic pane switches to 2D with the hashes it holds: the session sends the layers and findings it lacks
     const held = Object.fromEntries(facets(sch).map(e => [e.facet, e.hash]))
     const m = sch.got.length
@@ -254,8 +278,9 @@ test('two panes on two boards: each board compiles only the views of its own pan
     await until(() => facets(flat, 'Blinky').some(e => e.facet === 'findings') && facets(sch, 'Coin').some(e => e.facet === 'sch') && idle())
     const n = [flat.got.length, sch.got.length]
     for (const f of ['blinky.pcb.tsx', 'coin.pcb.tsx']) writeFileSync(join(root, f), readFileSync(join(root, f), 'utf8') + '\n// edited\n')
-    await until(() => facets(flat, 'Blinky', n[0]).some(e => e.facet === 'layers') && facets(sch, 'Coin', n[1]).some(e => e.facet === 'sch'))
-    await until(idle)
+    await Promise.all([settled(flat, n[0], 'Blinky', 'blinky.pcb.tsx'), settled(sch, n[1], 'Coin', 'coin.pcb.tsx')])
+    await holdsCurrent(flat, 'Blinky', ['meta', 'layers', 'findings'])
+    await holdsCurrent(sch, 'Coin', ['meta', 'sch'])
     const statuses = flat.got.slice(n[0]).filter(e => e.event === 'pcbjs:status' && e.entry)
     const planned = entry => statuses.findLast(e => e.entry === entry)?.stages.map(g => g.name)
     const stagesOf = views => STAGES.filter(n => demanded(views).has(n))

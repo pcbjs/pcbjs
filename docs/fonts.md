@@ -1,13 +1,13 @@
 # Fonts
 
 The two kinds of font for `<text>`: stroke fonts, Hershey Simplex by default and KiCad's NewStroke, and outline fonts from TrueType and OpenType files drawn as filled glyphs.
-Their size semantics, the silk text rule with its `thicken` guard, KiCad's text sizes, and the provenance and licences that must travel with the font data.
+Advanced. Their size semantics, the silk text rule with its `thicken` guard, KiCad's text sizes, and the provenance and licences that must travel with the font data.
 
 | Kind | `font` | Compiled item | Gerber |
 | --- | --- | --- | --- |
-| stroke, Hershey Simplex | default, `"hershey"`, `"hershey-simplex"` | `strokes`, polylines `thickness` wide, round ends | D01 strokes of a round aperture |
+| stroke, Hershey Simplex | default, `"hershey"` | `strokes`, polylines `thickness` wide, round ends | D01 strokes of a round aperture |
 | stroke, NewStroke | `"newstroke"` | same, `font: "newstroke"` | same |
-| outline | a name from `fonts`, or `{ file }` | `polys` in board mm, `font` the family and style, `strokes` empty, `thickness` 0 | one region per glyph piece, counters cut in with a cut line |
+| outline | a name from the `fonts` of `<PCB>` | `polys` in board mm, `font` the family and style, `strokes` empty, `thickness` 0 | one region per glyph piece, counters cut in with a cut line |
 
 - Outline glyphs come from opentype.js, curves flattened to 1/2000 em and unioned with Clipper under the nonzero rule, so counters are holes.
 - Both kinds reach the SVG, viewer, 3D view, Gerbers, DRC and `inspect` as the same geometry. On copper, text is copper with its `net`, in clearance, zone knock-outs and connectivity.
@@ -18,16 +18,16 @@ Their size semantics, the silk text rule with its `thicken` guard, KiCad's text 
 import PCB from '@pcbjs/core'
 
 export default (
-  <PCB name="Label" fonts={{ slab: { file: './fonts/RobotoSlab-VariableFont_wght.ttf', weight: 700 } }}>
+  <PCB name="Label" rev="0.1.0" fonts={{ slab: { file: './fonts/RobotoSlab-VariableFont_wght.ttf', weight: 700 }, bold: { file: './fonts/RobotoSlab-Bold.ttf' } }}>
     <rect layer="Edge.Cuts" x={0} y={0} w={40} h={12} />
     <text layer="F.SilkS" at="20 4" size={2} font="slab">© 2025 Label</text>
-    <text layer="B.SilkS" at="20 8" size={1.4} font={{ file: './fonts/RobotoSlab-Bold.ttf' }}>V1.0</text>
+    <text layer="B.SilkS" at="20 8" size={1.4} font="bold">V1.0</text>
   </PCB>
 )
 ```
 
-- `fonts` on `<PCB>` or in pcb.config.ts maps names to fonts; the board's names win. An unknown `font="name"` is a compile error listing the names.
-- An entry is a path or `{ file, weight }`, relative to the file holding the literal, as a model path; an absolute path or `file:` URL as it is. A missing file is a compile error at the `<text>`.
+- `fonts` on `<PCB>` maps names to fonts, the one place outline fonts are declared; `font` on `<text>` is a name. An unknown `font="name"` is a compile error listing the names.
+- An entry is `{ file, weight? }`, the file relative to the file holding the literal, as a model path; an absolute path or `file:` URL as it is. A missing file is a compile error at the `<text>`.
 - `weight` sets a variable font's `wght` axis, 700 for Bold, as FreeType applies it. A static font's weight is its file, `RobotoSlab-Bold.ttf`; pcbjs never emboldens.
 
 ## Metrics
@@ -59,7 +59,7 @@ TrueType: KiCad draws the font at an em of 1.4 x its size.
 - `size` = 1.4 x KiCad height x capHeight / unitsPerEm, `width` likewise. Roboto Slab, cap 1456 of 2048: `(size 2 2)` is `size={1.990625}`, `(size 1.4 1.4)` is `size={1.393438}`.
 - Centred baseline is 0.415 x height below `at`, from KiCad 9's render cache: move `at` by 0.415 x height minus half the pcbjs size, -0.165 mm for Roboto Slab at 2 mm.
 - KiCad's `thickness` is ignored; `(bold yes)` is the bold file or weight 700.
-- `kicadOutlineSize(font, height)` of `@pcbjs/core/outline` and `kicadOutlineText(font, [height, width])` of `@pcbjs/kicad/fonts`, with the shift, compute this for `pcbjs import`, see import.md. Roboto Slab bold ink lands within 0.012 mm of KiCad's.
+- `pcbjs import` computes this with the shift, see import.md. Roboto Slab bold ink lands within 0.012 mm of KiCad's.
 
 ## Silk text rule
 
@@ -92,7 +92,7 @@ The Hershey fonts are free to use. The distribution the data comes from carries 
 - The format of the Font data in this distribution was originally created by James Hurt, Cognition, Inc., 900 Technology Park Drive, Billerica, MA 01821.
 - The data may be used by anyone for any purpose, commercial or otherwise, and may be converted into any format except the one the U.S. NTIS distributes.
 
-The same acknowledgement is in the header comment of `hershey-simplex.ts`, which `tsc` keeps in `dist`. `strokeText` from `@pcbjs/lib/fonts` returns a stroke font's geometry for use in a `<path>`, NewStroke with `font: 'newstroke'`.
+The same acknowledgement is in the header comment of `hershey-simplex.ts`, which `tsc` keeps in `dist`. `strokeText` from `@pcbjs/lib` returns a stroke font's geometry for use in a `<path>`, NewStroke with `font: 'newstroke'`.
 
 ## NewStroke provenance
 

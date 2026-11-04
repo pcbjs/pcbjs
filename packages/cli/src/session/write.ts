@@ -65,10 +65,8 @@ export async function applyEdits(files: FileEdits[], o: WriteOptions): Promise<W
           { textDocument: { uri, version: null }, edits: f.edits },
         ],
       })
-      if (made) {
-        out.push({ file: f.file, via: 'editor', applied: true })
-        continue
-      }
+      out.push({ file: f.file, via: 'editor', applied: made, ...(!made ? { reason: `the editor refused to create ${relative(o.root, f.file)}` } : {}) })
+      continue
     } else if (editor) {
       out.push(await throughEditor(editor, f, uri, o.root))
       continue

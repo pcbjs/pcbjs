@@ -1,6 +1,6 @@
 // The board data of the viewer split into the facets a compile streams as its stages end, see docs/viewer.md; free of Node.
 import type { StageName } from './plugin.js'
-import type { SiteData, SiteFootprint } from './site-data.js'
+import type { SiteData, SiteFootprint, SiteItem } from './site-data.js'
 
 /** The views of a board page. */
 export type DrawingView = '2d' | '3d' | 'sch'
@@ -223,6 +223,14 @@ function withModels(fps: readonly MetaFootprint[], model?: ModelFacet): SiteFoot
   return out
 }
 
+const ITEM_HASHES = new WeakMap<readonly SiteItem[], string>()
+/** Content identity of immutable item rows, shared by their geometry and layer facets. */
+export function itemsHash(items: readonly SiteItem[]): string {
+  let hash = ITEM_HASHES.get(items)
+  if (!hash) ITEM_HASHES.set(items, (hash = facetHash(items)))
+  return hash
+}
+
 /** The board data of the facets held, `meta` required; what is missing reads as empty, the airwires standing in for the ratsnest. */
 export function joinSite(f: Facets): SiteData {
   const meta = f.meta!
@@ -246,7 +254,7 @@ export function joinSite(f: Facets): SiteData {
     footprints,
     ...f.sch,
     ...f.layers,
-    ...f.shapes,
+    ...(f.shapes?.shapes?.itemsHash && (!f.layers?.items || f.shapes.shapes.itemsHash !== itemsHash(f.layers.items)) ? {} : f.shapes),
     ...f.findings,
     ...f.fab,
   }

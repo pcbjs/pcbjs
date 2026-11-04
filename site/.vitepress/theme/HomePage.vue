@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { h, onBeforeUnmount, ref } from 'vue'
+import { topicLink } from '../../scripts/development.mjs'
+import { h, onBeforeUnmount, reactive, ref } from 'vue'
 import { withBase } from 'vitepress'
 import { data } from '../../home.data'
-import BoardSvg from './BoardSvg.vue'
+import { data as gallery } from '../../features.data'
+import type { View } from '../../examples.data'
+import boards from 'virtual:site-boards'
+import LiveBoard from './LiveBoard.vue'
 import MapDemo from './MapDemo.vue'
+import StatusPill from './StatusPill.vue'
+import ViewTabs from './ViewTabs.vue'
+import { CATEGORY, md } from './text'
 
 const INSTALL = 'npm install -D @pcbjs/pcbjs@beta'
 const github = 'https://github.com/pcbjs/pcbjs'
@@ -21,12 +28,9 @@ onBeforeUnmount(() => clearTimeout(reset))
 // the token colours of every highlighted block, light and dark
 const Palette = () => h('style', data.css)
 const at = (src: string) => src.replace(/:\d+$/, '')
-const rows = [
-  { title: 'Route by hand, or leave a leg to the router', snip: data.route, view: '2d' as const },
-  { title: 'Pours join their pads through thermals', snip: data.pour, view: '2d' as const },
-  { title: 'DRC points at the line', snip: data.drc, view: '2d' as const },
-  { title: 'The schematic is code too', snip: data.schematic, view: 'sch' as const },
-]
+// the key cards of the catalogue, one row each, in the order of its categories
+const keys = gallery.features.filter(f => f.key)
+const views = reactive(keys.map(f => f.view as View))
 </script>
 
 <template>
@@ -39,42 +43,39 @@ const rows = [
         <code><span class="prompt">$</span> {{ INSTALL }}</code>
         <button type="button" :aria-label="copied ? 'Copied' : 'Copy the install command'" @click="copy">{{ copied ? 'Copied' : 'Copy' }}</button>
       </div>
-      <p class="then">then <code>npx pcbjs create my-board</code> · <a :href="withBase('/getting-started')">Getting started</a></p>
+      <p class="then">then <code>npx pcbjs create my-board</code> · <a :href="withBase('/guide/getting-started/')">Getting started</a></p>
     </section>
 
     <MapDemo :hero="data.hero" />
 
     <section class="rows">
-      <div v-for="r in rows" :key="r.title" class="row">
+      <article v-for="(f, i) in keys" :key="f.id" class="row key-card">
         <div class="text">
-          <h2>{{ r.title }}</h2>
-          <pre class="hc" v-html="r.snip.html" />
-          <p v-if="r.snip.drc" class="finding">
-            <span class="err">error</span> {{ r.snip.drc.rule }} <span class="where">{{ at(r.snip.drc.src) }}</span> {{ r.snip.drc.message }}
+          <p class="meta">
+            <a :href="withBase(`/features#${f.category}`)">{{ CATEGORY[f.category] }}</a> <StatusPill :status="f.status" />
+          </p>
+          <h2>{{ f.title }}</h2>
+          <p class="summary" v-html="md(f.summary ?? '')" />
+          <pre v-if="f.snippet" class="hc" v-html="data.snippets[f.snippet]" />
+          <p v-if="f.drc" class="finding">
+            <span class="err">error</span> {{ f.drc.rule }} <span class="where">{{ at(f.drc.src) }}</span> {{ f.drc.message }}
+          </p>
+          <p class="more">
+            <code>{{ f.flag }}</code> · <a :href="withBase(topicLink(f.docs))">Docs</a> ·
+            <a :href="withBase(`/features#${f.category}`)">All {{ CATEGORY[f.category].toLowerCase() }} features</a>
           </p>
         </div>
-        <div class="result">
-          <BoardSvg :id="r.snip.id" :view="r.view" :label="`${r.title}: the board this code compiles to`" lazy />
+        <div class="result board">
+          <LiveBoard class="live" :board="boards[f.board!]" :view="views[i]" :tools="false" :label="`${f.title}: its demo board`" />
+          <ViewTabs class="tabs" v-model="views[i]" :views="f.views!" :label="`${f.title} view`" :full="f.page ? withBase(`/examples/${f.board}`) : undefined" />
         </div>
-      </div>
-      <div class="row">
-        <div class="text">
-          <h2>Ready to order, and to share</h2>
-          <pre class="hc" v-html="data.fab.html" />
-          <p class="note">Gerbers, drills, BOM and placement, zipped, and a static viewer site for the board.</p>
-        </div>
-        <div class="result fab">
-          <div class="status">{{ data.fab.status }}</div>
-          <ul>
-            <li v-for="f in data.fab.files" :key="f">{{ f }}</li>
-          </ul>
-          <div class="zip">{{ data.fab.zip }}</div>
-        </div>
-      </div>
+      </article>
+      <p class="all"><a :href="withBase('/features')">Every feature, and the roadmap</a></p>
     </section>
 
     <nav class="links" aria-label="More">
-      <a :href="withBase('/docs/quickstart')">Docs</a>
+      <a :href="withBase('/guide/getting-started/quickstart')">Docs</a>
+      <a :href="withBase('/features')">Features</a>
       <a :href="withBase('/examples')">Examples</a>
       <a :href="github" target="_blank" rel="noreferrer">GitHub</a>
       <a href="https://www.npmjs.com/package/@pcbjs/pcbjs" target="_blank" rel="noreferrer">npm</a>
@@ -146,8 +147,7 @@ h1 {
   color: var(--vp-c-text-2);
 }
 .then code,
-.finding,
-.fab {
+.finding {
   font-family: var(--vp-font-family-mono);
 }
 .then code {
@@ -184,8 +184,23 @@ pre {
   font-size: 12.5px;
   line-height: 1.6;
 }
+.meta {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.meta a {
+  color: var(--vp-c-brand-1);
+}
+.summary {
+  margin: 0 0 12px;
+  color: var(--vp-c-text-2);
+}
 .finding,
-.note {
+.more {
   margin: 10px 0 0;
   font-size: 13px;
   color: var(--vp-c-text-2);
@@ -202,24 +217,32 @@ pre {
   background: var(--pcb-canvas);
   padding: 12px;
 }
-.fab {
-  font-size: 12px;
-  padding: 14px 16px;
-  background: var(--vp-c-bg-alt);
+.board {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  padding: 44px 12px 12px;
 }
-.fab ul {
-  list-style: none;
-  margin: 8px 0;
-  padding: 0;
-  columns: 2;
-  color: var(--vp-c-text-2);
+.board > .live {
+  position: absolute;
+  inset: 44px 12px 12px;
+  width: auto;
+  height: auto;
 }
-.status {
-  color: var(--vp-c-green-1, #2aa366);
-  font-weight: 600;
+.board > .tabs {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
 }
-.zip {
-  color: var(--vp-c-text-1);
+.more a,
+.all a {
+  color: var(--vp-c-brand-1);
+  font-weight: 500;
+}
+.all {
+  margin: 0;
+  text-align: center;
+  font-size: 16px;
 }
 .links {
   display: flex;
@@ -259,9 +282,6 @@ pre {
   .row {
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
-  }
-  .fab ul {
-    columns: 1;
   }
 }
 </style>

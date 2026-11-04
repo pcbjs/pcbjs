@@ -1,51 +1,50 @@
 # Standard library
 
 Every footprint family in `@pcbjs/lib` with its pins, prefix and frame, the helpers for writing footprints, and the value, font and shape utilities.
-Import from `@pcbjs/lib`, or from one module such as `@pcbjs/lib/ic`.
+Advanced. Everything here imports from `@pcbjs/lib`; rule sets from `@pcbjs/lib/rules`, stackups from `@pcbjs/lib/stackups` and impedance from `@pcbjs/lib/impedance`.
 
 ```tsx
 import { R0603, SOT23, withPins, Crystal3225, SOT223 } from '@pcbjs/lib'
 
 const R1 = R0603('330')                                                  // a part
-const LDO = SOT23(5, { pinNames: ['VIN', 'GND', 'EN', 'NC', 'VOUT'] })   // a list renames in order
+const LDO = withPins(SOT23(5), ['VIN', 'GND', 'EN', 'NC', 'VOUT'])       // a list renames in order
 const Y = withPins(Crystal3225, { 2: 'GND1', 4: 'GND2' })                // a record maps pad numbers or pin names
 const REG = withPins(SOT223, ['GND', 'VOUT', 'VIN'])
-// <R0603 ref="R1" at="5 5" /> renders the footprint itself; LDO('AP2112K-3.3').connect({ VIN, GND, EN: VIN, VOUT: V3 })
+// LDO('AP2112K-3.3').connect({ VIN, GND, EN: VIN, VOUT: V3 }) is a part, placed as <U1 at="5 5" />
 ```
 
-- Every footprint is dual-mode, schematic.md. Ids have the `pcbjs:` prefix and KiCad names; land patterns follow KiCad 9; a test places each on every fab preset with no finding.
+- Every family is a footprint factory, or a generator returning one: `SOT23(5)`, `PinHeader(4)`. Calling the factory makes a part, `PinHeader(4)('PZ254V-11-04P')`; schematic.md. Ids have the `pcbjs:` prefix and KiCad names; land patterns follow KiCad 9; a test places each on every fab preset with no finding.
 - Frames are mm, y down, origin at the body centre unless a family says otherwise. A positive rotation is counter-clockwise on screen, `side="B"` mirrors first: `PinHeader(2)` at `at="10 10 90deg"` has pin 1 at (10, 10), pin 2 at (12.54, 10). `pcbjs inspect` prints where pads landed.
 - Generators throw a TypeError naming a bad parameter and its form.
 
 ## Renaming pins
 
-- Every generated footprint takes `pinNames`; `withPins` renames a copy. Pads of one name share a pin; a rename can split a shared pin.
+- `withPins(factory, names)` renames a copy of a generated footprint or a `kicadFootprint()`. Pads of one name share a pin; a rename can split a shared pin.
 - A pad named `NC` is no pin and joins the footprint's `nc` list.
 - `prefix` and `value` change the ref prefix and default value.
-- The same arguments give the same factory, so `source(SOT23(5), …)` finds parts made elsewhere.
+- The same arguments give the same factory.
 
-## Passives, `@pcbjs/lib/passives`
+## Passives
 
 | Factory | Pins | Prefix |
 | --- | --- | --- |
 | `R0402`, `R0603`, `R0805`, `R1206` | `1`, `2` | R |
 | `C0402`, `C0603`, `C0805`, `C1206` | `1`, `2` | C |
 | `LED0603`, `LED0805`, `LED1206` | `K` pad 1 with the silk bar, `A` pad 2 | D |
-| `LED(size, color?)` | `K`, `A` | D |
 | `chip(prefix, size, { names?, polarity?, color? })` | `1`, `2` or the two `names` | the prefix, D for LED |
 
-Pad 1 is at -x. `chip` prefixes: `R`, `C`, `LED`, `L`, `D`; sizes `0402`, `0603`, `0805`, `1206`. Named pins stay reachable by number.
+Pad 1 is at -x. `chip` prefixes: `R`, `C`, `LED`, `L`, `D`; sizes `0402`, `0603`, `0805`, `1206`, the named factories cover the common ones. Named pins stay reachable by number. An LED's lens in 3D takes `color`, `chip('LED', '0805', { names: ['K', 'A'], polarity: true, color: 'red' })`; the value is the BOM's.
 
 ## Headers and connectors
 
 ```ts
-import { PinHeader, PinSocket, JST_PH, JST_XH, USBC } from '@pcbjs/lib'
+import { PinHeader, PinSocket, JST_PH, JST_XH, USBC, withPins } from '@pcbjs/lib'
 
-const J1 = PinSocket(20, { rows: 2, value: 'GPIO 2x20', source: { MPN: 'SSQ-120-03-T-D' } })   // pins 1 to 40
-const J2 = PinHeader(4, 'PZ254V-11-04P')                                                       // last argument: value or options
-const J3 = JST_PH(6, 'side', { drill: 0.8 })
-const J4 = JST_XH(4, { value: 'B4B-XH-A', pinNames: ['V5', 'GND', 'CANH', 'CANL'] })
-const J5 = USBC('power6', { source: { MPN: 'TYPE-C-31-M-17' } })
+const J1 = PinSocket(20, { rows: 2 })('GPIO 2x20')                        // pins 1 to 40
+const J2 = PinHeader(4)('PZ254V-11-04P')
+const J3 = JST_PH(6, 'side', { drill: 0.8 })()
+const J4 = withPins(JST_XH(4), ['V5', 'GND', 'CANH', 'CANL'])('B4B-XH-A')
+const J5 = USBC('power6')('TYPE-C-31-M-17')
 ```
 
 | Call | Pins | Prefix | Frame |
@@ -57,8 +56,8 @@ const J5 = USBC('power6', { source: { MPN: 'TYPE-C-31-M-17' } })
 | `USBC('full16')` | `GND`, `VBUS`, `CC1`, `CC2`, `DP`, `DN`, `SBU1`, `SBU2`, `SHIELD` | J | HRO TYPE-C-31-M-12; signal pads at -y, mouth at +y |
 | `USBC('power6')` | `GND`, `VBUS`, `CC1`, `CC2`, `SHIELD` | J | HRO TYPE-C-31-M-17 |
 
-- `pins` counts one row. Options take the family's own, `pinNames`, `prefix`, `silk` and part options such as `value`, `source`, `model`. `JST_PH` defaults to `'top'`, `USBC` to `'full16'`.
-- `.footprint(...)` with the same arguments is the footprint factory: `JST_XH.footprint(4)('B4B-XH-A')`; `withPins` and `source(factory, value, spec)` take it.
+- `pins` counts one row. A generator's options are the family's own, `prefix`, `value` and `silk`; the part's value and model go to the factory call, its sourcing to `.source()`. `JST_PH` defaults to `'top'`, `USBC` to `'full16'`.
+- The same arguments give the same factory, which `withPins` takes.
 - `drill` in mm, `pad` a diameter or `[w, h]` in footprint axes. Defaults as KiCad 9: JST PH 0.75 in 1.2 x 1.75, JST XH 0.95 in 1.7 x 1.95, 2.54 mm headers and sockets 1.0 in 1.7. A change adds `_Drill0.8mm` or `_Pad1.8x2.1mm` to the id; anything else, `defineFootprint`.
 - `silk`: `'full'`, `'open'` or `'none'` on every generated family. `'open'`, default for `JST_PH(n, 'side')` and `USBC`, leaves the mating side out so a part flush with the edge draws no `silk-over-edge`; without a mating side it is `'full'`. A non-default mode adds `_SilkFull` or `_NoSilkScreen`. `kicadFootprint('Lib:Name', { silk })` of `@pcbjs/kicad` takes it too.
 - A 2-row header numbers across: 1 and 2 side by side, odd pins the first row. At 1.27 mm pitch pads are 1.0 mm on a 0.6 mm drill, a 0.2 mm ring; KiCad's 0.65 mm drill falls under JLCPCB's 0.18 mm.
@@ -70,11 +69,11 @@ const J5 = USBC('power6', { source: { MPN: 'TYPE-C-31-M-17' } })
 | --- | --- | --- | --- |
 | `TestPad(d = 1.5)` | `1` | TP | round SMD pad on F.Cu, out of BOM and placement |
 | `PogoPad(d = 1.5, { cols, rows, pitch = 2.54 })` | `1` to n, down each column | TP, or J for a grid | bare pads for a pogo fixture |
-| `MountingHole(d = 3.2, pad?)` | none, or `1` with a pad | H | NPTH; `pad` true or a diameter adds a plated ring, a part for GND |
+| `MountingHole(d = 3.2, { pad?, plated? })` | none, or `1` with a pad | H | NPTH; `pad` true for twice the drill or a diameter adds a copper ring, plated unless `plated: false`, which rings both sides |
 
-Without a pad it is a plain footprint: `const Hole = MountingHole(3.2)`, `<Hole ref="H1" at="3.5 3.5" />`.
+A mounting hole is a part, `const H1 = MountingHole(3.2, { pad: true })()`, placed `<H1 at="3.5 3.5" />`, its ring on no net and never `unconnected-pin`, layout.md No net. `MountingHole(3.2, { pad: true })().connect({ 1: GND })` ties the ring to GND.
 
-## ICs, `@pcbjs/lib/ic`
+## ICs
 
 | Factory | Pins | Prefix | Numbering |
 | --- | --- | --- | --- |
@@ -83,10 +82,10 @@ Without a pad it is a plain footprint: `const Hole = MountingHole(3.2)`, `<Hole 
 | `SOT223` | `1`, `2`, `3` | U | the tab, pad 4, is pin 2 |
 | `SOIC(pins, 'N' \| 'W')` | `1` to n | U | 1.27 mm; down the left from pin 1, up the right |
 | `TSSOP(pins)` | `1` to n | U | 0.65 mm, as SOIC |
-| `QFN(pins, size, pitch, ep?, { pad?, vias?, height? })` | `1` to n, `EP` | U | counter-clockwise from pin 1 at the top of the left side |
+| `QFN(pins, size, pitch, { ep?, pad?, vias?, height? })` | `1` to n, `EP` with `ep` | U | counter-clockwise from pin 1 at the top of the left side |
 | `LQFP(pins, size, pitch, { ep?, vias? })` | `1` to n, `EP` with `ep` | U | as QFN |
 
-The exposed pad is pad pins + 1, pin `EP`, renamed by `{ pinNames: { EP: 'GND' } }`. `vias: n` adds an n × n grid of 0.3 mm thermal vias at 1 mm pitch.
+The exposed pad, `ep` a size or `[w, h]` in mm, is pad pins + 1, pin `EP`, renamed by `withPins(QFN(32, 5, 0.5, { ep: 3.45 }), { EP: 'GND' })`. `vias: n` adds an n × n grid of 0.3 mm thermal vias at 1 mm pitch.
 
 ## Power, switches, LEDs, crystals, modules
 
@@ -116,14 +115,14 @@ The exposed pad is pad pins + 1, pin `EP`, renamed by `{ pinNames: { EP: 'GND' }
 ```ts
 import { R0603 } from '@pcbjs/lib'
 
-const R1 = R0603({ value: '330', model: { file: './models/R_0603_1608Metric.step', rotate: [0, 0, 180] } })
+const R1 = R0603('330', { model: { file: './models/R_0603_1608Metric.step', rotate: [0, 0, 180] } })
 ```
 
-- A `model` option, or `model` prop where placed, takes STEP, glTF or WRL with the library body as fallback. The path is relative to the file holding it; `offset`, `rotate`, `scale` follow KiCad.
+- A `model` option takes STEP, glTF or WRL with the library body as fallback. The path is relative to the file holding it; `offset`, `rotate`, `scale` follow KiCad.
 - Passives, `PinHeader` and `PinSocket` share KiCad's origin; centred JST takes an `offset`.
-- `pcbjs model add <file> --ref J1` fits a vendor file, models.md; `withGenerated(model, props)` in `@pcbjs/lib/footprint` keeps a fallback for your own footprint.
+- `pcbjs model add <file> --ref J1` fits a vendor file, models.md; `withGenerated(model, props)` keeps a fallback for your own footprint.
 
-## Writing footprints, `@pcbjs/lib/footprint`
+## Writing footprints
 
 ```text
 smd(num, x, y, w, h, extra?)                 // roundrect SMD pad centred at x y
@@ -138,7 +137,7 @@ silkOutline(w, h, { cx?, cy?, pads?, clearance?, width?, offset?, layer?, edges?
 
 - `padRow` centres n pads on `at` along `axis`, numbered from `first`, 1 by default. `padGrid` numbers row by row, or by column with `order: 'columns'`. `padRowDefs` and `padGridDefs` return the same as data.
 - `silkOutline` breaks the outline within `clearance` of a pad in `pads`, `{ x, y, w, h }` or a `PadDef`; `edges` picks from `top`, `bottom`, `left`, `right`.
-- A hand-written footprint returns `<footprint>` inside `defineFootprint`, schematic.md; `examples/demo/lib/MyPart.tsx` is a SOT-23.
+- A hand-written footprint returns `<footprint>` inside `defineFootprint`, footprints.md; `examples/demo/lib/MyPart.tsx` is a SOT-23.
 
 ## Brand
 
@@ -153,14 +152,14 @@ silkOutline(w, h, { cx?, cy?, pads?, clearance?, width?, offset?, layer?, edges?
 
 ## Values, fonts and shapes
 
-| Function | Module | Returns |
-| --- | --- | --- |
-| `parseOhms('4k7')` | `@pcbjs/lib/values` | 4700; also `330`, `4.7k`, `10R`, `0R`, `R47`, `1M`, `47Ω`; null for non-values |
-| `parseFarads('100n')` | `@pcbjs/lib/values` | 1e-7, null for non-values |
-| `formatValue(4700, 'Ω')` | `@pcbjs/lib/values` | `4.7 kΩ` |
-| `eia96(ohms)` | `@pcbjs/lib/values` | EIA-96 code or null |
-| `resistorCode(ohms, size, tolerance?)` | `@pcbjs/lib/values` | the code printed on a chip resistor in the 3D view |
-| `strokeText(text, { size, thickness, anchor, width?, lineHeight?, letterSpacing? })` | `@pcbjs/lib/fonts` | `{ strokes, width, height, missing }`, the polylines `<text>` draws, fonts.md |
-| `rect`, `roundedRect`, `circle`, `slot` | `@pcbjs/lib/shapes` | path data, layout.md |
+| Function | Returns |
+| --- | --- |
+| `parseOhms('4k7')` | 4700; also `330`, `4.7k`, `10R`, `0R`, `R47`, `1M`, `47Ω`; null for non-values |
+| `parseFarads('100n')` | 1e-7, null for non-values |
+| `formatValue(4700, 'Ω')` | `4.7 kΩ` |
+| `eia96(ohms)` | EIA-96 code or null |
+| `resistorCode(ohms, size, tolerance?)` | the code printed on a chip resistor in the 3D view |
+| `strokeText(text, { size, thickness, anchor, width?, lineHeight?, letterSpacing? })` | `{ strokes, width, height, missing }`, the polylines `<text>` draws, fonts.md |
+| `rect`, `roundedRect`, `circle`, `slot` | path data, layout.md |
 
-`@pcbjs/lib/rules` and `@pcbjs/lib/stackups` are in rules.md and board.md.
+`@pcbjs/lib/rules` and `@pcbjs/lib/stackups` are in rules.md and stackup.md.

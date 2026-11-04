@@ -324,12 +324,12 @@ function unitKey(run: Run, t: Target, name: string, steps: UnitDef[], defs: Stag
   const c = run.cache
   if (!c || !t.store) return null
   const plugins = [...new Set([...steps.flatMap(s => (s.plugin ? [s.plugin] : [])), ...inner(run, defs)])]
-  if (plugins.some(p => p.cache === false)) return null
+  if (plugins.some(p => p.cache === false || (p.cacheKey === undefined && p.cache !== true))) return null
   const own = steps.map(s => (s.own ? s.own(t, run) : undefined))
   if (own.some(o => o === null)) return null
   const reads = readsOf(run, t, steps, defs)
   const f = reads.size ? snap(t)!.facets : {}
-  return digest([name, c.cid, plugins.map(p => [p.name, p.version]), ...[...reads].sort().map(n => `${n}=${f[n]}`), ...own.filter(o => o !== undefined)])
+  return digest([name, c.cid, plugins.map(p => [p.name, p.version, p.cacheKey]), ...[...reads].sort().map(n => `${n}=${f[n]}`), ...own.filter(o => o !== undefined)])
 }
 
 /** What a unit reads: its steps' reads, its plugin stages' reads, and every facet when a plugin hooks one of its stages. */
@@ -698,7 +698,7 @@ function finalBoard(run: Run, t: Target): void {
 function commit(run: Run, targets: Target[], done: boolean): void {
   const c = run.cache
   if (!c || c.draft || !c.dir) return
-  const complete = done && run.plan.size === run.defs.length && c.exports !== null
+  const complete = done && run.plan.size === run.defs.length && c.exports !== null && run.plugins.length === 0
   targets.forEach((t, i) => {
     if (!t.store) return
     const files = { ...c.files, ...readFiles(t.board), ...t.models }

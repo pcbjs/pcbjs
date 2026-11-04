@@ -1,36 +1,12 @@
 ---
 title: Getting started
-description: Install pcbjs, make a project, and run the check, dev and build loop.
+description: Follow the Blinky walkthrough or choose an advanced topic.
 ---
 
 # Getting started
 
-Node 22.12 or newer; `@beta` is the npm tag until 0.1.
+The Guide is now a sequence of focused lessons.
 
-```sh
-npm install -D @pcbjs/pcbjs@beta
-npx pcbjs create my-board
-cd my-board && npm install
-```
+Start with the [Blinky walkthrough](/guide/getting-started/): choose npm or agentic setup, then build the schematic, define the board, place parts, route copper, and check DRC and ERC.
 
-## Three commands
-
-```sh
-npx pcbjs check   # compile, route, DRC and ERC
-npm run dev       # the viewer on http://localhost:5173, recompiled on save
-npm run build     # the fab set in .pcbjs/fab, the site in .pcbjs/dist
-```
-
-## A board
-
-Blinky's layout, from `examples/demo`:
-
-<<< @/../examples/demo/blinky.pcb.tsx#example{tsx}
-
-## Next
-
-- [Quick start](/docs/quickstart): the project files and the config.
-- [Schematic](/docs/schematic) and [Layout](/docs/layout): nets, parts and elements.
-- [Routing](/docs/routing): manual tracks, automatic legs, pairs and lengths.
-- [Findings](/docs/findings): every DRC and ERC rule.
-- [Examples](/examples): every board in the repository.
+Already comfortable with the basics? Choose an [Advanced topic](/guide/advanced/) for reusable design, precision placement, routing or delivery.

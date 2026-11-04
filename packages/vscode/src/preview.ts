@@ -1,3 +1,4 @@
+import { PANEL_TYPE } from './editor-groups'
 // Editor tabs for 2D, 3D, schematic and DRC/ERC, with the viewer in an iframe at
 // `<page>?ide=1&theme=<kind>&view=<view>&panel=0`; a pane keeps its page as a path and resolves it against the running session's URL.
 
@@ -57,7 +58,7 @@ interface Pane {
 /** `reuse` and `beside` reveal and focus the view's pane where it is, else open one, in the first pane's group or beside; `new` always opens another. */
 export type OpenMode = 'reuse' | 'beside' | 'new'
 
-export const PANEL_TYPE = 'pcbjs.preview'
+export { PANEL_TYPE } from './editor-groups'
 
 export class Preview implements vscode.Disposable {
   private panes: Pane[] = []
@@ -107,12 +108,12 @@ export class Preview implements vscode.Disposable {
   }
 
   /** Run `fn`, then give the pane that had focus its focus back if `fn` took it. */
-  async keepFocus<T>(fn: () => Promise<T>): Promise<T> {
+  async keepFocus<T>(fn: () => Promise<T>, valid: () => boolean = () => true): Promise<T> {
     const pane = this.focused()
     try {
       return await fn()
     } finally {
-      if (pane && this.panes.includes(pane) && !pane.panel.active) pane.panel.reveal(undefined, false)
+      if (valid() && pane && this.panes.includes(pane) && !pane.panel.active) pane.panel.reveal(undefined, false)
     }
   }
 
@@ -133,7 +134,7 @@ export class Preview implements vscode.Disposable {
     const server = this.target
     if (!server) return
     const routed = /\/board\/([^/?#]+)/.exec(pane.src || pane.page)?.[1]
-    const board = pane.context?.board ?? (routed ? decodeURIComponent(routed) : this.deps.board(server)?.name ?? server.boards?.boards[0]?.name)
+    const board = pane.context?.board ?? (routed ? decodeURIComponent(routed) : (this.deps.board(server)?.name ?? server.boards?.boards[0]?.name))
     if (!board) return
     const root = pane.context?.project ?? this.link?.boards?.root ?? this.link?.scope?.root ?? server.root
     return { root, board, key: `${root}\0${board}`, link: pane.context?.link ?? this.link }
@@ -149,7 +150,10 @@ export class Preview implements vscode.Disposable {
     const board = routed ? decodeURIComponent(routed) : this.target && this.deps.board(this.target)?.name
     if (!project || !board) return
     const slug = /\/board\/[^/]+\/([^/]+)/.exec(pathname)?.[1]
-    const target = slug ? link.boards?.boards.find(b => b.name === board)?.targets?.find(t => targetSlug(t) === slug) ?? (previous?.target && targetSlug(previous.target) === slug ? previous.target : undefined) : undefined
+    const target = slug
+      ? (link.boards?.boards.find(b => b.name === board)?.targets?.find(t => targetSlug(t) === slug) ??
+        (previous?.target && targetSlug(previous.target) === slug ? previous.target : undefined))
+      : undefined
     return { project, board, link, ...(target ? { target } : {}) }
   }
 
@@ -196,12 +200,14 @@ export class Preview implements vscode.Disposable {
     const origin = { project: event.project, board: event.board, link, target: event.target }
     let panes = this.of('checks')
     if (!panes.length) panes = [this.create('checks', findingColumn(entry ? path.resolve(event.project, entry) : undefined, event.project), origin, page)]
-    await Promise.all(panes.map(async pane => {
-      if (pane.context?.link !== link || pane.page !== page) pane.shown = pane.src = ''
-      pane.context = origin
-      pane.page = page
-      await this.show(pane, server, this.phase(server, link), event.board)
-    }))
+    await Promise.all(
+      panes.map(async pane => {
+        if (pane.context?.link !== link || pane.page !== page) pane.shown = pane.src = ''
+        pane.context = origin
+        pane.page = page
+        await this.show(pane, server, this.phase(server, link), event.board)
+      }),
+    )
   }
 
   /** Open all four views, keeping the checks viewer in its preferred editor group. */
@@ -293,19 +299,22 @@ export class Preview implements vscode.Disposable {
         })
       else if ((msg?.type === 'undo' || msg?.type === 'edit-written') && Array.isArray(msg.files) && msg.files.every((f: unknown) => typeof f === 'string')) {
         const owner = this.sourceOf(pane)
-        if (!owner || (typeof msg.board === 'string' && msg.board !== owner.board) || (typeof msg.project === 'string' && path.resolve(msg.project) !== path.resolve(owner.root))) return
+        if (!owner || (typeof msg.board === 'string' && msg.board !== owner.board) || (typeof msg.project === 'string' && path.resolve(msg.project) !== path.resolve(owner.root)))
+          return
         const files = msg.files.map((file: string) => path.resolve(owner.root, file))
         if (msg.type === 'edit-written') {
           if (files.length) this.sources.set(owner.key, files)
         } else {
           const selected = this.sources.get(owner.key) ?? files
           const redo = !!msg.redo
-          this.undoing = this.undoing.then(async () => {
-            if (this.panes.includes(pane) && owner.link?.open !== false && this.sourceOf(pane)?.key === owner.key && this.sourceOf(pane)?.link === owner.link) await undoIn(selected, panel, redo)
-          }).catch(() => {})
+          this.undoing = this.undoing
+            .then(async () => {
+              if (this.panes.includes(pane) && owner.link?.open !== false && this.sourceOf(pane)?.key === owner.key && this.sourceOf(pane)?.link === owner.link)
+                await undoIn(selected, panel, redo)
+            })
+            .catch(() => {})
         }
-      }
-      else if (view === 'checks' && msg?.type === 'copy-markdown' && typeof msg.id === 'string' && typeof msg.text === 'string') {
+      } else if (view === 'checks' && msg?.type === 'copy-markdown' && typeof msg.id === 'string' && typeof msg.text === 'string') {
         void vscode.env.clipboard.writeText(msg.text).then(
           () => panel.webview.postMessage({ type: 'post', data: { type: 'pcbjs:copied-markdown', id: msg.id, ok: true } }),
           () => panel.webview.postMessage({ type: 'post', data: { type: 'pcbjs:copied-markdown', id: msg.id, ok: false } }),
@@ -345,7 +354,7 @@ export class Preview implements vscode.Disposable {
 
   /** Panels restored before a server was known show it once one is. */
   async resume(server: PcbjsServer): Promise<void> {
-    if (!this.panes.length || this.target && this.target !== server) return
+    if (!this.panes.length || (this.target && this.target !== server)) return
     if (!this.target) this.retarget(server)
     await this.settle(server, true)
   }
@@ -427,7 +436,7 @@ export class Preview implements vscode.Disposable {
     }
     const key = `viewer ${phase.url}`
     if (key === pane.shown) return
-    const load = pane.load = {}
+    const load = (pane.load = {})
     const context = pane.context
     const page = pane.page
     const base = await this.externalOf(phase.url)
@@ -441,7 +450,7 @@ export class Preview implements vscode.Disposable {
 
   private phase(server: PcbjsServer, owner?: SessionLink): Phase {
     const link = owner ?? this.link
-    return link ? link.open && link.info ? running(devUrl(link.info), link.info) : { kind: 'detached' } : server.state
+    return link ? (link.open && link.info ? running(devUrl(link.info), link.info) : { kind: 'detached' }) : server.state
   }
 
   private async externalOf(url: string): Promise<string> {
@@ -478,7 +487,8 @@ export class Preview implements vscode.Disposable {
       if (!p.src || !base) continue
       const src = this.srcOf(p, base)
       if (src === p.src) continue
-      const before = new URL(p.src), after = new URL(src)
+      const before = new URL(p.src),
+        after = new URL(src)
       const oldTarget = /\/board\/[^/]+\/([^/]+)/.exec(before.pathname)?.[1]
       const board = /\/board\/([^/]+)\/?$/.exec(after.pathname)?.[1]
       const scope = (u: URL) => u.pathname.replace(/\/board\/.*$/, '/').replace(/\/?$/, '/')
@@ -607,7 +617,12 @@ export async function undoIn(files: string[], panel: vscode.WebviewPanel, redo: 
       await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: false, viewColumn: shown ?? code ?? vscode.ViewColumn.Beside })
       await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup')
       const tab = vscode.window.tabGroups.activeTabGroup.activeTab
-      if (!(tab?.input instanceof vscode.TabInputText) || tab.input.uri.toString() !== doc.uri.toString() || vscode.window.activeTextEditor?.document.uri.toString() !== doc.uri.toString()) throw new Error('the source editor did not take focus; no undo was requested')
+      if (
+        !(tab?.input instanceof vscode.TabInputText) ||
+        tab.input.uri.toString() !== doc.uri.toString() ||
+        vscode.window.activeTextEditor?.document.uri.toString() !== doc.uri.toString()
+      )
+        throw new Error('the source editor did not take focus; no undo was requested')
       await vscode.commands.executeCommand(redo ? 'redo' : 'undo')
       vscode.window.setStatusBarMessage(`pcbjs: ${redo ? 'Redo' : 'Undo'} in ${file}, using its chronological source history`, 3000)
     }

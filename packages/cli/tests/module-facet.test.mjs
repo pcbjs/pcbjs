@@ -99,7 +99,7 @@ test('the module the site ships compiles in the fake worker to the facets Node c
   const hook = `export const resolve = (s, c, next) => next(s.startsWith('/pcb/') ? ${JSON.stringify(pathToFileURL(out).href)} + s : s, c)`
   register(`data:text/javascript,${encodeURIComponent(hook)}`)
   const r = await compileInBrowser(module, { worker: fakeWorker(), want: ['meta', 'sch', 'layers', 'model', 'findings'] })
-  assert.equal(r.check.ok, true)
+  assert.equal(r.check.ok, true, JSON.stringify(r.check))
   assert.equal(r.mismatch, undefined, `differs from Node in ${r.mismatch}`)
   const mine = targetFacets({ board: 'Hello', target: null }, r.facets)
   for (const f of ['meta', 'sch', 'layers', 'model', 'findings']) {

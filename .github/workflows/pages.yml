@@ -1,4 +1,4 @@
-# Builds the whole site into one Pages artifact, since every deploy replaces the site: the latest published train at / for https://pcbjs.dev, main at /next/.
+# Builds the whole site into one Pages artifact, since every deploy replaces the site: main at / for https://pcbjs.dev, the latest published train at /stable/.
 # Runs on pushes to main that touch the site's sources, and from release.yml after a publish; it needs no secret, only Pages set to GitHub Actions, see RELEASING.md.
 name: Pages
 
@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   build:
-    name: Build the stable and next trees
+    name: Build the main and stable trees
     if: github.repository == 'pcbjs/pcbjs'
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -30,6 +30,7 @@ jobs:
       PCBJS_SITE_URL: https://pcbjs.dev
       OUT: ${{ github.workspace }}/_site
       STABLE: ${{ github.workspace }}/_stable
+      PCBJS_CACHE_DIR: ${{ github.workspace }}/.pcbjs-cache
     steps:
       - uses: actions/checkout@v5
         with:
@@ -43,7 +44,7 @@ jobs:
           echo "Stable tree from ${tag:-main, no train is published yet}"
       # taken before anything writes into examples/
       - id: hash
-        name: Content hashes of the gallery
+        name: Content hashes of the boards
         run: |
           echo "packages=${{ hashFiles('packages/*/src/**', 'packages/*/package.json', 'site/scripts/**') }}" >> "$GITHUB_OUTPUT"
           echo "examples=${{ hashFiles('examples/**') }}" >> "$GITHUB_OUTPUT"
@@ -54,57 +55,68 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: _stable
-          key: stable-site-1-${{ steps.stable.outputs.tag }}
+          key: stable-site-2-${{ steps.stable.outputs.tag }}
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      # boards.mjs recompiles a project whose folder or packages changed, so any older gallery is a safe start
+      # the stage caches key every stage on its inputs and the meshes on their content, so any older cache is a safe start
       - id: gallery
-        name: Gallery and route caches of main
+        name: Stage caches, route memos and meshes of main
         uses: actions/cache/restore@v4
         with:
           path: |
             site/.gallery
-            examples/*/.pcbjs/routes
-            examples/*/*/.pcbjs/routes
-          key: gallery-${{ steps.hash.outputs.packages }}-${{ steps.hash.outputs.examples }}
+            site/demos/.pcbjs/cache
+            examples/*/.pcbjs/cache
+            examples/*/*/.pcbjs/cache
+            examples/*/.pcbjs/models
+            examples/*/*/.pcbjs/models
+          key: boards-${{ steps.hash.outputs.packages }}-${{ steps.hash.outputs.examples }}
           restore-keys: |
-            gallery-${{ steps.hash.outputs.packages }}-
-            gallery-
+            boards-${{ steps.hash.outputs.packages }}-
+            boards-
+      - name: The user model cache, vendor and fetched models and their meshes
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PCBJS_CACHE_DIR }}
+          key: model-cache-${{ hashFiles('examples/**/models/LICENSES.md') }}
       - run: npm ci
       - run: npm run build
-      - id: next
-        name: Next tree, main at /next/
-        run: npm run build -w pcbjs-site -- --outDir "$OUT/next"
+      # the build prints the artifact's size by kind and its time; the boards compile in Node for the numbers and again in each reader's browser
+      - id: main
+        name: Main tree at /
+        run: npm run build -w pcbjs-site -- --outDir "$OUT"
+      - name: Module facets and pages in Chromium
+        run: npm run docs:test
         env:
-          PCBJS_SITE_BASE: /next/
-      - name: Save the gallery of main
-        if: ${{ !cancelled() && steps.next.outcome == 'success' && steps.gallery.outputs.cache-hit != 'true' }}
+          PCBJS_SITE_DIST: ${{ env.OUT }}
+      - name: Save the caches of main
+        if: ${{ !cancelled() && steps.main.outcome == 'success' && steps.gallery.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: |
             site/.gallery
-            examples/*/.pcbjs/routes
-            examples/*/*/.pcbjs/routes
-          key: gallery-${{ steps.hash.outputs.packages }}-${{ steps.hash.outputs.examples }}
-      - name: Stable tree from main
-        if: steps.stable.outputs.tag == ''
-        run: npm run build -w pcbjs-site -- --outDir "$STABLE"
+            site/demos/.pcbjs/cache
+            examples/*/.pcbjs/cache
+            examples/*/*/.pcbjs/cache
+            examples/*/.pcbjs/models
+            examples/*/*/.pcbjs/models
+          key: boards-${{ steps.hash.outputs.packages }}-${{ steps.hash.outputs.examples }}
       - name: Check out the train
         if: steps.stable.outputs.tag != '' && steps.tree.outputs.cache-hit != 'true'
         run: git worktree add "$RUNNER_TEMP/stable" "${{ steps.stable.outputs.tag }}"
-      # the train's own boards.mjs may not hash the packages, so main's gallery goes over only when nothing it depends on differs
-      - name: Gallery of main into the train
+      # main's caches go over only when nothing they depend on differs
+      - name: Caches of main into the train
         if: steps.stable.outputs.tag != '' && steps.tree.outputs.cache-hit != 'true'
         env:
           TAG: ${{ steps.stable.outputs.tag }}
         run: |
           if ! git diff --quiet "$TAG" HEAD -- packages examples site/scripts; then
-            echo "The train differs from main, so it compiles its own gallery"
+            echo "The train differs from main, so it compiles its own boards"
             exit 0
           fi
-          for d in site/.gallery examples/*/.pcbjs/routes examples/*/*/.pcbjs/routes; do
+          for d in site/.gallery site/demos/.pcbjs/cache examples/*/.pcbjs/cache examples/*/*/.pcbjs/cache examples/*/.pcbjs/models examples/*/*/.pcbjs/models; do
             [ -d "$d" ] || continue
             mkdir -p "$RUNNER_TEMP/stable/$(dirname "$d")"
             cp -R "$d" "$RUNNER_TEMP/stable/$(dirname "$d")/"
@@ -117,15 +129,19 @@ jobs:
           npm ci
           npm run build
           npm run build -w pcbjs-site -- --outDir "$STABLE"
+        env:
+          PCBJS_SITE_BASE: /stable/
       - name: Save the stable tree of the train
         if: ${{ !cancelled() && steps.train.outcome == 'success' }}
         uses: actions/cache/save@v4
         with:
           path: _stable
-          key: stable-site-1-${{ steps.stable.outputs.tag }}
-      - name: Stable tree at the root, domain and no Jekyll
+          key: stable-site-2-${{ steps.stable.outputs.tag }}
+      - name: Stable tree at /stable/, the old /next/ redirected, domain and no Jekyll
         run: |
-          cp -R "$STABLE/." "$OUT/"
+          if [ -d "$STABLE" ]; then mkdir -p "$OUT/stable" && cp -R "$STABLE/." "$OUT/stable/"; fi
+          mkdir -p "$OUT/next"
+          echo '<!doctype html><meta http-equiv="refresh" content="0; url=/"><link rel="canonical" href="https://pcbjs.dev/">' > "$OUT/next/index.html"
           echo pcbjs.dev > "$OUT/CNAME"
           touch "$OUT/.nojekyll"
       - uses: actions/upload-pages-artifact@v3

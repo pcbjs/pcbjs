@@ -1,38 +1,19 @@
 <script setup lang="ts">
-import { defineAsyncComponent, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
-import { data as aspects } from '../../aspects.data'
-import type { View } from '../../examples.data'
+// The home page demo's board or schematic inlined, its items keeping their ids and refs for the source map, themed by the site's CSS variables.
+import { defineAsyncComponent, type Component } from 'vue'
+import type { View } from '../../boards'
 
-const props = defineProps<{ id: string; view: View; label: string; lazy?: boolean }>()
+const props = defineProps<{ view: View; aspect?: number; label: string }>()
 
-// scripts/boards.mjs writes .gallery before every build and dev server; each SVG is its own chunk
-const svgs = import.meta.glob<{ default: Component }>('../../.gallery/*.svg')
-const load = svgs[`../../.gallery/${props.id}-${props.view}.svg`]
+// scripts/boards.mjs writes them before every build and dev server; svg-loader makes each a Vue component
+const svgs = import.meta.glob<{ default: Component }>('../../.gallery/hero/*.svg')
+const load = svgs[`../../.gallery/hero/${props.view}.svg`]
 const svg = load ? defineAsyncComponent(load) : null
-const aspect = aspects[props.id]?.[props.view] ?? 1
-
-// a lazy board is a sized placeholder on the server and until it nears the viewport
-const root = ref<HTMLElement | null>(null)
-const shown = ref(!props.lazy)
-let observer: IntersectionObserver | null = null
-onMounted(() => {
-  if (shown.value || !root.value) return
-  observer = new IntersectionObserver(
-    entries => {
-      if (!entries.some(e => e.isIntersecting)) return
-      shown.value = true
-      observer?.disconnect()
-    },
-    { rootMargin: '400px' },
-  )
-  observer.observe(root.value)
-})
-onBeforeUnmount(() => observer?.disconnect())
 </script>
 
 <template>
-  <div ref="root" class="board-svg" :style="{ aspectRatio: aspect }" role="img" :aria-label="label">
-    <component :is="svg" v-if="svg && shown" />
+  <div class="board-svg" :style="{ aspectRatio: aspect ?? 1 }" role="img" :aria-label="label">
+    <component :is="svg" v-if="svg" />
   </div>
 </template>
 

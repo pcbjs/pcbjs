@@ -1,31 +1,25 @@
 # Layout
 
 The elements a board is drawn with, the `pour`, `via` and `keepout` helpers, the shape helpers, hard keepouts and text.
-Routes are in routing.md, parts and their placement props in schematic.md, and pours, thermal reliefs, islands and `stitch()` in pours.md.
+Basic. Routes are in routing.md, parts and their placement props in schematic.md, and pours, thermal reliefs, islands and `stitch()` in pours.md.
 
 ```tsx
 <path layer="Edge.Cuts" d={roundedRect(30, 20, 2)} />
 <text layer="F.SilkS" at="10 12" size={1}>Hello</text>
 {via(VCC, '15.8 11.6')}
 {pour(GND, 'B.Cu', rect(30, 20))}
-{keepout('B.Cu', circle(6, 20, 10))}
-{keepout('all', rect(13.2, 5.4, 0, 0), { pours: false })}
+{keepout(circle(6, 20, 10))}
 ```
 
 ## Elements
 
-Lengths are mm numbers or strings with a unit. Every `net` prop takes a `Net` or a string; parts are placed as their own elements, see schematic.md.
+Lengths are mm numbers or strings with a unit. Every `net` prop takes a `Net`; parts are placed as their own elements, see schematic.md.
 
 | Element | Required | Optional, `= default` | Notes |
 | --- | --- | --- | --- |
-| `<g>` | | `at` = "0 0 0", `side` | transforms its children; `side="B"` mirrors to the back |
-| `<footprint>` | `ref` | `value` = "", `id` = "", `at`, `side`, `fields` = {}, `bom` = true, `pos` = true, `dnp` = false, `nets`, `net:*`, `description`, `height` = 1, `model`, `netTie` | `dnp`: out of BOM and placement, still in DRC |
-| `<pad>` | `num`, `size` | `name` = num, `at`, `shape`, `drill`, `type`, `layers`, `roundness` = 0.25, `points`, `net`, `nc`, `maskExpansion`, `mask`, `paste` = true for smd, `pasteShrink`, `pasteRatio`, `thermal` | see Pads |
-| `<track>` | `layer`, `width` | `net`, `d`, `points`, `layers`, `via`, `auto`, `lock`, `viaInPad` | `route()` makes these |
-| `<via>` | `at` | `net`, `drill`, `size`, `layers` = ["F.Cu", "B.Cu"] | no sizes: the default via, rules.md |
-| `<zone>` | `layer`, `d` | `net`, `clearance` = rules.clearance, `priority` = 0, `minWidth` = rules.zoneMinWidth, `connect` = "thermal", `islands` = rules.islands | pours.md |
-| `<stitch>` | `net` | `pitch` = 4, `layers`, `padClearance`, `via`, `avoid`, `area`, `grid`, `origin` | pours.md |
-| `<keepout>` | `d` | `layer` or `layers` = all copper, `tracks` = true, `vias` = true, `pours` = true, `except` = none | see Keepouts |
+| `<g>` | | `name`, `at` = "0 0 0", `side` | transforms its children; `side="B"` mirrors to the back; `name` makes it a level of hierarchy, schematic.md Placing |
+| `<footprint>` | `ref` | `value` = "", `id` = "", `at`, `side`, `bom` = true, `pos` = true, `dnp` = false, `description`, `height` = 1, `model`, `netTie`, `rules`, `thermal`, `ref:at` | the footprint a part's factory draws, never placed on its own; `dnp`: out of BOM and placement, still in DRC |
+| `<pad>` | `num`, `size` | `name` = num, `at`, `shape`, `drill`, `type`, `layers`, `roundness` = 0.25, `points`, `nc`, `maskExpansion`, `mask`, `paste` = true for smd, `pasteShrink`, `pasteRatio`, `thermal` | see Pads |
 | `<path>` | `layer`, `d` | `width`, `fill` = false, `net` | on copper it is copper |
 | `<line>` | `layer`, `x1`, `y1`, `x2`, `y2` | `width` | |
 | `<circle>` | `layer`, `r` | `cx` = 0, `cy` = 0, `width`, `fill` = false | |
@@ -55,18 +49,31 @@ Lengths are mm numbers or strings with a unit. Every `net` prop takes a `Net` or
 - The importer writes trapezoid, chamfered, offset and custom KiCad pads as `custom`, import.md.
 - A tht pad on fewer layers, KiCad's `remove_unused_layers`, keeps `holeClearance` from all copper on the rest.
 - The exporters draw `pasteRings` and `maskRings`; an npth pad opens the mask on both sides, as KiCad does.
-- `netTie`, on `<footprint>` or `defineFootprint` metadata, is KiCad's `net_tie_pad_groups`: `[['1', '2'], ['3', '4']]` lets pads of a group touch with no `short`; each keeps its net.
+- `netTie` on `<footprint>` is KiCad's `net_tie_pad_groups`: `[['1', '2'], ['3', '4']]` lets pads of a group touch with no `short`; each keeps its net.
 
 ## Helpers
 
-`pour`, `via`, `keepout` and `stitch` from `@pcbjs/core` return the element nodes, positional or as one props object.
+Copper other than parts and routes comes from four helpers of `@pcbjs/core`, each a node to place:
 
 ```text
-pour(net, layer, d, { clearance?, priority?, minWidth?, connect?, islands? }?)   // <zone />
-via(net | pin, at, { drill?, size?, layers? }?)              // <via />
-keepout(layers, d, { tracks?, vias?, pours?, except? }?)      // layers: a name, a list or 'all'
+pour(net | null, layer, area, { clearance?, priority?, minWidth?, connect?, islands? }?)
+via(net | pin | null, at, { drill?, size?, layers? }?)        // no sizes: the default via, rules.md
+keepout(area, { layers?, tracks?, vias?, pours?, except? }?)
 stitch(net, { pitch?, layers?, padClearance?, via?, avoid?, area?, grid?, origin? }?)
 ```
+
+`area` is an SVG path, as the shape helpers return; pours.md has `pour` options and `stitch`.
+
+### No net
+
+```tsx
+{pour(null, 'F.Cu', rect(30, 20))}
+{via(null, '9 5')}
+{route('3 10').net(null).width(1).H(9)}
+```
+
+- `null` puts copper on no net, as is a pad nobody connects, such as the ring of `MountingHole(3.2, { pad: true })`.
+- Copper on no net is foreign to every other copper, itself included: DRC holds clearance to it and contact is a `short`, findings say `no net`. It is never `unconnected` and never removed as an island.
 
 ### Vias
 
@@ -75,7 +82,7 @@ stitch(net, { pitch?, layers?, padClearance?, via?, avoid?, area?, grid?, origin
 ```
 
 - A pin or pad handle gives its net, as `J1.B6.net`; a pin on `NC` has none.
-- A via is a route end, `route(J1.B6).Z(v)` or `route(v).X(U1[3])`; keep both in one `<g>`.
+- A via is a route end, `route(J1.B6, v).Z()` or `route(v, U1[3])`; keep both in one `<g>`.
 - Children may be any iterable, read once, so a generator can yield each via beside its stub.
 
 ## Shapes
@@ -97,11 +104,11 @@ slot(x1, y1, x2, y2, w)               // round ends, centre line between the poi
 ## Keepouts
 
 ```tsx
-{keepout('B.Cu', rect(4, 3, 10, 5), { except: [OSC_IN, OSC_OUT] })}
+{keepout(rect(4, 3, 10, 5), { layers: ['B.Cu'], except: [OSC_IN, OSC_OUT] })}
 ```
 
-- `d` is a path; each closed subpath is an area. No closed area, or a non-copper layer, is a compile error.
-- `layer` or `layers`: copper layers; `'all'` or neither is every one.
+- `area` is a path; each closed subpath is an area. No closed area, or a non-copper layer, is a compile error.
+- `layers`: a list of copper layers, left out for every one.
 - `tracks`, `vias`, `pours`: true forbids that kind, each default true.
 - `except`: nets or net names let in, in DRC, pour clearing and the router.
 - The router keeps forbidden copper out and pours are cut; a pour left empty is the warning `pour-in-keepout`, forbidden copper inside the error `keepout`. Pads are never flagged.
@@ -111,16 +118,16 @@ slot(x1, y1, x2, y2, w)               // round ends, centre line between the poi
 ## Silk refs
 
 ```tsx
-<R1 at="10 5" ref={false} />
-<U1 at="20 10" refAt="0 -4.5 0" />
-<footprint ref="J9" at="3 3" refAt={false}><pad num={1} size={[1, 1]} /></footprint>
+<R1 at="10 5" ref:at={false} />
+<U1 at="20 10" ref:at="0 -4.5 0" />
 ```
 
 - Placed at the first spot beside the courtyard clear of mask plus `silkToPad`, silk, courtyards and the edge band, else inside it or within 3 mm; a row of identical parts shares a side. It reads upright, mirrored on the back.
 - Height 0.2 of the courtyard's short side, from `silkMinHeight`, 1 in `BASE`, 0.8 in `PCBWAY`, to 1.2 mm; stroke 0.15 of it, at least `silkMinWidth`.
 - No spot within 1 mm: ERC info `silk-ref-hidden` for a tiny part, warning `silk-ref` otherwise.
-- `<PCB silkRefs={false}>` drops all; `ref={false}` or `refAt={false}` one. `refAt` is `"x y rot"` in the footprint frame, turned upright.
-- Test points, pogo pads, fiducials, mounting holes, padless footprints and ones with their own silk ref get no ref, unless `refAt` is given, and no 3D body.
+- A placement selects the footprint together with its generated reference label. In the editor, the `ref:at` attribute focuses the label itself; its position uses the footprint frame, including rotation and back-side mirroring.
+- `<PCB silkRefs={false}>` drops all; `ref:at={false}` one. `ref:at` is `"x y rot"` in the footprint frame, turned upright.
+- Test points, pogo pads, fiducials, mounting holes, padless footprints and ones with their own silk ref get no ref, unless `ref:at` is given, and no 3D body.
 
 ## Text
 
@@ -139,4 +146,4 @@ slot(x1, y1, x2, y2, w)               // round ends, centre line between the poi
 | `at`, `anchor` | horizontal anchor and block centre; `start`, `middle`, `end` per line |
 
 - Never an SVG `<text>` font. `B.*` text is mirrored. Copper text is copper with its `net`.
-- A missing glyph is a box or `.notdef`, one warning per board. fonts.md has fonts and licences; `strokeText` of `@pcbjs/lib/fonts` gives strokes for a `<path>`, stdlib.md.
+- A missing glyph is a box or `.notdef`, one warning per board. fonts.md has fonts and licences; `strokeText` of `@pcbjs/lib` gives strokes for a `<path>`, stdlib.md.

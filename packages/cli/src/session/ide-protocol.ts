@@ -6,7 +6,7 @@ import { MAJOR, PROTOCOL, compat, type Events, type Hello } from '@pcbjs/core/pr
 
 /** What `ready` offers: the events it takes, and `lsp` when @pcbjs/lsp is installed. */
 export function serverCapabilities(): string[] {
-  return lspInstalled() ? ['bye', 'lsp'] : ['bye']
+  return lspInstalled() ? ['bye', 'layout', 'lsp'] : ['bye', 'layout']
 }
 
 let lsp: boolean | undefined

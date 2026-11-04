@@ -181,6 +181,8 @@ export function editTxns(d: EditDeps) {
     const got = await plan(t, t.last)
     for (const [k, v] of t.guards ?? []) if (got.guards.get(k) !== v) return { txn: t.id, written: [], error: 'the source changed since the drag began; nothing was written' }
     if (!got.files.length) return { txn: t.id, written: [], error: got.notes.join('; ') || 'nothing to write' }
+    if (new Set(got.files.map(f => f.file)).size > 1)
+      return { txn: t.id, written: [], error: 'A preview edit can change only one source document. Select items from one file and try again.' }
     const written = await d.write(got.files, t.by)
     const refused = written.find(w => !w.applied)
     return { txn: t.id, written, ...(refused ? { error: refused.reason ?? 'the editor refused the edit' } : {}), ...(got.cursor ? { cursor: got.cursor } : {}) }
@@ -315,7 +317,10 @@ class Planner {
     const { file, text, el } = site
     if (u.grid !== undefined) {
       const change = this.lsp.setGrid(el, u.grid)
-      if (!change) { this.notes.push(`${n.ref}: grid may come from a props spread; set an explicit grid attribute after the spread first`); return }
+      if (!change) {
+        this.notes.push(`${n.ref}: grid may come from a props spread; set an explicit grid attribute after the spread first`)
+        return
+      }
       this.push(file, text, change)
       this.wrote(file, n.src.at!.line, this.follow(n))
       return
@@ -368,9 +373,15 @@ class Planner {
     const rot = (old === undefined ? localRot(n) : this.lsp.atRotation(old)) + (to.rot - n.at![2]) * (mirrored(n.m) ? -1 : 1)
     const side = (to.side === 'B') !== mirrored(n.m) ? ' side="B"' : ''
     const change = u.grid === undefined ? null : this.lsp.setGrid(from.el, u.grid)
-    if (u.grid !== undefined && !change) { this.notes.push(`${n.ref}: grid may come from a props spread; set an explicit grid attribute after the spread first`); return }
+    if (u.grid !== undefined && !change) {
+      this.notes.push(`${n.ref}: grid may come from a props spread; set an explicit grid attribute after the spread first`)
+      return
+    }
     const grid = change ? ` ${change.newText.trim()}` : ''
-    const rest = from.el.others.filter(a => u.grid === undefined || a !== from.el.attrs.grid?.text).map(a => ` ${a}`).join('')
+    const rest = from.el.others
+      .filter(a => u.grid === undefined || a !== from.el.attrs.grid?.text)
+      .map(a => ` ${a}`)
+      .join('')
     const child = `<${handle} at="${this.atText(n, to, rot, old, u)}"${side}${grid}${rest} />`
     this.push(host.file, host.text, this.lsp.addChild(host.text, host.el, this.at(host.file, host.text, lay!.src), child))
     this.notes.push(`writes ${rel(this.d.root, host.file)}:${lay!.src.line}, an own placement of ${n.ref} in ${inst}`)
@@ -402,7 +413,8 @@ class Planner {
   }
 
   private traceCall(n: EditNode, rec: RouteRecord, k: number, u: EditUpdate): void {
-    const st = n.steps?.[k - 1], at = this.chainText(n)
+    const st = n.steps?.[k - 1],
+      at = this.chainText(n)
     const call = at && this.callOf(at, st)
     if (!at || !call || !rec.pts?.[k] || !rec.pts[k - 1] || !/^[HhVvLlAaXZ]$/.test(call.method)) throw new Error('select a literal trace primitive to edit')
     const back = (p: Pt) => apply(inv(n.m), p)
@@ -416,7 +428,12 @@ class Planner {
       this.push(at.file, at.text, edit)
     }
     if (u.command) {
-      const args = command === 'Z' ? '' : /^[Aa]$/.test(command) ? `${argOf(command === 'a' ? 'l' : 'L', back(rec.pts[k - 1]), back(rec.pts[k]))}, ${/^[Aa]$/.test(call.method) ? call.args[2]?.text ?? '90' : '90'}` : argOf(command, back(rec.pts[k - 1]), back(rec.pts[k]))
+      const args =
+        command === 'Z'
+          ? ''
+          : /^[Aa]$/.test(command)
+            ? `${argOf(command === 'a' ? 'l' : 'L', back(rec.pts[k - 1]), back(rec.pts[k]))}, ${/^[Aa]$/.test(call.method) ? (call.args[2]?.text ?? '90') : '90'}`
+            : argOf(command, back(rec.pts[k - 1]), back(rec.pts[k]))
       this.push(at.file, at.text, { start: call.name, end: call.end, newText: `${command}(${args})` })
     }
     this.wrote(at.file, st!.src!.line, this.follow(n))
@@ -437,7 +454,14 @@ class Planner {
     let following = j + 1
     while (following < steps.length && !/^[LlHhVvAaXZ]$/.test(steps[following].op)) following++
     const next = steps[following]?.src ? this.lsp.chainCallAt(this.sf(at.file, at.text), this.at(at.file, at.text, steps[following].src!)) : null
-    const edits = call && this.lsp.movePoint(call, local(rec.pts[j]), endOf(call.method, local(rec.pts[j]), to), next && rec.pts[following + 1] ? { call: next, end: local(rec.pts[following + 1]) } : undefined)
+    const edits =
+      call &&
+      this.lsp.movePoint(
+        call,
+        local(rec.pts[j]),
+        endOf(call.method, local(rec.pts[j]), to),
+        next && rec.pts[following + 1] ? { call: next, end: local(rec.pts[following + 1]) } : undefined,
+      )
     if (!edits) {
       this.notes.push(`${n.ref}/pt:${k}: its call takes no literal the tool can rewrite`)
       return
@@ -485,15 +509,22 @@ class Planner {
     const current = this.callOf(at, steps[k])
     if (current && /^[Aa]$/.test(current.method)) {
       if (current.args.length !== 3 || current.args.some(a => a.kind === 'other')) throw new Error('the arc arguments are computed; edit the source before splitting it')
-      const from = apply(inv(n.m), rec.pts[k]), end = apply(inv(n.m), rec.pts[k + 1])
+      const from = apply(inv(n.m), rec.pts[k]),
+        end = apply(inv(n.m), rec.pts[k + 1])
       const split = splitArc(from, end, steps[k].angle ?? 0, to)
       if (!split) throw new Error('choose an interior point of the arc')
-      const relative = current.method === 'a', f = (value: number) => +value.toFixed(6)
+      const relative = current.method === 'a',
+        f = (value: number) => +value.toFixed(6)
       const first = relative ? [to[0] - from[0], to[1] - from[1]] : to
       const second = relative ? [end[0] - to[0], end[1] - to[1]] : end
-      const angle = f(split.first), remainder = f((steps[k].angle ?? 0) - angle)
+      const angle = f(split.first),
+        remainder = f((steps[k].angle ?? 0) - angle)
       if (!angle || !remainder) throw new Error('choose an interior point farther from the arc endpoint')
-      this.push(at.file, at.text, { start: current.name, end: current.end, newText: `${current.method}(${f(first[0])}, ${f(first[1])}, ${angle}).${current.method}(${f(second[0])}, ${f(second[1])}, ${remainder})` })
+      this.push(at.file, at.text, {
+        start: current.name,
+        end: current.end,
+        newText: `${current.method}(${f(first[0])}, ${f(first[1])}, ${angle}).${current.method}(${f(second[0])}, ${f(second[1])}, ${remainder})`,
+      })
       this.wrote(at.file, steps[k].src!.line, this.follow(n))
       return
     }
@@ -562,7 +593,13 @@ class Planner {
       const local = back(u.point.at)
       const pitch = n?.grid ? (this.b.grids?.find(g => g.name === n.grid)?.pitch ?? null) : null
       value = this.lsp.writeAt(local[0], local[1], 0, undefined, { pitch, free: !!u.free })
-    } else if (a.start) value = command === 'Z' ? '' : /^[Aa]$/.test(command) ? `${argOf(command === 'a' ? 'l' : 'L', back(a.start), back(u.point.at))}, ${a.typed[2] ?? 90}` : argOf(command, back(a.start), back(u.point.at))
+    } else if (a.start)
+      value =
+        command === 'Z'
+          ? ''
+          : /^[Aa]$/.test(command)
+            ? `${argOf(command === 'a' ? 'l' : 'L', back(a.start), back(u.point.at))}, ${a.typed[2] ?? 90}`
+            : argOf(command, back(a.start), back(u.point.at))
     else {
       this.notes.push('the chain has no start yet; save or wait for the board')
       return

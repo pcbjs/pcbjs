@@ -6,16 +6,16 @@ A requirement checked on every compile cannot go stale. This page maps the kinds
 
 | Requirement | pcbjs |
 | --- | --- |
-| no part, silk or pad within w of the edge, an enclosure wall or card guide | `rules={{ edge: { width: w, kinds?, except: [J1, 'H1'] } }}`, DRC `edge-courtyard`, `edge-silk`, `edge-pad` |
+| no part, silk or pad within w of the edge, an enclosure wall or card guide | `rules={{ edge: { width: w, kinds?, except: [J1, H1] } }}`, DRC `edge-courtyard`, `edge-silk`, `edge-pad` |
 | solder mask dam of at least w between pads | `rules={{ maskWeb: w }}`, DRC warning `mask-web`; black or white mask usually wants more than green |
 | hole to copper differs on inner and outer layers | `holeClearance: { inner, outer }` |
 | via to via spacing differs from pad hole to pad hole | `minHoleToHole: { pad, via }` |
 | a through-hole pad keeps more from tracks than from its own neighbours | `part.rules({ clearance: { track, via, zone } })`; its own pads keep the board's |
 | power tracks keep more from through-hole pads | `net.rules({ clearance: { track } })` or a class; toward pads by type on a part, `{ pad: { tht } }` |
 | pads keep more from pours only | `part.rules({ clearance: { zone } })` |
-| one side carries no tracks, a battery or shield sits there | `keepout('B.Cu', OUTLINE)`; pads are never flagged, so through-hole parts stay |
-| no pour on a board or area | `keepout('all', d, { tracks: false, vias: false })`; each flag set false lets that kind in |
-| an antenna, a crystal, a screw head | `keepout('all', d, { except: [NET] })` for the nets that may enter |
+| one side carries no tracks, a battery or shield sits there | `keepout(OUTLINE, { layers: ['B.Cu'] })`; pads are never flagged, so through-hole parts stay |
+| no pour on a board or area | `keepout(area, { tracks: false, vias: false })`; each flag set false lets that kind in |
+| an antenna, a crystal, a screw head | `keepout(area, { except: [NET] })` for the nets that may enter |
 | pins across a cable or mezzanine carry the same nets | `reference(entry, { mate: { …, nets: true } })`, DRC `reference-net` |
 | a body must clear the board above | `reference()` with real heights, DRC `reference-collision` |
 | a skew or length budget | `.match(group, tolerance)` or `.length({ min, max })` |
@@ -34,13 +34,14 @@ const OUTLINE = 'M 0 0 H 40 V 30 H 0 Z'
 const { GND, VCC, SIG } = nets()
 VCC.rules({ clearance: { track: 0.4 } })
 
-const J1 = PinHeader(3).connect(GND, VCC, SIG).rules({ clearance: { track: 0.4, via: 0.4, zone: 0.4, pad: { tht: 0.5 } } })
-const R1 = R0603('10k').connect(SIG, VCC)
-const C1 = C0603('100n').connect(VCC, GND)
+const J1 = PinHeader(3)().connect({ 1: GND, 2: VCC, 3: SIG }).rules({ clearance: { track: 0.4, via: 0.4, zone: 0.4, pad: { tht: 0.5 } } })
+const R1 = R0603('10k').connect({ 1: SIG, 2: VCC })
+const C1 = C0603('100n').connect({ 1: VCC, 2: GND })
 
 export default (
   <PCB
     name="Rules"
+    rev="0.1.0"
     rules={{
       edge: { width: 1.2, kinds: ['courtyard', 'silk'], except: [J1] },
       maskWeb: 0.13,
@@ -52,11 +53,11 @@ export default (
     <J1 at="5 10" />
     <R1 at="20 12" />
     <C1 at="20 18" />
-    {route(J1[3]).X(R1[1])}
-    {route(J1[2]).X(R1[2])}
-    {route(R1[2]).X(C1[1])}
-    {route(C1[2]).X(J1[1])}
-    {keepout('B.Cu', OUTLINE)}
+    {route(J1[3], R1[1])}
+    {route(J1[2], R1[2])}
+    {route(R1[2], C1[1])}
+    {route(C1[2], J1[1])}
+    {keepout(OUTLINE, { layers: ['B.Cu'] })}
   </PCB>
 )
 ```

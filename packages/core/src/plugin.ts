@@ -107,7 +107,9 @@ export interface PcbPlugin {
   before?: Partial<Record<StageName, Hook>>
   after?: Partial<Record<StageName, Hook>>
   checks?: PluginCheck[]
-  /** false when not a pure function of what it reads: its stages never hit the cache */
+  /** Configuration identity, such as JSON.stringify(options); enables caching unless cache is false. */
+  cacheKey?: string
+  /** Explicitly opt into caching by version and declared reads, or disable caching. Without a key or opt-in, plugins are uncached. */
   cache?: boolean
 }
 

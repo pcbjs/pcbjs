@@ -94,10 +94,12 @@ test('the pane page hands the viewer’s undo to the extension', async () => {
   const p = preview()
   await p.open(server(), '2d')
   const html = panels[0].webview.html
-  assert.match(html, /m\.type === 'pcbjs:undo' && Array\.isArray\(m\.files\)\) vscode\.postMessage\(\{ type: 'undo', files: m\.files, redo: !!m\.redo, board: m\.board, project: m\.project \}\)/)
+  assert.match(
+    html,
+    /m\.type === 'pcbjs:undo' && Array\.isArray\(m\.files\)\) vscode\.postMessage\(\{ type: 'undo', files: m\.files, redo: !!m\.redo, board: m\.board, project: m\.project \}\)/,
+  )
   assert.ok(html.indexOf("'pcbjs:undo'") < html.indexOf('return;'), 'read before the frame’s messages return')
 })
-
 
 test('pane undo uses source chronology after editor and other-pane changes, and redo restores that change', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'pcbjs-chronology-'))
@@ -191,7 +193,8 @@ test('source owner is shared by board panes, survives page reload and preserves 
   Object.defineProperty(vscode.window, 'activeTextEditor', { configurable: true, get: () => ({ document: doc }) })
   t.after(() => Object.defineProperty(vscode.window, 'activeTextEditor', activeEditor))
   setGroups([group(file)], 0)
-  const p = preview(), s = server()
+  const p = preview(),
+    s = server()
   s.root = dir
   await p.open(s, '2d')
   await p.open(s, '3d', 'new')
@@ -214,7 +217,8 @@ test('source owner is shared by board panes, survives page reload and preserves 
 test('late source ownership and undo from a different board or project are ignored', async () => {
   panels.length = 0
   setGroups([group('/work/demo/a.ts')], 0)
-  const p = preview(), s = server()
+  const p = preview(),
+    s = server()
   await p.open(s, '2d')
   const panel = panels[0]
   const before = commands.length
@@ -228,14 +232,18 @@ test('late source ownership and undo from a different board or project are ignor
 
 test('rapid keyboard requests across panes serialize native source focus and undo', async t => {
   panels.length = 0
-  const dir = mkdtempSync(join(tmpdir(), 'pcbjs-undo-queue-')), file = join(dir, 'pcb.tsx')
+  const dir = mkdtempSync(join(tmpdir(), 'pcbjs-undo-queue-')),
+    file = join(dir, 'pcb.tsx')
   writeFileSync(file, '0')
   const { doc } = openDoc(file, '0')
   const active = Object.getOwnPropertyDescriptor(vscode.window, 'activeTextEditor')
   Object.defineProperty(vscode.window, 'activeTextEditor', { configurable: true, get: () => ({ document: doc }) })
   const original = vscode.commands.executeCommand
-  let release, entered = 0
-  const gate = new Promise(resolve => { release = resolve })
+  let release,
+    entered = 0
+  const gate = new Promise(resolve => {
+    release = resolve
+  })
   vscode.commands.executeCommand = async (id, ...args) => {
     if (id === 'undo' && ++entered === 1) await gate
     return original(id, ...args)
@@ -245,7 +253,8 @@ test('rapid keyboard requests across panes serialize native source focus and und
     Object.defineProperty(vscode.window, 'activeTextEditor', active)
   })
   setGroups([group(file)], 0)
-  const p = preview(), s = server()
+  const p = preview(),
+    s = server()
   await p.open(s, '2d')
   await p.open(s, '3d', 'new')
   for (const value of ['1', '2']) {
@@ -261,4 +270,20 @@ test('rapid keyboard requests across panes serialize native source focus and und
   await until(() => doc.text === '0')
   assert.equal(entered, 2)
   p.dispose()
+})
+
+test('cancelled source navigation does not restore focus over the user selection', async () => {
+  panels.length = 0
+  setGroups([group('/work/demo/a.ts')], 0)
+  const p = preview()
+  await p.open(server(), '2d')
+  const panel = panels[0]
+  panel.focus()
+  await p.keepFocus(
+    async () => {
+      panel.active = false
+    },
+    () => false,
+  )
+  assert.equal(panel.active, false)
 })

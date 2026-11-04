@@ -1,10 +1,10 @@
 # Sourcing
 
-What to order for each part: `MPN` and `MPN:<tag>` keys on parts, sourcing tags on boards and fab targets, and the BOM they resolve to.
-Write part numbers inline or in a separate `<board>.sourcing.ts` module of `source()` calls.
+What to order for each part: `MPN` and `MPN:<tag>` keys and BOM fields given by `.source()`, sourcing tags on boards and fab targets, and the BOM they resolve to.
+Advanced. `.source()` is called on the part where it is made, or out of line in a separate `<board>.sourcing.ts` module.
 
 ```ts
-export const R1 = R0603('330', { MPN: 'RC0603FR-07330RL', 'MPN:LCSC': 'C23138' }).connect(VCC, LED1)
+export const R1 = R0603('330').source({ MPN: 'RC0603FR-07330RL', 'MPN:LCSC': 'C23138' }).connect({ 1: VCC, 2: LED1 })
 ```
 
 ## Keys
@@ -12,40 +12,33 @@ export const R1 = R0603('330', { MPN: 'RC0603FR-07330RL', 'MPN:LCSC': 'C23138' }
 | Key | Meaning |
 | --- | --- |
 | `MPN` | the catch-all part number |
-| `MPN:<tag>` | the number for one source: `MPN:LCSC`, `MPN:DigiKey`, `MPN:Mouser`, `MPN:US`, `MPN:CN`; free strings, case-insensitive |
+| `MPN:<tag>` | the number for one source: `MPN:LCSC`, `MPN:DigiKey`, `MPN:Mouser`, `MPN:US`, `MPN:CN`; free strings matched as written, `MPN` in capitals |
 | any other, `Manufacturer`, `Datasheet`, `Description` | a plain BOM field |
 
-The keys are typed as `SourcingSpec`.
+The keys are typed as `SourcingSpec`. `Description` is the part's description in the BOM.
 
 ## Inline
 
-The second argument of a factory, the `source` option, or `.source()`:
-
 ```ts
-export const Q1 = SOT23(3)('MMBT3904', { MPN: 'MMBT3904LT1G', Manufacturer: 'onsemi' }).connect(SIG, GND, SW)
-export const R2 = R0603({ value: '330', source: { MPN: 'RC0603FR-07330RL' } }).source({ 'MPN:LCSC': 'C23138' }).connect(VCC, LED2)
+export const Q1 = SOT23(3)('MMBT3904').source({ MPN: 'MMBT3904LT1G', Manufacturer: 'onsemi' }).connect({ 1: SIG, 2: GND, 3: SW })
+export const R2 = R0603('330').source({ 'MPN:LCSC': 'C23138', Tolerance: '1%' }).connect({ 1: VCC, 2: LED2 })
 ```
+
+Several `.source()` calls merge, a later key replacing an earlier one.
 
 ## Out of line
 
 ```ts
 // blinky.sourcing.ts, imported by blinky.pcb.tsx with import './blinky.sourcing'
-import { source } from '@pcbjs/core'
-import { R0603 } from '@pcbjs/lib'
-import { J1, C1 } from './blinky.sch'
+import { J1, C1, CH1, CH2, CH3 } from './blinky.sch'
 
-source(R0603, '330', { MPN: 'RC0603FR-07330RL', 'MPN:LCSC': 'C23138' })   // every R0603 with value 330
-source(C1, { MPN: 'CL10B104KB8NNNC', 'MPN:LCSC': 'C14663' })              // one part, an instance, or an array
-source(J1, { MPN: 'PEC03SAAN', Manufacturer: 'Sullins' })
+const R330 = { MPN: 'RC0603FR-07330RL', 'MPN:LCSC': 'C23138' }
+for (const ch of [CH1, CH2, CH3]) ch.R.source(R330)       // the resistor of each channel
+C1.source({ MPN: 'CL10B104KB8NNNC', 'MPN:LCSC': 'C14663' })
+J1.source({ MPN: 'PEC03SAAN', Manufacturer: 'Sullins' })
 ```
 
-Merge order, a later key replacing an earlier one:
-
-1. `source(factory, value, spec)` rules, in call order; they reach only boards whose entry imports the module.
-2. `source(part, spec)` calls, in call order.
-3. The part options: `fields`, then `source` or the second argument.
-4. `.source()` calls.
-5. The placement's `fields`, `<R1 at="12 5" fields={{ … }} />`; plain footprints take keys this way.
+A plain object of keys shared by several parts is a constant like any other.
 
 ## Tags on the board
 

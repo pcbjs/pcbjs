@@ -11,15 +11,15 @@ import { PinHeader, R0603, rect } from '@pcbjs/lib'
 
 const { GND, VCC } = nets()
 const VIA = { drill: 0.3, size: 0.62 }
-const J1 = PinHeader(2).connect(GND, VCC)
-const R1 = R0603('1k').connect(VCC, GND)
+const J1 = PinHeader(2)().connect({ 1: GND, 2: VCC })
+const R1 = R0603('1k').connect({ 1: VCC, 2: GND })
 
 export default (
-  <PCB name="Stitched">
+  <PCB name="Stitched" rev="0.1.0">
     <rect layer="Edge.Cuts" x={0} y={0} w={60} h={40} />
     <J1 at="5 20" />
     <R1 at="30 20" />
-    {route(J1[2]).X(R1[1])}
+    {route(J1[2], R1[1])}
     {pour(GND, 'F.Cu', rect(60, 40))}
     {pour(GND, 'B.Cu', rect(60, 40))}
     {stitch(GND, { pitch: 4, layers: ['F.Cu', 'B.Cu'], padClearance: 1.0, via: VIA, avoid: { silk: true } })}
@@ -45,7 +45,7 @@ const { GND, DRAIN } = nets()
 const VIA = { drill: 0.3, size: 0.62 }
 
 export default (
-  <PCB name="Heat">
+  <PCB name="Heat" rev="0.1.0">
     <rect layer="Edge.Cuts" x={0} y={0} w={50} h={40} />
     {pour(GND, 'B.Cu', rect(50, 40))}
     {pour(DRAIN, 'B.Cu', rect(3.1, 6.25, 39.6, 28.9), { clearance: 0.2, priority: 2, connect: 'solid' })}

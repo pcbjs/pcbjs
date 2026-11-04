@@ -43,6 +43,7 @@ export const TOPICS = [
   'viewer',
   'interaction',
   'editing',
+  'layout-editing',
   'keys',
   'ui',
   'render',

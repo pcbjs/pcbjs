@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { scopeHost, sourcePosition } from '@pcbjs/compile/scope'
+import { scopeHost, sourcePosition } from '@pcbjs/compile/internal/scope'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..', '..', '..')

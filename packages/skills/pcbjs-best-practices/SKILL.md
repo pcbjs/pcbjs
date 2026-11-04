@@ -14,13 +14,14 @@ These are the habits that held up when generated KiCad boards were moved to pcbj
 3. **House rules are the strictest of every fab you order from.** One module takes the maximum of the owner's sheet and each fab's published set, so every board is checked against all of them. references/house-rules.md.
 4. **Measure with `inspect`, never by reading files.** `inspect <net>` gives copper per layer and pour pieces, `--lengths` every route, `--layer` every item with ink bounds, `--json` all of it for a contract script. references/measuring.md.
 5. **Placement asserts become contracts over `inspect --json`.** A generator's asserts, an enclosure's walls, a via grid: one script, one compile, a clear list of violations. Probe it with a 0.1 mm move that DRC passes.
-6. **Judge a change by a cold check, confirm it warm.** Delete `.pcbjs/routes`, check, then check again: same counts, same findings, same `inspect --lengths`, all legs cached. A warm pass alone can hide a routing change.
+6. **Judge a change by a cold check, confirm it warm.** Run `pcbjs check --fresh=all`, then check again: same counts, same findings, same `inspect --lengths`, all legs cached. A warm pass alone can hide a routing change.
 7. **Keep hand routes that encode a decision.** Try the router with a two-line trial and compare lengths and topology before replacing an owner's chain; a skew budget on hand routes is a `.match()` group. references/routing-choices.md.
 8. **Boards that meet are checked together.** `reference()` with a `mate` on every connector pair, `nets` across each mate, real body heights, one shared pinout module and one shared frame module. references/stacks.md.
 9. **Copper for current and heat is measured.** Dead pour pockets become heat copper with thermal vias; `stitch()` places stitching vias from the fill; `inspect <net>` reports the area before and after. references/copper.md.
 10. **Models come from the vendor first, with the licence noted.** `pcbjs model add`, `model align`, `model check` and a 3D shot; a model whose licence forbids redistribution is fetched by a make target and kept out of git. references/models.md.
 11. **The fab set is reproducible and self-explaining.** `fabNotes` for order choices, teardrops on through-hole pads, NewStroke for KiCad-looking legends, `thicken` for variable outline text, and a build date from the design's last commit. references/fab-output.md.
 12. **Compare against the original while you improve.** A netlist and copper comparison that lists the differences you made on purpose, each with its reason, and fails on anything else. references/comparisons.md.
+13. **Intent you are asked to keep is a test.** A placement rule, a part on one side, a distance or a clean net goes into a `*.test.ts` with `board()` of `@pcbjs/cli/test`, run by `pcbjs check --test`; a golden from `pcbjs test --update` guards a refactor that must not move copper. `pcbjs docs testing`.
 
 ## How to work a change
 
@@ -31,14 +32,16 @@ These are the habits that held up when generated KiCad boards were moved to pcbj
 
 ## Save tokens
 
+- With the pcbjs MCP tools present, prefer them to the CLI: `check`, `inspect`, `query` and `render` answer from the session's compiled snapshot, `events` says what changed since the last call.
 - Never lint or format by hand; the commit hook does it.
-- Never read `dist` or `board.json`; `pcbjs check` gives the findings and `pcbjs inspect` the positions, nets and lengths.
+- Never read `dist` or `board.json`; `check` gives the findings and `inspect` the positions, nets and lengths.
+- Never overwrite an existing file with a whole-file Write; change it by edits anchored on text you read.
 - Run only the test suite of the package you changed, unless the change crosses packages.
-- Run `pcbjs shot` to look at a board instead of opening a browser.
+- Look at a board with `render` or `pcbjs shot` instead of opening a browser.
 
 ## Checklist before calling a board done
 
 - `pcbjs check --fab` cold and warm, identical; `STATUS: ORDERABLE` in README-fab.
-- `pcbjs model check` 0 flagged; `pcbjs shot --view both` looked at, `--flip` for back parts.
+- `pcbjs model check` 0 flagged; `pcbjs shot` looked at, `--side B` for back parts.
 - Every spec rule either in DRC, in a contract script, or listed as not covered with the reason.
 - Two `pcbjs build --date <iso>` runs give byte-identical fab sets.

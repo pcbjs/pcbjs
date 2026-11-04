@@ -9,6 +9,49 @@ import { emptySelection, isSelection, normalizeSelection, sameSelection, type Re
 import { instanceIn } from '@pcbjs/core/internal/instances'
 import ts from 'typescript'
 import { textDoc } from '@pcbjs/core/internal/textdoc'
+import { parseSnapshot, type Params } from '@pcbjs/core/protocol'
+
+/** Resolve transport references against the selected model before publishing canonical state. */
+export function validateSelection(board: Board, value: Selection, focused = board): Selection {
+  if (!isSelection(value) || value.board !== board.name) throw new Error('invalid selection offer')
+  const snapshot = value.snapshot ? parseSnapshot(value.snapshot) : null
+  if (value.snapshot && (!snapshot || !Number.isSafeInteger(snapshot.run) || snapshot.run < 1)) throw new Error('invalid selection snapshot')
+  let index: ReturnType<typeof boardIndex> | undefined
+  const resolve = (ref: string) => resolveRef((index ??= boardIndex(board)), ref)
+  let focusedIndex: ReturnType<typeof boardIndex> | undefined
+  const canonical = (ref: string) => {
+    parseRef(ref)
+    const symbol = focused.schematic?.parts?.find(p => p.ref === ref || [...(p.path ?? []), p.local ?? p.ref].join('/') === ref)
+    if (symbol) return [...(symbol.path ?? []), symbol.local ?? symbol.ref].join('/')
+    const found = focused === board ? resolve(ref) : resolveRef((focusedIndex ??= boardIndex(focused)), ref)
+    return found.kind === 'part' || found.kind === 'group' ? found.path : found.kind === 'pad' ? `${canonicalRef(board, found.ref)}/${found.pad.num}` : ref
+  }
+  const refs = [...new Set(value.refs.map(canonical))]
+  const anchor = value.anchor ? canonical(value.anchor) : null
+  const ancestor = (a: string, b: string) => b.startsWith(a + '/') && !a.startsWith('net:') && !a.startsWith('plane:')
+  const members = refs.filter(ref => !refs.some(other => other !== ref && ((ancestor(other, ref) && ref !== anchor) || (ancestor(ref, other) && other === anchor))))
+  const container = (ref: string, library = false) => {
+    const found = resolve(ref)
+    if (found.kind !== 'group' && (library || found.kind !== 'part')) throw new Error(`${ref} is not an isolatable ${library ? 'layout group' : 'part or group'}`)
+    return found.path
+  }
+  const isolation = (v: Selection['isolate']) =>
+    v && {
+      ...v,
+      ref: container(v.ref, v.mode === 'library'),
+      context: container(v.context, v.mode === 'library'),
+      instances: [...new Set(v.instances.map(ref => container(ref, v.mode === 'library')))],
+    }
+  if (value.finding && resolve(value.finding).kind !== 'finding') throw new Error('selection finding must name a finding')
+  return normalizeSelection({
+    ...value,
+    refs: members,
+    anchor,
+    level: value.level ? container(value.level, value.isolate?.mode === 'library') : null,
+    isolate: isolation(value.isolate),
+    isolateChoice: isolation(value.isolateChoice ?? null),
+  })
+}
 
 /** 1-based, `endCol` inclusive, as `pcbjs/select` takes it. */
 export interface SelectRange {
@@ -24,11 +67,16 @@ const primitiveRange = (s: Src | undefined, textOf?: (file: string) => string | 
   const range = rangeOf(s)
   const text = s && textOf?.(s.file)
   if (!range || !text) return range
-  const doc = textDoc(text), offset = doc.span({ line: range.line, col: range.col }).start
+  const doc = textDoc(text),
+    offset = doc.span({ line: range.line, col: range.col }).start
   const sf = ts.createSourceFile(range.file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   let dot: number | undefined
   const visit = (node: ts.Node): void => {
-    if (ts.isPropertyAccessExpression(node) && node.name.getStart(sf) === offset) dot = node.getChildren(sf).find(child => child.kind === ts.SyntaxKind.DotToken)?.getStart(sf)
+    if (ts.isPropertyAccessExpression(node) && node.name.getStart(sf) === offset)
+      dot = node
+        .getChildren(sf)
+        .find(child => child.kind === ts.SyntaxKind.DotToken)
+        ?.getStart(sf)
     if (dot === undefined) ts.forEachChild(node, visit)
   }
   visit(sf)
@@ -64,7 +112,7 @@ const placed = (r: SelectRange | null): MemberRange | null => (r ? { ...r, place
 const instanceAt = (board: Board, path: string): MemberRange | null =>
   placed(rangeOf(board.edit?.find(e => e.ref === path)?.src.at ?? board.edit?.find(e => e.layout && instanceIn(e.frames, board.schematic.circuits) === path)?.layout?.src))
 
-/** Where a member is in the code: a part's or a pad's placement, a route's chain call, an item's range, an instance's placement else the span over its parts, a pour's call, a net's declaration, a finding's first range, in the schematic view as schRange has it; null for none. */
+/** Resolve an entity to the source expression used by the requesting view. */
 export function memberRange(board: Board, ref: Ref, o: RangeOptions = {}): MemberRange | null {
   if (o.view === 'sch') {
     const part = board.schematic.parts.find(p => p.displayRef && !p.placed && (p.ref === ref || [...p.path, p.local].join('/') === ref))
@@ -154,7 +202,7 @@ export function declRange(file: string, text: string, name: string): SelectRange
   return { file, line, col, endLine: line, endCol: col + name.length - 1 }
 }
 
-/** The board a reference names alone, `board:Blinky`; null for any other reference. */
+/** A standalone board reference, without an entity path. */
 export function boardOnly(ref: Ref): string | null {
   try {
     const segs = parseRef(ref)
@@ -174,7 +222,7 @@ export function pcbRange(file: string, text: string): SelectRange | null {
   return { file, line, col, endLine: line, endCol: col + m[0].length - 1 }
 }
 
-/** A member as the tree names it: a part by its path, `CH2/R01`, a pad under it, a group by its path; anything else as given. */
+/** Canonical tree path for a part, pad or group. */
 export function canonicalRef(board: Board, ref: Ref): Ref {
   try {
     const t = resolveRef(boardIndex(board), ref)
@@ -188,7 +236,7 @@ export function canonicalRef(board: Board, ref: Ref): Ref {
 /** A reusable source declaration selects one library context, preserving the focused representative when possible. */
 export function editorContext(board: Board, input: EditorSelection, previous: Selection | null, rootDir = ''): Partial<Selection> {
   const refs = [...new Set(input.refs.map(ref => canonicalRef(board, ref)))]
-  const anchor = input.anchor ? canonicalRef(board, input.anchor) : refs[0] ?? null
+  const anchor = input.anchor ? canonicalRef(board, input.anchor) : (refs[0] ?? null)
   const key = (value: string | undefined) => {
     if (!value) return value
     const at = value.lastIndexOf('#')
@@ -196,15 +244,22 @@ export function editorContext(board: Board, input: EditorSelection, previous: Se
   }
   const candidates = input.library ? board.schematic.circuits.filter(c => key(c.layout) === key(input.library) || key(c.def) === key(input.library)).map(c => c.path.join('/')) : []
   const inside = (ref: string, root: string) => ref === root || ref.startsWith(root + '/')
-  if (!candidates.length) return {
-    refs, anchor, marks: input.marks, level: null,
-    ...(previous?.isolate?.mode === 'library' ? { isolate: null, isolateChoice: null } : {}),
-  }
+  if (!candidates.length)
+    return {
+      refs,
+      anchor,
+      marks: input.marks,
+      level: null,
+      ...(previous?.isolate?.mode === 'library' ? { isolate: null, isolateChoice: null } : {}),
+    }
   const focused = previous?.anchor ?? previous?.refs[0]
-  const root = candidates.find(c => c === previous?.isolate?.ref) ?? candidates.filter(c => focused && inside(canonicalRef(board, focused), c)).sort((a, b) => b.length - a.length)[0] ?? candidates[0]
+  const root =
+    candidates.find(c => c === previous?.isolate?.ref) ??
+    candidates.filter(c => focused && inside(canonicalRef(board, focused), c)).sort((a, b) => b.length - a.length)[0] ??
+    candidates[0]
   const index = boardIndex(board)
   const ownsRoute = (ref: string) => !!board.edit?.find(n => n.ref === ref)?.frames?.some(f => inside(f.inst, root))
-  const ownsItem = (it: Board['items'][number]) => !!it.ref && inside(canonicalRef(board, it.ref), root) || 'route' in it && !!it.route && ownsRoute(it.route)
+  const ownsItem = (it: Board['items'][number]) => (!!it.ref && inside(canonicalRef(board, it.ref), root)) || ('route' in it && !!it.route && ownsRoute(it.route))
   const belongs = (ref: string): boolean => {
     if (inside(ref, root)) return true
     try {
@@ -217,8 +272,12 @@ export function editorContext(board: Board, input: EditorSelection, previous: Se
   }
   const local = refs.filter(belongs)
   return {
-    refs: local.length ? local : [root], anchor: anchor && local.includes(anchor) ? anchor : local[0] ?? root,
-    marks: undefined, finding: null, level: root, isolateChoice: null,
+    refs: local.length ? local : [root],
+    anchor: anchor && local.includes(anchor) ? anchor : (local[0] ?? root),
+    marks: undefined,
+    finding: null,
+    level: root,
+    isolateChoice: null,
     isolate: { ref: root, context: root, instances: candidates, preview: false, mode: 'library' },
   }
 }
@@ -236,38 +295,65 @@ export interface Offer {
   base?: number
 }
 
-/** The selections of a session, one per board; the last writer by arrival wins, a client's change based on an older seq than its last one is dropped. */
+type RefSelect = Extract<Params<'session/select'>, { refs: string[] }>
+
+const selectionBase = (board: string, previous: Selection | null, target?: string | null): Selection =>
+  previous && (target === undefined || target === previous.target) ? previous : emptySelection(board, target ?? null)
+
+/** Target-local context never crosses a refs-form target change. */
+export function refsSelection(board: Board, previous: Selection | null, p: RefSelect): Selection {
+  const base = selectionBase(p.board, previous, p.target)
+  const refs = p.refs
+  const finding = p.finding !== undefined ? p.finding : (refs.find(ref => [...board.drc, ...board.erc].some(f => f.id === ref)) ?? base.finding)
+  return validateSelection(board, { ...base, refs, anchor: p.anchor ?? refs.at(-1) ?? null, level: p.level ?? null, marks: undefined, finding })
+}
+
+/** One state and pending intent per board; stale client bases cannot supersede newer intent. */
 export function selectionStore(findings?: (s: Selection) => readonly { id?: string; refs?: readonly string[] }[] | undefined) {
   const byBoard = new Map<string, Selection>()
   const bases = new WeakMap<object, number>()
+  const intents = new Map<string, symbol>()
   let seq = 0
   const stamp = (s: Selection): Selection => {
     const out = { ...s, seq: ++seq }
     byBoard.set(s.board, out)
     return out
   }
-  return {
-    get: (board: string): Selection | null => byBoard.get(board) ?? null,
-    /** A viewer's selection; null when it is dropped or shows nothing new. */
-    offer(client: object, m: Offer, by: Selection['client']): Selection | null {
-      if (!isSelection(m.selection) || m.selection.board !== m.board || (m.base !== undefined && (!Number.isSafeInteger(m.base) || m.base < 0))) throw new Error('invalid selection offer')
+  const begin = (client: object, m: Offer, by: Selection['client']) => {
+    if (!isSelection(m.selection) || m.selection.board !== m.board || (m.base !== undefined && (!Number.isSafeInteger(m.base) || m.base < 0)))
+      throw new Error('invalid selection offer')
+    const base = m.base ?? 0
+    if (base < (bases.get(client) ?? 0)) return null
+    bases.set(client, base)
+    const intent = Symbol()
+    intents.set(m.board, intent)
+    return (selection = m.selection): Selection | null => {
+      if (intents.get(m.board) !== intent) return null
+      intents.delete(m.board)
       const was = byBoard.get(m.board)
-      const next = normalizeSelection(m.selection, findings?.(m.selection), was)
-      const base = m.base ?? 0
-      if (base < (bases.get(client) ?? 0)) return null
-      bases.set(client, base)
-      if (was && sameSelection(was, next)) return null
-      return stamp({ ...next, board: m.board, by: next.by, client: by })
-    },
-    /** A selection the session itself sets, from the editor or an agent; null when it shows nothing new. */
-    set(board: string, change: Partial<Pick<Selection, 'refs' | 'anchor' | 'level' | 'marks' | 'target' | 'snapshot' | 'finding' | 'isolate' | 'isolateChoice'>>, by: SetBy, client: Selection['client']): Selection | null {
-      const was = byBoard.get(board) ?? emptySelection(board)
-      const refs = change.refs ?? was.refs
-      const anchor = change.anchor !== undefined ? change.anchor : (refs[refs.length - 1] ?? null)
-      const proposed = { ...was, ...change, refs, anchor, by, client, ...(change.refs !== undefined && change.finding === undefined ? { finding: null } : {}) }
-      const next = normalizeSelection(proposed, findings?.(proposed), was)
-      if (sameSelection(was, next) && was.by === by) return null
-      return stamp(next)
+      const next = normalizeSelection(selection, findings?.(selection), was)
+      return was && sameSelection(was, next) ? null : stamp({ ...next, client: by })
+    }
+  }
+  return {
+    begin,
+    cancel: () => intents.clear(),
+    get: (board: string): Selection | null => byBoard.get(board) ?? null,
+    offer: (client: object, m: Offer, by: Selection['client']): Selection | null => begin(client, m, by)?.() ?? null,
+    set(
+      board: string,
+      change: Partial<Pick<Selection, 'refs' | 'anchor' | 'level' | 'marks' | 'target' | 'snapshot' | 'finding' | 'isolate' | 'isolateChoice'>>,
+      by: SetBy,
+      client: Selection['client'],
+    ): Selection | null {
+      intents.delete(board)
+      const previous = byBoard.get(board) ?? null
+      const base = selectionBase(board, previous, change.target)
+      const refs = change.refs ?? base.refs
+      const anchor = change.anchor !== undefined ? change.anchor : (refs.at(-1) ?? null)
+      const proposed = { ...base, ...change, refs, anchor, by, client, ...(change.refs !== undefined && change.finding === undefined ? { finding: null } : {}) }
+      const next = normalizeSelection(proposed, findings?.(proposed), previous ?? undefined)
+      return previous && sameSelection(previous, next) && previous.by === by ? null : stamp(next)
     },
   }
 }

@@ -1,4 +1,3 @@
-// The chip in an isolation names the definition, whose values it is shown with and how many instances follow a write, with the picker; a definition placed once has no picker.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createSSRApp, h } from 'vue'
@@ -19,7 +18,8 @@ const text = html =>
     .replace(/\s+/g, ' ')
 
 test('first group focus shows separate layout actions; second click enters instance layout with disabled active action', async () => {
-  const b = site(), store = ui.useBoard(b)
+  const b = site(),
+    store = ui.useBoard(b)
   const hit = { kind: 'pad', id: 5, ref: 'R101', net: 'S1' }
   const render = () => renderToString(createSSRApp({ render: () => h(ui.PathChip, { board: b }) }))
   store.pick(hit, { shift: false, deep: false })
@@ -44,7 +44,8 @@ test('first group focus shows separate layout actions; second click enters insta
 })
 
 test('library layout of a group placed once hides the board context', async () => {
-  const b = site(), store = ui.useBoard(b)
+  const b = site(),
+    store = ui.useBoard(b)
   store.pick({ kind: 'pad', id: 1, ref: 'R1', net: 'A' }, { shift: false, deep: false })
   store.chooseIsolation('library')
   assert.equal(store.iso.fade, false)
@@ -52,4 +53,19 @@ test('library layout of a group placed once hides the board context', async () =
   const html = await renderToString(createSSRApp({ render: () => h(ui.PathChip, { board: b }) }))
   assert.match(text(html), /Library layout: G/)
   assert.doesNotMatch(html, /instances follow|Instance whose values are shown/)
+})
+
+test('isolating a standalone footprint offers visibility without group-layout actions', async () => {
+  const b = site(),
+    store = ui.useBoard(b)
+  b.schematic.circuits = []
+  b.schematic.parts = b.schematic.parts.map(p => ({ ...p, path: [], local: p.ref }))
+  store.selectRef('R1')
+  store.toggleIsolate()
+  const before = store.sel
+  const html = await renderToString(createSSRApp({ render: () => h(ui.PathChip, { board: b }) }))
+  assert.match(text(html), /Isolated: R1/)
+  assert.doesNotMatch(html, /aria-label="Edit (instance|library) layout"/)
+  store.chooseIsolation('library')
+  assert.equal(store.sel, before, 'unsupported layout action leaves visibility unchanged')
 })

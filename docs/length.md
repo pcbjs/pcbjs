@@ -1,12 +1,12 @@
 # Length and matching
 
 Length targets with `.length()`, match groups with `.match()`, how the tuner lays meanders to meet them, and where the lengths are reported.
-The route call and its builder methods are in routing.md; pair skew is in pairs.md.
+Advanced. The route call is in routing.md, its builder methods in route-options.md; pair skew is in pairs.md.
 
 ```tsx
-route(J1[1]).Z(J2[1]).width(0.25).length(34)
-route(J1[2]).Z(J2[2]).width(0.25).match('DATA')
-route(J1[3]).H(20).V(14).H(35).Z(J2[3]).width(0.25).match('DATA')
+route(J1[1], J2[1]).width(0.25).length(34).Z()
+route(J1[2], J2[2]).width(0.25).match('DATA').Z()
+route(J1[3], J2[3]).width(0.25).match('DATA').H(20).V(14).H(35).Z()
 ```
 
 | Call | Means |

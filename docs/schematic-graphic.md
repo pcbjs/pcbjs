@@ -1,12 +1,12 @@
 # Schematic drawing
 
-The schematic as a picture: `<Schematic>`, parts as their symbols, `<Sym>`, `<Label>`, `<Power>`, `<Sheet>`, `<Text>` and `wire()`, symbols and `defineSymbol`, the automatic placement and wiring, the `sch-*` findings and the outputs.
-It is a view of the netlist in schematic.md and adds no nets; only hand wires can disagree with the board, and they are checked.
+The schematic as a picture: `<Schematic>`, parts as their symbols, `<Place>`, `<Label>`, `<Power>`, `<Sheet>`, `<Text>` and `wire()`, symbols and `defineSymbol`, the automatic placement and wiring, the `sch-*` findings and the outputs.
+Advanced. It is a view of the netlist in schematic.md and adds no nets; only hand wires can disagree with the board, and they are checked.
 
-```tsx
-import PCB, { Schematic, Power, Text, wire } from '@pcbjs/core'
+```tsx file=blinky.sch.tsx
+import { Schematic, Power, Text, wire } from '@pcbjs/core'
 
-const sheet = (
+export const drawing = (
   <Schematic>
     <J1 at="4 7" />
     <Q1 at="13 10" />
@@ -16,18 +16,16 @@ const sheet = (
     <Text at="4 26">Three LED channels switched low by Q1</Text>
   </Schematic>
 )
-export default <PCB name="Blinky" schematic={sheet}>{/* the layout */}</PCB>
 ```
 
 ## Where the drawing comes from
 
 - Every compile draws `board.schematic.drawing`, placing and wiring what nobody placed, so a board with no schematic code has one.
-- `schematic({ children: [...] })` is `<Schematic>` without JSX.
-- With `<PCB schematic={sch}>`, `import * as sch from './board.sch'`, the drawing is the export `drawing`, else `default`, else the first `<Schematic>` or `schematic({ … })` export, else the compiler's. examples/demo/blinky.sch.tsx exports a hand-laid `drawing`.
+- With `<PCB schematic={sch}>`, `import * as sch from './board.sch'`, the drawing is the module's `drawing` export, a `<Schematic>`, else the compiler's. examples/demo/blinky.sch.tsx exports a hand-laid `drawing`.
 
 ## Units and page
 
-- Positions are grid units, 2.54 mm by default, y down: `at="4 7"`; `"10.16mm"` converts at the grid. Symbols, labels and wire points snap to whole units. `board.schematic.drawing` is in mm.
+- Positions are grid units, 2.54 mm by default, y down: `at="4 7"`. Symbols, labels and wire points snap to whole units. `board.schematic.drawing` is in mm.
 - No paper by default: `drawing.page`, x0 y0 x1 y1 mm, is the box of everything grown by 3 units, no border or title block.
 - `sheet="A4"` to `"A0"`: landscape paper with border and title block, the smallest allowed, growing to fit. `sheet={{ w: 200, h: 150 }}`: fixed, mm or length tokens. `drawing.paper` holds it.
 
@@ -35,17 +33,17 @@ export default <PCB name="Blinky" schematic={sheet}>{/* the layout */}</PCB>
 
 | Element | Props | Does |
 | --- | --- | --- |
-| `<Schematic>` | `grid`, `sheet`, `labelOver`, `labelFar`, `route`, `title` | the root; `title` goes in the title block |
+| `<Schematic>` | `grid`, `sheet`, `labelOver`, `labelFar`, `route`, `title` | the root; `grid` the pitch in mm; `title` goes in the title block |
 | `<R1>`, any part | `at`, `rot`, `flip`, `symbol` | its symbol; `rot` 0, 90, 180 or 270 counterclockwise, `flip` mirrors left to right first |
-| `<Sym>` | `part` and the same | `<Sym part={R1} at="4 6" />` |
+| `<Place>` | `part` and the same | a part the file cannot name, `<Place part={LEDS[2]} at="4 6" />`; the same element places it on the board |
 | `<Label>` | `net`, `at`, `dir` | pins and wire ends at its point join the net by name |
 | `<Power>` | `net`, `at`, `kind` | a label drawn as ground, `'gnd'`, default for GND-like names, or supply bar, `'vcc'` |
-| `<Sheet>` | `group`, `name`, `at` | dashed box around a `group()` or `circuit()` instance, titled `name` or its path; children relative to `at` |
+| `<Sheet>` | `group`, `name`, `at` | dashed box around a circuit instance, titled `name` or its path; children relative to `at` |
 | `<Text>` | `at`, `size` | a note, `size` in mm |
 
 - A board prop such as `side` on a symbol, or `rot`, `flip` or `symbol` on the board, is a compile error naming the part; so is one part twice.
 - Unplaced symbols are placed automatically; place only those that matter.
-- A function returning `<Sheet>` with `<ch.R at="2 2" />` draws one block per instance.
+- A function returning `<Sheet>` with `<ch.R01 at="2 2" />` draws one block per instance.
 
 ## Hand wires
 
@@ -81,7 +79,7 @@ Deterministic; hand-placed symbols never move.
 
 - A part with more than three pins, or a connector, anchors a block; small parts on its signal nets sit beside their pin, followed by chains through nets of at most three pins, such as a resistor and its LED. A part between two anchors joins the one on its more private net.
 - A two-pin part on only a supply and ground is a decoupling capacitor: upright beside a symbol with a pin on that supply, in a grid above a wide one or beside a tall one.
-- Unlinked small parts chain on their own. A top-level `group()` or `circuit()` instance is one block in an unnamed dashed box; `<Sheet>` names it.
+- Unlinked small parts chain on their own. A top-level circuit instance or named `<g>` is one block in an unnamed dashed box; `<Sheet>` names an instance's.
 - Blocks pack in reading order at the topmost, leftmost free spot, into an A-paper proportioned width, the smallest paper from `sheet` up, or a fixed `sheet`'s width; gaps grow a unit per wired net between blocks, up to eight.
 - A connector with all pins one way turns them to the middle when there is room. Adjacent same-side pins on one supply share a bar and one power symbol.
 - Three orders are tried, by pin count, shared nets and declaration; the smallest paper, then least wire length, bends, crossings and labels, wins.
@@ -106,7 +104,7 @@ const LDOSymbol = defineSymbol({
 
 ## Findings
 
-ERC findings with `layer: 'sch'`, `at` in sheet mm and `items` the PCB pad ids.
+ERC findings with `layer: 'sch'`, `at` in sheet mm and `items` the PCB pads by uid.
 
 | Rule | Severity | When |
 | --- | --- | --- |
