@@ -12,6 +12,8 @@ pcbjs dev --workspace          # the working directory
 
 ## Scopes
 
+Windows editor paths, Vite's forward-slash paths and drive-letter case differences identify the same project files. Saved imports and config changes update the affected scopes; source navigation and `pcbjs check` use the same path comparison. POSIX paths retain their case and separator semantics.
+
 - A scope is a directory with a `pcb.config.*`, outside `node_modules` and hidden folders. Start only lists directories and prints each scope's route.
 - A scope loads when a viewer opens its page or the editor focuses a file in it: its config through Vite, then its `entries`. A failing config or no entries shows on the home page.
 - Every scope and folder gets its own `.pcbjs/dev.json` when the session starts or attaches it, its `url` the scope's page, see session.md. Before a scope loads, the editor's file icons match `pcb.tsx` and `<board>.pcb.tsx`.

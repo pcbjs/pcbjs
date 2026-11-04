@@ -65,3 +65,22 @@ test('a file named through a symbolic link is one document under its real path',
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('Windows editor drive case and Vite separators share one authoritative document', { skip: process.platform !== 'win32' }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pcbjs-store-'))
+  try {
+    const file = join(dir, 'pcb.tsx')
+    writeFileSync(file, 'disk')
+    const editorFile = file.replace(/^[A-Z]:/, drive => drive.toLowerCase())
+    const viteFile = file.replace(/\\/g, '/')
+    const s = documentStore()
+    s.sync(editorFile, 'unsaved editor text', 1, editor('e'))
+    assert.equal(s.get(viteFile)?.text, 'unsaved editor text')
+    assert.equal(s.sync(viteFile, 'agent overwrite', 2, agent('a')), false)
+    assert.equal(s.files().length, 1)
+    s.release(viteFile, editor('e'))
+    assert.equal(s.get(editorFile), undefined)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

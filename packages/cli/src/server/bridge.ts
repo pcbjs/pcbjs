@@ -1,4 +1,5 @@
 // The /__pcbjs/open and /__pcbjs/ide endpoints. docs/ide-bridge.md has the protocol.
+import { under } from '../project/files.js'
 import { existsSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
@@ -44,7 +45,7 @@ export interface BridgeOptions {
 /** The /__pcbjs/{open,ide} middleware. */
 export function ideBridge(server: ViteDevServer, rootOf: (req: IncomingMessage) => string, opts: BridgeOptions = {}): IdeBridge {
   // a file the editor may open: inside a directory Vite is allowed to serve, which holds the project root
-  const allowed = (root: string, abs: string) => [root, ...server.config.server.fs.allow].some(d => abs === d || abs.startsWith(d.endsWith(sep) ? d : d + sep))
+  const allowed = (root: string, abs: string) => [root, ...server.config.server.fs.allow].some(d => under(abs, resolve(d)))
 
   const middleware: Connect.NextHandleFunction = async (req, res: ServerResponse, next) => {
     // a page's files are relative to the project it shows

@@ -1,4 +1,5 @@
 // The Vite config designs are evaluated with: the drafts, the schematic scope and the source ranges before esbuild, JSX of @pcbjs/core.
+import { fileKey, under } from './files.js'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -65,13 +66,12 @@ export function compileConfig(cfg: ResolvedConfig, drafts: DraftCodes | null = n
 
 // source ranges for design files outside the root, such as `../lib/wire.ts`; the files under it are sourceRangesPlugin's
 function sharedSourceRanges(rootOf: (file: string) => string | null, exclude: string[], limitOf: (file: string) => number | null): Plugin {
-  const under = (file: string, dir: string) => file === dir || file.startsWith(dir.endsWith(sep) ? dir : dir + sep)
   return {
     name: 'pcbjs:shared-source-ranges',
     enforce: 'pre',
     transform(code, id) {
       const file = id.split('?')[0]
-      if (file.startsWith('\0') || !/\.tsx?$/.test(file) || file.endsWith('.d.ts') || file.includes(`${sep}node_modules${sep}`) || file.includes(`${sep}.pcbjs${sep}`)) return null
+      if (file.startsWith('\0') || !/\.tsx?$/.test(file) || file.endsWith('.d.ts') || fileKey(file).includes('/node_modules/') || fileKey(file).includes('/.pcbjs/')) return null
       if (exclude.some(d => under(file, d))) return null
       const root = rootOf(file)
       if (!root || under(file, root)) return null

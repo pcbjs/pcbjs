@@ -9,7 +9,7 @@ const SUN_PATH = 100
 
 export const real = (p: string): string => {
   try {
-    return realpathSync(resolve(p))
+    return realpathSync.native(resolve(p))
   } catch {
     return resolve(p)
   }

@@ -1,5 +1,6 @@
 // What agents ask of the session beside the queries: describe their work, read and write source, the findings, and the messages a
 // human sends them, queued per connection until acknowledged. docs/mcp.md has the tools over them.
+import { under } from '../project/files.js'
 import { existsSync, realpathSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 import type { ProjectsApi } from './plugin.js'
@@ -34,7 +35,7 @@ export interface Replace {
 
 const real = (f: string) => {
   try {
-    return realpathSync(f)
+    return realpathSync.native(f)
   } catch {
     return f
   }
@@ -104,7 +105,7 @@ export function agentMethods(h: AgentHooks): Pick<Handlers, AgentMethod> {
     const all = (h.clients()?.list() ?? []).filter(isAgent)
     if (str(p?.client)) return all.filter(c => c.id === p.client)
     const root = str(p?.root) && real(p.root)
-    return all.filter(c => (!str(p?.name) || norm(c.hello?.name ?? '') === norm(p.name)) && (!root || !c.hello?.project || root.startsWith(real(c.hello.project))))
+    return all.filter(c => (!str(p?.name) || norm(c.hello?.name ?? '') === norm(p.name)) && (!root || !c.hello?.project || under(root, real(c.hello.project))))
   }
 
   const describe = async (p: any, c: Client) => {
@@ -162,7 +163,7 @@ export function agentMethods(h: AgentHooks): Pick<Handlers, AgentMethod> {
   const write = async (p: any, c: Client) => {
     const file = fileOf(c, p?.file)
     const prj = await projectOf(c, file)
-    if (!file.startsWith(prj.root + '/')) throw new Error(`${file} is outside the project ${prj.root}`)
+    if (!under(file, prj.root)) throw new Error(`${file} is outside the project ${prj.root}`)
     const sources = h.api()?.sources()
     if (!sources) throw new Error('this session serves no project')
     const got = sources.read(file)
@@ -225,6 +226,6 @@ export function claimant(clients: Client[], p: { client?: unknown; name?: unknow
   if (byId) return byId.by()
   const root = str(p.root) && real(p.root as string)
   const want = norm(str(p.name) ?? str(p.client) ?? '')
-  const named = agents.filter(c => want === norm(c.hello?.name ?? '') && (!root || !c.hello?.project || root.startsWith(real(c.hello.project))))
+  const named = agents.filter(c => want === norm(c.hello?.name ?? '') && (!root || !c.hello?.project || under(root, real(c.hello.project))))
   return named[0]?.by() ?? null
 }

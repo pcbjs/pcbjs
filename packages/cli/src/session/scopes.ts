@@ -1,3 +1,4 @@
+import { under } from '../project/files.js'
 import { readdirSync, statSync } from 'node:fs'
 import { basename, relative, resolve, sep } from 'node:path'
 import { findConfig } from '../project/config.js'
@@ -72,8 +73,7 @@ export function findScopes(folders: string[], maxDepth = 8, taken = new Set<stri
 export function scopeOf<S extends Pick<ScopeInfo, 'dir'>>(scopes: S[], file: string): S | null {
   let best: S | null = null
   for (const s of scopes) {
-    const d = s.dir.endsWith(sep) ? s.dir : s.dir + sep
-    if ((file === s.dir || file.startsWith(d)) && (!best || s.dir.length > best.dir.length)) best = s
+    if (under(file, s.dir) && (!best || s.dir.length > best.dir.length)) best = s
   }
   return best
 }

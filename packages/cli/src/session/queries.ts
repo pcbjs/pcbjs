@@ -1,4 +1,5 @@
 // The session's queries over its snapshots: each settles its project first, then answers in an Envelope. docs/session.md has them.
+import { under } from '../project/files.js'
 import { readFileSync, realpathSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import type { Context } from 'node:vm'
@@ -37,7 +38,7 @@ export const WAIT_S = 600
 
 const real = (f: string) => {
   try {
-    return realpathSync(f)
+    return realpathSync.native(f)
   } catch {
     return f
   }
@@ -78,7 +79,7 @@ async function check(api: ProjectsApi | undefined, p: any, c: Client) {
   const verbose = !!p?.verbose
   const json = typeof p?.json === 'string' && p.json ? p.json : undefined
   const store = api?.store()
-  const open = (store?.files() ?? []).some(f => f.startsWith(prj.root + '/'))
+  const open = (store?.files() ?? []).some(f => under(f, prj.root))
   const tc = typecheck(
     prj.root,
     slots.map(s => s.entry.file),

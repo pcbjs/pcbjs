@@ -1,5 +1,6 @@
 // The Vite side of the session: the virtual board module, the boot screen and the hot updates that reach the projects' runtimes.
 // session/hub.ts runs the projects and everything around them, session/viewers.ts the viewers, session/http.ts the routes.
+import { fileKey, under } from '../project/files.js'
 import { readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import type { Plugin } from 'vite'
@@ -106,7 +107,7 @@ export interface ProjectsApi {
 
 /** Design modules under the root, outside node_modules and .pcbjs. */
 export const previewable = (root: string, abs: string): boolean =>
-  abs.startsWith(root.endsWith('/') ? root : root + '/') && /\.(m?[jt]sx?)$/.test(abs) && !/\.d\.m?ts$/.test(abs) && !abs.includes('/node_modules/') && !abs.includes('/.pcbjs/')
+  under(abs, root) && /\.(m?[jt]sx?)$/.test(abs) && !/\.d\.m?ts$/.test(abs) && !fileKey(abs).includes('/node_modules/') && !fileKey(abs).includes('/.pcbjs/')
 
 /** The URL an editor's pane is served from, `/pane.html` with the query, for a page route with `?ide=1&view=2d|3d|sch|checks`; null for any other request. */
 export function paneUrl(url: string): string | null {
@@ -122,7 +123,7 @@ export function pcbjsPlugin(clientDir: string, shared: DevState, ws: Workspace):
   // a workspace of one project is that project's site, inlined in the virtual module
   const single = () => (ws.scopes.length === 1 ? ws.scopes[0] : null)
   /** A hot update of a design file reaches the runtimes that read it, never a reload of the page. */
-  const design = (file: string) => !file.startsWith(clientDir) && (!!scopeOf(ws.scopes, file) || hub.runtimes().some(rt => rt.reaches(file)))
+  const design = (file: string) => !under(file, clientDir) && (!!scopeOf(ws.scopes, file) || hub.runtimes().some(rt => rt.reaches(file)))
 
   return {
     name: 'pcbjs',

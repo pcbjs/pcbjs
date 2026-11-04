@@ -1,4 +1,5 @@
 // cached in .pcbjs/typecheck.json by size and mtime of every file read; schematic names bound as scope.ts in @pcbjs/compile does
+import { fileKey, under } from './files.js'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
@@ -40,7 +41,7 @@ export function typecheck(root: string, entries: string[], o: TypecheckOptions =
   const config = join(root, 'tsconfig.json')
   if (!existsSync(config)) return null
   const cacheFile = join(root, '.pcbjs', 'typecheck.json')
-  const key = JSON.stringify([3, ts.version, entries.map(e => resolve(root, e)).sort(), stamp(config)])
+  const key = JSON.stringify([4, ts.version, entries.map(e => resolve(root, e)).sort(), stamp(config)])
   if (!o.overlay)
     try {
       const c = JSON.parse(readFileSync(cacheFile, 'utf8')) as Cache
@@ -58,7 +59,7 @@ export function typecheck(root: string, entries: string[], o: TypecheckOptions =
     options,
     host,
   )
-  const inProject = (f: string) => f.startsWith(root + '/') && !f.includes('/node_modules/')
+  const inProject = (f: string) => under(f, resolve(root)) && !fileKey(f).includes('/node_modules/')
   const errors: TypeError_[] = []
   for (const [f, e] of scopeErrors) {
     const { line, character } = ts.getLineAndCharacterOfPosition(ts.createSourceFile(f, read?.(f) ?? ts.sys.readFile(f) ?? '', ts.ScriptTarget.Latest), e.pos)

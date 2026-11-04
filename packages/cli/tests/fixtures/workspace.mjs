@@ -53,7 +53,7 @@ export function makeWorkspace() {
  * lib file neither imports.
  */
 export function makeStack() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-stack-')))
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'pcbjs-stack-')))
   mkdirSync(join(root, 'node_modules'))
   symlinkSync(join(REPO, 'node_modules', '@pcbjs'), join(root, 'node_modules', '@pcbjs'), 'dir')
   const stack = join(root, 'stack'), lib = join(stack, 'lib')

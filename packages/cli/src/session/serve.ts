@@ -1,9 +1,10 @@
 // `pcbjs session serve`: the session itself. Vite, the compile and the language servers of devWorkspace, plus the socket or pipe,
 // dev.json in every project it serves, the idle grace and the exit polling. docs/session.md has the lifecycle.
+import { sameFile, under } from '../project/files.js'
 import { randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createServer, type Server, type Socket } from 'node:net'
-import { dirname, sep } from 'node:path'
+import { dirname } from 'node:path'
 import type { ViteDevServer } from 'vite'
 import { devWorkspace } from './workspace.js'
 import { addToWorkspace, scopeRoute, scopesInfo, type ProjectSpec, type Workspace } from './scope-state.js'
@@ -106,7 +107,7 @@ export async function serveSession(o: ServeOptions): Promise<Session | null> {
     ...(token ? { token } : {}),
   })
   const urlOf = (root: string): string => {
-    const sc = ws.scopes.find(s => s.dir === root)
+    const sc = ws.scopes.find(s => sameFile(s.dir, root))
     const base = server.resolvedUrls?.local?.[0] ?? 'http://localhost/'
     return new URL(sc ? scopeRoute(ws, sc) : '/', base).href
   }
@@ -122,7 +123,7 @@ export async function serveSession(o: ServeOptions): Promise<Session | null> {
     }
   }
 
-  const served = (root: string) => ws.folders.includes(root) || !!scopeOf(ws.scopes, root)
+  const served = (root: string) => ws.folders.some(f => sameFile(f, root)) || !!scopeOf(ws.scopes, root)
   const attach = async (dir: string) => {
     const root = real(dir)
     if (!existsSync(root) || served(root)) return
@@ -139,7 +140,7 @@ export async function serveSession(o: ServeOptions): Promise<Session | null> {
   /** Stop serving a folder `attach` added and every scope in it; the first folder stays. */
   const detach = async (dir: string) => {
     const root = real(dir)
-    const inside = (p: string) => p === root || p.startsWith(root + sep)
+    const inside = (p: string) => under(p, root)
     if (inside(first)) return
     const gone = ws.scopes.filter(s => inside(s.dir))
     const keep = ws.scopes.find(s => !inside(s.dir))

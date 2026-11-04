@@ -33,7 +33,7 @@ function onDisk(file: string, text: string): Written {
 
 /** The writer of a project: its session's while one is live, else the disk's. */
 export async function sourceWriter(root: string, name: string): Promise<SourceWriter> {
-  const real = realpathSync(root)
+  const real = realpathSync.native(root)
   const info = await sessionOf(real)
   if (!info) return { write: async (file, _, after) => onDisk(file, after), close: () => {} }
   const c = await connect(info, name, real)

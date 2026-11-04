@@ -1,4 +1,5 @@
 // runs before esbuild turns JSX into calls, so the compiler can map board items back to the code that made them
+import { under } from './files.js'
 import { createHash } from 'node:crypto'
 import { relative, sep } from 'node:path'
 import MagicString from 'magic-string'
@@ -35,7 +36,6 @@ export function wantsSourceRanges(id: string, root: string, exclude: string[] = 
   if (!rel || rel.startsWith('..') || rel.startsWith(sep) || /^[a-zA-Z]:/.test(rel)) return false
   const parts = rel.split(sep)
   if (parts.includes('node_modules') || parts.includes('.pcbjs')) return false
-  const under = (f: string, d: string) => f === d || f.startsWith(d.endsWith(sep) ? d : d + sep)
   // a folder holding the root itself, such as a template inside the repository's packages, excludes nothing of it
   return !exclude.some(d => under(file, d) && !under(root, d))
 }

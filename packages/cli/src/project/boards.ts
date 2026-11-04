@@ -1,3 +1,4 @@
+import { fileKey, sameFile } from './files.js'
 import type { SiteData } from '@pcbjs/export/internal/site-data'
 import type { Entry } from './config.js'
 import { boardFile, type BoardOut, type Compiled } from './project.js'
@@ -92,7 +93,7 @@ interface GraphNode {
 export function entriesReaching(modules: Iterable<GraphNode> | undefined, entryFiles: Iterable<string>): Set<string> | null {
   const start = modules ? [...modules] : []
   if (!start.length) return null
-  const entries = new Set(entryFiles)
+  const entries = new Map([...entryFiles].map(f => [fileKey(f), f]))
   const hit = new Set<string>()
   const seen = new Set<GraphNode>()
   const stack = start
@@ -100,7 +101,8 @@ export function entriesReaching(modules: Iterable<GraphNode> | undefined, entryF
     const m = stack.pop()!
     if (seen.has(m)) continue
     seen.add(m)
-    if (m.file && entries.has(m.file)) hit.add(m.file)
+    const entry = m.file && entries.get(fileKey(m.file))
+    if (entry) hit.add(entry)
     for (const i of m.importers) stack.push(i)
   }
   return hit
@@ -150,7 +152,7 @@ export function focusTarget(graph: ModuleLookup | undefined, slots: BoardSlot<Bo
       graph?.getModulesByFile(file),
       slots.map(s => s.entry.file),
     ) ?? new Set<string>()
-  if (slots.some(s => s.entry.file === file)) hit.add(file)
+  for (const s of slots) if (sameFile(s.entry.file, file)) hit.add(s.entry.file)
   const reached = slots.filter(s => hit.has(s.entry.file))
   const live = reached.filter(s => s.compiled && !s.conflict)
   const names = live.map(slotName)

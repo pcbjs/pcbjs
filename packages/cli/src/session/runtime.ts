@@ -1,6 +1,8 @@
 // One loaded project as the session runs it, docs/session.md: its slots and compile thread, its scheduler of the tiers, its snapshots,
 // the facets its viewers hold, and the compile events every report of a compile follows. Runtimes share nothing but the session's
 // drafts and snapshots, so two projects compile at once and a query on one never waits for another's route.
+import { relative, sep } from 'node:path'
+import { fileKey, sameFile, under } from '../project/files.js'
 import { readFileSync } from 'node:fs'
 import type { RouteProgress } from '@pcbjs/compile'
 import { demanded, STAGES } from '@pcbjs/compile/internal/pipeline'
@@ -91,7 +93,7 @@ const formatError = (e: any) => {
   return e?.frame ? `${msg}\n\n${strip(String(e.frame))}` : strip(String(e?.stack ?? msg))
 }
 /** A path relative to a project root, as it is when outside it. */
-export const relTo = (root: string, f: string) => (f.startsWith(root + '/') ? f.slice(root.length + 1) : f)
+export const relTo = (root: string, f: string) => (under(f, root) ? relative(root, f).split(sep).join('/') : f)
 
 /** True when `p` settles before the deadline, a time in ms. */
 async function within(p: Promise<unknown>, deadline: number): Promise<boolean> {
@@ -155,9 +157,9 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
   // nothing compiled yet, nothing reached: the compile thread is made by the first compile
   const graph = (): ModuleLookup => state.compiler?.graph() ?? { getModulesByFile: () => undefined }
   const imported = (file: string) => state.compiler?.imported(file) ?? new Set([file])
-  const referencedBy = (s: Slot, file: string) => !!s.compiled && referenceFiles(s.compiled).includes(file)
+  const referencedBy = (s: Slot, file: string) => !!s.compiled && referenceFiles(s.compiled).some(f => sameFile(f, file))
   const referenced = (file: string) => state.slots.some(s => referencedBy(s, file))
-  const own = (file: string) => file.startsWith(root + '/') && !file.startsWith(hooks.clientDir) && !file.includes('/.pcbjs/') && !file.includes('/node_modules/')
+  const own = (file: string) => under(file, root) && !under(file, hooks.clientDir) && !fileKey(file).includes('/.pcbjs/') && !fileKey(file).includes('/node_modules/')
   // every board without a file; one that failed last time is always affected
   const affected = (file: string | null): Slot[] => {
     const slots = state.slots
@@ -175,7 +177,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
     const d = drafts()
     if (!d?.files().length) return []
     const graph = imported(file)
-    return d.files().filter(f => graph.has(f))
+    return d.files().filter(f => [...graph].some(g => sameFile(g, f)))
   }
   const markDraft = (cs: BoardOut[], file: string) => {
     const files = draftFiles(file)
@@ -195,7 +197,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
   const projectFiles = (): Set<string> => {
     const out = new Set<string>(cfg.configFile ? [cfg.configFile] : [])
     for (const sl of state.slots) {
-      for (const f of imported(sl.entry.file)) if (!f.includes('/node_modules/') && !f.startsWith('\0')) out.add(f)
+      for (const f of imported(sl.entry.file)) if (!fileKey(f).includes('/node_modules/') && !f.startsWith('\0')) out.add(f)
       for (const f of referenceFiles(sl.compiled ?? [])) out.add(f)
     }
     return out
@@ -208,7 +210,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
     const out = new Map<string, string>()
     const was = current()
     for (const f of files) {
-      if (!f.startsWith(root + '/') || !/\.[cm]?[jt]sx?$/.test(f)) continue
+      if (!under(f, root) || !/\.[cm]?[jt]sx?$/.test(f)) continue
       const text = drafts()?.get(f)?.text ?? (was && !was.overlay.has(f) && was.stamps.get(f) === stamps.get(f) ? was.texts.get(f) : undefined)
       try {
         out.set(f, text ?? readFileSync(f, 'utf8'))
@@ -236,7 +238,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
   }
   // the watcher follows the files of the last compile, so an edit of any reaches this project
   const track = (stamps: Map<string, string>) => {
-    const watched = (f: string) => !f.includes('/node_modules/') && !f.includes('/.pcbjs/') && !f.startsWith(hooks.clientDir + '/') && !f.startsWith('\0')
+    const watched = (f: string) => !fileKey(f).includes('/node_modules/') && !fileKey(f).includes('/.pcbjs/') && !under(f, hooks.clientDir) && !f.startsWith('\0')
     const files = new Set([...projectFiles()].filter(watched))
     if (state.preview) for (const f of imported(state.preview.file)) if (watched(f)) files.add(f)
     scope.files = [...files]
@@ -361,7 +363,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
         s.error = null
         s.failure = undefined
         // a board served from the cache has no module graph, so its stamps come from the files its compile read
-        s.stamps = stampFiles(s.compiled[0].files.filter(f => !f.includes('/node_modules/') && !f.startsWith('\0')).concat(referenceFiles(s.compiled)))
+        s.stamps = stampFiles(s.compiled[0].files.filter(f => !fileKey(f).includes('/node_modules/') && !f.startsWith('\0')).concat(referenceFiles(s.compiled)))
         // referenced boards compile in their own process, so the watcher follows their files here
         if (referenceFiles(s.compiled).length) hooks.watch(referenceFiles(s.compiled))
         s.doneAt = Date.now()
@@ -569,10 +571,10 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
     facets,
     compiler,
     graph,
-    reaches: file => own(file) || scope.files.includes(file) || [...(graph().getModulesByFile(file) ?? [])].length > 0 || referenced(file),
+    reaches: file => own(file) || scope.files.some(f => sameFile(f, file)) || [...(graph().getModulesByFile(file) ?? [])].length > 0 || referenced(file),
     edit(file, typed) {
       const pv = state.preview
-      if (pv && (!file || file === pv.file || entriesReaching(graph().getModulesByFile(file), [pv.file])?.size)) previewDirty = true
+      if (pv && (!file || sameFile(file, pv.file) || entriesReaching(graph().getModulesByFile(file), [pv.file])?.size)) previewDirty = true
       stop()
       sched.edit({ file, slots: affected(file).map(s => s.entry.file), typed }, Date.now())
       pump()

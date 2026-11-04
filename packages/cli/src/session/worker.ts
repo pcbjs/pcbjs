@@ -1,5 +1,6 @@
 // One project's compile thread in a session: its own config, globals and Vite SSR, fed drafts and changed files by the session,
 // cancelled through a shared flag the stage graph reads between units. worker-client.ts is the other side.
+import { fileKey } from '../project/files.js'
 import { createHash } from 'node:crypto'
 import { serialize } from 'node:v8'
 import { parentPort, workerData } from 'node:worker_threads'
@@ -8,7 +9,7 @@ import { configFrom, loadUserConfig, type Entry, type ResolvedConfig } from '../
 import { compileConfig } from '../project/vite-base.js'
 import { quietLogger } from '../project/compile.js'
 import { compileEntry, compileLayout, compilePreview, DATA_FORMATS, glbOf, schOf, sketchEntry, svgOf, type Compiled } from '../project/project.js'
-import { evaluation, viteLoader } from '../project/loader.js'
+import { evaluation, modulesFor, viteLoader } from '../project/loader.js'
 import type { WorkerData, ToWorker, FromWorker, Edge, Crossed } from './worker-client.js'
 import type { Artifact } from '../project/compiler.js'
 import type { View } from '@pcbjs/core/internal/plugin'
@@ -25,7 +26,7 @@ const post = (m: FromWorker, transfer: ArrayBuffer[] = []) => parentPort!.postMe
 
 /** As the dev server compiles, JSX with its source, without HTTP, HMR or a watcher: the session's watcher sends what changed. */
 async function server(cfg: ResolvedConfig): Promise<ViteDevServer> {
-  const vc = compileConfig(cfg, drafts)
+  const vc = compileConfig(cfg, { get: file => drafts.get(fileKey(file)) })
   return createServer({
     ...vc,
     logLevel: 'silent',
@@ -45,7 +46,7 @@ const booted = (async () => {
 
 const invalidate = (vite: ViteDevServer, file: string) => {
   const g = vite.environments.ssr.moduleGraph
-  for (const m of g.getModulesByFile(file) ?? []) g.invalidateModule(m)
+  for (const m of modulesFor(g, file) ?? []) g.invalidateModule(m)
 }
 
 function edges(vite: ViteDevServer): Edge[] {
@@ -204,8 +205,8 @@ async function handle(m: ToWorker): Promise<void> {
   }
   const { vite } = await booted
   if (m.t === 'draft') {
-    if (m.code === null) drafts.delete(m.file)
-    else drafts.set(m.file, { code: m.code, limit: m.limit })
+    if (m.code === null) drafts.delete(fileKey(m.file))
+    else drafts.set(fileKey(m.file), { code: m.code, limit: m.limit })
     invalidate(vite, m.file)
   } else if (m.t === 'changed') for (const f of m.files) invalidate(vite, f)
 }

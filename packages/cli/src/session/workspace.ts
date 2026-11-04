@@ -80,7 +80,7 @@ export async function devWorkspace(opts: WorkspaceOptions): Promise<{ server: Vi
 
 function realDir(f: string): string {
   if (!existsSync(f) || !statSync(f).isDirectory()) throw new Error(`folder not found: ${f}`)
-  return realpathSync(resolve(f))
+  return realpathSync.native(resolve(f))
 }
 
 /** The page of a scope on this server. */

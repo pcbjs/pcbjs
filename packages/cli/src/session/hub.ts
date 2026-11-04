@@ -1,6 +1,7 @@
 // The session around its projects, docs/session.md: the runtime of each loaded project, the scope the editor focused last, the editor's
 // drafts with their repair and hold, the language servers and the sources they share, the connections and the events log, the
 // viewers and what each one observes, and the projections of every runtime's compile events onto all of them.
+import { sameFile, under } from '../project/files.js'
 import { realpathSync } from 'node:fs'
 import type { IncomingMessage } from 'node:http'
 import { join } from 'node:path'
@@ -116,7 +117,7 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
   const snaps = () => (shared.snapshots ??= snapshots(shared.session.id))
   const realOf = (f: string) => {
     try {
-      return realpathSync(f)
+      return realpathSync.native(f)
     } catch {
       return f
     }
@@ -234,10 +235,10 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
     const project = c.hello?.project
     if (project !== undefined) {
       const root = realOf(project)
-      const sc = ws.scopes.find(x => x.dir === root)
+      const sc = ws.scopes.find(x => sameFile(x.dir, root))
       if (sc) return sc.dir
       // a workspace-root editor follows its sidebar's shown scope; an explicit viewer scope never falls back
-      if (c.hello?.role === 'editor' && ws.folders.includes(root)) return recent()?.root ?? ws.scopes[0]?.dir ?? null
+      if (c.hello?.role === 'editor' && ws.folders.some(f => sameFile(f, root))) return recent()?.root ?? ws.scopes[0]?.dir ?? null
       return null
     }
     return recent()?.root ?? ws.scopes[0]?.dir ?? null
@@ -248,7 +249,7 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
   const sendTo = <E extends keyof Events>(root: string, event: E, data: Events[E], board?: string) => {
     for (const c of viewersOf(root, board)) c.event(event, data)
   }
-  const byRoot = (root: string | null) => (root ? ([...runtimes.values()].find(r => r.root === root) ?? null) : null)
+  const byRoot = (root: string | null) => (root ? ([...runtimes.values()].find(r => sameFile(r.root, root)) ?? null) : null)
   const runtimeOfClient = (c: Client) => byRoot(projectOf(c))
 
   // an observer of every stage: a language client, an editor connection, a findings or compile subscriber, pcbjs dev; it follows the scope shown last
@@ -504,7 +505,7 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
   /** A write on disk: a config reloads its scope, any other file reaches each runtime whose compile reads it; false when none does. */
   const changed = (file: string): boolean => {
     const sc = scopeOf(ws.scopes, file)
-    if (sc && file === sc.configFile && sc.status !== 'unloaded') {
+    if (sc && sameFile(file, sc.configFile) && sc.status !== 'unloaded') {
       void reload(sc)
       return true
     }
@@ -520,8 +521,8 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
     for (const rt of runtimes.values()) rt.state.compiler?.changed([file])
     shared.feed?.written(file)
     const sc = scopeOf(ws.scopes, file)
-    if (sc && file === sc.configFile) return void reload(sc)
-    for (const rt of runtimes.values()) if (file.startsWith(rt.root + '/') && !file.startsWith(clientDir)) rt.edit(null, false)
+    if (sc && sameFile(file, sc.configFile)) return void reload(sc)
+    for (const rt of runtimes.values()) if (under(file, rt.root) && !under(file, clientDir)) rt.edit(null, false)
   }
   const typed = (file: string) => {
     const reached = [...runtimes.values()].filter(rt => rt.reaches(file))
@@ -603,7 +604,7 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
   }
   const closeFile = (file: string) => {
     const rt = runtimeOfFile(realOf(file))
-    if (rt && rt.state.preview?.file === normalizeFile(rt.root, file).abs) dropPreview(rt, 'file closed')
+    if (rt && rt.state.preview && sameFile(rt.state.preview.file, normalizeFile(rt.root, file).abs)) dropPreview(rt, 'file closed')
   }
 
   // --- sources, shadows and restored buffers
@@ -651,7 +652,7 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
   server.watcher.on('add', added)
   server.watcher.on('unlink', file => {
     const rt = runtimeOfFile(file)
-    if (rt?.state.preview?.file === file) dropPreview(rt, 'file deleted')
+    if (rt?.state.preview && sameFile(rt.state.preview.file, file)) dropPreview(rt, 'file deleted')
     added(file)
   })
 
@@ -696,7 +697,7 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
       preview: previewPage,
       skipped: () => skippedRanges(shared.drafts),
       placements: (file, text) => {
-        const placed = boards().flatMap(b => (b.site.placed ?? []).filter(p => p.src && join(b.root, p.src.file) === file))
+        const placed = boards().flatMap(b => (b.site.placed ?? []).filter(p => p.src && sameFile(join(b.root, p.src.file), file)))
         return placed.length ? { lines: placed.map(p => p.src!.line), edits: freezeEdits(file, text, placed).edits } : null
       },
       shadowed: () =>

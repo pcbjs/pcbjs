@@ -1,6 +1,7 @@
 // A project's config and entries as browser ESM for @pcbjs/compile/browser: the `?pcb:module` facet and scripts/browser-equality.mjs.
 // Each file takes the CLI's scope and source range transforms as Vite's SSR applies them, then esbuild bundles with keepNames,
 // since Rollup renames a function expression shadowing its own constant and with it the name a part is labelled by. docs/browser.md.
+import { under } from './files.js'
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
@@ -19,7 +20,6 @@ export const ROOT = '/project'
 
 const sha1 = (b: Uint8Array | string) => createHash('sha1').update(b).digest('hex')
 const posix = (p: string) => p.split(sep).join('/')
-const under = (f: string, d: string) => f === d || f.startsWith(d.endsWith(sep) ? d : d + sep)
 
 interface RawMap {
   version: number

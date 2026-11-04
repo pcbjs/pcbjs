@@ -1,3 +1,4 @@
+import { fileKey, sameFile, under } from './files.js'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { compileBoards, compileLoaded, sketch, type CompileOptions, type CompileResult, type Exporter, type StageTime } from '@pcbjs/compile'
@@ -284,7 +285,7 @@ export async function compilePreview(loader: ModuleLoader, cfg: ResolvedConfig, 
   // the project modules it reaches, for the circuit of a default-exported layout
   const related: Record<string, unknown>[] = []
   for (const f of loader.imported(file)) {
-    if (f === file || !f.startsWith(cfg.root) || f.includes('/node_modules/')) continue
+    if (sameFile(f, file) || !under(f, cfg.root) || fileKey(f).includes('/node_modules/')) continue
     try {
       related.push(await loader.load(f))
     } catch {

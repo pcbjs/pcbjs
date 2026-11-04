@@ -1,4 +1,4 @@
-import { existsSync, globSync, statSync } from 'node:fs'
+import { existsSync, globSync, realpathSync, statSync } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import { loadConfigFromFile } from 'vite'
 import type { UserConfig } from '@pcbjs/core/internal/config'
@@ -111,6 +111,7 @@ export async function loadUserConfig(
   root = process.cwd(),
 ): Promise<{ root: string; file: string | null; shown: string | null; user: UserConfig; deps: string[] }> {
   root = resolve(root)
+  if (process.platform === 'win32') root = realpathSync.native(root)
   const file = configArg ? resolve(root, configArg) : findConfig(root)
   let user: UserConfig = {}
   let deps: string[] = []

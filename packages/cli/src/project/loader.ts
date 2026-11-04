@@ -1,4 +1,5 @@
 // The Node ModuleLoader: a project's modules evaluated through Vite's SSR, with the cancel and source mapping Vite needs.
+import { fileKey } from './files.js'
 import type { Plugin, ViteDevServer } from 'vite'
 import { CancelledError } from '@pcbjs/compile'
 import type { ModuleLoader } from '@pcbjs/compile/internal/entry'
@@ -24,7 +25,7 @@ export function draftsPlugin(store: () => DraftCodes | null | undefined): Plugin
     load(id) {
       if (evaluation.signal?.aborted) throw new CancelledError()
       const file = id.split('?')[0]
-      return evaluation.code.get(file) ?? store()?.get(file)?.code
+      return evaluation.code.get(fileKey(file)) ?? store()?.get(file)?.code
     },
   }
 }
@@ -59,7 +60,7 @@ function sourceMapper(server: ViteDevServer): (src: Src) => Src {
 function importedFiles(server: ViteDevServer, file: string): Set<string> {
   const graph = server.environments?.ssr?.moduleGraph ?? (server as any).moduleGraph
   const seen = new Set<string>([file])
-  const stack = [...(graph.getModulesByFile(file) ?? [])]
+  const stack = [...(modulesFor(graph, file) ?? [])]
   const visited = new Set<unknown>()
   while (stack.length) {
     const m: any = stack.pop()
@@ -73,7 +74,7 @@ function importedFiles(server: ViteDevServer, file: string): Set<string> {
 
 const invalidate = (server: ViteDevServer, file: string) => {
   const g = server.environments.ssr.moduleGraph
-  for (const m of g.getModulesByFile(file) ?? []) g.invalidateModule(m)
+  for (const m of modulesFor(g, file) ?? []) g.invalidateModule(m)
 }
 
 async function withCode<T>(server: ViteDevServer, code: CodeOf, fn: () => Promise<T>): Promise<T> {
@@ -89,7 +90,7 @@ async function withCode<T>(server: ViteDevServer, code: CodeOf, fn: () => Promis
 /** A module evaluated through Vite's SSR, each module it loads a cancel point. */
 async function evaluate(server: ViteDevServer, file: string, signal: { readonly aborted: boolean } | undefined, code?: CodeOf): Promise<Record<string, any>> {
   if (evaluation.serial) evaluation.signal = signal ?? null
-  if (code) evaluation.code.set(code.file, code.code)
+  if (code) evaluation.code.set(fileKey(code.file), code.code)
   try {
     const mod = await server.ssrLoadModule(file, { fixStacktrace: true })
     if (signal?.aborted) throw new CancelledError()
@@ -106,4 +107,12 @@ async function evaluate(server: ViteDevServer, file: string, signal: { readonly 
     evaluation.signal = null
     evaluation.code.clear()
   }
+}
+
+/** Vite normalizes separators, but an editor or watcher can still use a different drive case. */
+export function modulesFor<T>(graph: { getModulesByFile(file: string): Set<T> | undefined; fileToModulesMap: Map<string, Set<T>> }, file: string): Set<T> | undefined {
+  const direct = graph.getModulesByFile(file)
+  if (direct?.size || process.platform !== 'win32') return direct
+  const key = fileKey(file)
+  return [...graph.fileToModulesMap].find(([path]) => fileKey(path) === key)?.[1]
 }

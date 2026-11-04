@@ -51,10 +51,10 @@ export interface DocumentStore extends OpenDocs {
 export function realFile(file: string): string {
   const abs = resolve(file)
   try {
-    return realpathSync(abs)
+    return realpathSync.native(abs)
   } catch {
     try {
-      return join(realpathSync(dirname(abs)), basename(abs))
+      return join(realpathSync.native(dirname(abs)), basename(abs))
     } catch {
       return abs
     }

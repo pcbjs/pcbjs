@@ -18,7 +18,7 @@ const BIN = join(REPO, 'packages/pcbjs/bin/pcbjs.js')
 
 for (const workspace of [false, true]) {
   test(`a ${workspace ? 'workspace' : 'single-project'} session serves the STEP meshes of its loaded runtimes`, { timeout: 120000 }, async () => {
-    const top = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-session-models-')))
+    const top = realpathSync.native(mkdtempSync(join(tmpdir(), 'pcbjs-session-models-')))
     mkdirSync(join(top, 'node_modules'))
     symlinkSync(join(REPO, 'node_modules/@pcbjs'), join(top, 'node_modules/@pcbjs'), 'dir')
     const projects = workspace ? ['alpha', 'beta'].map(n => join(top, n)) : [join(top, 'alpha')]

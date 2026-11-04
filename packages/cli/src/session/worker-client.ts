@@ -1,5 +1,6 @@
 // The session's compile of one project in a worker thread, worker.ts: an edit cancels it within one unit through shared memory, the
 // session answers queries while it runs, and a crashed thread is restarted once with its compiles sent again.
+import { fileKey } from '../project/files.js'
 import { deserialize } from 'node:v8'
 import { Worker } from 'node:worker_threads'
 import type { RouteProgress } from '@pcbjs/compile'
@@ -80,8 +81,8 @@ interface Node {
 export function mirrorGraph(edges: Edge[]): ModuleLookup & { imported(file: string): Set<string> } {
   const nodes = new Map<string, Node>()
   const node = (file: string) => {
-    let n = nodes.get(file)
-    if (!n) nodes.set(file, (n = { file, importers: new Set(), imports: new Set() }))
+    let n = nodes.get(fileKey(file))
+    if (!n) nodes.set(fileKey(file), (n = { file, importers: new Set(), imports: new Set() }))
     return n
   }
   for (const [file, to] of edges) {
@@ -93,10 +94,10 @@ export function mirrorGraph(edges: Edge[]): ModuleLookup & { imported(file: stri
     }
   }
   return {
-    getModulesByFile: file => (nodes.has(file) ? [nodes.get(file)!] : undefined),
+    getModulesByFile: file => (nodes.has(fileKey(file)) ? [nodes.get(fileKey(file))!] : undefined),
     imported(file) {
       const seen = new Set<string>([file])
-      const stack = nodes.has(file) ? [nodes.get(file)!] : []
+      const stack = nodes.has(fileKey(file)) ? [nodes.get(fileKey(file))!] : []
       while (stack.length)
         for (const d of stack.pop()!.imports)
           if (!seen.has(d.file)) {
