@@ -10,7 +10,13 @@ import { chromes, launchAny, stopChrome, cdp, evaluate } from '../../scripts/bro
 const dist = process.env.PCBJS_SITE_DIST ? resolve(process.env.PCBJS_SITE_DIST) : fileURLToPath(new URL('../.vitepress/dist/', import.meta.url))
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 async function until(page, expression, ms = 15000) {
-  for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (await evaluate(page, expression)) return true
+  for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) {
+    try {
+      if (await evaluate(page, expression)) return true
+    } catch (error) {
+      if (!/Inspected target navigated or closed|Execution context was destroyed|Cannot find context with specified id/.test(String(error))) throw error
+    }
+  }
   return false
 }
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' }
