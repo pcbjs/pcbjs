@@ -81,7 +81,7 @@ The run, one job on Ubuntu:
 4. Pushes the new version commit to main only after validation. A rejected push means main moved, and nothing from this run is published. Start a new run against the updated main.
 5. Runs `npx changeset publish` with provenance to publish missing npm versions in dependency order. An active prerelease state chooses its tag; the prepared stable release uses `latest`. It pushes package tags and ensures the train's meta-package tag exists even on a retry that finds the npm versions already published.
 6. Publishes the extension when a new train moved it, see The VS Code extension. Recovery runs skip extension registries to avoid republishing a version a previous attempt already sent.
-7. Creates the GitHub Release on `@pcbjs/pcbjs@<version>`, titled `pcbjs <version>`, marked pre-release only when the version has a prerelease tag. Notes come from `scripts/release-notes.mjs`. It uploads the VSIX and its manifest when those assets are missing, including on an existing release whose asset upload failed earlier.
+7. Creates the GitHub Release on `@pcbjs/pcbjs@<version>`, titled `pcbjs <version>`, marked pre-release only when the version has a prerelease tag. Notes come from `scripts/release-notes.mjs`; above 100,000 characters it links to the package changelogs at the release tag, keeping below GitHub's body limit. It uploads the VSIX and its manifest when those assets are missing, including on an existing release whose asset upload failed earlier.
 8. Starts `pages.yml` so https://pcbjs.dev shows the train.
 
 The workflow token's version commit starts no CI workflow. The versioned tree has already passed the release validation in step 3; the full platform and browser matrix remains the prerequisite on the source commit.

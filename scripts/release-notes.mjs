@@ -26,6 +26,8 @@ function withoutDependencyBumps(lines) {
 }
 
 const parts = []
+const links = []
+const tag = encodeURIComponent(`@pcbjs/pcbjs@${train}`)
 for (const dir of readdirSync(root).sort()) {
   if (!existsSync(join(root, dir, 'CHANGELOG.md'))) continue
   const { name, version } = JSON.parse(read(dir, 'package.json'))
@@ -37,5 +39,7 @@ for (const dir of readdirSync(root).sort()) {
     .join('\n')
     .trim()
   parts.push(`## ${name}\n\n${body}`)
+  links.push(`- [${name}](https://github.com/pcbjs/pcbjs/blob/${tag}/packages/${dir}/CHANGELOG.md)`)
 }
-process.stdout.write(parts.join('\n\n') + '\n')
+const notes = parts.join('\n\n')
+process.stdout.write((notes.length <= 100000 ? notes : `Changes in pcbjs ${train} are detailed in the package changelogs:\n\n${links.join('\n')}`) + '\n')
