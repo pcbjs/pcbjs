@@ -69,3 +69,70 @@ for (const partial of [false, true]) {
     }
   })
 }
+
+test('compiling one board cannot bless an unreported disk edit of another board', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'pcbjs-watch-two-'))
+  const files = ['a.tsx', 'b.tsx'].map(f => join(root, f))
+  files.forEach(f => writeFileSync(f, 'old'))
+  let run = 0,
+    snap = null
+  const calls = []
+  const compiler = {
+    graph: () => ({ getModulesByFile: file => [{ file, importers: new Set() }] }),
+    imported: file => new Set([file]),
+    changed() {},
+    cancel() {},
+    close: async () => {},
+    compile: async entry => {
+      const title = readFileSync(entry.file, 'utf8')
+      calls.push([entry.rel, title])
+      return [{ entry, board: { name: entry.rel, title, drc: [], erc: [] }, site: { name: entry.rel }, hashes: {}, files: [entry.file] }]
+    },
+  }
+  const scope = { cfg: { root }, entries: [], files: [], stamps: new Map(), state: { slots: files.map((file, i) => ({ entry: { file, rel: `${i}.tsx` } })), compiler } }
+  const rt = projectRuntime(scope, {
+    snaps: { reserve: () => ++run, last: () => run, current: () => snap, commit: (s, run) => (snap = { ...s, run, id: `test.${run}` }) },
+    tiers: { keystroke: 30, quiet: 300 },
+    drafts: () => null,
+    settle: async () => new Set(),
+    viewers: () => 0,
+    invalidated() {},
+    shadow() {},
+    flushFeed() {},
+    log() {},
+    watch() {},
+    closing: () => false,
+    clientDir: '/client',
+  })
+  const idle = async () => {
+    for (const end = Date.now() + 3000; rt.busy() && Date.now() < end;) await new Promise(r => setTimeout(r, 10))
+    assert.equal(rt.busy(), false)
+  }
+  try {
+    await rt.compiledOnce()
+    rt.demand(new Map(files.map(f => [f, null])))
+    files.forEach(f => writeFileSync(f, 'new'))
+    rt.edit(files[0], false)
+    await idle()
+    assert.notEqual(scope.stamps.get(files[1]), stampFiles([files[1]]).get(files[1]))
+    assert.equal(snap.texts.get(files[1]), 'old', 'the snapshot retains the source its second board actually compiled')
+    rt.catchUp()
+    await idle()
+    assert.ok(calls.some(([entry, title]) => entry === '1.tsx' && title === 'new'))
+    assert.equal(snap.slots[1].compiled[0].board.title, 'new')
+    rt.demand(new Map([[files[0], null]]))
+    writeFileSync(files[1], 'new while hidden')
+    const before = calls.length
+    rt.catchUp()
+    await idle()
+    assert.equal(calls.length, before, 'a missed edit of a hidden board does not rebuild the visible board')
+    rt.catchUp()
+    assert.equal(rt.busy(), false, 'a recovered notification is not scheduled again each heartbeat')
+    rt.demand(new Map(files.map(f => [f, null])))
+    await idle()
+    assert.ok(calls.some(([entry, title]) => entry === '1.tsx' && title === 'new while hidden'))
+  } finally {
+    await rt.close()
+    rmSync(root, { recursive: true, force: true })
+  }
+})

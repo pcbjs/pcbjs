@@ -204,7 +204,17 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
   }
   const overlayNow = () => new Map((drafts()?.files() ?? []).map(f => [f, sha(drafts()!.get(f)!.text)]))
   // what a compile starts from: the stamps of the files it read last time and the unsaved text it gets now
-  const inputsOf = () => ({ stamps: stampFiles(projectFiles()), overlay: overlayNow() })
+  const inputsOf = (slots: Slot[]) => {
+    const stamps = stampFiles(projectFiles())
+    for (const s of state.slots) {
+      if (slots.includes(s)) continue
+      for (const f of new Set([...imported(s.entry.file), ...(s.stamps?.keys() ?? [])])) {
+        const before = scope.stamps.get(f)
+        if (before !== undefined) stamps.set(f, before)
+      }
+    }
+    return { stamps, overlay: overlayNow() }
+  }
   /** The source texts as compiled: a draft's, else the last snapshot's while its file kept its stamp, else the disk's. */
   const textsOf = (files: Set<string>, stamps: Map<string, string>) => {
     const out = new Map<string, string>()
@@ -315,7 +325,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
   const compileSlots = async (slots: Slot[], r: Run): Promise<{ left: string[]; partial: Map<string, Set<View>> }> => {
     const done: Slot[] = []
     const partial = new Map<string, Set<View>>()
-    const inputs = inputsOf()
+    const inputs = inputsOf(slots)
     const c = compiler()
     const id = hooks.snaps.reserve()
     let cancelled = false
@@ -605,10 +615,12 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
     stale: () => sched.unseen().size > 0,
     preview,
     catchUp() {
-      if (!scope.stamps.size || !changedSince(scope.stamps)) return
-      // the watcher did not follow its files, so the modules held for them are out of date
-      state.compiler?.changed(scope.files)
-      this.edit(null, false)
+      for (const [file, stamp] of stampFiles(scope.stamps.keys())) {
+        if (scope.stamps.get(file) === stamp) continue
+        scope.stamps.set(file, stamp)
+        state.compiler?.changed([file])
+        this.edit(file, false)
+      }
     },
     on(fn) {
       listeners.add(fn)

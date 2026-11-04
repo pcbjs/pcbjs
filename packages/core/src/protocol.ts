@@ -326,7 +326,7 @@ export type CompileEvent =
   | { t: 'committed'; project: string; run: Run; snapshot: string | null; entries: string[]; partial: string[] }
   /** an editor's draft began or stopped holding the compile, `line` 1-based, null when the hold ended */
   | { t: 'held'; project: string; file: string; line: number | null }
-/** The keystroke tier's pause and the quiet period before the full compile, ms. */
+/** The minimum sketch interval and the quiet period before the full compile, ms. */
 export interface Tiers {
   keystroke: number
   quiet: number

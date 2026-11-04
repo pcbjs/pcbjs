@@ -11,7 +11,7 @@ export type Demand = ReadonlyMap<string, readonly View[] | null>
 
 export interface Tier {
   name: TierName
-  /** ms of quiet before it runs */
+  /** minimum sketch interval, or ms of quiet before a full compile */
   after: number
   runs: 'sketch' | 'compile'
   /** the views it compiles of a slot, null for every one, none for a slot no one observes */
@@ -101,6 +101,7 @@ export function scheduler(slots: string[], tiers: Record<TierName, Tier>): Sched
   let running: Run | null = null
   let demand: Demand = new Map()
   const sketches = new Map<string, { at: number; slots: string[] }>()
+  const sketched = new Map<string, number>()
 
   const merge = (e: Edit) => {
     const was = edits.find(x => x.file === e.file)
@@ -145,7 +146,8 @@ export function scheduler(slots: string[], tiers: Record<TierName, Tier>): Sched
     edit(e, now) {
       merge(e)
       // the keystroke tier reaches a typed file's viewers only
-      if (e.typed && e.file && e.slots.some(s => demand.has(s))) sketches.set(e.file, { at: now + tiers.keystroke.after, slots: e.slots })
+      if (e.typed && e.file && e.slots.some(s => demand.has(s)))
+        sketches.set(e.file, { at: Math.max(now, (sketched.get(e.file) ?? -Infinity) + tiers.keystroke.after), slots: e.slots })
       quietAt = now + (e.typed ? tiers.quiet.after : GATHER_MS)
       return !!running
     },
@@ -165,6 +167,7 @@ export function scheduler(slots: string[], tiers: Record<TierName, Tier>): Sched
       for (const [file, k] of sketches)
         if (k.at <= now) {
           sketches.delete(file)
+          sketched.set(file, now)
           return { tier: tiers.keystroke, file, slots: k.slots }
         }
       if (running) return null
@@ -196,6 +199,7 @@ export function scheduler(slots: string[], tiers: Record<TierName, Tier>): Sched
       edits = []
       wanted = new Set()
       sketches.clear()
+      sketched.clear()
       quietAt = null
     },
     running: () => running,

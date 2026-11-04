@@ -99,7 +99,7 @@ Every client, the editor too, joins the session `.pcbjs/dev.json` names, ide-bri
 ## The dev loop
 
 1. Vite's watcher sees a change outside `.pcbjs` and `node_modules`.
-2. The session's Vite plugin suppresses design HMR and passes edits to each project's runtime. Its scheduler gathers disk writes for 60 ms, sketches editor changes after 30 ms and compiles the demanded views after 300 ms of typing quiet; a query requests every view, session.md.
+2. The session's Vite plugin suppresses design HMR and passes edits to each project's runtime. Its scheduler gathers disk writes for 60 ms, starts sketches immediately with a 30 ms minimum interval and compiles the demanded views after 300 ms of typing quiet; a query requests every view, session.md.
 3. Before the compile, `pcbjs:invalidate` marks what the edit makes stale; each stage's facet goes out as `pcbjs:facet` as it ends, then `pcbjs:boards` with per-entry errors; the viewer keeps zoom, hidden layers and selection, see viewer.md.
 4. A failed compile sends `pcbjs:error`, over the last good board.
 

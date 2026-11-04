@@ -38,7 +38,7 @@ function harness(slots, { ms = 100, held = new Set(), partial = () => null } = {
   return { s, log, step, now: () => now, runs: () => log.filter(l => isRun(l.job)), sketches: () => log.filter(l => !isRun(l.job)) }
 }
 
-test('a burst of ten keys 50 ms apart: a sketch 30 ms after each, one compile 300 ms after the last', () => {
+test('a burst of ten keys 50 ms apart: each sketch starts immediately, one compile 300 ms after the last', () => {
   const h = harness([A])
   h.s.demand(new Map([[A, ['meta', 'layers']]]), 0)
   for (let i = 0; i < 10; i++) {
@@ -48,7 +48,7 @@ test('a burst of ten keys 50 ms apart: a sketch 30 ms after each, one compile 30
   h.step(2000)
   assert.deepEqual(
     h.sketches().map(l => l.at),
-    [30, 80, 130, 180, 230, 280, 330, 380, 430, 480],
+    [0, 50, 100, 150, 200, 250, 300, 350, 400, 450],
   )
   assert.equal(h.runs().length, 1)
   const [run] = h.runs()
@@ -57,6 +57,24 @@ test('a burst of ten keys 50 ms apart: a sketch 30 ms after each, one compile 30
   assert.deepEqual(run.job.views.get(A), ['meta', 'layers'])
   assert.deepEqual(run.job.edits, [edit(A, [A], true)])
   assert.equal(h.s.busy(), false)
+})
+
+test('continuous typing coalesces sketches without postponing them until the burst ends', () => {
+  const s = scheduler([A], TIERS)
+  s.demand(new Map([[A, ['layers']]]), 0)
+  const sketches = []
+  for (let now = 0; now <= 100; now += 10) {
+    s.edit(edit(A, [A], true), now)
+    const job = s.next(now)
+    if (job) {
+      assert.equal(isRun(job), false)
+      sketches.push(now)
+    }
+  }
+  assert.deepEqual(sketches, [0, 30, 60, 90])
+  assert.equal(s.due(), 120, 'the trailing edit still gets a sketch')
+  assert.equal(s.next(120).file, A)
+  assert.equal(s.due(), 400, 'full compile still waits for typing quiet')
 })
 
 test('an edit while a run runs stops it, and the next run waits for it to end', () => {
