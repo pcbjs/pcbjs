@@ -51,7 +51,19 @@ async function serve(root) {
   child.stdout.on('data', d => (out += d))
   child.stderr.on('data', d => (out += d))
   await until(() => /\[pcbjs\] session \w+, pid/.test(out))
-  return { info: JSON.parse(readFileSync(join(root, '.pcbjs', 'dev.json'), 'utf8')), stop: () => stop(child) }
+  const info = JSON.parse(readFileSync(join(root, '.pcbjs', 'dev.json'), 'utf8'))
+  return {
+    info,
+    stop: async () => {
+      const control = await client(info, 'cli', root)
+      try {
+        await control.request('session/stop')
+      } finally {
+        control.close()
+      }
+      await until(() => child.exitCode !== null || child.signalCode !== null).catch(() => stop(child))
+    },
+  }
 }
 
 /** A WebSocket client of the session, as the editor or a watcher. */

@@ -169,3 +169,15 @@ test('shaded, grouped, 25 percent with a selection draws no edge geometry, a fad
   })
   assert.deepEqual(lines, [])
 })
+
+test('grouped depth prepass preserves a material offset expressed only in depth units', () => {
+  const variants = new Variants(() => '#888888')
+  const base = new THREE.MeshStandardMaterial({ polygonOffset: true, polygonOffsetFactor: 0, polygonOffsetUnits: -4 })
+  const depth = variants.depth(base, false)
+  assert.equal(depth.polygonOffset, true)
+  assert.equal(depth.polygonOffsetFactor, 0)
+  assert.equal(depth.polygonOffsetUnits, -4)
+  const unoffset = variants.depth(new THREE.MeshStandardMaterial({ polygonOffset: false, polygonOffsetFactor: 0, polygonOffsetUnits: -4 }), false)
+  assert.notEqual(unoffset, depth)
+  assert.equal(unoffset.polygonOffset, false)
+})

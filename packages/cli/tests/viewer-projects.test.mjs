@@ -44,7 +44,7 @@ function fixture(nested = false) {
   const tools = viewerTools(h)
   const context = (i, file = `${roots[i]}/pcb.tsx`) => ({ project: roots[i], board: 'Same', file, command: 'H', start: [i, 0] })
   const clear = () => viewers.forEach(c => c.got.splice(0))
-  return { roots, runtimes, viewers, tools, context, clear }
+  return { roots, runtimes, viewers, tools, context, clear, h }
 }
 
 test('assist, completion focus, grid and hover stay in their project with duplicate board names', () => {
@@ -337,4 +337,54 @@ test('selection offers validate board, target, snapshot and references before br
   runtimes[0].state.slots[0].compiled.push({ board: variant })
   const target = await tools.views['session/select']({ board: 'Same', target: 'Second', refs: ['R1'] }, viewers[0])
   assert.equal(target.target, 'Second')
+})
+
+test('library lock reads use fresh advisory geometry while the full snapshot remains stale', async () => {
+  const { emptySelection } = await import('@pcbjs/core/internal/selection')
+  const { runtimes, viewers, tools, h } = fixture()
+  const rt = runtimes[0]
+  const file = join(rt.root, 'layout.tsx')
+  const node = { ref: 'R1', caps: ['placed'], at: [1, 2, 0], side: 'F', src: { at: { file, line: 1, col: 1 } } }
+  const model = {
+    name: 'Same',
+    nets: [],
+    drc: [],
+    erc: [],
+    edit: [node],
+    schematic: { circuits: [{ kind: 'group', path: ['CH1'], parts: ['R1'] }], parts: [{ ref: 'R1', path: ['CH1'] }] },
+    items: [],
+    footprints: [{ ref: 'R1', pads: [] }],
+    groups: [],
+    grids: [],
+  }
+  rt.state.slots[0].compiled[0].board = model
+  rt.compiledOnce = async () => {}
+  rt.compiler = () => ({ layout: async () => ({ board: model, site: {} }) })
+  rt.idle = async () => {}
+  rt.lockModel = () => model
+  h.sources.read = () => ({ text: '<R1 at="1 2" locked />', authority: 'disk', version: null, holder: null, named: file })
+  tools.views['session/select'](
+    {
+      board: 'Same',
+      selection: {
+        ...emptySelection('Same'),
+        refs: ['R1'],
+        anchor: 'R1',
+        level: 'CH1',
+        isolate: { ref: 'CH1', context: 'CH1', instances: ['CH1'], mode: 'library', preview: false },
+      },
+    },
+    viewers[0],
+  )
+  await new Promise(r => setImmediate(r))
+  rt.stale = () => true
+  rt.compiledOnce = async () => assert.fail('advisory read must not upgrade the full snapshot')
+  assert.deepEqual(await tools.views['session/edit/lock']({ board: 'Same', ref: 'R1', isolate: 'CH1', view: 'pcb' }, viewers[0]), { locked: true, reason: null })
+  rt.compiler = () => ({
+    layout: async () => {
+      rt.lockModel = () => null
+      return { board: model, site: {} }
+    },
+  })
+  assert.match((await tools.views['session/edit/lock']({ board: 'Same', ref: 'R1', isolate: 'CH1', view: 'pcb' }, viewers[0])).reason, /Waiting/)
 })

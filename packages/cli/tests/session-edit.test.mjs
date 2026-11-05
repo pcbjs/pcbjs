@@ -187,6 +187,7 @@ test('toolbar locks use source checks, editor writes and ordinary undo history',
     const { done } = await drag(c, { tool: 'lock', refs: ['TP1'], anchor: 'TP1' }, { locked: true })
     assert.match(c.docs.get(file), /<TP1 at="5 10" locked \/>/)
     assert.equal(done.written[0].via, 'editor')
+    await c.request('session/check')
     assert.deepEqual(await c.request('session/edit/lock', query), { locked: true, reason: null })
     await c.request('session/edit/undo', { txn: done.txn })
     assert.equal(c.docs.get(file), BOARD)

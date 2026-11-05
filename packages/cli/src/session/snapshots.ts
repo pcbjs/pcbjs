@@ -109,7 +109,7 @@ export function staleOf(snap: Snapshot | null, now: Now): Stale | null {
 }
 
 /** The files whose disk stamp or unsaved text differs from what the snapshot compiled. */
-export function changedFiles(snap: Snapshot, now: Pick<Now, 'overlay'>): string[] {
+export function changedFiles(snap: Pick<Snapshot, 'stamps' | 'overlay'>, now: Pick<Now, 'overlay'>): string[] {
   const disk = stampFiles(snap.stamps.keys())
   const out: string[] = []
   for (const [f, was] of snap.stamps) {

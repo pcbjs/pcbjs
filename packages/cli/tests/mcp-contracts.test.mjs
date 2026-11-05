@@ -1,11 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { TOOLS } from '../dist/mcp-tools.js'
 import { guardSnapshot, pick, queryMethods } from '../dist/session/queries.js'
 
 const tool = name => TOOLS.find(t => t.name === name)
-const root = '/tmp/project'
-const slots = ['a.tsx', 'b.tsx'].map(rel => ({ entry: { file: `${root}/${rel}`, rel } }))
+const root = join(tmpdir(), 'pcbjs-mcp-project')
+const slots = ['a.tsx', 'b.tsx'].map(rel => ({ entry: { file: join(root, rel), rel } }))
 
 test('advertised MCP schemas reject malformed scope, unknown keys and render tuples before asking session', async () => {
   let calls = 0

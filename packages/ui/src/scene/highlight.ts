@@ -116,7 +116,8 @@ export class Variants {
   /** The depth-only material of the grouped prepass; pushed back a hair in edges mode so the edges pass it. */
   depth(base: THREE.Material, edges: boolean): THREE.MeshBasicMaterial {
     const off = edges ? 1 : base.polygonOffset ? base.polygonOffsetFactor : 0
-    const key = `${base.side}:${off}:${edges ? 1 : base.polygonOffsetUnits}`
+    const offset = edges || base.polygonOffset
+    const key = `${base.side}:${offset}:${off}:${edges ? 1 : base.polygonOffsetUnits}`
     let d = this.depths.get(key)
     if (!d)
       this.depths.set(
@@ -128,7 +129,7 @@ export class Variants {
           depthWrite: true,
           transparent: true,
           side: base.side,
-          polygonOffset: off !== 0,
+          polygonOffset: offset,
           polygonOffsetFactor: off,
           polygonOffsetUnits: edges ? 1 : base.polygonOffsetUnits,
         })),

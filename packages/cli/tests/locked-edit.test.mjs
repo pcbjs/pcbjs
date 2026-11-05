@@ -1,15 +1,18 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { editTxns, toolsOf } from '../dist/session/edit.js'
 
 function session(initial = '<R1 at="1 2" />') {
-  const file = '/tmp/pcbjs-lock-test/pcb.tsx'
+  const root = join(tmpdir(), 'pcbjs-lock-test')
+  const file = join(root, 'pcb.tsx')
   const node = { ref: 'R1', caps: ['placed', 'layered'], at: [1, 2, 0], side: 'F', m: [1, 0, 0, 1, 0, 0], grid: null, src: { at: { file, line: 1, col: 1 } } }
   const board = { name: 'Locks', edit: [node], schematic: { circuits: [] }, items: [], footprints: [{ ref: 'R1' }], groups: [], grids: [] }
   let text = initial
   let writes = 0
   const tx = editTxns({
-    root: '/tmp/pcbjs-lock-test',
+    root,
     board: () => board,
     entry: () => file,
     run: () => 1,

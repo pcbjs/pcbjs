@@ -87,13 +87,14 @@ test('with no editor holding the file a drag writes to disk, once', { skip }, as
   await until('J1 selected', async () => (await chip()).startsWith('J1'))
   await until('the toolbar says it writes to disk', async () => /write to disk/.test(await ev(`document.querySelector('.bv-edit')?.title ?? ''`)))
   const n = compiles()
+  const logged = S.log.text.length
   await drag(await screenOf(3, 8.77), await screenOf(5, 8.77))
   await until('the file on disk', () => !readFileSync(quad, 'utf8').includes('<J1 at="3 6.23" />'))
   assert.match(readFileSync(quad, 'utf8'), /<J1 at="5 6\.23" \/>/)
   await until('a compile', () => compiles() > n, 20000)
   await until('the confirmation', async () => (await confirmations()).includes('Updated'))
   await sleep(600)
-  assert.equal(compiles() - n, 1, 'one compile')
+  assert.equal(compiles() - n, 1, `one compile\n${S.log.text.slice(logged)}`)
   assert.equal(readFileSync(quad, 'utf8'), TEXT0.replace('<J1 at="3 6.23" />', '<J1 at="5 6.23" />'))
 })
 

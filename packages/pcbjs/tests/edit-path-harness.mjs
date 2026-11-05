@@ -82,6 +82,7 @@ export async function serve(root, run, args = []) {
 }
 
 export let S, page, chrome, ed, quad, TEXT0
+let compilePhase = null
 /** The WebSockets the page opened, by request id: the URL and how many of their frames speak pcbjs. */
 export const sockets = new Map()
 export const selections = []
@@ -283,13 +284,13 @@ export const snapshot = () => ev(`document.querySelector('svg.board-svg')?.datas
 /** The compiles of a board the session logged so far, Quad's by default. */
 export const compiles = (board = 'Quad') => (S.log.text.match(new RegExp(`${board} 0\\.1\\.0 .*DRC|${board.toLowerCase()}\\.pcb\\.tsx: compiled `, 'g')) ?? []).length
 
-/** No compile for 600 ms, so a gesture counts only its own. */
+/** Idle and no compile for 600 ms, so a gesture counts only its own. */
 export async function settled(board) {
   let n = compiles(board),
     t = Date.now()
   while (Date.now() - t < 600) {
     await sleep(50)
-    if (compiles(board) !== n) ((n = compiles(board)), (t = Date.now()))
+    if (compiles(board) !== n || compilePhase !== 'idle') ((n = compiles(board)), (t = Date.now()))
   }
 }
 
@@ -449,6 +450,7 @@ export function harness() {
         try {
           const frame = JSON.parse(text)
           if (frame.event === 'pcbjs:select') selections.push(frame.data.selection)
+          if (frame.event === 'pcbjs:status') compilePhase = frame.data.phase
         } catch {}
       }
     }

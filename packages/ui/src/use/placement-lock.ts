@@ -15,7 +15,7 @@ export function usePlacementLock(ctx: PaneContext) {
   const isolate = computed(() => (store.sel.isolate?.mode === 'library' ? store.sel.isolate.ref : null))
   const request = computed(() => (part.value ? { board: store.name, ref: part.value, view: view.value, isolate: isolate.value } : null))
   watch(
-    [request, () => store.run, site, () => store.edit.client],
+    [request, () => store.run, site, () => store.edit.client, () => Object.keys(store.invalid).length],
     async (_, __, cleanup) => {
       state.value = null
       failure.value = null

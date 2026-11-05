@@ -50,7 +50,10 @@ export function viteLoader(server: ViteDevServer, code?: CodeOf): ModuleLoader {
 function sourceMapper(server: ViteDevServer): (src: Src) => Src {
   return src => {
     const e = new Error()
-    e.stack = `Error\n    at f (${src.file}:${src.line}:${src.col})`
+    const graph = server.environments.ssr.moduleGraph
+    const node = graph.getModuleById(src.file) ?? [...(modulesFor(graph, src.file) ?? [])].find(m => m.id)
+    const id = node?.id ?? src.file
+    e.stack = `Error\n    at f (${id}:${src.line}:${src.col})`
     server.ssrFixStacktrace(e)
     return localFrames(e.stack ?? '')[0] ?? src
   }

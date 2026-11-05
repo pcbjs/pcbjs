@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileKey, sameFile, sourcePath, under } from '../dist/project/files.js'
 import { entriesReaching, focusTarget } from '../dist/project/boards.js'
-import { modulesFor } from '../dist/project/loader.js'
+import { modulesFor, viteLoader } from '../dist/project/loader.js'
 import { scopeOf } from '../dist/session/scopes.js'
 import { mirrorGraph } from '../dist/session/worker-client.js'
 import { previewable } from '../dist/session/plugin.js'
@@ -83,5 +83,30 @@ test('editor bridge accepts native paths under Vite allow roots, but refuses adj
     assert.equal(selected.length, 1)
   } finally {
     rmSync(top, { recursive: true, force: true })
+  }
+})
+
+test('Windows source frames use the module graph identity before Vite maps generated positions', () => {
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { value: 'win32' })
+  try {
+    const id = 'C:/Users/Dev/board/pcb.tsx'
+    const node = { id, file: id }
+    const graph = {
+      getModuleById: file => (file === id ? node : undefined),
+      getModulesByFile: file => (file === id ? new Set([node]) : undefined),
+      fileToModulesMap: new Map([[id, new Set([node])]]),
+    }
+    const loader = viteLoader({
+      environments: { ssr: { moduleGraph: graph } },
+      ssrFixStacktrace: error => {
+        if (error.stack.includes(`${id}:62:12`)) error.stack = `Error\n    at f (${id}:16:3)`
+      },
+    })
+    for (const file of ['c:\\users\\dev\\board\\pcb.tsx', 'c:/users/dev/board/pcb.tsx', id]) {
+      assert.deepEqual(loader.mapSrc({ file, line: 62, col: 12 }), { file: id, line: 16, col: 3 })
+    }
+  } finally {
+    Object.defineProperty(process, 'platform', platform)
   }
 })

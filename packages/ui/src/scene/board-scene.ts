@@ -346,10 +346,12 @@ export class BoardScene {
       return { bare: one(shades.bare), copper: one(shades.copper) }
     }
     const silk = this.silkColor(b)
+    // A small depth-unit bias keeps mask rounding from tinting silk without a slope-dependent displacement.
+    const ink = () => std({ color: silk, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: 0, polygonOffsetUnits: -4 })
     this.mats = {
       outer: std({ color: finish, roughness: 0.32, metalness: 0.75 }),
       inner: std({ color: COLORS.copper, roughness: 0.4, metalness: 0.6 }),
-      silk: { F: std({ color: silk, roughness: 0.8 }), B: std({ color: silk, roughness: 0.8 }) },
+      silk: { F: ink(), B: ink() },
       barrel: std({ color: finish, roughness: 0.35, metalness: 0.7, side: THREE.DoubleSide }),
       slab: [std({ color: COLORS.fr4, roughness: 0.7 }), std({ color: COLORS.edge, roughness: 0.85 })],
       mask: { F: mask(), B: mask() },

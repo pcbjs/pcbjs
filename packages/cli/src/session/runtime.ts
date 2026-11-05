@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs'
 import type { RouteProgress } from '@pcbjs/compile'
 import { demanded, STAGES } from '@pcbjs/compile/internal/pipeline'
 import type { View } from '@pcbjs/core/internal/plugin'
+import type { Board } from '@pcbjs/core/model'
 import { FACET_NAMES, facetHash, splitSite } from '@pcbjs/core/site-facets'
 import type { CompileEvent, Invalidate, Run as RunId, Stale, Tiers } from '@pcbjs/core/protocol'
 import { entriesReaching, markConflicts, slotName, type BoardSlot, type ModuleLookup } from '../project/boards.js'
@@ -71,6 +72,8 @@ export interface ProjectRuntime {
   settle(ms: number): Promise<{ snap: Snapshot | null; stale: Stale | null }>
   refresh(entries: string[], policy: 'stages' | 'all' | 'warm', ms: number): Promise<void>
   snapshotStale(snap: Snapshot): Stale | null
+  /** Current placement geometry for an advisory read, without requesting missing checks. */
+  lockModel(name: string, view: 'pcb' | 'sch'): Board | null
   current(): Snapshot | null
   previous(): Snapshot | null
   hold(): { file: string; line: number } | null
@@ -128,6 +131,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
   )
   const facets = facetStore()
   const lastGood = new Map<string, Held[]>()
+  const lockModels = new Map<string, { boards: Held[]; views: Set<View>; inputs: Pick<Snapshot, 'stamps' | 'overlay'> }>()
   const listeners = new Set<(e: CompileEvent) => void>()
   const emit = (e: CompileEvent) => {
     for (const fn of [...listeners]) fn(e)
@@ -365,6 +369,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
           // the stages stream their facets while the project has viewers; the finished board reaches the store whatever
           ...(hooks.viewers() > 0 ? { facet: f => live() && emit({ t: 'facet', project: root, facet: { ...f, run: id } }) } : {}),
         })
+        lockModels.set(s.entry.file, { boards: out, views: viewsOf(want), inputs: { ...inputs, stamps: new Map([...stampFiles(out.flatMap(c => c.files)), ...inputs.stamps]) } })
         if (out[0]?.partial) {
           partial.set(s.entry.file, viewsOf(want))
           continue
@@ -383,6 +388,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
         s.doneAt = Date.now()
         done.push(s)
       } catch (e: any) {
+        lockModels.delete(s.entry.file)
         if (e?.name === 'CancelledError') {
           cancelled = true
           left.push(...slots.slice(i).map(x => x.entry.file))
@@ -635,6 +641,18 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
       return next
     },
     snapshotStale: snap => staleOf(snap, nowOf()),
+    lockModel(name, view) {
+      for (const [entry, model] of lockModels) {
+        if (!state.slots.some(s => s.entry.file === entry && !s.error && !s.conflict) || changedFiles(model.inputs, nowOf()).length) {
+          lockModels.delete(entry)
+          continue
+        }
+        if (busy() || !model.views.has(view === 'sch' ? 'sch' : 'layers')) continue
+        const board = model.boards.find(c => c.board.name === name && (!c.board.variant || c.board.variant.index === 0))?.board
+        if (board) return board
+      }
+      return null
+    },
     current,
     previous: () => hooks.snaps.previous(root),
     hold: () => holdIn(drafts(), root),
@@ -660,6 +678,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
     },
     async close() {
       closed = true
+      lockModels.clear()
       if (timer) clearTimeout(timer)
       stop()
       for (const done of asked.splice(0)) done()

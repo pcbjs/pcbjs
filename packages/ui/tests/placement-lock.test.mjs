@@ -127,3 +127,25 @@ test('changing focus while a lock transaction begins keeps the original requeste
   assert.deepEqual(s.calls[0], ['update', { locked: true }])
   assert.equal(s.lock.locked.value, true)
 })
+
+test('a pending placement read retries after the current facets settle', async t => {
+  let ready = false,
+    reads = 0
+  const s = setup(async () => {
+    reads++
+    return ready ? { locked: true, reason: null } : { locked: false, reason: 'Waiting for the current placement model.' }
+  })
+  t.after(s.stop)
+  s.store.invalid = { R1: {} }
+  await tick()
+  assert.match(s.lock.reason.value, /Waiting/)
+  const before = reads
+  ready = true
+  s.store.invalid = {}
+  await tick()
+  assert.ok(reads > before)
+  assert.equal(s.lock.locked.value, true)
+  assert.equal(s.lock.reason.value, null)
+  await s.lock.toggle()
+  assert.deepEqual(s.calls[1], ['update', { locked: false }])
+})

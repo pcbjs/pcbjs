@@ -358,10 +358,18 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
     'session/edit/lock': async p => {
       const rt = runtimeOfBoard(String(p?.board), prefer())
       if (!rt) throw new Error(`no board ${String(p?.board)} in this session`)
-      await freshModel(rt, p.board)
+      await rt.idle()
+      const model = rt.lockModel(p.board, p.view === 'sch' ? 'sch' : 'pcb')
+      if (!model) return { locked: false, reason: 'Waiting for the current placement model.' }
       const sel = selectionsOf(rt).get(p.board)
-      if (p.isolate && sel?.isolate?.mode === 'library' && sel.isolate.ref === p.isolate) await loadLayout(rt, p.board, sel.target, p.isolate)
-      return txnsOf(rt).lockState(p)
+      if (p.isolate && sel?.isolate?.mode === 'library' && sel.isolate.ref === p.isolate) {
+        const slot = liveSlots(rt.state.slots).find(s => s.compiled?.some(c => c.board.name === p.board))
+        if (!slot) return { locked: false, reason: 'Waiting for the current library layout.' }
+        const layout = await rt.compiler().layout(slot.entry, p.board, sel.target, p.isolate)
+        if (rt.lockModel(p.board, p.view === 'sch' ? 'sch' : 'pcb') !== model) return { locked: false, reason: 'Waiting for the current library layout.' }
+        return txnsOf(rt).lockState(p, layout.board)
+      }
+      return txnsOf(rt).lockState(p, model)
     },
     // a view drawn from a compile of its views alone is as current as the whole compile that completes it
     'session/edit/begin': async (p, by) => {

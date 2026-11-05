@@ -36,6 +36,8 @@ export default (
 
 `<R1 locked />` is shorthand for `<R1 locked={true} />`. Use `locked={condition}` for a boolean expression evaluated on each compile; `false` or omission leaves the placement editable. Strings such as `locked="false"` are invalid.
 
+The toolbar reads lock state from the current placement view without requesting a full board check; changed or unavailable geometry stays pending until its view settles. Starting a lock edit still refreshes and guards the source.
+
 A lock prevents preview movement, rotation, side changes, placement-grid changes and placement-assist writes. Selection, inspection and source navigation still work. A group containing a locked part cannot move as a whole; an unlocked sibling can still be edited individually. A mixed selection is refused rather than partially moved. The server checks locks again before writing, including when a recompilation changes the expression during a drag.
 
 Locks belong to the placement, independently on the PCB and schematic. They do not prevent source edits or change automatic placement: use explicit `at` coordinates to fix a position across compilations. The toolbar lock button adds or removes a bare `locked` attribute. An expression, including `{true}` or `{false}`, disables the button with “Lock state is derived from an expression and cannot be overridden.” Change those values in source. Props spreads remain source-controlled. Lock changes use the same undo/redo history as other preview edits.

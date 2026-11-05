@@ -206,8 +206,8 @@ export function editTxns(d: EditDeps) {
     txns.delete(txnOf(p?.txn).id)
     return null
   }
-  const lockState = async (p: Params<'session/edit/lock'>) => {
-    const b = d.board(p.board, p.isolate)
+  const lockState = async (p: Params<'session/edit/lock'>, model?: Board) => {
+    const b = model ?? d.board(p.board, p.isolate)
     if (!b) throw new Error(`no board ${p.board} in this session`)
     const out = new Planner(await d.lsp(), b, d, abs, p.isolate ?? null)
     const { locked, reason } = out.lockSite(p.ref, p.view)
