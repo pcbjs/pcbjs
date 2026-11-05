@@ -93,7 +93,7 @@ const glb = await compose(
 writeFileSync('stack.glb', glb)
 ```
 
-- `compose(boards, { format: 'glb' })` writes one GLB of library boards, each under a node `board:<name>`, the first at the origin and each later one placed against it by `mate` or `at`, as `reference()` places it: the same options, with a part of the first board named by its ref, `J2` or `J2/1`.
+- `compose(boards, { format: 'glb' })` writes one GLB of library boards, each under a node `board:<name>`, the first at the origin and each later one placed against it by `mate`, `at` or `pose`, as `reference()` places it: the same options, with a part of the first board named by its ref, `J2` or `J2/1`. A `pose` carries 3D `translation` and quaternion `orientation`, using the frame, pivot and normalization contract in references.md; it cannot be mixed with other placement options.
 - A board is its folder or `reference.json` as a path or URL, or the `board` its `index.js` exports, which carries the URLs of its reference data and GLB.
 - Panels are a compile stage, never a `compose()`. STEP joins `glb` when pcbjs writes a board as STEP.
 

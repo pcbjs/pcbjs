@@ -2090,6 +2090,13 @@ tr.on {
   align-items: center;
   gap: 8px;
 }
+.stale-banner.halted {
+  max-height: min(40%, 280px);
+}
+.compile-warning {
+  margin: 6px 0;
+  color: var(--warn);
+}
 .stale-head {
   margin-top: 4px;
   font-family: var(--mono);
@@ -3104,4 +3111,13 @@ tr.on {
 .layout-action svg {
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* Preview gestures include controls and diagnostic overlays. */
+.board-view,
+.sch-view,
+.view3d,
+.stage:has(.board-view, .sch-view, .view3d),
+.pcbjs-view:has(.board-view, .sch-view, .view3d) {
+  touch-action: pan-x pan-y;
 }

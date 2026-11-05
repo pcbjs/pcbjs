@@ -12,7 +12,7 @@ import { chromes, launchAny, stopChrome, cdp, evaluate } from '../../../scripts/
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const compiled = await build({
   stdin: {
-    contents: `import {createViewer} from './packages/ui/src/shell.ts';import {connect} from './packages/ui/src/connect.ts';import {undoKey} from './packages/ui/src/undo.ts';const shell=createViewer({boards:${JSON.stringify([facetSet(fixture())])},entries:{Fx:'pcb.tsx'},single:true,path:'/',baseUrl:'/',ide:true});window.shell=shell;window.undoKey=undoKey;window.disconnect=connect(shell,null);document.body.tabIndex=0;document.body.focus();window.ready=true;`,
+    contents: `import {createViewer} from './packages/ui/src/shell.ts';import {connect} from './packages/ui/src/connect.ts';import {undoKey} from './packages/ui/src/undo.ts';import {fakeTransport} from './packages/ui/tests/fake-transport.mjs';import {MAJOR,PROTOCOL} from '@pcbjs/core/protocol';const shell=createViewer({boards:${JSON.stringify([facetSet(fixture())])},entries:{Fx:'pcb.tsx'},single:true,path:'/',baseUrl:'/',ide:true});window.shell=shell;window.undoKey=undoKey;const t=fakeTransport();t.closed=fn=>window.closeSession=fn;window.setMode=mode=>t.emit('pcbjs:ide:ready',{mode,major:MAJOR,protocol:PROTOCOL,version:'test',capabilities:[],session:'test'});window.disconnect=connect(shell,t);window.setMode('rw');document.body.tabIndex=0;document.body.focus();window.ready=true;`,
     resolveDir: repo,
     sourcefile: 'undo-keyboard-fixture.ts',
     loader: 'ts',
@@ -29,7 +29,7 @@ async function until(page, expression) {
     if (await evaluate(page, expression)) return
     await sleep(30)
   }
-  assert.fail(expression)
+  assert.fail(expression + '\n' + page.logs.join('\n'))
 }
 test(
   'real preview keyboard sends native undo without page history, keeps source ownership and typing guards',
@@ -95,6 +95,17 @@ test(
         { type: 'pcbjs:undo', board: 'Fx', project: '/workspace/two', files: ['/workspace/two/pcb.tsx'], redo: false },
         'same board name in another project uses its own source entry',
       )
+      await evaluate(page, `${f}.setMode('ro')`)
+      const beforeReadonly = await evaluate(page, 'posts.length')
+      await key()
+      assert.equal(await evaluate(page, 'posts.length'), beforeReadonly, 'read-only undo cannot fall through to host keyboard forwarding')
+      await evaluate(page, `${f}.setMode('rw')`)
+      assert.equal(await evaluate(page, `${f}.shell.edit.mode.mode`), 'rw', 'permission comes from the session ready response')
+      await evaluate(page, `${f}.closeSession()`)
+      assert.equal(await evaluate(page, `${f}.shell.edit.mode.mode`), 'ro')
+      assert.equal(await evaluate(page, `${f}.shell.edit.client`), null)
+      await key()
+      assert.equal(await evaluate(page, 'posts.length'), beforeReadonly, 'disconnection revokes undo access')
     } finally {
       page?.close()
       await stopChrome(chrome?.proc)

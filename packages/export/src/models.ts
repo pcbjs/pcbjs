@@ -35,7 +35,7 @@ export function siteStep(spec: StepModelSpec, rel: (p: string) => string): SiteS
 }
 
 // bump when a generated body's geometry in @pcbjs/ui's models changes, so every cached mesh of one is made again
-export const MODELS_VERSION = 1
+export const MODELS_VERSION = 2
 
 /** What a generated body is drawn for besides its spec: the footprint's height and the board's thickness, mm. */
 export interface ModelCtx {

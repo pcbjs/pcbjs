@@ -14,7 +14,7 @@ Folders keep stable import and source links. Choose a focused path, then read th
 | --- | --- |
 | First board and split files | [demo](demo/README.md): Coin, Blinky, Quad, Multi |
 | Routing and signal integrity | [qfn-breakout](qfn-breakout/README.md), [highspeed](highspeed/README.md), [usb-hub](usb-hub/README.md), [lvds-camera](lvds-camera/README.md), [eth-phy](eth-phy/README.md), [sdram](sdram/README.md), [usb3-hub](usb3-hub/README.md) |
-| Reuse and multiple boards | [library](library/README.md), [motor-stack](motor-stack/README.md) |
+| Reuse and multiple boards | [library](library/README.md), [motor-stack](motor-stack/README.md), [board-poses](board-poses/README.md) |
 | Power and manufacturing | [usbc-led](usbc-led/README.md), [psu](psu/README.md), [sensor-hat](sensor-hat/README.md) |
 | Repeated circuits and complete devices | [badge](badge/README.md), [led-matrix](led-matrix/README.md), [esp32-sensor](esp32-sensor/README.md), [stm32-dev](stm32-dev/README.md) |
 
@@ -42,6 +42,7 @@ Everything else, by folder; docs/advanced.md has the topics they use.
 | `led-matrix` | an N by N WS2812B-2020 matrix built from a circuit placed per pixel, serpentine data chain, pours on both sides | none |
 | `lvds-camera` | five 100 ohm LVDS pairs with array ends, an I2C level shifter and two custom footprints on four layers | none |
 | `library` | `power`, a library built with `pcbjs build --lib`: a regulator circuit, its layout and the PowerModule board; `consumer`, a carrier that places the circuit and references the board by package, the library installed by `scripts/check-examples.mjs` | none |
+| `board-poses` | three upright camera references using translation and quaternion orientation, top-surface height conversion, automatic source updates and independent fabrication output | none |
 | `motor-stack` | three boards in one folder, controller, driver and test jig, sharing `lib/`; the driver lays out a half bridge circuit three times | `driver` keeps the ERC warning `copper-weight`: 2 oz copper under the 1 oz preset rules, kept because the 0.16 mm rules reroute it into split pours |
 | `psu` | a 24 V to 5 V 5 A buck, copper first: power pours, thermal maps, arcs in the outline and a cutout, 2 oz copper, vendor STEP models; the status LED group placed by the placer and the boot capacitor following the switch node | none: the regulator's SW, PGND and VIN bars take a 0.02 mm mask margin, inside TI's 0.05 maximum, to keep the 0.13 mm dam black mask needs |
 | `sdram` | an STM32F429 with a 16-bit SDRAM on four layers: 91 autorouted legs and two match groups on a timing budget | one `length-match` error on DATA: the FMC data pins sit on the far sides of the MCU and the only free board lies behind ADDR, so closing it needs the SDRAM moved or the inner layers opened |

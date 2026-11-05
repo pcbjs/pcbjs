@@ -9,8 +9,10 @@ import type { SchDrawing } from '@pcbjs/core/internal/sch-model'
 import { injectPane, modsOf, useCommands } from './context'
 import type { Focus } from './pane'
 import { useViewBox, type Box } from './viewbox'
+import { usePinch } from './touch'
+import { pointerInside, usePointer } from './pointer'
 import { focusTransaction, type FocusKind } from './focus-transaction'
-import { drawnBox, schHit, schMarks, schVars, symbolFrame, type SchHit } from './schview'
+import { drawnBox, validViewBox, schHit, schMarks, schVars, symbolFrame, type SchHit } from './schview'
 import { displayRef, uidsOf } from './refs'
 import type { HoverTarget } from './sync'
 import { EASE_OUT_CSS } from './scene/motion'
@@ -57,11 +59,12 @@ let viewScope = keyOfSite(props.board)
 const legacy = pane.focusViews.size === 0 ? pane.viewport['sch'] : undefined
 const transaction = () => focusTransaction<FocusView>(pane.focusViews, viewScope, 'sch')
 const remembered = transaction().current()
-const restored = remembered?.box ?? legacy ?? null
+const previous = remembered?.box ?? legacy
+const restored = validViewBox(previous) ? previous : null
 let frameKey = remembered?.frameKey ?? ''
 let focusN = remembered?.focusN
 const snapshot = (): FocusView => ({ box: [...vb.value] as Box, size: [size.value.w, size.value.h], frameKey, focusN })
-const { size, vb, px, animateTo, stopAnimation, show, zoomBy, toView, onWheel, resize, press, pan, release, panning, fitBox } = useViewBox(
+const { size, vb, px, animateTo, stopAnimation, show, zoomBy, toView, onWheel, pinch, resize, press, pan, release, panning, fitBox } = useViewBox(
   svg,
   restored ?? drawnBox(props.drawing),
   () => (props.drawing.page[2] - props.drawing.page[0]) * 4,
@@ -134,6 +137,7 @@ function focusBox(f: Focus): Box {
   return [f.at[0] - s / 2, f.at[1] - s / 2, s, s]
 }
 function savedBox(saved: FocusView): Box {
+  if (!validViewBox(saved.box)) return fitBox(drawnBox(props.drawing))
   const { w, h } = size.value
   if (!saved.size?.[0] || !w || !h) return fitBox(saved.box)
   if (saved.size[0] === w && saved.size[1] === h) return [...saved.box] as Box
@@ -223,6 +227,24 @@ const hitOf = (h: SchHit | null): Hit | null =>
   h ? { kind: h.kind === 'symbol' ? 'body' : h.kind, ref: h.kind === 'sheet' ? h.key.slice('sheet:'.length) : (h.ref ?? null), net: h.net ?? null, pad: h.pin ?? null } : null
 const hoverRef = useHover({ hit: () => hitOf(hover.value), site: () => props.board, sel: () => props.sel, deep: () => prefs.deep, hover: ctx.board.hover }, h => emit('hover', h))
 
+usePinch(
+  host,
+  () => {
+    release()
+    stopAnimation()
+    onLeave()
+  },
+  pinch,
+)
+
+usePointer(
+  host,
+  () => {
+    release()
+  },
+  onLeave,
+)
+
 function onMove(e: PointerEvent) {
   const r = host.value?.getBoundingClientRect()
   if (r) pointer.value = [e.clientX - r.left, e.clientY - r.top]
@@ -230,23 +252,22 @@ function onMove(e: PointerEvent) {
     hover.value = null
     return
   }
+  if (!pointerInside(host.value, e)) return onLeave()
   const p = toView(e)
   cursor.value = p
   const h = hitAt(e)
   if (h?.key !== hover.value?.key) hover.value = h
 }
 function onUp(e: PointerEvent) {
-  if (!release()) return
+  if (!release() || !pointerInside(host.value, e)) return
   emit('pick', hitOf(hitAt(e)), modsOf(e))
 }
 function onDouble(e: MouseEvent) {
   emit('enter', hitOf(hitAt(e as PointerEvent)))
 }
 function onLeave() {
-  if (!panning()) {
-    hover.value = null
-    cursor.value = null
-  }
+  hover.value = null
+  cursor.value = null
 }
 
 // the overlay: a halo copy of each marked element under a copy in its own colours, one class per highlight state

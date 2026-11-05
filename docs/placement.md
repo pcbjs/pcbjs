@@ -32,6 +32,14 @@ export default (
 )
 ```
 
+## Placement locks
+
+`<R1 locked />` is shorthand for `<R1 locked={true} />`. Use `locked={condition}` for a boolean expression evaluated on each compile; `false` or omission leaves the placement editable. Strings such as `locked="false"` are invalid.
+
+A lock prevents preview movement, rotation, side changes, placement-grid changes and placement-assist writes. Selection, inspection and source navigation still work. A group containing a locked part cannot move as a whole; an unlocked sibling can still be edited individually. A mixed selection is refused rather than partially moved. The server checks locks again before writing, including when a recompilation changes the expression during a drag.
+
+Locks belong to the placement, independently on the PCB and schematic. They do not prevent source edits or change automatic placement: use explicit `at` coordinates to fix a position across compilations. The toolbar lock button adds or removes a bare `locked` attribute. An expression, including `{true}` or `{false}`, disables the button with “Lock state is derived from an expression and cannot be overridden.” Change those values in source. Props spreads remain source-controlled. Lock changes use the same undo/redo history as other preview edits.
+
 ## Slots
 
 `at` is `"x y rot"` in the frame of the enclosing groups. Any slot may be `auto`, and `auto` alone frees all three: `at="auto"`, `at="10mm auto 90deg"`, `at="auto auto 90"`. A slot written as a value is fixed and holds whatever chooses the others; a placement written without a rotation has it fixed at 0. A part keeps its `side`. `at:initial`, `at:cost` and `at:solver` need a slot left auto; written on a fixed placement they are a compile error.

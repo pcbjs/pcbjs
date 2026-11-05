@@ -114,6 +114,16 @@ export function defaultVia(r: Rules): { drill: number; size: number } {
   return { drill, size: Math.round(Math.max(0.6, r.minViaDiameter, drill + 2 * r.minAnnularRing) * 1e4) / 1e4 }
 }
 
+/** Resolve preferred and operation dimensions component by component; only the legacy fallback grows to meet rules. */
+export function resolveVia(r: Rules, ...levels: (Partial<{ drill: number; size: number }> | undefined)[]): { drill: number; size: number } {
+  const out = defaultVia(r)
+  for (const level of levels) {
+    if (level?.drill !== undefined) out.drill = level.drill
+    if (level?.size !== undefined) out.size = level.size
+  }
+  return out
+}
+
 /** Resolve hole clearances given by side to the larger side, keeping the sides in `holeClearanceBy` and `minHoleToHoleBy`. */
 export function resolveRules(r: Rules): ResolvedRules {
   // a set resolved before has its sides made again from its values; the keys keep their order, which the route and tune cache keys hash

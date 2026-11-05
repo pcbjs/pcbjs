@@ -49,7 +49,7 @@ interface CacheFile {
 }
 
 /** Bumped whenever the router changes what it produces, so old entries are not reused. */
-export const ROUTER_VERSION = 'maze-5'
+export const ROUTER_VERSION = 'maze-7'
 
 const KEY = Symbol.for('pcbjs.routeCache')
 function store(): Map<string, CacheFile> {
@@ -182,4 +182,9 @@ export function hash(s: string): string {
   h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
   h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
   return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, '0')
+}
+
+/** Release one retired cache directory from this process without touching its files. */
+export function forgetRouteCache(dir: string): void {
+  for (const key of store().keys()) if (key.startsWith(`${dir}\u0000`)) store().delete(key)
 }

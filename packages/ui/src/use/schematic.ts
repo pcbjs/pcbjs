@@ -113,7 +113,7 @@ export function usePart(ctx: PaneContext) {
     store.site?.repo ? repoUrl(store.site.repo, s.file, { start: s.start, end: s.end ?? s.start }) : null
   const partSourcing = computed(() => bomRowOf(store.site?.bom ?? [], store.activeRef)?.sourcing ?? null)
   function onOpen(item: { id?: number | null; ref?: string | null }, kind: SourceKind = 'placement', quiet = false) {
-    if (sourceSite.value) void ctx.open(itemSource(sourceSite.value, item, kind), quiet)
+    if (sourceSite.value) void ctx.open(itemSource(sourceSite.value, item, kind), quiet, !quiet)
   }
   return { ...t, part, schPart, partPath, partPlace, partDef, partRepoUrl, partSourcing, onOpen }
 }

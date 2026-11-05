@@ -89,6 +89,11 @@ const apply = (m: Mat, p: Pt): Pt => [m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p
 const mirrored = (m: Mat) => m[0] * m[3] - m[1] * m[2] < 0
 
 const nodeOf = (b: Board, ref: string) => b.edit?.find(e => e.ref === ref) ?? null
+const editRef = (ref: string) => ref.replace(/\/(pt|leg):\d+$/, '')
+function assertUnlocked(b: Board, refs: string[]) {
+  const locked = refs.map(ref => nodeOf(b, editRef(ref))).find(n => n?.locked)
+  if (locked) throw new Error(`${locked.ref} is locked or contains a locked placement; change locked in the source to edit it`)
+}
 type Site = { file: string; line: number; col: number }
 const same = (a: Site | undefined, b: Site | undefined) => !!a && !!b && a.file === b.file && a.line === b.line && a.col === b.col
 const keyOf = (n: EditNode): 'at' | 'chain' => (n.src.chain ? 'chain' : 'at')
@@ -107,7 +112,7 @@ const isWritable = (root: string, file: string) => under(file, root) && !/[\\/]n
 
 /** The tools the anchor's capabilities allow. */
 export function toolsOf(node: EditNode | null): Tool[] {
-  return node ? TOOLS.filter(t => node.caps.includes(t.needs)) : []
+  return node && !node.locked ? TOOLS.filter(t => node.caps.includes(t.needs)) : []
 }
 
 export function editTxns(d: EditDeps) {
@@ -116,10 +121,13 @@ export function editTxns(d: EditDeps) {
 
   const begin = (p: EditBegin, by: By | null) => {
     if (p?.tool === 'assist') return beginAssist(p, by)
-    if (!p || typeof p.board !== 'string' || !Array.isArray(p.refs) || typeof p.anchor !== 'string' || !TOOLS.some(t => t.id === p.tool))
+    if (!p || typeof p.board !== 'string' || !Array.isArray(p.refs) || typeof p.anchor !== 'string' || !(p.tool === 'lock' || TOOLS.some(t => t.id === p.tool)))
       throw new Error('session/edit/begin needs { board, tool, refs, anchor }')
     const b = d.board(p.board, p.isolate)
     if (!b) throw new Error(`no board ${p.board} in this session`)
+    if (p.tool !== 'lock') assertUnlocked(b, [p.anchor, ...p.refs])
+    else if (p.refs.length !== 1 || p.refs[0] !== p.anchor || (p.view !== undefined && p.view !== 'pcb' && p.view !== 'sch'))
+      throw new Error('Lock editing needs one focused placement and a PCB or schematic view')
     const now = d.run()
     if (p.run && now && p.run !== now) throw new Error(`the board changed since the view drew it, run ${p.run} is now ${now}; drag again`)
     const base = p.anchor
@@ -127,7 +135,7 @@ export function editTxns(d: EditDeps) {
       .filter(s => !/^(pt|leg):\d+$/.test(s))
       .join('/')
     const tools = toolsOf(nodeOf(b, base))
-    if (!tools.some(t => t.id === p.tool)) throw new Error(`${p.anchor} takes no ${p.tool} tool`)
+    if (p.tool !== 'lock' && !tools.some(t => t.id === p.tool)) throw new Error(`${p.anchor} takes no ${p.tool} tool`)
     const id = `edit${randomUUID()}`
     txns.set(id, { ...p, id, by, last: null, guards: null })
     return { txn: id, tools }
@@ -138,6 +146,9 @@ export function editTxns(d: EditDeps) {
     if (typeof p.board !== 'string' || !d.board(p.board)) throw new Error(`no board ${String(p.board)} in this session`)
     const a = d.assist(p.board)
     if (!a) throw new Error('the editor cursor waits for no argument: put it in an empty chain call, a route end or at=""')
+    const b = d.board(p.board, p.isolate)
+    if (!b) throw new Error(`no board ${p.board} in this editing context`)
+    assertUnlocked(b, a.ref ? [a.ref] : [])
     const id = `edit${randomUUID()}`
     txns.set(id, { ...p, refs: [], anchor: a.ref ?? 'assist', id, by, last: null, guards: null, assist: a })
     return { txn: id, tools: [] as Tool[] }
@@ -155,8 +166,10 @@ export function editTxns(d: EditDeps) {
     const lsp = await d.lsp()
     const b = d.board(t.board, t.isolate)
     if (!b) throw new Error(`no board ${t.board} in this session`)
+    if (t.tool !== 'lock') assertUnlocked(b, [t.anchor, ...t.refs])
     const out = new Planner(lsp, b, d, abs, typeof t.isolate === 'string' ? t.isolate : null)
-    if (t.assist) out.assist(t.assist, u)
+    if (t.tool === 'lock') out.lock(t.anchor, t.view, u.locked)
+    else if (t.assist) out.assist(t.assist, u)
     else if (t.tool === 'point') await out.point(t.anchor, u)
     else {
       const poses = t.refs.map(r => nodeOf(b, r)).filter((n): n is EditNode => !!n?.at)
@@ -193,7 +206,14 @@ export function editTxns(d: EditDeps) {
     txns.delete(txnOf(p?.txn).id)
     return null
   }
-  return { begin, update, commit, cancel, open: () => txns.size }
+  const lockState = async (p: Params<'session/edit/lock'>) => {
+    const b = d.board(p.board, p.isolate)
+    if (!b) throw new Error(`no board ${p.board} in this session`)
+    const out = new Planner(await d.lsp(), b, d, abs, p.isolate ?? null)
+    const { locked, reason } = out.lockSite(p.ref, p.view)
+    return { locked, reason }
+  }
+  return { begin, update, commit, cancel, lockState, open: () => txns.size }
 }
 
 /** The selection's centre for a turn of several, else the anchor's origin. */
@@ -286,6 +306,32 @@ class Planner {
     this.notes.push(`writes a patch: ${why}`)
   }
 
+  lockSite(ref: string, view: EditBegin['view']) {
+    const n = nodeOf(this.b, ref)
+    const symbol = view === 'sch' ? this.b.schematic.drawing?.symbols.find(s => s.ref === ref) : null
+    const part = view === 'sch' ? symbol : this.b.footprints.find(f => f.ref === ref)
+    const src = view === 'sch' ? symbol?.src : n?.src.at
+    let locked = !!part?.locked
+    const site = this.element(src)
+    let reason = !part || !site ? 'This placement has no editable source element.' : this.lsp.lockReason(site.el)
+    if (site && !reason) locked = !!site.el.attrs.locked
+    if (!reason && view !== 'sch' && n && (repeated(this.b, n) || (!this.iso && reach(this.b, n) > 1)))
+      reason = 'This element is shared; edit its library layout or give it an instance placement first.'
+    if (!reason && view === 'sch' && symbol?.src && this.b.schematic.drawing!.symbols.some(s => s.ref !== ref && same(s.src, symbol.src)) && !this.iso)
+      reason = 'This element is shared; edit its library schematic first.'
+    return { locked, reason, site }
+  }
+
+  lock(ref: string, view: EditBegin['view'], locked: boolean | undefined): void {
+    if (typeof locked !== 'boolean') throw new Error('Lock editing needs a boolean locked value')
+    const { site, reason } = this.lockSite(ref, view)
+    if (reason || !site) throw new Error(reason ?? 'No placement source')
+    const { file, text, el } = site
+    const change = this.lsp.setLocked(text, el, locked)
+    this.guards.set(`${file}:lock:${el.insert}`, text.slice(0, el.end))
+    if (change) this.push(file, text, change)
+  }
+
   /** A placement's new pose, written where it was instantiated: its own element's `at` and `side`, a layout element's for an instance, a text's, or an own placement among the children of the layout element that placed a shared part. */
   place(n: EditNode, to: Pose, u: EditUpdate): void {
     if (n.auto?.length) {
@@ -299,6 +345,10 @@ class Planner {
     const shared = reach(this.b, n),
       placed = twins(this.b, n).length
     if (placed > 1 && !this.iso && n.layout) return this.own(n, to, u, placed)
+    assertUnlocked(
+      this.b,
+      twins(this.b, n).map(t => t.ref),
+    )
     if (placed > shared) {
       this.notes.push(`${n.ref}: its element places ${placed} parts, instances or groups in a loop or a helper; give it an element of its own in the source`)
       return

@@ -7,6 +7,14 @@ Advanced. 3D: 3d.md. Highlight: highlight.md. Source navigation: editor.md. Keys
 /board/Blinky?view=3d&explode=0.4&select=Q1
 ```
 
+## Compile failures
+
+Compile failures show the reason, author source location and a short source excerpt directly in the preview. Unsaved edits use the draft that failed. When the failing expression has a recoverable placement boundary, the preview shows the current source before that expression, excluding it and subsequent entities in traversal order. A static progress bar retains completed stages and marks the failed stage red; its accessible description includes the source location. The browser and VS Code preview share this presentation.
+
+The halted board contains placements, schematic geometry and manual copper that can be recovered. Automatic routing, fills, DRC/ERC and manufacturing output are incomplete; the UI warns instead of reporting a clean board, and partial artifacts cannot be exported. Recovery does not write build caches or modify source. A correction requires a full successful compile before the halted state clears.
+
+If no board can be constructed, or the source boundary cannot be recovered, the viewer explicitly identifies the last successful board as stale, or shows the error alone when none exists. It never presents an earlier partial preview as the current source. Relevant calls through author files may follow the excerpt; pcbjs, dependency and runtime stack frames never appear in the preview, including when the server uses `--verbose`.
+
 ## View query
 
 Applied once per board after first render; unknown names warn.
@@ -49,12 +57,18 @@ Each board has one selection, shared by dev session, views, tree and editor; bui
 | sheet | the instance | its `<Sheet>` |
 
 - Hover lights what a click would select, with cmd a deep-select, nothing more. The readout names the item, pad, net and route.
-- A click makes one selection, one editor jump, one chip. Only a copper anchor draws context; an item lights its own copper.
-- Shift toggles selection; alt/option opens its definition without changing selection. Double-click: instance part enters its definition with part selected; part selects pad; route selects nearest point. Escape ascends within a definition, leaves with instance selected, goes to an enclosing nested definition, then clears.
+- A click makes one selection and one chip. In a read-write live session, selection can also focus an attached source editor. Only a copper anchor draws context; an item lights its own copper.
+- Shift toggles selection; alt/option opens its definition without changing selection when this connection permits editor access. In a read-only preview, alt/option selects normally. Double-click: instance part enters its definition with part selected; part selects pad; route selects nearest point. Escape ascends within a definition, leaves with instance selected, goes to an enclosing nested definition, then clears.
 - Tools show under the chip for a placed anchor in a read-write session, else why not, editing.md.
 - The chip shows the anchor path `Group1/R1/2`, selectable prefixes, other selected members and view state. Findings show their type only; full messages belong in the checks viewer. The `I` shortcut toggles isolation; group-layout actions sit below the badges. Write feedback reports success or refusal.
 - Isolate or `I` limits visibility to the focused group or standalone footprint. Instance layout edits retain the board context and close on part blur. Library layout edits show the independent template at its own origin, borrowing parameter values where necessary, with independent numbering. A footprint can be isolated but cannot enter library layout editing. See editing.md.
 - An older session says `session <version> is older than the viewer`.
+
+## Access and source navigation
+
+A lock and **Read-only** label distinguish published previews and read-only connections from **Editable** live sessions. The server grants editing during the session handshake; the browser does not infer permission from its hostname. Remote and tunneled clients default to read-only, configurable through `session.edit` and a session token, session.md. Selection, isolation, camera controls, layers and diagnostics remain available.
+
+Entity clicks in a published preview stay inside the viewer. Repository navigation is an explicit source link or **Placement on repository ↗** / **Definition on repository ↗** action, opening a separate tab without replacing the preview.
 
 ## 2D view
 
@@ -62,6 +76,7 @@ Each board has one selection, shared by dev session, views, tree and editor; bui
 | --- | --- |
 | click a layer in the rail | hide it; double-click shows it alone; presets Front, Back, All, Copper |
 | scroll, drag | zoom, pan |
+| two-finger pinch/drag | zoom and pan around the fingers in 2D, schematic and 3D, including over controls and finding labels; page scale stays unchanged |
 | hover | what a click would select, coordinates, net; a track adds width, length, skew and target |
 | grid button, `G` | grid off in 2D, 3D and schematic |
 | ratsnest button, `N` | the ratsnest and the connection indicators off in 2D and 3D |

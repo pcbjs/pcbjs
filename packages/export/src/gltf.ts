@@ -12,6 +12,8 @@ export interface Material {
   /** linear RGB */
   color: [number, number, number]
   alpha?: number
+  alphaMode?: 'OPAQUE' | 'MASK' | 'BLEND'
+  alphaCutoff?: number
   metal?: number
   rough?: number
   doubleSided?: boolean
@@ -92,7 +94,8 @@ export class Gltf {
     this.materials.push({
       name: m.name,
       pbrMetallicRoughness: pbr,
-      ...(m.alpha !== undefined && m.alpha < 1 ? { alphaMode: 'BLEND' } : {}),
+      ...(m.alphaMode ? { alphaMode: m.alphaMode } : m.alpha !== undefined && m.alpha < 1 ? { alphaMode: 'BLEND' } : {}),
+      ...(m.alphaMode === 'MASK' ? { alphaCutoff: m.alphaCutoff ?? 0.5 } : {}),
       ...(m.doubleSided ? { doubleSided: true } : {}),
       ...(m.emissive ? { emissiveFactor: m.emissive } : {}),
     })

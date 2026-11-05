@@ -20,7 +20,7 @@ export const drawing = (
 
 ## Where the drawing comes from
 
-- Every compile draws `board.schematic.drawing`, placing and wiring what nobody placed, so a board with no schematic code has one.
+- Every compile draws `board.schematic.drawing`, placing and wiring parts with pins even without schematic code. Placement-only drafts without schematic content show “No schematic yet” in the preview, finish loading normally, and update automatically when content is added. An explicitly requested paper sheet still renders when blank.
 - With `<PCB schematic={sch}>`, `import * as sch from './board.sch'`, the drawing is the module's `drawing` export, a `<Schematic>`, else the compiler's. examples/demo/blinky.sch.tsx exports a hand-laid `drawing`.
 
 ## Units and page
@@ -34,7 +34,7 @@ export const drawing = (
 | Element | Props | Does |
 | --- | --- | --- |
 | `<Schematic>` | `grid`, `sheet`, `labelOver`, `labelFar`, `route`, `title` | the root; `grid` the pitch in mm; `title` goes in the title block |
-| `<R1>`, any part | `at`, `rot`, `flip`, `symbol` | its symbol; `rot` 0, 90, 180 or 270 counterclockwise, `flip` mirrors left to right first |
+| `<R1>`, any part | `at`, `rot`, `flip`, `symbol`, `locked` | its symbol; `rot` 0, 90, 180 or 270 counterclockwise, `flip` mirrors left to right first |
 | `<Place>` | `part` and the same | a part the file cannot name, `<Place part={LEDS[2]} at="4 6" />`; the same element places it on the board |
 | `<Label>` | `net`, `at`, `dir` | pins and wire ends at its point join the net by name |
 | `<Power>` | `net`, `at`, `kind` | a label drawn as ground, `'gnd'`, default for GND-like names, or supply bar, `'vcc'` |
@@ -42,7 +42,8 @@ export const drawing = (
 | `<Text>` | `at`, `size` | a note, `size` in mm |
 
 - A board prop such as `side` on a symbol, or `rot`, `flip` or `symbol` on the board, is a compile error naming the part; so is one part twice.
-- Unplaced symbols are placed automatically; place only those that matter.
+- Unplaced symbols are placed automatically; place only those that matter. A part element without `at`, such as `<R1 locked />`, keeps automatic placement. Explicit `rot` or `flip` needs an `at`.
+- `locked` is shorthand for `locked={true}`; `locked={condition}` evaluates a boolean on each compile. `false` or omission unlocks. The schematic lock is independent of the PCB placement, survives in drawing metadata and is shown in the selection badge. Its toolbar lock button adds or removes only the bare attribute; expressions disable the button and stay source-controlled. Schematic previews currently offer selection and navigation rather than symbol dragging; the lock does not disable those operations or freeze automatic compilation. See placement.md for the editing contract.
 - A function returning `<Sheet>` with `<ch.R01 at="2 2" />` draws one block per instance.
 
 ## Hand wires

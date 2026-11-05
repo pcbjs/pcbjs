@@ -19,7 +19,6 @@ import { queryMethods } from './queries.js'
 import { agentMethods } from './agents.js'
 import { RenderWorker } from '../render/worker-client.js'
 import { lineReader, sessionId, type EditMode, type SessionInfo } from './frames.js'
-import { isLoopback } from './endpoint.js'
 import { probe } from './client.js'
 import { liveSession, repoSession, type RepoRecord } from './start.js'
 import { checkoutOf, devJsonOf, logOf, otherWorktree, real, repoRecordOf, sessionKey, socketOf } from './paths.js'
@@ -78,8 +77,7 @@ export async function serveSession(o: ServeOptions): Promise<Session | null> {
   }
   const id = sessionId(randomBytes(5))
   const edit = editMode(o.edit, await configEdit(first))
-  const lan = !!o.host && !(typeof o.host === 'string' && isLoopback(o.host === 'localhost' ? '127.0.0.1' : o.host))
-  const token = edit === 'all' && lan ? randomBytes(16).toString('base64url') : undefined
+  const token = edit === 'all' ? randomBytes(16).toString('base64url') : undefined
   const startedAt = new Date().toISOString()
   let changed = () => {}
   const state: DevState = {
@@ -231,8 +229,9 @@ export async function serveSession(o: ServeOptions): Promise<Session | null> {
       return v[m](p, c)
     }
   state.session.handlers = {
-    'session/status': () => ({
+    'session/status': (_p, c) => ({
       ...info(),
+      ...(c.transport.kind === 'tcp' ? { token: undefined } : {}),
       folders: ws.folders,
       projects: state.projects?.() ?? [],
       log: logOf(first),
@@ -269,6 +268,7 @@ export async function serveSession(o: ServeOptions): Promise<Session | null> {
     'session/resync': viewed('session/resync'),
     'session/hover': viewed('session/hover'),
     'session/clients': viewed('session/clients'),
+    'session/edit/lock': viewed('session/edit/lock'),
     'session/edit/begin': viewed('session/edit/begin'),
     'session/edit/update': viewed('session/edit/update'),
     'session/edit/commit': viewed('session/edit/commit'),

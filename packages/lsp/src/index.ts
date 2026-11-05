@@ -23,6 +23,8 @@ export {
   setAt,
   addChild,
   setSide,
+  setLocked,
+  lockReason,
   setGrid,
   chainCallAt,
   routeLayer,

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs, { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, install, installLine, skillNames, skillsDir } from '../index.mjs'
 
@@ -33,6 +33,28 @@ test('skills: package.json ships every skill folder and nothing else is taken fo
   const { files } = JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8'))
   for (const name of names) assert.ok(files.includes(name), `${name} is not in files`)
   assert.deepEqual(skillNames(), [...names].sort())
+})
+
+test('skills: local markdown links resolve throughout copied reference trees', () => {
+  const dir = tmp()
+  try {
+    install(dir, { to: 'skills', claude: false })
+    for (const name of names) {
+      const folder = join(dir, 'skills', name)
+      for (const file of readdirSync(folder, { recursive: true }).filter(f => f.endsWith('.md'))) {
+        const source = join(folder, file)
+        const text = readFileSync(source, 'utf8')
+        for (const [, ref] of text.matchAll(/\]\(([^\s)]+\.md)(?:#[^)]*)?\)/g)) {
+          if (/^[a-z]+:/i.test(ref)) continue
+          const target = resolve(dirname(source), ref)
+          assert.ok(target.startsWith(folder + sep), `${name}/${file}: ${ref} leaves the skill`)
+          assert.ok(existsSync(target), `${name}/${file}: ${ref} is missing from the installed copy`)
+        }
+      }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('skills: no em-dash and no path to an untracked note', () => {

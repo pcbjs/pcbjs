@@ -141,7 +141,9 @@ async function viaSession(info: NonNullable<Awaited<ReturnType<typeof sessionOf>
     mkdirSync(outDir, { recursive: true })
     for (const j of jobs) {
       const t0 = performance.now()
-      const got = await c.request('session/render', { project: root, spec: j.spec }, 600_000).then(r => ({ ...r.value, png: Buffer.from(r.value.png, 'base64') }), asError)
+      const got = await c
+        .request('session/render', { project: root, spec: j.spec, expectedSnapshot: e.snapshot }, 600_000)
+        .then(r => ({ ...r.value, png: Buffer.from(r.value.png, 'base64') }), asError)
       if (!report(j, t0, got)) failed++
     }
     return failed || !jobs.length ? 1 : 0

@@ -1,4 +1,4 @@
-# Model files from vendors
+# Models: reuse, author and validate
 
 `pcbjs model add`, `align` and `check`: fetch a STEP, glTF or WRL model, fit it to a placed part, write the `model` option, and where to find models and what their licences allow.
 Advanced. The model descriptor, its frame and the user model cache are in 3d.md.
@@ -13,6 +13,47 @@ pcbjs shot --view 3d --select J1
 ```
 
 Stdlib parts fetch their own models, see 3d.md Fetched on first use; `pcbjs model fetch` gets them at once.
+
+## Choose a model
+
+1. Keep a part's existing model when it represents the package correctly.
+2. Use a generated descriptor for standard chip passives, LEDs, headers or simple package bodies. See 3d.md Model descriptors.
+3. Source a matching KiCad or manufacturer model when its mechanical detail matters.
+4. Compose an approximate custom body with the shared modeling API below when no suitable model exists. Record dimensions, provenance and approximations alongside its script.
+
+A 3D body does not define copper pads, pin numbering or electrical connectivity. A visually plausible body is not a verified footprint.
+
+## Author a custom body
+
+The standard library generates meshes, not STEP solids. `@pcbjs/ui/models` exposes the same palette and geometry through `composeModel`; `modelGlb` writes a model asset using pcbjs's exporter:
+
+```js
+import { writeFileSync } from 'node:fs'
+import { composeModel } from '@pcbjs/ui/models'
+import { modelGlb } from '@pcbjs/export'
+
+const model = composeModel([
+  { shape: 'box', size: [10, 10, 1], radius: 0.15, material: 'mould' },
+  { shape: 'box', size: [8, 8, 0.3], radius: 0.1,
+    translation: [0, 0, 1], material: 'tin' },
+])
+writeFileSync('models/custom.glb', modelGlb(model, 'custom'))
+```
+
+Run the script from the project root after creating `models/`, then set the part's `model` to `{ file: './models/custom.glb' }`, relative to the source file. Keep the script in the project so the asset is reproducible. This API does not provide boolean solids, textures or STEP export.
+
+| Part | Shape parameters |
+| --- | --- |
+| `box` | `size: [x, y, z]`, optional `radius` or `chamfer` |
+| `cylinder` | `radius`, `height`, optional `segments` (32 by default) |
+| `sphere` | `radius`, optional `segments` (32 by default) |
+| `generated` | `spec`, a generated descriptor; `context: { height, thickness }` |
+
+All parts accept `translation: [x,y,z]` in mm and quaternion `orientation: [x,y,z,w]`. Rotation precedes translation. The right-handed frame is footprint X, negative footprint Y, Z up. Boxes and cylinders start at Z=0; spheres are centred at the origin. Generated parts retain their materials unless overridden.
+
+Use a named `material` such as `mould`, `plastic`, `tin`, `gold`, `ceramicCap` or `ferrite` for consistency. An explicit material accepts `color` as hex plus `metalness`, `roughness`, `opacity`, `alphaMode`, `alphaCutoff`, `doubleSided` and `emissive`. See 3d.md for the supported import/export subset.
+
+For raw meshes, preserve counterclockwise front-face winding and outward normals. Reflecting coordinates, such as swapping Y/Z without a sign change, also requires reversing winding. Validate after conversion: a correct bounding box does not prove correct surfaces.
 
 ## model add
 
@@ -44,7 +85,9 @@ Stdlib parts fetch their own models, see 3d.md Fetched on first use; `pcbjs mode
 
 ## model check
 
-`pcbjs model check [entry...]` lists every footprint's model source: `file`, `generated` with its kind, `no model` or `no body`, with counts. It flags missing, unreadable or misplaced files, and parts waiting on `pcbjs model fetch`, each with its fix, and counts the stdlib's parts by fetched, generated, no body and waiting. Exits 1 when it flags any.
+`pcbjs model check [entry...]` lists every footprint's model source: `file`, `generated` with its kind, `no model` or `no body`, with counts. It flags missing, unreadable or misplaced files, parts waiting on `pcbjs model fetch`, and invalid mesh geometry. It checks both imported and generated meshes for malformed arrays, invalid indices, nonfinite positions/normals, zero normals and winding opposite the supplied normals. Degenerate triangles are warnings; other issues exit 1. It never repairs geometry automatically. The scope line counts file-fit and mesh checks actually run; structured rows expose these as `coverage.fit` and `coverage.mesh`. Missing or unreadable geometry is not mesh-checked. Fit and mesh checks do not verify manufacturer dimensions, watertightness or outward-facing surfaces; inspect the relevant views for appearance.
+
+The MCP `models` tool returns the same inventory and checks as structured rows with per-mesh issue counts, from the session's current compiled source. `render` supplies visual acceptance. Neither check establishes watertightness, correct outward orientation of an entire closed body, material realism, pin-1 alignment or electrical correctness. Inspect top, underside, sides and a close-up after changes. A clean DRC/ERC result also does not certify model quality.
 
 ## Where to find models
 

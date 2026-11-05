@@ -16,6 +16,8 @@ import { store, viewOf } from '@pcbjs/compile/internal/user-cache'
 import { findConfig, resolveConfig } from './config.js'
 import type { BoardOut, Compiled } from './project.js'
 import type { StepModel } from '@pcbjs/step/internal/mesh'
+import { CONVERTER_VERSION } from '@pcbjs/step/internal/key'
+import { MODELS_VERSION } from '@pcbjs/export/internal/models'
 
 /** Bump when what a referenced compile keeps or how its mesh is built changes, so older caches compile again. */
 export const REFERENCE_VERSION = 5
@@ -84,9 +86,9 @@ const sha = (f: string): string => {
   }
 }
 
-/** Every file's path and content, and REFERENCE_VERSION. */
+/** Every file's path and content, the reference format and its model converters. */
 export function graphHash(hashes: Record<string, string>): string {
-  const h = createHash('sha256').update(`pcbjs-reference v${REFERENCE_VERSION}\0`)
+  const h = createHash('sha256').update(`pcbjs-reference v${REFERENCE_VERSION} models ${MODELS_VERSION} converter ${CONVERTER_VERSION}\0`)
   for (const f of Object.keys(hashes).sort()) h.update(`${f}\0${hashes[f]}\0`)
   return h.digest('hex')
 }
@@ -173,6 +175,7 @@ function cached(root: string, f: string): ReferencedBoard | null {
     return null
   }
   if (!data || data.version !== REFERENCE_VERSION || data.board?.entry !== f) return null
+  if (data.board.hash !== graphHash(data.hashes)) return null
   for (const [p, h] of Object.entries(data.hashes)) if (sha(p) !== h) return null
   if (!meshThere(root, data.board)) return null
   memo().set(key, { board: data.board, stamps: new Map(Object.keys(data.hashes).map(p => [p, stamp(p)])) })
@@ -407,12 +410,18 @@ export function inspectReferences(b: Board, root: string): { text: string[]; jso
     const angle = ((Math.atan2(t[1], t[0]) * 180) / Math.PI + 360) % 360
     const flipped = t[10] < 0
     const o: [number, number, number] = [t[12], -t[13], t[14]]
+    const normal = [t[8], -t[9], t[10]]
+    const pose = r.anchor.kind === 'pose' ? r.anchor.pose : undefined
     const side = sideOf(r, b.thickness)
     text.push(`${r.name}  ${relative(root, r.entry)}  ${r.title}  ${r.status}`)
     text.push(
-      `  anchor  ${r.anchor.kind === 'mate' ? `${r.anchor.local} mates ${r.anchor.remote}` : `at ${r.anchor.at.map(f2).join(' ')}`}${side ? `  side ${side}` : ''}${r.stack === 'coplanar' ? '  coplanar' : ''}${r.gap !== undefined ? `  gap ${f2(r.gap)}` : ''}${r.rotate ? `  rotate ${f2(r.rotate)}` : ''}${r.offset.some(v => v) ? `  offset ${r.offset.map(f2).join(' ')}` : ''}`,
+      `  anchor  ${r.anchor.kind === 'mate' ? `${r.anchor.local} mates ${r.anchor.remote}` : r.anchor.kind === 'pose' ? `pose ${r.anchor.pose.translation.map(f2).join(' ')}` : `at ${r.anchor.at.map(f2).join(' ')}`}${side ? `  side ${side}` : ''}${r.stack === 'coplanar' ? '  coplanar' : ''}${r.gap !== undefined ? `  gap ${f2(r.gap)}` : ''}${r.rotate ? `  rotate ${f2(r.rotate)}` : ''}${r.offset.some(v => v) ? `  offset ${r.offset.map(f2).join(' ')}` : ''}`,
     )
-    text.push(`  transform  origin to ${f2(o[0])} ${f2(o[1])} ${f2(o[2])}, turned ${f2(angle)} deg${flipped ? ', upside down' : ''}, slab z ${f2(r.z[0])} to ${f2(r.z[1])}`)
+    text.push(
+      `  transform  origin to ${o.map(f2).join(' ')}, ${pose ? `quaternion ${pose.orientation.map(f2).join(' ')}` : `turned ${f2(angle)} deg${flipped ? ', upside down' : ''}`}, slab z ${f2(r.z[0])} to ${f2(r.z[1])}`,
+    )
+    if (pose) text.push(`  normal  ${normal.map(f2).join(' ')}  carrier x, y, z`)
+    if (r.bounds) text.push(`  bounds  ${r.bounds.min.map(f2).join(' ')} to ${r.bounds.max.map(f2).join(' ')}  carrier x, y, z`)
     if (r.mates && r.mates.length > 1)
       text.push(
         `  also mates  ${r.mates
@@ -435,6 +444,9 @@ export function inspectReferences(b: Board, root: string): { text: string[]; jso
       stack: r.stack === 'coplanar' ? 'coplanar' : null,
       gap: r.gap ?? null,
       rotate: r.rotate,
+      ...(pose ? { pose } : {}),
+      normal,
+      ...(r.bounds ? { bounds: r.bounds } : {}),
       offset: r.offset,
       transform: r.transform,
       z: r.z,
@@ -444,7 +456,7 @@ export function inspectReferences(b: Board, root: string): { text: string[]; jso
       pairs: (r.mates ?? (r.mate ? [r.mate] : [])).map(m => ({ local: `${m.local.ref}/${m.local.pin}`, remote: `${m.remote.ref}/${m.remote.pin}` })),
       heights: {
         here: (r.heights ?? []).map(h => ({ ref: h.ref, height: h.height, from: h.from })),
-        there: r.bodies.map(b => ({ ref: b.ref, height: Math.round((b.z[1] - b.z[0]) * 1000) / 1000, from: b.from ?? null })),
+        there: r.bodies.map(b => ({ ref: b.ref, height: Math.round((b.height ?? b.z[1] - b.z[0]) * 1000) / 1000, from: b.from ?? null })),
       },
     }
   })

@@ -1,7 +1,7 @@
 // The schematic view's geometry and its cross-probe mapping, imported straight from the client TypeScript.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { SCH_LAYERS, drawnBox, layerCounts, schAtCursor, schFindingAt, schHit, schMarks, schVars, symbolFrame } from '../src/schview.ts'
+import { SCH_LAYERS, schematicState, validViewBox, drawnBox, layerCounts, schAtCursor, schFindingAt, schHit, schMarks, schVars, symbolFrame } from '../src/schview.ts'
 import { parseViewQuery, queryMode } from '../src/query.ts'
 
 const src = (line, col, endLine, endCol) => ({ file: 'pcb.tsx', line, col, endLine, endCol })
@@ -116,4 +116,18 @@ test('the rail rows, and the colours of a theme as variables', () => {
     ['symbols', 'wires', 'labels', 'power', 'sheets', 'texts', 'findings'],
   )
   assert.deepEqual(layerCounts(drawing, 2), { symbols: 1, wires: 1, labels: 0, power: 1, sheets: 1, texts: 0, findings: 2 })
+})
+
+test('schematic availability distinguishes empty drafts, invalid data and drawn content', () => {
+  const empty = { ...drawing, symbols: [], wires: [], labels: [], texts: [], sheets: [], junctions: [], noConnects: [] }
+  assert.equal(schematicState(null), 'empty')
+  assert.equal(schematicState(empty), 'empty')
+  assert.equal(schematicState({ ...empty, page: [null, null, null, null] }), 'empty')
+  assert.equal(schematicState(drawing), 'ready')
+  assert.equal(schematicState({ ...empty, texts: [{ at: [10, 10], text: 'Draft' }] }), 'ready')
+  assert.equal(schematicState({ ...empty, paper: { name: 'A4', w: 297, h: 210 } }), 'ready')
+  assert.equal(schematicState({ ...drawing, page: [null, null, null, null] }), 'invalid')
+  assert.equal(schematicState({ ...drawing, grid: 0 }), 'invalid')
+  for (const box of [null, [null, null, null, null], [0, 0, 0, 1], [0, 0, Infinity, 1]]) assert.equal(validViewBox(box), false)
+  assert.equal(validViewBox([0, 0, 10, 10]), true)
 })

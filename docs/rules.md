@@ -43,7 +43,7 @@ Set on `<PCB rules>`, a preset or `defineDefaultBoard({ rules })`, in mm. Withou
 | `requireSourcing` | false | a BOM row without any part number is the ERC warning `unsourced-part` |
 | `edge` | none | `{ width, kinds?, except? }`, see Edge band |
 
-Default via: drill `max(0.3, minViaDrill, minDrill)`, diameter `max(0.6, minViaDiameter, drill + 2 × minAnnularRing)`, 0.3 and 0.6 in `BASE`.
+Legacy fallback via: drill `max(0.3, minViaDrill, minDrill)`, diameter `max(0.6, minViaDiameter, drill + 2 × minAnnularRing)`, 0.3 and 0.6 in `BASE`. `<PCB via={{ drill: 0.2, size: 0.45 }}>` selects a board-wide preference independently of these minima. Fields merge individually over the fallback; explicit dimensions are emitted unchanged and DRC reports a violated drill, diameter or annular-ring minimum. Lowering manufacturing minima alone does not select smaller vias.
 
 ### Hole rules by side
 

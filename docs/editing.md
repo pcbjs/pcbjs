@@ -111,7 +111,7 @@ A drag previews every frame and commits once on release.
 - With an editor, the session writes through its `workspace/applyEdit`, one undo step per file, unsaved; with none, to disk.
 - Refuse commits after the literal or editor buffer changes, and begins against boards unseen by the view.
 
-The tools are hidden on a built site and in an embed; in a read-only session or a viewer beyond loopback the chip says `read-only`; an anchor without tools, `no placement` or `select a part`.
+The viewer labels its access as **Editable** or **Read-only**. Source tools are hidden on published sites, embeds and connections without a server grant; undo/redo cannot forward source edits from read-only previews. Layout actions say **View instance layout** or **View library layout** when read-only, preserving inspection. Remote access defaults to read-only; `session: { edit: "all" }` or `--edit all` plus the session token enables remote editing. See session.md. An anchor without tools explains `no placement` or `select a part`.
 
 ## Undo
 
@@ -123,13 +123,15 @@ Cmd or ctrl+Z undoes; Shift adds redo. Undo and redo use keyboard shortcuts; the
 
 ## The protocol
 
+The read-only `session/edit/lock { board, ref, view?: "pcb" | "sch", isolate? }` query returns `{ locked, reason }` from the current source. A non-null reason disables the toolbar button. Lock writes use the ordinary transaction below with `tool: "lock"`, one focused reference, and `update { locked: boolean }`. The server refuses expressions and props spreads again at update and commit. PCB and schematic sources remain independent.
+
 Read-write session methods:
 
 ```ts
 type Written = { file: string; via: 'editor' | 'disk'; applied: boolean; reason?: string }[]
 interface EditMethods {
-  'session/edit/begin'(p: { board: string; target?: string; run?: number; tool: 'move' | 'rotate' | 'layer' | 'point' | 'assist'; refs: string[]; anchor: string; isolate?: string }): { txn: string; tools: { id: string; needs: string; key: string }[] }
-  'session/edit/update'(p: { txn: string; delta?: [number, number]; angle?: number; side?: 'F' | 'B'; grid?: number; command?: 'H' | 'h' | 'V' | 'v' | 'L' | 'l' | 'A' | 'a' | 'X' | 'Z'; layer?: string; point?: { at: [number, number] }; remove?: boolean; insert?: boolean; free?: boolean; pick?: boolean; end?: string }): { txn: string; files: { file: string; edits: object[] }[]; notes: string[]; findings: string[]; preview: object | null }
+  'session/edit/begin'(p: { board: string; target?: string; run?: number; tool: 'move' | 'rotate' | 'layer' | 'point' | 'assist' | 'lock'; view?: 'pcb' | 'sch'; refs: string[]; anchor: string; isolate?: string }): { txn: string; tools: { id: string; needs: string; key: string }[] }
+  'session/edit/update'(p: { txn: string; locked?: boolean; delta?: [number, number]; angle?: number; side?: 'F' | 'B'; grid?: number; command?: 'H' | 'h' | 'V' | 'v' | 'L' | 'l' | 'A' | 'a' | 'X' | 'Z'; layer?: string; point?: { at: [number, number] }; remove?: boolean; insert?: boolean; free?: boolean; pick?: boolean; end?: string }): { txn: string; files: { file: string; edits: object[] }[]; notes: string[]; findings: string[]; preview: object | null }
   'session/edit/commit'(p: { txn: string }): { txn?: string | null; written: Written; error?: string; cursor?: { file: string; line: number; col: number } }
   'session/edit/cancel'(p: { txn: string }): null
   // the caller's latest commit or the named one; session/edit/redo alike

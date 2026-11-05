@@ -36,7 +36,7 @@ const LABEL_OVER = 6
 const LABEL_FAR = 40
 /** Free page margin around everything drawn, grid units. */
 const PAGE_MARGIN = 3
-const SYM_PROPS = new Set(['at', 'rot', 'flip', 'symbol', '__src', 'key'])
+const SYM_PROPS = new Set(['at', 'rot', 'flip', 'symbol', 'locked', '__src', 'key'])
 const GROUND = /^(A|D|P|S|C)?GND\w*$|^GND[A-Z]?$|^VSS\w*$|^0V$|^V-$/i
 const SUPPLY = /^(VCC|VDD|VEE|VBUS|VBAT|VIN|VSYS|VREG|VIO|VCORE|AVDD|DVDD|IOVDD)\w*$|^\+?\d+V\d*$|^\d+V\d+$|^V\d+V\d*$/i
 
@@ -48,6 +48,7 @@ interface Placed {
   rot: number
   flip: boolean
   auto: boolean
+  locked?: boolean
   src?: Src
   items: Map<string, string[]>
 }
@@ -142,14 +143,16 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
   }
 
   // the hand-written part of the picture
-  const syms = new Map<string, { at: Pt; rot: number; flip: boolean; symbol?: unknown; src?: Src }>()
+  const syms = new Map<string, { at?: Pt; rot: number; flip: boolean; locked?: boolean; symbol?: unknown; src?: Src }>()
   const labels: HandLabel[] = []
   const texts: SchText[] = []
   const sheets: { name?: string; path: string[]; src?: Src }[] = []
   const wireNodes: { n: PcbNode; off: Pt; k: number }[] = []
   const placeSym = (st: PartState, q: Record<string, any>, tag: string, at: (where: string) => Pt, src?: Src) => {
     const ref = partRefs.get(st) ?? null
-    const pos = snap(at(`<${tag}> at`))
+    if (q.locked !== undefined && typeof q.locked !== 'boolean') throw new CompileError(`<${tag}> locked must be true or false`, src)
+    const pos = q.at === undefined ? undefined : snap(at(`<${tag}> at`))
+    if (!pos && (q.rot !== undefined || q.flip !== undefined)) throw new CompileError(`<${tag}> rot and flip need an explicit at`, src)
     const rot = q.rot ?? 0
     if (![0, 90, 180, 270].includes(rot)) throw new CompileError(`<${tag}> rot must be 0, 90, 180 or 270, got ${JSON.stringify(q.rot)}`, src)
     if (ref === null || !byRef.has(ref)) {
@@ -159,7 +162,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
           rule: 'sch-missing-symbol',
           args: { what: 'place', tag, part: ref ?? st.label },
           ...(ref !== null ? { refs: [ref] } : {}),
-          at: [pos[0] * grid, pos[1] * grid],
+          at: pos ? [pos[0] * grid, pos[1] * grid] : [0, 0],
           layer: 'sch',
           ...(src ? { src } : {}),
         }),
@@ -167,7 +170,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
       return
     }
     if (syms.has(ref)) throw new CompileError(`<${tag}> places ${ref} twice`, src)
-    syms.set(ref, { at: pos, rot, flip: !!q.flip, symbol: q.symbol, ...(src ? { src } : {}) })
+    syms.set(ref, { at: pos, rot, flip: !!q.flip, ...(q.locked ? { locked: true } : {}), symbol: q.symbol, ...(src ? { src } : {}) })
   }
   /** `k` schematic pitches per unit of the sheet's own grid */
   const walk = (c: unknown, off: Pt, depth: number, k = 1): void => {
@@ -191,7 +194,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
         board = Object.keys(q).filter(k => !SYM_PROPS.has(k))
       if (board.length)
         throw new CompileError(
-          `<${tag}> inside <Schematic> places its symbol and takes at, rot, flip and symbol; ${board.join(', ')} belong${board.length === 1 ? 's' : ''} to its placement on the board`,
+          `<${tag}> inside <Schematic> places its symbol and takes at, rot, flip, symbol and locked; ${board.join(', ')} belong${board.length === 1 ? 's' : ''} to its placement on the board`,
           src,
         )
       placeSym(st, q, tag, at, src)
@@ -242,9 +245,21 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
   // symbols: hand placed, then the rest on a grid in declaration order
   const placed: Placed[] = []
   for (const [ref, s] of syms) {
+    if (!s.at) continue
     const part = byRef.get(ref)!,
       st = stOf.get(ref)
-    placed.push({ part, st, sym: symbolOf(part, st, s.symbol), at: s.at, rot: s.rot, flip: s.flip, auto: false, ...(s.src ? { src: s.src } : {}), items: pinItems(part, st) })
+    placed.push({
+      part,
+      st,
+      sym: symbolOf(part, st, s.symbol),
+      at: s.at,
+      rot: s.rot,
+      flip: s.flip,
+      auto: false,
+      ...(s.locked ? { locked: true } : {}),
+      ...(s.src ? { src: s.src } : {}),
+      items: pinItems(part, st),
+    })
   }
   const handBox = placed.length
     ? boxOf([
@@ -270,7 +285,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
     for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) return a[i] - b[i]
     return a.length - b.length
   }
-  const rest = parts.filter(x => !syms.has(x.ref)).sort((a, b) => cmp(order(a), order(b)) || (a.ref < b.ref ? -1 : 1))
+  const rest = parts.filter(x => !syms.get(x.ref)?.at).sort((a, b) => cmp(order(a), order(b)) || (a.ref < b.ref ? -1 : 1))
   const classOf = new Map(board.schematic.nets.map(n => [n.name, n.class]))
   const ground = (net: string) => GROUND.test(net.split('/').pop()!)
   const power = (net: string) => classOf.get(net) === 'power' || ground(net) || SUPPLY.test(net.split('/').pop()!)
@@ -283,7 +298,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
       ...(part.displayRef ? { displayRef: part.displayRef } : {}),
       value: part.value,
       prefix: part.prefix,
-      sym: symbolOf(part, st, undefined),
+      sym: symbolOf(part, st, syms.get(part.ref)?.symbol),
       pins: part.pins.map(q => ({ name: q.name, net: q.net })),
       path: part.path,
       order,
@@ -297,7 +312,19 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
       ...placed,
       ...items.map(it => {
         const q = r.at.get(it.ref)!
-        return { part: it.part, st: it.st, sym: it.sym, at: q.at, rot: q.rot, flip: q.flip, auto: true, items: pinItems(it.part, it.st) }
+        const own = syms.get(it.ref)
+        return {
+          part: it.part,
+          st: it.st,
+          sym: it.sym,
+          at: q.at,
+          rot: q.rot,
+          flip: q.flip,
+          auto: true,
+          ...(own?.locked ? { locked: true } : {}),
+          ...(own?.src ? { src: own.src } : {}),
+          items: pinItems(it.part, it.st),
+        }
       }),
     ]
   }
@@ -733,6 +760,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
         refAt: S(t.ref),
         valueAt: S(t.value),
         auto: x.auto,
+        ...(x.locked ? { locked: true } : {}),
         path: [...x.part.path],
         items: [...x.items.values()].flat(),
         ...(x.src ? { src: x.src } : {}),
@@ -758,7 +786,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
           [t.at[0] / grid + textUnits(t.text, t.size), t.at[1] / grid],
         ] as Pt[],
     )
-    const extent = boxOf([
+    const points: Pt[] = [
       ...all,
       ...words,
       ...notes,
@@ -771,7 +799,8 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
             [s.box[2] / grid, s.box[3] / grid],
           ] as Pt[],
       ),
-    ])
+    ]
+    const extent = points.length ? boxOf(points) : [0, 0, 0, 0]
     let paper: SchDrawing['paper']
     if (Array.isArray(sheet)) paper = { name: 'custom', w: sheet[0], h: sheet[1] }
     else if (sheet !== null) {

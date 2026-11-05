@@ -6,7 +6,7 @@ import { asRange, rangeLabel } from './source'
 import { agentLabel } from './agents'
 import { isMac } from './context'
 import { computed } from 'vue'
-import { layoutGroup } from './selection'
+import { layoutGroup, editNodeOf, anchorPart } from './selection'
 import { jumpButtons } from './edit-client'
 import { useChip, MAX_CHIPS } from './use/chip'
 import { useActions } from './use/actions'
@@ -22,8 +22,15 @@ const hoverNet = computed(() => store.hover.net)
 const tools = store.edit
 const dropMember = (ref: string) => store.dropMember(ref)
 const layout = computed(() => (store.site ? layoutGroup(store.site, sel.value) : null))
+const locked = computed(() => {
+  const b = board.value
+  if (!b) return false
+  return ctx.pane.mode === 'sch' ? !!b.schematic.drawing?.symbols.find(s => s.ref === anchorPart(b, sel.value))?.locked : !!editNodeOf(b, sel.value.anchor)?.locked
+})
 /** an editor is attached: a click jumps it to the placement, an alt-click to the definition, so the chip has no jump buttons */
-const editor = computed(() => !jumpButtons(tools.mode))
+const writable = computed(() => !!board.value?.dev && tools.mode?.mode === 'rw' && !!tools.client && !tools.mismatch && !board.value?.variant?.index)
+const editor = computed(() => writable.value && !jumpButtons(tools.mode))
+const sourceLinks = computed(() => writable.value || !!board.value?.repo)
 const nameTitle = computed(() => (editor.value ? `click: placement, ${isMac ? 'option' : 'alt'}-click: definition` : undefined))
 /** A finding as the anchor: its rule and references, with full text reserved for details. */
 const finding = computed(() => {
@@ -53,6 +60,13 @@ function open(kind: 'placement' | 'definition') {
             {{ s.label }}
           </button></template
         ><button class="x" title="Remove from the selection" aria-label="Remove" @click="sel.anchor && dropMember(sel.anchor)">×</button>
+      </span>
+      <span v-if="locked" class="chip" role="status" title="Placement locked in source">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+          <rect x="3.5" y="7" width="9" height="7" rx="1.5" />
+          <path d="M5.5 7V4.5a2.5 2.5 0 0 1 5 0V7" />
+        </svg>
+        Locked
       </span>
       <span v-if="finding" class="chip finding" :class="finding.severity" role="note" :title="finding.rule"
         ><b>{{ finding.rule }}</b
@@ -96,17 +110,24 @@ function open(kind: 'placement' | 'definition') {
         <button type="button" @click="sendBox = null">Cancel</button>
       </form>
     </div>
-    <div v-if="layout || (!editor && (openPlace || openDef) && (board?.dev || board?.repo))" class="layout-actions" data-ui="PathChip.LayoutActions" aria-label="Layout editing">
+    <div
+      v-if="layout || (!editor && (openPlace || openDef) && sourceLinks)"
+      class="layout-actions"
+      data-ui="PathChip.LayoutActions"
+      :aria-label="writable ? 'Layout editing' : 'Layout inspection'"
+    >
       <button
         v-if="layout"
         type="button"
         class="layout-action"
         :disabled="sel.isolate?.mode === 'instance'"
         @click="store.chooseIsolation('instance')"
-        aria-label="Edit instance layout"
+        :aria-label="writable ? 'Edit instance layout' : 'View instance layout'"
         data-ui-source="packages/ui/src/PathChip.vue"
       >
-        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m10.5 2.5 3 3-8 8-4 1 1-4zM9 4l3 3" /></svg>Instance layout
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <path :d="writable ? 'm10.5 2.5 3 3-8 8-4 1 1-4zM9 4l3 3' : 'M1 8s3-4 7-4 7 4 7 4-3 4-7 4-7-4-7-4zM6 8a2 2 0 1 0 4 0 2 2 0 1 0-4 0'" /></svg
+        >{{ writable ? 'Edit instance layout' : 'View instance layout' }}
       </button>
       <button
         v-if="layout"
@@ -114,16 +135,18 @@ function open(kind: 'placement' | 'definition') {
         class="layout-action"
         :disabled="!!sel.isolate && sel.isolate.mode !== 'instance'"
         @click="store.chooseIsolation('library')"
-        aria-label="Edit library layout"
+        :aria-label="writable ? 'Edit library layout' : 'View library layout'"
         data-ui-source="packages/ui/src/PathChip.vue"
       >
-        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m10.5 2.5 3 3-8 8-4 1 1-4zM9 4l3 3" /></svg>Library layout
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <path :d="writable ? 'm10.5 2.5 3 3-8 8-4 1 1-4zM9 4l3 3' : 'M1 8s3-4 7-4 7 4 7 4-3 4-7 4-7-4-7-4zM6 8a2 2 0 1 0 4 0 2 2 0 1 0-4 0'" /></svg
+        >{{ writable ? 'Edit library layout' : 'View library layout' }}
       </button>
-      <button v-if="!editor && openPlace && (board?.dev || board?.repo)" class="layout-action" :title="rangeLabel(openPlace.file, asRange(openPlace))" @click="open('placement')">
-        Open placement
+      <button v-if="!editor && openPlace && sourceLinks" class="layout-action" :title="rangeLabel(openPlace.file, asRange(openPlace))" @click="open('placement')">
+        {{ writable ? 'Open placement' : 'Placement on repository ↗' }}
       </button>
-      <button v-if="!editor && openDef && (board?.dev || board?.repo)" class="layout-action" :title="rangeLabel(openDef.file, asRange(openDef))" @click="open('definition')">
-        Open definition
+      <button v-if="!editor && openDef && sourceLinks" class="layout-action" :title="rangeLabel(openDef.file, asRange(openDef))" @click="open('definition')">
+        {{ writable ? 'Open definition' : 'Definition on repository ↗' }}
       </button>
     </div>
     <div v-if="sel.isolate?.mode === 'library' && store.libraryState === 'loading'" class="selection-status" role="status">Loading library layout…</div>

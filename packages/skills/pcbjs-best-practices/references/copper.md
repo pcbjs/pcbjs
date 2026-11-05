@@ -2,6 +2,14 @@
 
 Pours, stitching and heat copper are measured with `pcbjs inspect <net>`: its first line gives the net's copper per layer, its `zone` rows the fill, pieces and islands removed, and its `stitch` line the stitching vias.
 
+## Via sizes as a design choice
+
+Fab minima are limits, not the preferred via inventory. Choose a usual drill and diameter for the board, reuse the same object for `autoroute={{ via: VIA }}`, standalone `via()`, `stitch(..., { via: VIA })` and explicit chain transitions, and document intentional exceptions for escape, current or thermal needs. A net class `via` applies to its routes; it does not currently set standalone or stitching dimensions. Keep trace width and via dimensions separate unless an electrical or manufacturing calculation connects them.
+
+Inspect the compiled inventory by drill, diameter and layer span, then attribute each group to manual, automatic, pair or stitching sources before consolidating it. Several diameters on one drill can be deliberate. Preserve explicit overrides and compare connectivity, clearance and routing after any consolidation. Do not impose a fixed number of sizes or change the fab limits just to select a smaller default.
+
+With no via dimensions specified, pcbjs currently starts at 0.3 mm drill and 0.6 mm diameter and grows those defaults to meet board minima. Lowering `minViaDrill` or `minViaDiameter` does not select those smaller values. Board `autoroute.via` sets route defaults only; it does not change standalone or stitching vias. `rulesAt()` currently reports class dimensions or fab minima, so use actual item queries, such as `board.items.on('F.Cu', { kinds: ['via'] })`, when auditing emitted geometry. Include other spans and deduplicate item ids for a whole-board inventory.
+
 ## Stitching vias from the fill
 
 ```tsx
@@ -62,3 +70,7 @@ export default (
 ## Pour parity with KiCad
 
 When a board came from KiCad, compare each net's fill area per layer against KiCad's `filled_polygon` areas, a shoelace sum over the `.kicad_pcb`. Pieces KiCad keeps through 45 degree spokes on round pads come back with `thermal: { angle: 45 }` on those pads or parts; a fresh `pcbjs import board` writes it. Expect 98 to 99 % of KiCad's area: pcbjs draws its own reliefs and both remove islands.
+
+## Silk appearance over copper
+
+Check fabrication silk clipping in 2D separately from 3D visibility across camera distances and board sides. If valid white artwork becomes tinted or disappears only in the 3D view, investigate renderer depth and transparency before changing the board. Choose mask, silk thickness and finish for manufacturing intent; do not increase the physical stack thickness or artwork strokes to compensate for a viewer depth defect. `maskExpansion` and `silkMinWidth` are fabrication constraints, not camera depth controls.

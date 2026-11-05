@@ -7,14 +7,14 @@ description: Create Blinky, check it, and open the live viewer before editing a 
 
 Start with a working board so each change has a result you can compare. This guide uses Blinky: three LED channels switched by one transistor on a 30 × 20 mm board.
 
-Use Node 22.12 or newer. This guide targets pcbjs 0.1.0. For an unreleased checkout, use the [source setup](#use-the-current-source) until its version is available on npm.
+Use Node 22.12 or newer. This guide uses the latest stable pcbjs release. For an unreleased checkout, use the [source setup](#use-the-current-source) until its version is available on npm.
 
-## Install pcbjs 0.1.0
+## Install pcbjs
 
-Create a project with the 0.1.0 release:
+Create a project with the latest stable release:
 
 ```sh
-npx --package @pcbjs/pcbjs@0.1.0 pcbjs create my-blinky --example blinky
+npx --package @pcbjs/pcbjs pcbjs create my-blinky --example blinky
 cd my-blinky
 npm install
 npx pcbjs check

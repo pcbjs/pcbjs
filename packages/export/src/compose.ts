@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import type { ReferencedBoard, ReferencedFootprint, ReferenceOptions } from '@pcbjs/core/internal/reference'
 import type { BoardRef } from '@pcbjs/core/site-facets'
 import type { MatePoint } from '@pcbjs/core/model'
-import { anchorTransform, IDENTITY4, mateTransform, mul4, type MateGeometry } from '@pcbjs/compile/internal/reference'
+import { anchorTransform, IDENTITY4, mateTransform, mul4, poseTransform, referencePose, type MateGeometry } from '@pcbjs/compile/internal/reference'
 import { mm } from '@pcbjs/core/internal/units'
 
 type Mat4 = number[]
@@ -14,7 +14,7 @@ type Mat4 = number[]
 /** a library board's GLB, beside its reference.json */
 const GLB = 'model.glb'
 
-/** A board and where it goes: `mate` against a part of the first board, by its ref such as `J1` or `J1/5`, or `at`; the first board stays where it is. */
+/** A board placed by `mate`, `at` or `pose` against the first board; mate.local names its part such as `J1/5`. */
 export interface Placed extends Omit<ReferenceOptions, 'show'> {
   /** a library board: its folder or `reference.json`, as a path or URL, or the `board` its `index.js` exports */
   board: string | BoardRef
@@ -74,10 +74,15 @@ function padOf(fp: ReferencedFootprint, pin: string, board: string): ReferencedF
 
 /** Where a board goes in the first board's 3D frame, as reference() computes it. */
 export function placement(base: ReferencedBoard, rb: ReferencedBoard, p: Omit<Placed, 'board'>): Mat4 {
+  if (p.pose !== undefined) {
+    for (const key of ['at', 'mate', 'side', 'stack', 'gap', 'rotate', 'flip', 'offset'] as const)
+      if (p[key] !== undefined) throw new Error(`compose(): pose is a complete placement; do not combine it with ${key}`)
+    return poseTransform([1, 0, 0, 1, 0, 0], referencePose(p.pose))
+  }
   const rotate = p.rotate ?? 0
   const offset = p.offset ? triple(p.offset, 'offset') : ([0, 0, 0] as [number, number, number])
   if (p.mate === undefined) {
-    if (p.at === undefined) throw new Error(`compose(): ${rb.name} needs mate or at`)
+    if (p.at === undefined) throw new Error(`compose(): ${rb.name} needs mate, at or pose`)
     return anchorTransform([1, 0, 0, 1, 0, 0], triple(p.at, 'at'), rotate, !!p.flip, offset, rb.thickness)
   }
   const m = Array.isArray(p.mate) ? p.mate[0] : p.mate

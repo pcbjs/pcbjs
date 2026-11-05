@@ -208,9 +208,9 @@ function makeShell(init: StoreInit, run: <T>(fn: () => T) => T) {
           theme: resolvedTheme,
           toggle: (k: 'grid' | 'ratsnest') => (k === 'grid' ? toggleGrid() : toggleRatsnest()),
           say: showToast,
-          open: async (t, quiet) => {
+          open: async (t, quiet, external) => {
             const s = board(name).site
-            if (s) await openTarget(s, t, showToast, quiet)
+            if (s) await openTarget(s, t, showToast, quiet, { editable: edit.mode?.mode === 'rw', external })
           },
         } satisfies PaneContext)),
       )
@@ -597,6 +597,7 @@ function makeShell(init: StoreInit, run: <T>(fn: () => T) => T) {
   let undoing = false
   /** IDE panes use source-document history; standalone pages use their own session transactions. */
   function undoEdit(redo: boolean): boolean {
+    if (edit.mode?.mode !== 'rw' || current.value?.variant?.index) return true
     if (edit.dragging || undoing) return true
     if (browser && ide.on && window.parent !== window) {
       const name = current.value?.name

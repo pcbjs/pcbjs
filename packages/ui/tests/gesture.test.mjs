@@ -363,3 +363,37 @@ test('editing waits for compile completion, including view-only compiles without
   assert.equal(g.rw.value, true, 'a view-only compile can finish without a whole-board snapshot')
   assert.equal(store.run, 1)
 })
+
+test('locked placements stay selectable but expose no editing tools; false restores them', () => {
+  const b = reactive(board())
+  b.edit[0].locked = true
+  const { g, calls } = gesture(b)
+  assert.deepEqual(g.tools.value, [])
+  assert.match(g.why.value, /Locked/)
+  assert.equal(g.down(ev([1, 5]), { ref: 'R101' }), false)
+  assert.equal(g.command('rotate'), false)
+  assert.equal(g.command('side'), false)
+  assert.equal(g.targets('move').anchor, null)
+  assert.equal(calls.length, 0)
+  b.edit[0].locked = false
+  assert.ok(g.tools.value.some(t => t.id === 'move'))
+  assert.equal(g.down(ev([1, 5]), { ref: 'R101' }), true)
+})
+
+test('mixed selections cannot move a locked member, and locking during a drag cancels it', async () => {
+  const b = reactive(board())
+  b.edit.push({ ...b.edit[0], ref: 'R2', locked: true })
+  const mixed = gesture(b, { refs: ['CH1', 'R2'], anchor: 'CH1' })
+  assert.deepEqual(mixed.g.tools.value, [])
+  assert.match(mixed.g.why.value, /locked placement/)
+  assert.equal(mixed.g.down(ev([1, 5]), { ref: 'R101' }), false)
+  const { g, calls } = gesture(b)
+  g.down(ev([1, 5]), { ref: 'R101' })
+  g.move(ev([3, 5]))
+  await tick()
+  b.edit[0].locked = true
+  await tick()
+  assert.equal(g.drag.value, null)
+  assert.ok(calls.some(c => c[0] === 'cancel'))
+  assert.ok(!calls.some(c => c[0] === 'commit'))
+})

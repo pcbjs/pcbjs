@@ -107,7 +107,13 @@ test('pair flatten: the nets come from the pads, checked: P pads on one net, N p
         ),
         opts,
       ),
-    e => e instanceof CompileError && /the P ends J1\/1 and J2\/1 are on two nets, DP and X/.test(e.message),
+    e => {
+      assert.ok(e instanceof CompileError)
+      assert.match(e.message, /pair route: P endpoints must be on the same net/)
+      assert.match(e.message, /J1\/1: DP\n  J2\/1: X/)
+      assert.match(e.message, /Check the connector pin mapping and the \[P, N\] order at both ends/)
+      return true
+    },
   )
   // P and N on one net
   assert.throws(

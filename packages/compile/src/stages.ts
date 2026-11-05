@@ -170,7 +170,7 @@ export function opener(): Open {
       variants = variantsOf(node)
       names = (variants ?? []).map(t => String(t.name))
       checkTargets(String(node.props.name), variants, names)
-      const plugins = registered([...(run.opts.plugins ?? []), ...((node.props.plugins as PcbPlugin[] | undefined) ?? [])], run.defs)
+      const plugins = run.opts.previewBefore ? [] : registered([...(run.opts.plugins ?? []), ...((node.props.plugins as PcbPlugin[] | undefined) ?? [])], run.defs)
       return { plugins, count: run.first ? 1 : (variants?.length ?? 1) }
     },
     place: (run, i) =>
@@ -349,6 +349,7 @@ export function prepare(f: Flat): Board {
     copper: f.copper,
     thickness: f.thickness,
     stackup: f.stackup,
+    ...(f.via ? { via: f.via } : {}),
     rules: resolveEdgeBand(f.rules, f.partRefs, f.items),
     layers: f.layers,
     nets: [...f.netNames].sort().map((name, i) => ({ id: i + 1, name })),
@@ -649,7 +650,7 @@ function sharedRouting(flats: Flat[], placed: unknown[][], names: string[], opts
   // with net classes, the classes and route widths too, which an impedance class makes depend on the stackup
   const fns: unknown[] = []
   const key = (f: Flat, i: number) =>
-    JSON.stringify([f.copper, f.autoroute, placed[i], ...(Object.keys(f.classes).length ? [f.classes, f.autoRoutes.map(j => j.width ?? null)] : [])], (_, v) =>
+    JSON.stringify([f.copper, f.via ?? null, f.autoroute, placed[i], ...(Object.keys(f.classes).length ? [f.classes, f.autoRoutes.map(j => j.width ?? null)] : [])], (_, v) =>
       typeof v === 'function' ? `fn${fns.indexOf(v) < 0 ? fns.push(v) - 1 : fns.indexOf(v)}` : v,
     )
   const groups = new Map<string, number[]>()

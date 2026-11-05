@@ -19,6 +19,7 @@ export interface SchPin {
 }
 export interface SchSymbol {
   ref: string
+  locked?: boolean
   displayRef?: string
   value: string
   /** 'resistor', 'box', 'connector', 'custom' and so on */

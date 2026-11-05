@@ -1,5 +1,8 @@
 // The session's compile of one project in a worker thread, worker.ts: an edit cancels it within one unit through shared memory, the
 // session answers queries while it runs, and a crashed thread is restarted once with its compiles sent again.
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileKey } from '../project/files.js'
 import { deserialize } from 'node:v8'
 import { Worker } from 'node:worker_threads'
@@ -16,6 +19,7 @@ import type { FacetOut, StageStatus } from '../project/facets.js'
 
 export interface WorkerData {
   root: string
+  rebuildRoot: string
   configFile: string
   /** the command line's entries, which win over the config's */
   entries: string[]
@@ -29,6 +33,7 @@ export type Edge = [string, string[]]
 /** One target of a finished compile as it crosses: `board` serialized with its dependency graph, null like `site` when the last answer for the target carried the same. */
 export interface Crossed extends Omit<BoardOut, 'board' | 'site'> {
   name: string
+  cacheNamespace?: string
   target: string | null
   board: Uint8Array | null
   site: SiteData | null
@@ -36,7 +41,7 @@ export interface Crossed extends Omit<BoardOut, 'board' | 'site'> {
 }
 
 export type ToWorker =
-  | { t: 'compile'; id: number; entry: Entry; draft: boolean; dev?: boolean; formats?: readonly string[]; want?: View[] }
+  | { t: 'compile'; id: number; entry: Entry; draft: boolean; rebuild?: 'stages' | 'all' | 'warm'; dev?: boolean; formats?: readonly string[]; want?: View[] }
   | { t: 'layout'; id: number; entry: Entry; board: string; target: string | null; ref: string }
   | { t: 'preview'; id: number; file: string; rel: string }
   | ({ t: 'sketch'; id: number; entry: Entry } & Omit<SketchJob, 'signal'>)
@@ -54,6 +59,9 @@ export type FromWorker =
   | { t: 'done'; id: number; value?: unknown; error?: WorkerError; cancelled?: boolean; graph?: Edge[] }
 
 export interface WorkerError {
+  halted?: SiteData['halted']
+  preview?: (Omit<BoardOut, 'board'> & { board: Uint8Array })[]
+  src?: import('@pcbjs/core/internal/types').Src
   name?: string
   message: string
   stack?: string
@@ -143,7 +151,7 @@ const thaw = (bytes: Uint8Array): Board => {
 const ARTIFACTS = 8
 
 /** An error from the thread as the plugin reports one, a CancelledError named as such. */
-const asError = (e: WorkerError): Error => Object.assign(new Error(e.message), e)
+const asError = (e: WorkerError): Error => Object.assign(new Error(e.message), e, { preview: e.preview?.map(c => ({ ...c, board: thaw(c.board), run: 0, hashes: {} })) })
 
 export interface WorkerOptions {
   root: string
@@ -153,6 +161,7 @@ export interface WorkerOptions {
 }
 
 export function workerCompiler(o: WorkerOptions): Compiler {
+  const rebuildRoot = mkdtempSync(join(tmpdir(), 'pcbjs-rebuild-'))
   const flag = new SharedArrayBuffer(8)
   const cancelled = new Int32Array(flag)
   const jobs = new Map<number, Job>()
@@ -167,7 +176,9 @@ export function workerCompiler(o: WorkerOptions): Compiler {
   let restarted = false
 
   const spawn = () => {
-    const w = new Worker(new URL('./worker.js', import.meta.url), { workerData: { root: o.root, configFile: o.configFile, entries: o.entries ?? [], flag } satisfies WorkerData })
+    const w = new Worker(new URL('./worker.js', import.meta.url), {
+      workerData: { rebuildRoot, root: o.root, configFile: o.configFile, entries: o.entries ?? [], flag } satisfies WorkerData,
+    })
     w.on('message', (m: FromWorker) => receive(m))
     w.on('error', e => o.log(`the compile thread of ${o.root} failed: ${String(e?.message ?? e).split('\n')[0]}`))
     w.on('exit', code => exited(w, code))
@@ -228,6 +239,7 @@ export function workerCompiler(o: WorkerOptions): Compiler {
           id: run,
           entry: { file: entry.file, rel: entry.rel },
           draft: job.draft,
+          rebuild: job.rebuild,
           ...(job.dev === false ? { dev: false } : {}),
           ...(job.formats ? { formats: job.formats } : {}),
           ...(job.want ? { want: job.want } : {}),
@@ -274,6 +286,7 @@ export function workerCompiler(o: WorkerOptions): Compiler {
       worker?.ref()
       await worker?.terminate()
       worker = null
+      rmSync(rebuildRoot, { recursive: true, force: true })
     },
   }
 }

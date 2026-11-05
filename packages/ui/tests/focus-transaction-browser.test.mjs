@@ -72,14 +72,15 @@ const site = {
   },
 }
 const styles = []
+let scopeId = 0
 const entry = `import {createApp,h,provide,reactive,effectScope,watch} from 'vue';
-import Board2D from './packages/ui/src/Board2D.vue';import BoardSch from './packages/ui/src/BoardSch.vue';
+import CompileHalt from './packages/ui/src/CompileHalt.vue';import AccessMode from './packages/ui/src/AccessMode.vue';import Board2D from './packages/ui/src/Board2D.vue';import BoardSch from './packages/ui/src/BoardSch.vue';
 import {createBoard} from './packages/ui/src/board-store.ts';import {createPane,paneEffects} from './packages/ui/src/pane.ts';import {commandBus} from './packages/ui/src/keys.ts';
 const store=createBoard('Fx');store.targets.push(${JSON.stringify(site)});
 const schStore=createBoard('Fx');schStore.targets.push({...store.site,drc:[],erc:store.site.drc.map((f,i)=>({...f,id:f.id.replace('drc:','erc:'),kind:'erc',layer:'sch',at:[i?71:11,12]}))});watch(()=>store.frame,frame=>schStore.frame=frame);
 const make=mode=>{const board=mode==='sch'?schStore:store;const pane=createPane(mode);effectScope(true).run(()=>paneEffects(board,pane));return {board,pane,prefs:reactive({grid:false,ratsnest:false,deep:false,theme:'dark'}),commands:commandBus(),shell:null,theme:()=> 'dark',toggle(){},say(){},open:async()=>{}}};
 const contexts={d2:make('2d'),sch:make('sch')},mounted=reactive({d2:true,sch:true});
-const Host={props:['kind'],setup(props){provide(Symbol.for('pcbjs:pane'),contexts[props.kind]);return()=>h(props.kind==='d2'?Board2D:BoardSch)}};
+const Host={props:['kind'],setup(props){provide(Symbol.for('pcbjs:pane'),contexts[props.kind]);return()=>h('div',{style:'display:contents'},[h(props.kind==='d2'?Board2D:BoardSch),h(AccessMode),contexts[props.kind].board.site.halted?h(CompileHalt,{halted:contexts[props.kind].board.site.halted}):null])}};
 window.demo={store,schStore,contexts,mounted,focus:index=>{store.focusFinding(store.site.drc[index]);schStore.focusFinding(schStore.site.erc[index])},clear:()=>{store.selectRef(null);schStore.selectRef(null)}};
 createApp({render:()=>h('div',{class:'layout'},['d2','sch'].map(kind=>h('div',{id:kind,class:'host'},mounted[kind]?[h(Host,{kind})]:[])))}).mount('#app');`
 const compiled = await build({
@@ -95,7 +96,7 @@ const compiled = await build({
       setup(builder) {
         builder.onLoad({ filter: /\.vue$/ }, args => {
           const { descriptor } = parse(readFileSync(args.path, 'utf8'), { filename: args.path })
-          const id = `focus-${styles.length}`
+          const id = `focus-${scopeId++}`
           const script = compileScript(descriptor, { id, inlineTemplate: true })
           for (const style of descriptor.styles) styles.push(compileStyle({ source: style.content, filename: args.path, id: `data-v-${id}`, scoped: !!style.scoped }).code)
           return {
@@ -191,6 +192,15 @@ test(
       await page.send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` })
       await until(page, `!!document.querySelector('#d2 svg.board-svg')&&!!document.querySelector('#sch svg.sch-svg')`)
       await sleep(100)
+      assert.deepEqual(await evaluate(page, `[...document.querySelectorAll('[data-ui="View.Access"]')].map(e=>e.textContent.trim())`), ['Read-only', 'Read-only'])
+      assert.equal(
+        await evaluate(
+          page,
+          `document.querySelector('#d2 [data-ui="View.Access"]').getBoundingClientRect().bottom <= document.querySelector('#d2 .bv-scale').getBoundingClientRect().top`,
+        ),
+        true,
+        'access indicator does not cover the scale',
+      )
       for (const kind of Object.keys(selectors)) await wheel(page, kind)
       await settle(page)
       const original = await boxes(page)
@@ -313,6 +323,43 @@ test(
       await until(page, `!!document.querySelector('#d2 svg.board-svg')&&!!document.querySelector('#sch svg.sch-svg')`)
       await sleep(150)
       assertResized(beforeHiddenResize, hiddenSize, await boxes(page), await dimensions(page))
+
+      await evaluate(
+        page,
+        `window.savedSch=structuredClone(JSON.parse(JSON.stringify(window.demo.schStore.targets[0].schematic)));
+        window.setSch=schematic=>{const b=window.demo.schStore;b.targets[0]={...b.targets[0],schematic}};
+        window.readyEvents=0;document.querySelector('#sch').addEventListener('pcbjs-ready',()=>window.readyEvents++);
+        window.setSch({...window.savedSch,drawing:null,svg:null})`,
+      )
+      await until(page, `document.querySelector('#sch [role="status"]')?.textContent.includes('No schematic yet') && window.readyEvents>0`)
+      assert.equal(await evaluate(page, `!!document.querySelector('#sch svg.sch-svg')`), false)
+      await evaluate(
+        page,
+        `window.readyEvents=0;window.setSch({...window.savedSch,drawing:{...window.savedSch.drawing,page:[null,null,null,null],symbols:[],wires:[],labels:[],texts:[],sheets:[],junctions:[],noConnects:[]}})`,
+      )
+      await until(page, `window.readyEvents>0 && document.documentElement.dataset.ready==='sch'`)
+      await evaluate(page, `window.demo.contexts.sch.pane.focusViews.clear();window.demo.contexts.sch.pane.viewport.sch=[null,null,null,null];window.setSch(window.savedSch)`)
+      await until(page, `!!document.querySelector('#sch svg.sch-svg')`)
+      assert.ok((await evaluate(page, `document.querySelector('#sch svg.sch-svg').getAttribute('viewBox')`)).split(' ').map(Number).every(Number.isFinite))
+      await evaluate(page, `window.readyEvents=0;window.setSch({...window.savedSch,drawing:{...window.savedSch.drawing,page:[null,null,null,null]}})`)
+      await until(page, `document.querySelector('#sch [role="status"]')?.textContent.includes('Schematic unavailable') && window.readyEvents>0`)
+
+      await evaluate(
+        page,
+        `window.demo.store.targets[0]={...window.demo.store.targets[0],halted:{stage:'place',stages:['evaluate','place','checks','exports'],completed:['evaluate'],src:{file:'pcb.tsx',line:10,col:4}}}`,
+      )
+      await until(page, `!!document.querySelector('#d2 [role="progressbar"] .failed')`)
+      const halted = await evaluate(
+        page,
+        `(()=>{const bar=document.querySelector('#d2 [role="progressbar"]'),fail=bar.querySelector('.failed'),style=getComputedStyle(fail);return {label:bar.getAttribute('aria-valuetext'),value:bar.getAttribute('aria-valuenow'),animated:style.animationName,height:fail.getBoundingClientRect().height,color:style.backgroundColor}})()`,
+      )
+      assert.match(halted.label, /halted at place, pcb.tsx:10:4/)
+      assert.equal(halted.value, '1')
+      assert.equal(halted.animated, 'none')
+      assert.equal(halted.height, 5)
+      assert.notEqual(halted.color, 'rgba(0, 0, 0, 0)')
+      await evaluate(page, `const b=window.demo.store;const {halted,...complete}=b.targets[0];b.targets[0]=complete`)
+      await until(page, `!document.querySelector('#d2 [role="progressbar"]')`)
 
       assert.deepEqual(
         page.logs.filter(line => /Uncaught|Hydration/.test(line)),

@@ -17,14 +17,21 @@ registerHooks({
     }
   },
 })
-const file = new URL('../src/EditBar.vue', import.meta.url)
-const { descriptor } = parse(readFileSync(file, 'utf8'), { filename: file.pathname })
-const compiled = compileScript(descriptor, { id: 'editbar-test', inlineTemplate: true, templateOptions: { ssr: true } })
-const js = ts.transpileModule(compiled.content, { compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext } }).outputText
-const code = js
-  .replace(/import Bubble from ['"]\.\/Bubble\.vue['"];?/, 'const Bubble = {}')
-  .replace(/from (["'])([^"']+)\1/g, (_, quote, spec) => `from ${JSON.stringify(spec.startsWith('.') ? new URL(spec + '.ts', file).href : import.meta.resolve(spec))}`)
-const { default: EditBar } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
+function component(name) {
+  const file = new URL(`../src/${name}.vue`, import.meta.url)
+  const { descriptor } = parse(readFileSync(file, 'utf8'), { filename: file.pathname })
+  const compiled = compileScript(descriptor, { id: `${name}-test`, inlineTemplate: true, templateOptions: { ssr: true } })
+  const js = ts.transpileModule(compiled.content, { compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext } }).outputText
+  const code = js
+    .replace(/import Bubble from ['"]\.\/Bubble\.vue['"];?/, 'const Bubble = {}')
+    .replace(
+      /from (["'])([^"']+)\1/g,
+      (_, quote, spec) =>
+        `from ${JSON.stringify(spec.endsWith('.vue') ? component(spec.split('/').at(-1).slice(0, -4)) : spec.startsWith('.') ? new URL(spec + '.ts', file).href : import.meta.resolve(spec))}`,
+    )
+  return `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
+}
+const { default: EditBar } = await import(component('EditBar'))
 
 const render = async node => {
   const tl = {
@@ -44,6 +51,7 @@ const render = async node => {
   const app = createSSRApp({ render: () => h(EditBar, { tl, as: { on: ref(false), ends: ref(null), chip: ref(null) }, chip: {} }) })
   app.provide(Symbol.for('pcbjs:pane'), {
     commands: { run() {} },
+    pane: { mode: '2d' },
     board: {
       sel: { refs: [node.ref], anchor: node.caps.includes('chain') ? `${node.ref}/pt:1` : node.ref },
       site: {

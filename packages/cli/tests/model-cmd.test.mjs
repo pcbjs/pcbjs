@@ -62,6 +62,40 @@ test('check lists every footprint with its source and flags files off the courty
   assert.match(r.out, /fix: pcbjs model add <file-or-url> --ref R3/)
   assert.match(r.out, /R4\s+file models\/bad\.glb\s+unread: the file did not read/)
   assert.match(r.out, /5 footprints, 3 with a model file, 2 generated, 0 with no model, 3 flagged/)
+  assert.match(r.out, /scope: 1 file-fit checks, 3 mesh checks/)
+})
+
+test('model check flags inconsistent winding instead of reporting a fitted custom model as clean', () => {
+  const data = Buffer.from(new Float32Array([-0.0008, 0.0003, -0.0004, 0.0008, 0.0003, -0.0004, 0, 0.0003, 0.0004, 0, 1, 0, 0, 1, 0, 0, 1, 0]).buffer)
+  const gltf = {
+    asset: { version: '2.0' },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ mesh: 0 }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 1 } }] }],
+    buffers: [{ byteLength: data.length, uri: `data:application/octet-stream;base64,${data.toString('base64')}` }],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: 36 },
+      { buffer: 0, byteOffset: 36, byteLength: 36 },
+    ],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: 3, type: 'VEC3' },
+      { bufferView: 1, componentType: 5126, count: 3, type: 'VEC3' },
+    ],
+  }
+  writeFileSync(join(root, 'models/winding.gltf'), JSON.stringify(gltf))
+  writeFileSync(
+    join(root, 'winding.tsx'),
+    `import PCB from '@pcbjs/core'
+import { R0603 } from '@pcbjs/lib'
+const R1 = R0603('10k', { model: { file: './models/winding.gltf' } })
+export default <PCB name="Winding"><rect layer="Edge.Cuts" x={0} y={0} w={10} h={10}/><R1 at="5mm 5mm"/></PCB>`,
+  )
+  const r = run('check', 'winding.tsx')
+  assert.equal(r.code, 1, r.err)
+  assert.match(r.out, /file models\/winding\.gltf\s+invalid/)
+  assert.match(r.out, /1 triangles with winding opposite their normals/)
+  assert.match(r.out, /repair the source mesh/)
 })
 
 test('align prints the transform that undoes a wrong offset', () => {

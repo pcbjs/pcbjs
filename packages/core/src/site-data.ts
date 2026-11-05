@@ -4,6 +4,7 @@ import type { ModelSpec, Rules, Src, Stackup, StepModelSpec } from './types.js'
 import type { Finding } from './finding.js'
 
 export interface SiteFootprint {
+  locked?: boolean
   /** library-preview reference label; ref remains the stable source/selection identity */
   displayRef?: string
   ref: string
@@ -119,6 +120,8 @@ export interface SiteData {
   staleError?: string
   /** dev: compiled from the editor's unsaved text; `skipped` counts the spans its repair left out */
   draft?: { skipped: number }
+  /** Preview-only current source prefix; checks and manufacturing output are unavailable. */
+  halted?: { stage: string; stages: string[]; completed: string[]; src?: SiteSrc }
   /** a live rebuild's layers: the uids of the last compile's copper drawn until the stage that remakes it ends */
   carried?: string[]
   /** the board's grids, sources relative to the root, see grids.md */

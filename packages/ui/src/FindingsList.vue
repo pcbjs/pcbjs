@@ -44,7 +44,8 @@ watch(
         ><span class="dim">{{ t.text }}</span>
       </a>
     </div>
-    <template v-if="shows('erc')">
+    <div v-if="board.halted" class="empty" role="status">DRC / ERC incomplete: compilation halted.</div>
+    <template v-if="!board.halted && shows('erc')">
       <div v-if="!erc" class="empty">No ERC data in this build</div>
       <div v-else-if="!erc.length" class="empty">No findings</div>
       <button
@@ -64,7 +65,7 @@ watch(
         <span v-if="d.at && (d.at[0] || d.at[1])" class="at">{{ mm(d.at[0]) }}, {{ mm(d.at[1]) }} mm</span>
       </button>
     </template>
-    <template v-if="shows('drc')">
+    <template v-if="!board.halted && shows('drc')">
       <div v-if="!board.drc.length" class="empty">
         No findings<template v-if="board.unconnected">, {{ board.unconnected }} unconnected</template>
       </div>

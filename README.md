@@ -3,7 +3,7 @@
 PCB design as TypeScript and JSX. A board is a TSX module: nets and parts are values, JSX places them, and one compile routes what you leave to the autorouter, fills pours, runs DRC and ERC, and writes Gerbers, drills, a BOM and placement file, all zipped, plus a 2D, 3D and schematic viewer that links every item back to its code. This documentation targets pcbjs 0.1.0.
 
 ```sh
-npm install -D @pcbjs/pcbjs@^0.1.0    # Node 22.12 or newer
+npm i -D @pcbjs/pcbjs    # Node 22.12 or newer
 ```
 
 ## Quick start

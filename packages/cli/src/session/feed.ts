@@ -10,6 +10,8 @@ import { changedRanges, type EventLog } from './events.js'
 export const COALESCE_MS = 200
 /** ms a claim and the watcher's event of one file are matched within */
 export const CLAIM_MS = 2000
+/** ms a spawned post-tool hook has to claim a write after its prompt opted in */
+export const HOOK_CLAIM_MS = 10_000
 /** ms after the last claim in which unclaimed writes wait for theirs */
 export const CLAIMING_MS = 600_000
 /** ms a save keeps the watcher's event of its own write from being an edit */
@@ -71,6 +73,7 @@ export function eventFeed(o: FeedOptions): Feed {
     return c.by
   }
   let claimed = -Infinity
+  let hookClaims = false
 
   const flushSync = (file: string) => {
     const s = synced.get(file)
@@ -100,7 +103,7 @@ export function eventFeed(o: FeedOptions): Feed {
   }
   // while agents claim their writes, an unclaimed write waits for its claim up to 2 s after the watcher saw it
   const claimWait = (file: string, at: number) => {
-    return claims.has(file) || Date.now() - claimed > CLAIMING_MS ? 0 : Math.max(0, at + CLAIM_MS - Date.now())
+    return claims.has(file) || Date.now() - claimed > CLAIMING_MS ? 0 : Math.max(0, at + (hookClaims ? HOOK_CLAIM_MS : CLAIM_MS) - Date.now())
   }
   // the first value goes at once, the last of each 500 ms after it
   const throttled = new Map<string, { pending: (() => void) | null }>()
@@ -164,14 +167,14 @@ export function eventFeed(o: FeedOptions): Feed {
       file = resolve(file)
       claimed = Date.now()
       claims.set(file, { by, at: claimed })
+      const d = disk.get(file)
       const sh = shadows.get(file)
       if (sh) {
         clearTimeout(sh.timer)
         timers.delete(sh.timer)
         shadows.delete(file)
-        sh.push(take(file))
+        sh.push(d ? by : take(file))
       }
-      const d = disk.get(file)
       // the write is waiting past its coalescing: it goes now, attributed
       if (d && Date.now() - d.at >= COALESCE_MS) {
         clearTimeout(d.timer)
@@ -180,13 +183,14 @@ export function eventFeed(o: FeedOptions): Feed {
       }
     },
     expectClaims() {
+      hookClaims = true
       claimed = Date.now()
     },
     shadowed(file, push) {
       file = resolve(file)
       const by = take(file)
       if (by || Date.now() - claimed > CLAIMING_MS) return push(by)
-      const timer = later(CLAIM_MS, () => {
+      const timer = later(hookClaims ? HOOK_CLAIM_MS : CLAIM_MS, () => {
         shadows.delete(file)
         push(take(file))
       })

@@ -7,6 +7,12 @@ description: Upgrade a pcbjs project to a newer pcbjs release and verify the boa
 
 Before 1.0 a minor release may break, a patch may not. Every `@pcbjs/*` package of one release train shares the train's version, and `@pcbjs/pcbjs` pins the exact set, so upgrade them together.
 
+## Work split and reading
+
+Keep a small version update in one agent. For a multi-board migration, use focused workers when delegation is available and permitted: one owner changes dependencies and shared APIs, while board-specific compatibility reviews can run independently. Workers load only changelog entries and topics relevant to their assigned packages or boards, and return affected paths, intentional differences, check results and risks. The coordinator keeps the version/baseline matrix and verifies the integrated upgrade; it does not ingest every changelog or raw check log.
+
+Do not load all references or documentation in advance. Use the topic index or a targeted search to locate the next required detail.
+
 ## Steps
 
 1. **Find where you are.** `npm ls @pcbjs/core` gives the installed version; `npx pcbjs doctor` lists every installed `@pcbjs` version, the cache format versions and the config, and exits 1 when two packages differ in major.minor.

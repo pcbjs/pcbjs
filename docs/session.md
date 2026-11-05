@@ -42,7 +42,7 @@ pcbjs session serve -p 5211    # the session in the foreground, for CI and worke
 interface SessionInfo { session: string; pid: number; version: string; protocol: number; major: number; startedAt: string; root: string; url: string; socket: string; edit: 'localhost' | 'all' | 'none'; checkout?: string; token?: string; tiers: { keystroke: number; quiet: number } }
 ```
 
-`session` is 8 base32 characters per start, `socket` a path or pipe name, `checkout` that of its first folder, `token` only under `edit: 'all'` beyond loopback.
+`session` is 8 base32 characters per start, `socket` a path or pipe name, `checkout` that of its first folder, `token` only under `edit: 'all'`.
 
 ## Listeners
 
@@ -59,6 +59,7 @@ Each method's params and result are `Methods` of `@pcbjs/core/protocol`, ide-bri
 | `session/attach`, `detach` | serves folders too, a project as it is, any other folder searched for projects; stops serving attached ones, never the first |
 | `session/stop` | ends the session |
 | `session/check`, `inspect` | `Envelope<{ stdout, stderr?, exitCode }>` as in process; `report` adds the check report and each board's fab `sets` |
+| `session/models` | `Envelope<{ stdout, exitCode, models }>`: model inventory, fit and mesh validation; optional `entries`, read-only, shared with `pcbjs model check` and MCP `models` |
 | `session/q`, `resolve` | the record of queries.md; any reference as the current snapshot names it |
 | `session/script`, `test` | output or error; the snapshot written for testing.md |
 | `session/boards`, `render` | the boards for `shot`; a PNG of render.md, base64, with its legend |
@@ -100,11 +101,14 @@ interface Envelope<T> { snapshot: string; stale: Stale | null; overlay: string[]
 
 | Mode | Read-write | Read-only |
 | --- | --- | --- |
-| `localhost` | the socket, the pipe, loopback HTTP and WebSocket | the LAN |
-| `all` | the above, and LAN clients with the session token | LAN clients without it |
+| `localhost` | the socket, the pipe, direct loopback HTTP and WebSocket | LAN and proxied clients |
+| `all` | the above, and remote clients with the session token | remote clients without it |
 | `none` | nobody; `session/stop`, `attach` and `detach` still work on socket and pipe | everybody |
 
-- The token is 128 random bits per start, only with `--edit all` and a `--host` beyond loopback. `pcbjs dev` prints the LAN URL with `?token=`, dev.json holds it, the config never does; a client sends it as `?token=` or in its hello.
+- The token is 128 random bits per start with `--edit all`, including loopback servers exposed through a tunnel. `pcbjs dev` prints LAN URLs with `?token=`; dev.json holds the token, the config never does. Open the viewer with `?token=<token>` to pass it to the session handshake. HTTP editor requests use the same token as a bearer credential.
+- Direct loopback access requires a loopback TCP peer, a localhost or loopback Host header, and no proxy forwarding headers. Forwarding headers only remove privileges; they never grant them. Component proxies preserve this distinction.
+- The viewer uses the server hello response's `mode`, never the browser hostname, to enable editing. Published bundles and embeds are read-only. Missing permission, incompatible sessions and disconnected sessions cannot enable tools. HTTP source-opening routes, including Vite's editor route, enforce the same policy and reject cross-origin browser requests. Read-only selections still synchronize between viewers but do not trigger local source-editor or diagnostics-editor reveals.
+- Session credentials are omitted from TCP status and blocked from HTTP file serving. Read-only TCP source reads stay within non-hidden files of the served project; read-only hello messages cannot attach additional projects.
 - Read-only connections may run checks, queries, docs and plain renders. `script`, `write`, `send`, `edited`, `claiming`, scripted renders, `test` and document sync need read-write.
 
 ## Agents

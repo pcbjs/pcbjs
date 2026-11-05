@@ -1,5 +1,9 @@
 // One project's compile thread in a session: its own config, globals and Vite SSR, fed drafts and changed files by the session,
 // cancelled through a shared flag the stage graph reads between units. worker-client.ts is the other side.
+import { cpSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { basename, join } from 'node:path'
+import { forgetRouteCache } from '@pcbjs/compile/internal/route-cache'
+import { clearStageCache } from '@pcbjs/compile/internal/cache'
 import { fileKey } from '../project/files.js'
 import { createHash } from 'node:crypto'
 import { serialize } from 'node:v8'
@@ -8,6 +12,11 @@ import { createServer, type ViteDevServer } from 'vite'
 import { configFrom, loadUserConfig, type Entry, type ResolvedConfig } from '../project/config.js'
 import { compileConfig } from '../project/vite-base.js'
 import { quietLogger } from '../project/compile.js'
+import { errorSource, errorFrame } from '../project/errors.js'
+import { disk } from './sources.js'
+import { sourcePrefix } from '../project/prefix.js'
+import { evaluateEntry } from '@pcbjs/compile/internal/entry'
+import { resolve } from 'node:path'
 import { compileEntry, compileLayout, compilePreview, DATA_FORMATS, glbOf, schOf, sketchEntry, svgOf, type Compiled } from '../project/project.js'
 import { evaluation, modulesFor, viteLoader } from '../project/loader.js'
 import type { WorkerData, ToWorker, FromWorker, Edge, Crossed } from './worker-client.js'
@@ -71,7 +80,17 @@ function graphOf(vite: ViteDevServer | null): Edge[] | undefined {
 }
 
 /** What survives postMessage of an error: the fields errorText reads. */
-const errorOf = (e: any) => ({ name: e?.name, message: String(e?.message ?? e), stack: e?.stack, loc: e?.loc, frame: e?.frame, code: e?.code })
+const errorOf = (e: any) => ({
+  name: e?.name,
+  message: String(e?.message ?? e),
+  stack: e?.stack,
+  halted: e?.halted,
+  preview: e?.preview?.map(({ board, ...rest }: any) => ({ ...rest, board: serialize({ board, deps: board.deps }) })),
+  src: errorSource(e),
+  loc: e?.loc,
+  frame: errorFrame(e, data.root, file => drafts.get(fileKey(file))?.code ?? disk(file)),
+  code: e?.code,
+})
 
 /** What a request answers: its value, the buffers it hands over, and what to note once it was sent. */
 interface Reply {
@@ -144,11 +163,44 @@ const signalOf = (id: number, at = 0) => ({
   },
 })
 
-function compile(id: number, entry: Entry, draft: boolean, dev: boolean, formats?: readonly string[], want?: View[]): Promise<void> {
+const rebuildCaches = new Map<string, string>()
+process.on('exit', () => {
+  for (const dir of rebuildCaches.values()) rmSync(dir, { recursive: true, force: true })
+})
+
+function compile(id: number, entry: Entry, draft: boolean, dev: boolean, formats?: readonly string[], want?: View[], rebuild?: 'stages' | 'all' | 'warm'): Promise<void> {
   const signal = signalOf(id)
   return answer(id, async (cfg, vite) => {
+    let cacheDir: string | undefined
+    if (rebuild) {
+      cacheDir = rebuildCaches.get(entry.file)
+      if (rebuild === 'warm' && !cacheDir) throw new Error('no prepared rebuild cache for this entry; run rebuild all or stages first')
+      if (rebuild !== 'warm') {
+        if (cacheDir) {
+          forgetRouteCache(join(cacheDir, 'route'))
+          rmSync(cacheDir, { recursive: true, force: true })
+        }
+        clearStageCache()
+        cacheDir = mkdtempSync(join(data.rebuildRoot, 'entry-'))
+        rebuildCaches.set(entry.file, cacheDir)
+        const route = join(cfg.root, '.pcbjs', 'cache', 'route')
+        if (rebuild !== 'all' && existsSync(route)) cpSync(route, join(cacheDir, 'route'), { recursive: true })
+      }
+    }
     const out = await compileEntry(viteLoader(vite), cfg, entry, {
+      cacheDir,
       dev,
+      recover: dev,
+      recoverLoad: async error => {
+        if (!error || typeof error !== 'object' || !('src' in error || 'loc' in error)) return undefined
+        const src = errorSource(error)
+        if (!src) return undefined
+        const file = resolve(cfg.root, src.file)
+        const text = drafts.get(fileKey(file))?.code ?? disk(file)
+        const code = text === null ? null : sourcePrefix(file, text, src)
+        if (code === null) return undefined
+        return evaluateEntry(viteLoader(vite, { file, code }), entry, null, signal)
+      },
       // the session builds the fab set and the site data; the rest is made when `artifact` asks
       formats: formats ?? DATA_FORMATS,
       draft,
@@ -161,7 +213,10 @@ function compile(id: number, entry: Entry, draft: boolean, dev: boolean, formats
     // the dependency graph is not enumerable, so a message would drop it
     if (out[0]?.partial) return { value: out.map(c => ({ ...c, deps: c.board.deps })) }
     keep(id, entry.file, out)
-    return cross(entry, out)
+    return cross(
+      entry,
+      out.map(c => ({ ...c, cacheNamespace: cacheDir ? basename(cacheDir) : 'project' })),
+    )
   })
 }
 
@@ -195,7 +250,7 @@ async function artifact(m: Extract<ToWorker, { t: 'artifact' }>): Promise<void> 
 }
 
 async function handle(m: ToWorker): Promise<void> {
-  if (m.t === 'compile') return compile(m.id, m.entry, m.draft, m.dev ?? true, m.formats, m.want)
+  if (m.t === 'compile') return compile(m.id, m.entry, m.draft, m.dev ?? true, m.formats, m.want, m.rebuild)
   if (m.t === 'layout')
     return answer(m.id, (cfg, vite) => reply(compileLayout(viteLoader(vite), cfg, m.entry, m.board, m.target, m.ref).then(v => ({ site: v.site, board: serialize(v.board) }))))
   if (m.t === 'preview') return answer(m.id, (cfg, vite) => reply(compilePreview(viteLoader(vite), cfg, m.file, m.rel)))

@@ -1,28 +1,35 @@
-// Opening a source location: the editor through the dev server in dev, the repository host in a built site.
+// Source navigation is explicit; editor access comes from the session permission.
 import type { SiteData } from '@pcbjs/core/site-data'
 import { openQuery, padOf, repoUrl, sourceTarget, type SourceKind, type SourceTarget } from './source'
 
 /** Ask the dev server to open a file in the editor. */
 export async function openInEditor(t: SourceTarget): Promise<boolean> {
   try {
-    return (await fetch(`/__pcbjs/open?${openQuery(t.file, t)}`)).ok
+    const token = new URLSearchParams(location.search).get('token')
+    return (await fetch(`/__pcbjs/open?${openQuery(t.file, t)}`, { headers: token ? { authorization: `Bearer ${token}` } : {} })).ok
   } catch {
     return false
   }
 }
 
 /** Open a known source location; `quiet` says nothing unless opening failed. */
-export async function openTarget(board: SiteData, t: SourceTarget | null, say: (text: string, err?: boolean) => void, quiet = false): Promise<void> {
+export async function openTarget(
+  board: SiteData,
+  t: SourceTarget | null,
+  say: (text: string, err?: boolean) => void,
+  quiet = false,
+  access: { editable?: boolean; external?: boolean } = {},
+): Promise<void> {
   if (!t) {
     if (!quiet) say('No source location', true)
     return
   }
-  if (board.dev) {
+  if (board.dev && access.editable) {
     const ok = await openInEditor(t)
     if (!ok || !quiet) say(ok ? 'Opened in editor' : `Could not open ${t.file}:${t.start[0]}`, !ok)
-  } else if (board.repo) {
+  } else if (!quiet && access.external && board.repo) {
     window.open(repoUrl(board.repo, t.file, { start: t.start, end: t.end ?? t.start }), '_blank', 'noopener')
-  } else if (!quiet) say('No source location', true)
+  } else if (!quiet && access.external) say('Source navigation is unavailable in this read-only view')
 }
 
 /** Where an item is placed or defined, with its pad for a placement in dev. */

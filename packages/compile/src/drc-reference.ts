@@ -143,8 +143,7 @@ interface Solid {
 /** This board's slab and its part bodies as boxes, front above and back below, as tall as the references resolved them. */
 function localSolids(board: Board, heights: BoardReference['heights']): Solid[] {
   const out: Solid[] = []
-  const outer = largest(board.outline)
-  if (outer) out.push({ what: 'this board', ring: outer, z: [0, board.thickness] })
+  for (const ring of outers(board.outline)) out.push({ what: 'this board', ring, z: [0, board.thickness] })
   const known = new Map((heights ?? []).map(h => [h.ref, h.height]))
   for (const fp of board.footprints) {
     const h = known.get(fp.ref) ?? fp.height ?? (bareHole(board, fp) ? 0 : 1)
@@ -158,8 +157,7 @@ function localSolids(board: Board, heights: BoardReference['heights']): Solid[] 
 /** A reference's slab and part bodies, named by `name`. */
 function theirSolids(r: BoardReference, name = r.name): Solid[] {
   const out: Solid[] = []
-  const slab = largest(r.outline)
-  if (slab) out.push({ what: `${name}'s board`, ring: slab, z: r.z })
+  for (const ring of outers(r.outline)) out.push({ what: `${name}'s board`, ring, z: r.z })
   for (const b of r.bodies) out.push({ what: `${name} ${b.ref}`, ref: b.ref, ring: b.ring, z: b.z })
   return out
 }
@@ -197,7 +195,7 @@ function meet(theirs: Solid[], mine: Solid[], pairs: MatePair[], into: (b: Solid
   return out
 }
 
-const largest = (rings: Ring[]): Ring | undefined => rings.reduce<Ring | undefined>((m, q) => (!m || Math.abs(area([q])) > Math.abs(area([m])) ? q : m), undefined)
+const outers = (rings: Ring[]): Ring[] => clipRings('union', rings).filter(r => area([r]) > 0)
 
 function boxesMeet(a: Ring, b: Ring): boolean {
   const box = (r: Ring) => {

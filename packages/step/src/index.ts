@@ -18,6 +18,7 @@ export { alignModel, guessUnit, type AlignPad, type AlignTarget, type AlignResul
 export { placementIssue, footprintRect, type Box3, type Rect, type StepTransform } from './place.js'
 export { meshToBinary, meshFromBinary } from './binary.js'
 export { meshKey, fullOptions, CONVERTER_VERSION } from './key.js'
+export { validateMesh, type MeshValidation, type MeshIssue, type MeshIssueCode } from './validate.js'
 
 interface OcctMesh {
   name?: string

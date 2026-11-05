@@ -4,6 +4,8 @@ import { existsSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import launch from 'launch-editor'
+import { localRequest } from './access.js'
+import { sameOrigin } from './access.js'
 import type { Connect, ViteDevServer } from 'vite'
 
 export interface SelectEvent {
@@ -30,6 +32,7 @@ export interface IdeBridge {
 }
 
 export interface BridgeOptions {
+  canOpen?(req: IncomingMessage): boolean
   /** what /__pcbjs/ide lists */
   clients?: () => unknown[]
   /** keyed by connection; a session that takes `pcbjs/select` gets it */
@@ -58,7 +61,14 @@ export function ideBridge(server: ViteDevServer, rootOf: (req: IncomingMessage) 
       res.end(JSON.stringify({ connected: clients.length, clients }))
       return
     }
-    if (p === '/__pcbjs/open') {
+    const viteOpen = p === '/__open-in-editor' || p.startsWith('/__open-in-editor/')
+    if (p === '/__pcbjs/open' || viteOpen) {
+      if (!sameOrigin(req) || req.headers['sec-fetch-site'] === 'cross-site' || !(opts.canOpen?.(req) ?? localRequest(req))) {
+        res.statusCode = 403
+        res.end('Opening the editor requires read-write access')
+        return
+      }
+      if (viteOpen) return next()
       const q = url.searchParams
       const f = q.get('file')
       if (!f) {

@@ -33,7 +33,7 @@ Advanced. Run commands in the project directory; the entries are `entries` in it
 | `pcbjs cache clear [folder...]` | delete `.pcbjs/cache` and `.pcbjs/typecheck.json` of every project under the folders, the working directory without any, and `.pcbjs/models` with `--models`; refuses while a live session serves one, unless `--force` |
 | `pcbjs doctor` | the `@pcbjs` versions, the renderer's too, Node, the step converter, the cache formats, the config, the desync incidents, `--desync` the last; exit 1 when two packages differ in major.minor, which check, build and dev warn of, or the project's core in realm abi |
 
-An entry is a `.tsx` or `.ts` module that default-exports `<PCB>`, listed in the config's `entries`, globs allowed; entries on the command line win for that run. `inspect` takes the config's only entry, or the one named first. Two entries with the same board name are an error. `DEBUG=1` prints stack traces. `pcbjs -v` prints every `@pcbjs` package the project resolves on one line, `--help` starts with it.
+An entry is a `.tsx` or `.ts` module that default-exports `<PCB>`, listed in the config's `entries`, globs allowed; entries on the command line win for that run. `inspect` takes the config's only entry, or the one named first. Two entries with the same board name are an error. Compile failures show the author file, line and column when available, a source excerpt with the failing range marked, and relevant calls through author files. Internal stack frames appear only in explicit debug output such as `--verbose`; `DEBUG=1` prints stacks for top-level failures. `pcbjs -v` prints every `@pcbjs` package the project resolves on one line, `--help` starts with it.
 
 ## Flags
 

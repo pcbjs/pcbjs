@@ -9,8 +9,10 @@ import { ledModel } from './led'
 import { headerModel } from './header'
 import { sot23Model } from './sot23'
 import { boxModel } from './box'
-import { materialOf } from './materials'
+import { stepMaterial } from './materials'
 import { Sink } from './sink'
+
+export { composeModel, type ModelPart, type ModelMaterial } from './compose'
 
 /** What a generated body reads besides its spec, as @pcbjs/export's modelHash keys it. */
 export interface ModelCtx {
@@ -98,7 +100,7 @@ export function generatedModel(spec: GeneratedSpec, ctx: ModelCtx, marking: stri
       geo.setAttribute('normal', new THREE.BufferAttribute(m.normals, 3))
       geo.setIndex(new THREE.BufferAttribute(m.indices, 1))
       geo.computeBoundingSphere()
-      proto.add(new THREE.Mesh(geo, materialOf(m.color)))
+      proto.add(new THREE.Mesh(geo, stepMaterial(m.color, m.material)))
     }
     if (spec.kind === 'chip' && marking) proto.add(markingDecal(spec, marking))
     protos.set(key, proto)

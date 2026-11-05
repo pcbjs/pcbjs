@@ -147,6 +147,24 @@ export function setSide(text: string, el: Element, side: 'F' | 'B'): OffsetEdit 
   return { start: s, end: el.side.end, newText: '' }
 }
 
+export function lockReason(el: Element): string | null {
+  const attr = el.attrs.locked
+  if (attr && attr.text !== 'locked') return 'Lock state is derived from an expression and cannot be overridden.'
+  if (el.spreadEnd !== undefined) return 'Lock state may come from a props spread and cannot be overridden.'
+  return null
+}
+
+export function setLocked(text: string, el: Element, locked: boolean): OffsetEdit | null {
+  const reason = lockReason(el)
+  if (reason) throw new Error(reason)
+  const attr = el.attrs.locked
+  if (locked) return attr ? null : { start: el.insert, end: el.insert, newText: ' locked' }
+  if (!attr) return null
+  let start = attr.start
+  while (start > 0 && /[ \t]/.test(text[start - 1])) start--
+  return { start, end: attr.end, newText: '' }
+}
+
 /** One chain call: `.L(5, 16)` from its dot, its method, its arguments as written and offsets. */
 export interface ChainCall {
   method: string

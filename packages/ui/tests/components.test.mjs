@@ -58,6 +58,8 @@ test('every component renders on the server without window, document or three.js
   assert.match(await render(ui.View2D), /class="pcbjs-ui pcbjs-view stage/)
   assert.match(await render(ui.FindingsList), /clearance/)
   assert.match(await render(ui.PcbViewer), /class="app pcbjs-ui pcbjs-viewer/)
+  assert.match(await render(ui.PcbViewer), /Read-only/)
+  assert.match(await render(ui.View2D), /Read-only/)
 })
 
 test('two components given one board share its store: a selection made in one shows in the other', () => {
@@ -68,6 +70,52 @@ test('two components given one board share its store: a selection made in one sh
   a.selectRef('R1')
   assert.deepEqual([...c.sel.refs], ['R1'])
   assert.notEqual(ui.useBoard(board()), a, 'another data object is another board')
+})
+
+test('locked placements remain selectable and show a lock badge', async () => {
+  for (const locked of [true, false]) {
+    const b = board()
+    b.edit = [{ ref: 'R1', locked, caps: ['move'], src: {}, m: [1, 0, 0, 1, 0, 0], grid: null }]
+    const store = ui.useBoard(b)
+    store.selectRef('R1')
+    assert.equal(store.sel.anchor, 'R1')
+    const html = await renderToString(createSSRApp({ render: () => h(ui.PathChip, { board: b }) }))
+    assert.equal(html.includes('title="Placement locked in source"'), locked)
+  }
+})
+
+test('stale compile failures expose source context directly without a details disclosure', async () => {
+  const b = {
+    ...board(),
+    stale: true,
+    staleError: 'pcb.tsx:9:4: pair route: P endpoints must be on the same net\n  J9/1: DATA_P\n  J1/2: DATA_N\n\n> 9 |   {route(a, b)}\n    |    ^^^^^^^^^^^',
+  }
+  const html = await renderToString(createSSRApp({ render: () => h(ui.PcbViewer, { board: b }) }))
+  assert.match(html, /role="alert"/)
+  assert.match(html, /aria-label="Source context"/)
+  assert.match(html, /J9\/1: DATA_P/)
+  assert.match(html, /pcb\.tsx:9:4/)
+  assert.doesNotMatch(html, /<details|<summary/)
+})
+
+test('halted boards show a failed progress segment and incomplete checks instead of a clean result', async () => {
+  const b = {
+    ...board(),
+    drc: [],
+    erc: [],
+    unconnected: 0,
+    halted: { stage: 'place', stages: ['evaluate', 'place', 'checks', 'exports'], completed: ['evaluate'], src: { file: 'pcb.tsx', line: 9, col: 4 } },
+    staleError: 'pcb.tsx:9:4: pair endpoints disagree',
+  }
+  const html = await renderToString(createSSRApp({ render: () => h(ui.PcbViewer, { board: b }) }))
+  assert.match(html, /role="progressbar"/)
+  assert.match(html, /aria-valuenow="1"/)
+  assert.match(html, /class="failed"/)
+  assert.match(html, /Partial board before the failing expression/)
+  assert.match(html, /DRC \/ ERC incomplete/)
+  const checks = await renderToString(createSSRApp({ render: () => h(ui.FindingsList, { board: b, kinds: ['drc', 'erc'] }) }))
+  assert.match(checks, /compilation halted/)
+  assert.doesNotMatch(checks, /No findings|clean/)
 })
 
 test('a ref loads the facets a view wants; a newer ref refetches them into the same store and keeps the selection', async () => {

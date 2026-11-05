@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AccessMode from './AccessMode.vue'
 // The 3D view of a board as a component: orbit, hover, the selection's fade and the exploded stack; three.js loads on first mount.
 import { defineAsyncComponent, onErrorCaptured, ref, watch } from 'vue'
 import { useView, type ViewProps, type Hover, type View } from './view'
@@ -72,5 +73,6 @@ watch(
         <img v-if="poster" class="pcbjs-poster" :src="poster" alt="" />
       </template>
     </ClientOnly>
+    <AccessMode v-if="board && props.tools" />
   </div>
 </template>

@@ -6,7 +6,7 @@ Basic. This is the reading order for a first board; advanced.md indexes everythi
 ## 1. Make a project
 
 ```sh
-npm install -D @pcbjs/pcbjs@^0.1.0
+npm i -D @pcbjs/pcbjs
 npx pcbjs create my-board && cd my-board && npm install
 ```
 

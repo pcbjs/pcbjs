@@ -2,7 +2,8 @@
 // geometry is built in the viewer's frame, mm with x board x, y board -y and z up, then written in metres with y up: (x, y, z) to (x, z, -y) / 1000
 import type { SiteData, SiteFootprint, SiteItem } from '@pcbjs/core/site-data'
 import type { SiteReference } from '@pcbjs/core/internal/reference'
-import type { StepModel } from '@pcbjs/step/internal/mesh'
+import type { MeshMaterial, StepModel } from '@pcbjs/step'
+import { modelMaterial } from './model-glb.js'
 import { mul, stepMatrix, type Mat4 } from '@pcbjs/step/internal/place'
 import { Gltf, type Material, type Primitive } from './gltf.js'
 import { flatten, holeOf, runJob, slabJob, type GeoResult } from './scene/geometry.js'
@@ -243,9 +244,9 @@ export function boardGlb(b: SiteData, inputs: GlbInputs): Uint8Array {
 interface Mats {
   get(name: string): number
   /** a model file's colour: light greys and golds metal, the rest plastic */
-  step(c: Rgb): number
+  step(c: Rgb, material?: MeshMaterial): number
   /** a generated body's colour: an LED lens glowing in its own, else as a model file's */
-  generated(c: Rgb): number
+  generated(c: Rgb, material?: MeshMaterial): number
   face: Record<Side, number>
 }
 
@@ -283,13 +284,11 @@ function materials(g: Gltf, b: SiteData, inputs: GlbInputs): Mats {
   }
   const steps = new Map<string, number>()
   // light greys and golds are the metal of pins and shells, the rest plastic, as the viewer has it
-  const step = (c: Rgb) => {
-    const key = rgbKey(c)
+  const step = (c: Rgb, material?: MeshMaterial) => {
+    const key = JSON.stringify([c, material])
     let m = steps.get(key)
     if (m === undefined) {
-      const [hue, s, l] = hsl(c)
-      const metal = l > 0.25 && (s < 0.15 || (hue > 0.08 && hue < 0.17 && s > 0.3))
-      steps.set(key, (m = g.material({ name: `model:${key}`, color: c, rough: metal ? 0.35 : 0.6, metal: metal ? 0.7 : 0.05 })))
+      steps.set(key, (m = g.material(modelMaterial(c, material))))
     }
     return m
   }
@@ -299,7 +298,8 @@ function materials(g: Gltf, b: SiteData, inputs: GlbInputs): Mats {
   ])
   const leds = new Map<string, number>()
   // an opaque lens with a mild glow in its own colour, as the viewer's
-  const generated = (c: Rgb) => {
+  const generated = (c: Rgb, material?: MeshMaterial) => {
+    if (material) return step(c, material)
     const lens = lenses.get(rgbKey(c))
     if (!lens) return step(c)
     let m = leds.get(lens.color)
@@ -431,7 +431,7 @@ function barrels(g: Gltf, b: SiteData, slices: Map<string, Slice>, mats: Mats, z
 function bodies(g: Gltf, b: SiteData, side: Side, slices: Map<string, Slice>, mats: Mats, inputs: GlbInputs, z: number): number {
   const face = bodyFace(slices, side)
   const shared = new Map<string, number | null>()
-  const meshOf = (hash: string, model: StepModel, material: (c: Rgb) => number) => {
+  const meshOf = (hash: string, model: StepModel, material: (c: Rgb, material?: MeshMaterial) => number) => {
     if (!shared.has(hash)) shared.set(hash, g.mesh(`model:${hash.slice(0, 12)}`, modelPrims(model, material)))
     return shared.get(hash)!
   }
@@ -449,8 +449,8 @@ function bodies(g: Gltf, b: SiteData, side: Side, slices: Map<string, Slice>, ma
   return g.node({ name: `bodies:${side}`, children, extras: extras('bodies', z, { layer: `bodies:${side}` }) })
 }
 
-function modelPrims(model: StepModel, material: (c: Rgb) => number): Primitive[] {
-  return model.meshes.filter(m => m.indices.length).map(m => ({ positions: m.positions, normals: m.normals, indices: m.indices, material: material(m.color) }))
+function modelPrims(model: StepModel, material: (c: Rgb, material?: MeshMaterial) => number): Primitive[] {
+  return model.meshes.filter(m => m.indices.length).map(m => ({ positions: m.positions, normals: m.normals, indices: m.indices, material: material(m.color, m.material) }))
 }
 
 /** A part without a model as its body box, none for `none` or a bare hole. */
@@ -476,7 +476,15 @@ function reference(g: Gltf, r: SiteReference, inputs: GlbInputs, z: number): num
       positions: m.positions,
       normals: m.normals,
       indices: m.indices,
-      material: g.material({ name: `reference:${r.name}:${i}`, color, rough: 0.6, metal: 0.1, alpha: r.opacity }),
+      material: g.material({
+        name: `reference:${r.name}:${i}`,
+        color,
+        alpha: r.opacity,
+        rough: m.material ? (m.material.roughness ?? 1) : 0.6,
+        metal: m.material ? (m.material.metalness ?? 1) : 0.1,
+        doubleSided: m.material?.doubleSided,
+        emissive: m.material?.emissive,
+      }),
     })
   }
   const mesh = g.mesh(`reference:${r.name}`, prims)

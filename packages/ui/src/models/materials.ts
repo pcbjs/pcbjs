@@ -1,11 +1,11 @@
 // created once per page and never disposed
 import * as THREE from 'three'
 import { LED_GLOW } from '@pcbjs/export/internal/scene/colors'
-import { colorKey, type Rgb } from './sink'
+import type { MeshMaterial } from '@pcbjs/step'
+import { normalizeMaterial } from '@pcbjs/step/internal/mesh'
+import type { Rgb } from './sink'
 
 const cache = new Map<string, THREE.Material>()
-// the first material made in each colour, which a generated mesh of that colour is drawn with
-const byColor = new Map<string, THREE.MeshStandardMaterial>()
 
 /** A shared MeshStandardMaterial, one instance per set of parameters. */
 export function standard(color: string, roughness: number, metalness = 0, extra: THREE.MeshStandardMaterialParameters = {}): THREE.MeshStandardMaterial {
@@ -14,8 +14,6 @@ export function standard(color: string, roughness: number, metalness = 0, extra:
   if (!m) {
     m = new THREE.MeshStandardMaterial({ color, roughness, metalness, ...extra })
     cache.set(key, m)
-    const c = colorKey([m.color.r, m.color.g, m.color.b])
-    if (!byColor.has(c)) byColor.set(c, m)
   }
   return m
 }
@@ -76,21 +74,46 @@ export function lens(color: string, clear: boolean): THREE.MeshStandardMaterial 
 const files = new Map<string, THREE.MeshStandardMaterial>()
 
 /** A model file's material: light greys and golds as metal, the rest plastic. */
-export function stepMaterial(c: [number, number, number]): THREE.MeshStandardMaterial {
-  const key = c.map(v => v.toFixed(3)).join()
+export function stepMaterial(c: Rgb, material?: MeshMaterial): THREE.MeshStandardMaterial {
+  const key = JSON.stringify([c, material])
   let m = files.get(key)
   if (!m) {
     // light greys and golds are the metal of pins and shells, the rest plastic
     const col = new THREE.Color().setRGB(c[0], c[1], c[2])
     const hsl = col.getHSL({ h: 0, s: 0, l: 0 })
     const metal = hsl.l > 0.25 && (hsl.s < 0.15 || (hsl.h > 0.08 && hsl.h < 0.17 && hsl.s > 0.3))
-    m = new THREE.MeshStandardMaterial({ color: col, roughness: metal ? 0.35 : 0.6, metalness: metal ? 0.7 : 0.05 })
+    m = new THREE.MeshStandardMaterial(
+      material
+        ? {
+            ...(material.name ? { name: material.name } : {}),
+            color: col,
+            roughness: material.roughness ?? 1,
+            metalness: material.metalness ?? 1,
+            opacity: material.alphaMode === 'OPAQUE' || !material.alphaMode ? 1 : (material.opacity ?? 1),
+            transparent: material.alphaMode === 'BLEND',
+            alphaTest: material.alphaMode === 'MASK' ? (material.alphaCutoff ?? 0.5) : 0,
+            side: material.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+            emissive: new THREE.Color().setRGB(...(material.emissive ?? [0, 0, 0])),
+          }
+        : { color: col, roughness: metal ? 0.35 : 0.6, metalness: metal ? 0.7 : 0.05 },
+    )
+    if (material) m.userData.pcbjsMaterial = normalizeMaterial(material)
     files.set(key, m)
   }
   return m
 }
 
-/** The material a generated body's mesh of this colour was built with, else a model file's material of that colour. */
-export function materialOf(c: Rgb): THREE.MeshStandardMaterial {
-  return byColor.get(colorKey(c)) ?? stepMaterial(c)
+/** Scalar material properties retained by model caches and exports. */
+export function meshMaterial(m: THREE.MeshStandardMaterial): MeshMaterial {
+  if (m.userData.pcbjsMaterial) return normalizeMaterial(m.userData.pcbjsMaterial)
+  return {
+    ...(m.name ? { name: m.name } : {}),
+    metalness: m.metalness ?? 0,
+    roughness: m.roughness ?? 1,
+    opacity: m.opacity,
+    alphaMode: m.transparent ? 'BLEND' : m.alphaTest > 0 ? 'MASK' : 'OPAQUE',
+    ...(m.alphaTest > 0 ? { alphaCutoff: m.alphaTest } : {}),
+    doubleSided: m.side === THREE.DoubleSide,
+    emissive: m.emissive ? (m.emissive.toArray().map(c => c * m.emissiveIntensity) as Rgb) : [0, 0, 0],
+  }
 }

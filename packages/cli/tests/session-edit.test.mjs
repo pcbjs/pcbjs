@@ -173,6 +173,38 @@ const line = (text, re) =>
     .find(l => re.test(l))
     ?.trim()
 
+test('toolbar locks use source checks, editor writes and ordinary undo history', { timeout: 120000 }, async () => {
+  const root = project(),
+    file = join(root, 'pcb.tsx'),
+    s = await serve(root)
+  let c
+  try {
+    c = await client(s.info, 'editor', root)
+    c.type(file, BOARD)
+    await c.request('session/check')
+    const query = { board: 'Edit', ref: 'TP1' }
+    assert.deepEqual(await c.request('session/edit/lock', query), { locked: false, reason: null })
+    const { done } = await drag(c, { tool: 'lock', refs: ['TP1'], anchor: 'TP1' }, { locked: true })
+    assert.match(c.docs.get(file), /<TP1 at="5 10" locked \/>/)
+    assert.equal(done.written[0].via, 'editor')
+    assert.deepEqual(await c.request('session/edit/lock', query), { locked: true, reason: null })
+    await c.request('session/edit/undo', { txn: done.txn })
+    assert.equal(c.docs.get(file), BOARD)
+    await c.request('session/edit/redo', { txn: done.txn })
+    assert.match(c.docs.get(file), /<TP1 at="5 10" locked \/>/)
+    await drag(c, { tool: 'lock', refs: ['TP1'], anchor: 'TP1' }, { locked: false })
+    assert.equal(c.docs.get(file), BOARD)
+    c.type(file, BOARD.replace('<TP1 at="5 10" />', '<TP1 at="5 10" locked={false} />'))
+    await c.request('session/check')
+    assert.match((await c.request('session/edit/lock', query)).reason, /derived from an expression/)
+    await assert.rejects(drag(c, { tool: 'lock', refs: ['TP1'], anchor: 'TP1' }, { locked: true }), /expression/)
+    assert.match(c.docs.get(file), /locked=\{false\}/)
+  } finally {
+    c?.close()
+    await s.stop()
+  }
+})
+
 test('trace primitive case conversions preserve world endpoints and layer changes update the initial route stage', { timeout: 120000 }, async () => {
   const root = project(),
     s = await serve(root),

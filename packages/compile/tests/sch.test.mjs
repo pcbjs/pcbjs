@@ -325,6 +325,9 @@ test('types: a part element takes its symbol props or its board props, not both'
     `const s = defineSymbol({ pins: { A: { side: 'left', at: 1 }, B: { side: 'right', at: 1 } } })`,
     `export const sym = [<U1 at="4 6" flip />, <U1 at="4 6" rot={90} symbol={s} />, <P.R at="2 2" />]`,
     `export const fp = [<U1 side="B" />, <U1 at="4 6 90" ref:at={false} />, <U1 />]`,
+    `export const locks = [<U1 locked />, <U1 locked={true} />, <U1 locked={false} />, <U1 locked={Math.random() > 0.5} />, <U1 at="4 6" rot={90} locked />]`,
+    `// @ts-expect-error locked is boolean`,
+    `export const badLock = <U1 locked="true" />`,
     `// @ts-expect-error side is a board prop, flip a symbol prop`,
     `export const bad1 = <U1 at="4 6" side="B" flip />`,
     `// @ts-expect-error rot is a multiple of 90`,
@@ -352,4 +355,15 @@ test('types: a part element takes its symbol props or its board props, not both'
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('placement-only drafts serialize a finite empty schematic page', () => {
+  const d = sch(board(null))
+  assert.equal(d.symbols.length, 0)
+  assert.ok(d.page.every(Number.isFinite))
+  assert.ok(d.page[2] > d.page[0] && d.page[3] > d.page[1])
+  assert.deepEqual(JSON.parse(JSON.stringify(d)).page, d.page)
+  const paper = sch(board(h(Schematic, { sheet: 'A4' })))
+  assert.ok(paper.page.every(Number.isFinite))
+  assert.equal(paper.paper.name, 'A4')
 })

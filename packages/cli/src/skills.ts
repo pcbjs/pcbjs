@@ -42,8 +42,14 @@ export async function skills(action: string, opts: { to?: string; claude?: boole
   if (action === 'install') {
     for (const s of pkg.install(cwd, { to: opts.to, claude: opts.claude })) console.log(pkg.installLine(s, cwd))
     // a skills folder of its own, such as ~/.agents/skills, is no project to register in
-    if (opts.to === undefined)
-      for (const w of registerAgents(cwd, { claude: opts.claude, hooks: opts.hooks, mcp: opts.mcp })) console.log(`wrote      ${w.what.padEnd(18)} ${w.file}`)
+    if (opts.to === undefined) {
+      const written = registerAgents(cwd, { claude: opts.claude, hooks: opts.hooks, mcp: opts.mcp })
+      for (const w of written) console.log(`wrote      ${w.what.padEnd(18)} ${w.file}`)
+      if (written.some(w => w.what === 'mcp server')) {
+        console.log('MCP configured, not verified in your agent. Load it in the harness, then call its session tool with your task and confirm the live agent connection.')
+        console.log('Keep the harness-owned MCP process running. A one-shot handshake or CLI events command does not establish a persistent agent inbox.')
+      }
+    }
   } else if (action === 'list') {
     for (const n of pkg.skillNames()) console.log(`${n.padEnd(32)}  ${pkg.describe(n)}`)
   } else if (action === 'path') {

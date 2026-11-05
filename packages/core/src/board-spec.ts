@@ -18,6 +18,8 @@ export interface ResolvedBoardSpec {
   rules: ResolvedRules
   /** the ordered sourcing tags, [] for the catch-all MPN alone */
   sourcing: string[]
+  /** preferred via dimensions in mm, over the legacy fallback */
+  via?: { drill?: number; size?: number }
   /** the board-wide autoroute parameters */
   autoroute: AutoRouteParams
   /** the net classes by name, lengths in mm, {} when none */
@@ -294,6 +296,18 @@ export function resolveBoardSpec(levels: BoardSpec[], levelNames?: string[]): Re
   levels.forEach((l, i) => checkBoardKeys(l, names[i]))
   const rules = resolveRules(mergeRules(BASE, ...levels.map((l, i) => checkRules(l.rules, names[i]))))
   const autoroute = mergeAutoroute(BASE_AUTOROUTE, ...levels.map((l, i) => checkAutoroute(l.autoroute, names[i])))
+  const via: { drill?: number; size?: number } = {}
+  levels.forEach((l, i) => {
+    if (l.via === undefined) return
+    if (!l.via || typeof l.via !== 'object' || Array.isArray(l.via)) throw new Error(`${names[i]} via must be an object { drill?, size? }`)
+    for (const [k, v] of Object.entries(l.via)) {
+      if (k !== 'drill' && k !== 'size') throw new Error(`${names[i]} via: unknown field ${k}`)
+      if (v === undefined) continue
+      const n = mm(v)
+      if (!(Number.isFinite(n) && n > 0)) throw new Error(`${names[i]} via.${k} must be a positive length`)
+      via[k] = n
+    }
+  })
   const classes = resolveClasses(mergeClasses(...levels.map((l, i) => checkClasses(l.classes, names[i]))))
   let title: string | undefined,
     rev = '',
@@ -329,6 +343,7 @@ export function resolveBoardSpec(levels: BoardSpec[], levelNames?: string[]): Re
   const thickness = stackupThickness(stackup)
   const teardrops = resolveTeardrops(levels.map((l, i) => (has(l, 'teardrops') ? checkTeardrops(l.teardrops, names[i]) : undefined)))
   const out: ResolvedBoardSpec = { rev, copper: copper as 2 | 4 | 6 | 8, thickness, stackup, rules, sourcing, autoroute, classes, fabNotes, teardrops }
+  if (Object.keys(via).length) out.via = via
   if (title !== undefined) out.title = title
   if (cpl) out.cpl = cpl
   return out

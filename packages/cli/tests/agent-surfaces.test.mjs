@@ -136,7 +136,7 @@ test(
       const { tools } = await m.request('tools/list')
       assert.deepEqual(
         tools.map(t => t.name),
-        ['check', 'inspect', 'query', 'render', 'script', 'docs', 'read', 'write', 'events', 'session'],
+        ['check', 'models', 'inspect', 'query', 'render', 'script', 'docs', 'read', 'write', 'events', 'session'],
       )
       const said = await m.call('session', { task: 'move TP2 out', plan: ['move TP2', 'check'] })
       assert.ok(!said.isError, textOf(said))
@@ -148,6 +148,10 @@ test(
       const checked = await m.call('check')
       assert.match(textOf(checked), /Mcp/)
       assert.match(textOf(checked), /exit [01]; snapshot \w+\.\d+/)
+      const modelCheck = JSON.parse(textOf(await m.call('models')))
+      assert.match(modelCheck.value.stdout, /footprints.*flagged/)
+      assert.ok(modelCheck.value.models.some(r => r.ref === 'TP1'))
+      assert.match(modelCheck.snapshot, /^\w+\.\d+$/)
       const q = JSON.parse(textOf(await m.call('query', { reference: 'TP1' })))
       assert.equal(q.value.record.ref, 'TP1')
       const shot = await m.call('render', { view: '2d', size: [320, 240] })
@@ -179,6 +183,60 @@ test(
     }
   },
 )
+
+test('mcp: a persistent inbox reconnects without subscriptions or tool calls and restores its task', { timeout: 120000 }, async () => {
+  const root = project('Inbox')
+  let s = await serve(root)
+  const m = mcpClient(root)
+  let editor
+  try {
+    await m.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'persistent-harness', version: '1' } })
+    editor = await client(s.info, 'editor', root)
+    assert.ok(
+      (await editor.request('session/clients')).some(c => c.name === 'persistent-harness'),
+      'initialize only succeeds after attaching',
+    )
+    await m.call('session', { task: 'review placement', plan: ['inspect', 'check'], progress: 'checking pin 1' })
+    editor.close()
+    editor = undefined
+    await s.stop()
+    await sleep(2500)
+    assert.ok(!readFileIfPresent(join(root, '.pcbjs/dev.json')), 'background reconnect must not resurrect a stopped server')
+    s = await serve(root)
+    editor = await client(s.info, 'editor', root)
+    const me = await until(async () => (await editor.request('session/clients')).find(c => c.name === 'persistent-harness' && c.task === 'review placement'))
+    assert.deepEqual(me.plan, ['inspect', 'check'])
+    assert.equal(me.progress, 'checking pin 1')
+
+    // Hosts may suppress logging notifications; the next tool result must still carry the note.
+    await m.request('logging/setLevel', { level: 'critical' })
+    const sent = await editor.request('session/send', { to: me.client, comment: 'check the mirrored model' })
+    await until(async () => (await editor.request('session/inbox', { client: me.client })).messages.some(e => e.id === sent.id))
+    const reply = await m.call('docs', { topic: 'mcp' })
+    assert.match(reply.content[0].text, /check the mirrored model/)
+    assert.ok(!m.notes.some(n => n.method === 'notifications/message' && /check the mirrored model/.test(n.params.data)))
+    assert.equal((await editor.request('session/inbox', { client: me.client })).messages.length, 0)
+    assert.ok(!(await m.call('docs', { topic: 'mcp' })).content.some(c => c.text?.startsWith('pcbjs message ')))
+    m.end()
+    await m.exited
+    await until(async () => !(await editor.request('session/clients')).some(c => c.name === 'persistent-harness'))
+    await assert.rejects(editor.request('session/send', { to: me.client, comment: 'after transport close' }), /no agent is attached/)
+  } finally {
+    editor?.close()
+    m.end()
+    await m.exited
+    await s.stop()
+  }
+})
+
+function readFileIfPresent(file) {
+  try {
+    return readFileSync(file, 'utf8')
+  } catch (e) {
+    if (e.code === 'ENOENT') return null
+    throw e
+  }
+}
 
 /** `pcbjs lsp --stdio`: LSP framing both ways, and every notification it sent. */
 function lspClient(root, ...args) {

@@ -36,6 +36,14 @@ Do not copy a field's optionality from one record to another. In particular, a n
 
 A `FacetSet` groups the named facets of one board and nullable target. The [facet inventory](./#viewer-facets) and `FACETS` table define which `SiteData` fields belong to each facet. Facets stream independently and unchanged content can survive across runs. New shape exports carry `itemsHash`, the content hash of the exact item rows their numeric IDs describe. `joinSite` withholds shapes until the layer facet has matching rows, regardless of arrival order. This permits unchanged cross-run reuse without associating geometry with different entities. Legacy shapes without this additive field retain their existing behavior and do not provide this coherence check.
 
+## Halted previews
+
+The meta facet may carry `halted: { stage, stages, completed, src? }`: the failed stage, ordered stage names, completed stage names and optional one-based author source location. This identifies geometry recovered from the current source before the failing expression. It is distinct from `stale`, which identifies a previous successful board shown as a fallback. Consumers must show checks as incomplete even when `drc` and `erc` are empty. Halted previews have no export URLs or fabrication files and do not become successful query snapshots. A successful full compile removes `halted`.
+
+## Mechanical reference transforms
+
+Mechanical board references in the meta facet carry a column-major 4 × 4 `transform`, in millimetres with X = board X, Y = negative board Y and Z up from the carrier bottom. This remains the authoritative world transform for both the viewer and GLB export. The compiler accepts a complete `pose` with translation and quaternion orientation, normalizes it, and composes it with enclosing groups before emitting the matrix. Reference inspection also exposes the normalized input pose and transformed bounds; see [mechanical placement syntax](../syntax/references#quaternion-poses). Referenced copper and drills never join carrier fabrication items.
+
 ## Packed geometry
 
 `SiteShapes` contains optional `itemsHash`, `rings`, `covered.F/B` and `openings.F/B`. Every entry is a `PackedRings` record:
@@ -75,3 +83,5 @@ A non-null stale state must remain visible to a consumer that makes edit or corr
 ## Verification
 
 Facet tests check producer/consumer correspondence, and browser equality checks compare the resulting facets with Node. The site source-map regression test covers sparse IDs explicitly. These tests should accompany a format change; they do not replace versioning or boundary validation for a new external consumer.
+
+PCB footprints and schematic drawing symbols independently carry optional `locked: true`. Edit nodes also carry it when the node itself is locked or a group move would move a locked member. Clients retain selection and source navigation, hide placement tools and cancel active drags when a new snapshot locks their targets. The session enforces locks independently of client flags.

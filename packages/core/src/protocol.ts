@@ -88,7 +88,7 @@ export interface By {
 
 // --- edits
 
-export type ToolId = 'move' | 'rotate' | 'layer' | 'point' | 'assist'
+export type ToolId = 'move' | 'rotate' | 'layer' | 'point' | 'assist' | 'lock'
 export interface Tool {
   id: ToolId
   needs: Capability
@@ -108,12 +108,15 @@ export interface EditBegin {
   /** the run the viewer drew; a begin against another snapshot is refused */
   run?: Run | null
   tool: ToolId
+  /** Lock edits target PCB placements by default, or independent schematic symbols. */
+  view?: 'pcb' | 'sch'
   refs: string[]
   anchor: string
   /** the instance whose definition the view isolates, `CH1`: every write goes to the definition, which all its instances follow */
   isolate?: string | null
 }
 export interface EditUpdate {
+  locked?: boolean
   /** Persist the placement editing pitch in its grid attribute, in mm. */
   grid?: number
   /** Rewrite a literal trace primitive, preserving its endpoint when only case changes. */
@@ -592,6 +595,7 @@ export interface ClientInfo extends By {
 
 /** The project a request names, its root or a file in it; the connection's hello project without one. */
 interface At {
+  expectedSnapshot?: string
   project?: string
   /** s the query waits for its compile */
   timeout?: number
@@ -607,10 +611,18 @@ export interface Methods {
   'session/detach': { params: Folders; result: Projects; write: false }
   'session/clients': { params: {}; result: ClientInfo[]; write: false }
   'session/check': {
-    params: At & { entries?: string[]; verbose?: boolean; json?: string; report?: boolean }
-    result: Envelope<Ran & { report?: unknown; sets?: unknown[] }>
+    params: At & { entries?: string[]; verbose?: boolean; json?: string; report?: boolean; rebuild?: 'stages' | 'all' | 'warm' }
+    result: Envelope<
+      Ran & {
+        report?: unknown
+        sets?: unknown[]
+        result?: 'ok' | 'fail' | 'error'
+        provenance?: { authority: 'saved' | 'editor'; cachePolicy: 'settled' | 'stages' | 'all' | 'warm'; snapshot: string; inputs: string }
+      }
+    >
     write: false
   }
+  'session/models': { params: At & { entries?: string[] }; result: Envelope<Ran & { models: unknown[] }>; write: false }
   'session/resolve': { params: At & { reference: string }; result: Envelope<unknown>; write: false }
   'session/q': {
     params: At & { reference: string; board?: string; target?: string }
@@ -668,6 +680,7 @@ export interface Methods {
   /** sent without an id: nothing answers */
   'session/hover': { params: HoverMsg; result: null; write: false }
   'session/edit/begin': { params: EditBegin; result: { txn: string; tools: Tool[] }; write: true }
+  'session/edit/lock': { params: Pick<EditBegin, 'board' | 'isolate' | 'view'> & { ref: string }; result: { locked: boolean; reason: string | null }; write: false }
   'session/edit/update': { params: EditUpdate & { txn: string }; result: EditPlan; write: true }
   'session/edit/commit': { params: { txn: string }; result: EditResult; write: true }
   'session/edit/cancel': { params: { txn: string }; result: null; write: true }
@@ -696,6 +709,7 @@ export interface SessionStatus extends Omit<ReadyInfo, 'port' | 'host' | 'urls' 
   socket: string
   edit: 'localhost' | 'all' | 'none'
   checkout?: string
+  /** Only returned over the local socket or pipe, never TCP. */
   token?: string
   tiers: Tiers
   url: string
@@ -716,6 +730,7 @@ const WRITES: { [M in Method]: Methods[M]['write'] } = {
   'session/detach': false,
   'session/clients': false,
   'session/check': false,
+  'session/models': false,
   'session/resolve': false,
   'session/q': false,
   'session/inspect': false,
@@ -739,6 +754,7 @@ const WRITES: { [M in Method]: Methods[M]['write'] } = {
   'session/observe': false,
   'session/resync': false,
   'session/hover': false,
+  'session/edit/lock': false,
   'session/edit/begin': true,
   'session/edit/update': true,
   'session/edit/commit': true,

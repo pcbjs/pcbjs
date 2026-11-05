@@ -43,14 +43,14 @@ export function useChip(ctx: PaneContext) {
       t && b && a && part && kind === 'placement' && pane.mode !== 'sch' && a !== partRefOf(b, part)
         ? { ...t, pad: `${part}/${a.slice(a.lastIndexOf('/') + 1)}`, board: b.name }
         : t
-    if (b) void ctx.open(pad)
+    if (b) void ctx.open(pad, false, true)
   }
   const isoName = computed(() => (store.site && sel.value.isolate ? isolationName(store.site, sel.value.isolate) : null))
 
   // the context menu: Send to agent, while an agent is attached; an editor's pane hands it to the extension, a standalone page asks here
   const chipMenu = ref(false)
   const sendBox = ref<{ to: string; comment: string; now: number } | null>(null)
-  const canSend = computed(() => agents.list.length > 0 && sel.value.refs.length > 0)
+  const canSend = computed(() => store.edit.mode?.mode === 'rw' && agents.list.length > 0 && sel.value.refs.length > 0)
   const inPane = () => !!ctx.shell?.ide.on && window.parent !== window
   const lastAgent = (): LastAgent | null => {
     try {

@@ -70,7 +70,9 @@ test('editor bridge accepts native paths under Vite allow roots, but refuses adj
   const bridge = ideBridge(server, () => `${top}-other`, { lsp: { keys: () => ['editor'], select: (_key, ranges) => selected.push(...ranges) } })
   const request = async path => {
     const response = { statusCode: 200, setHeader() {}, end() {} }
-    await bridge.middleware({ url: `/__pcbjs/open?file=${encodeURIComponent(path)}` }, response, () => assert.fail('unhandled request'))
+    await bridge.middleware({ url: `/__pcbjs/open?file=${encodeURIComponent(path)}`, headers: { host: 'localhost' }, socket: { remoteAddress: '127.0.0.1' } }, response, () =>
+      assert.fail('unhandled request'),
+    )
     return response.statusCode
   }
   try {

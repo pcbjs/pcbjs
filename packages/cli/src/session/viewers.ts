@@ -21,7 +21,7 @@ import { CONDITIONS, issueUrl, ownVersion, writeIncident, type Condition } from 
 import type { ProjectRuntime } from './runtime.js'
 import { boardOnly, editorContext, isView, netDecl, pcbRange, selectionRanges, selectionStore, type MemberRange, type View as SelView } from './selection.js'
 
-type EditMethod = 'session/edit/begin' | 'session/edit/update' | 'session/edit/commit' | 'session/edit/cancel' | 'session/edit/undo' | 'session/edit/redo'
+type EditMethod = 'session/edit/lock' | 'session/edit/begin' | 'session/edit/update' | 'session/edit/commit' | 'session/edit/cancel' | 'session/edit/undo' | 'session/edit/redo'
 
 /** A viewer's `observe` checked: a board, its target, the scope it shows and known facet names. */
 export function observeOf(d: any): Observe | null {
@@ -151,6 +151,7 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
   const selected = (rt: ProjectRuntime, sel: Selection, by: By | null, was?: Selection | null, view?: SelView | null) => {
     for (const c of h.viewersOf(rt.root)) if ((c.observe?.board ?? sel.board) === sel.board) c.event('pcbjs:select', { board: sel.board, selection: sel })
     shared.feed?.selection(rt.root, { board: sel.board, refs: sel.refs, anchor: sel.anchor, level: sel.level, isolate: sel.isolate?.ref ?? null }, by)
+    if (by && shared.clients?.get(by.client)?.mode === 'ro') return
     const model = boardModel(rt, sel.board, sel.target)
     const finding = sel.finding ? [...(model?.drc ?? []), ...(model?.erc ?? [])].find(f => f.id === sel.finding) : null
     shared.clients?.relay('pcbjs:ide:finding', {
@@ -354,6 +355,14 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
     return got
   }
   const edit = (prefer: () => ProjectRuntime | null): { [M in EditMethod]: (p: Params<M>, by: By | null) => Result<M> | Promise<Result<M>> } => ({
+    'session/edit/lock': async p => {
+      const rt = runtimeOfBoard(String(p?.board), prefer())
+      if (!rt) throw new Error(`no board ${String(p?.board)} in this session`)
+      await freshModel(rt, p.board)
+      const sel = selectionsOf(rt).get(p.board)
+      if (p.isolate && sel?.isolate?.mode === 'library' && sel.isolate.ref === p.isolate) await loadLayout(rt, p.board, sel.target, p.isolate)
+      return txnsOf(rt).lockState(p)
+    },
     // a view drawn from a compile of its views alone is as current as the whole compile that completes it
     'session/edit/begin': async (p, by) => {
       const rt = runtimeOfBoard(String(p?.board), prefer())
@@ -391,7 +400,7 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
     (p, c) => {
       const rt = runtimeOfClient(c)
       if (!rt) throw new Error('the project is no longer available; reload its view')
-      if (m !== 'session/edit/cancel') {
+      if (m !== 'session/edit/cancel' && m !== 'session/edit/lock') {
         const requested = m === 'session/edit/begin' ? (p as Params<'session/edit/begin'>) : null
         const board = requested?.board ?? c.observe?.board
         if (requested && c.observe?.board && requested.board !== c.observe.board)
@@ -567,6 +576,7 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
     atOf: r => atOf(h.recent()?.root ?? h.ws.folders[0], { ...r, place: true }),
     views: {
       'session/select': (p, c) => {
+        if (c.mode === 'ro' && 'refs' in p && Array.isArray(p.refs) && p.refs.includes(`board:${p.board}`)) throw new Error('Opening the editor requires read-write access')
         const rt = runtimeOfClient(c)
         if (!rt) throw new Error('the project is no longer available; reload its view')
         return 'selection' in p ? offer(p, c) : select(p, c.by(), c.hello?.role === 'agent' ? 'agent' : isViewer(c) ? 'viewer' : 'sync', rt)
@@ -582,6 +592,7 @@ export function viewerTools(h: Hub): ToolHooks & { views: Pick<Handlers, ViewMet
       'session/resync': resync,
       'session/hover': (p, c) => relay(p, c),
       'session/clients': () => clientList(),
+      'session/edit/lock': byClient('session/edit/lock'),
       'session/edit/begin': byClient('session/edit/begin'),
       'session/edit/update': byClient('session/edit/update'),
       'session/edit/commit': byClient('session/edit/commit'),

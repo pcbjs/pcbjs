@@ -1,6 +1,6 @@
 import { marker } from './messages.js'
 import type { AutoRouteParams, Child, IslandMode, PcbNode, PinRef, RouteEnd, ResolvedRules as Rules, Src, Stackup, ThermalConnection } from '@pcbjs/core/internal/types'
-import { defaultVia, withMaskColor } from '@pcbjs/core/internal/rules'
+import { resolveVia, withMaskColor } from '@pcbjs/core/internal/rules'
 import type { BoardSpec, ResolvedBoardSpec } from '@pcbjs/core/internal/defaults'
 import { checkTeardrops, type TeardropLevel } from '@pcbjs/core/internal/teardrop'
 import { checkAutoroute, checkIslands, mergeAutoroute, resolveBoardSpec } from '@pcbjs/core/internal/board-spec'
@@ -162,6 +162,8 @@ export interface Flat {
   netNames: Set<string>
   /** tracks to route once everything else is flattened, in document order */
   autoRoutes: AutoRouteJob[]
+  /** preferred via dimensions in mm, over the legacy fallback */
+  via?: { drill?: number; size?: number }
   /** the board-wide autoroute parameters */
   autoroute: AutoRouteParams
   /** the net classes by name, in mm, {} when none */
@@ -294,6 +296,8 @@ export interface CompileCache {
 
 /** Options of a compile. `files` are the modules the entry imports. */
 export interface CompileOptions {
+  /** Preview only: stop traversal before this source expression; omit completeness checks. */
+  previewBefore?: Src
   /** Preview the reusable layout of this instance without its own placement overrides. */
   library?: string
   /** The root used by the loader for relative source filenames. */
@@ -366,7 +370,7 @@ interface Own {
 }
 const PLACEHOLDER = '\u0000part:'
 /** What a placement takes; everything else about a part is set where it is made. */
-const PLACE_PROPS = new Set(['at', 'side', 'grid', 'ref:at', 'thermal', 'children', 'at:initial', 'at:cost', 'at:solver', 'at:follow', 'name'])
+const PLACE_PROPS = new Set(['at', 'side', 'grid', 'locked', 'ref:at', 'thermal', 'children', 'at:initial', 'at:cost', 'at:solver', 'at:follow', 'name'])
 const AUTO_PROPS = ['at:initial', 'at:cost', 'at:solver', 'at:follow'] as const
 
 interface Ctx {
@@ -600,6 +604,7 @@ export class CompileError extends Error {
     public code?: string,
   ) {
     super(message)
+    this.name = 'CompileError'
   }
 }
 
@@ -733,6 +738,7 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
     footprints: [],
     netNames: new Set(),
     autoRoutes: [],
+    ...(board.via ? { via: board.via } : {}),
     autoroute: board.autoroute,
     classes: board.classes,
     erc: [],
@@ -759,7 +765,7 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
     routeScopes: {},
   }
   if (sch !== undefined && sch !== null) schematicProp(flat, sch, node)
-  const { drill: viaDrill, size: viaSize } = defaultVia(flat.rules)
+  const { drill: viaDrill, size: viaSize } = resolveVia(flat.rules, flat.via)
   let nextId = 1
   const localObjects = new WeakSet<object>()
   const inLibrary = (ctx: Ctx) => !!opts.library && ctx.levels.some(l => l.path === opts.library || l.path.startsWith(opts.library + '/'))
@@ -1197,7 +1203,11 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
     )
   }
 
+  let halted = false
+  const boundary = opts.previewBefore
+  const sameSource = (a: string, b: string) => absFile(a, opts.files, platform().path, opts.sourceRoot) === absFile(b, opts.files, platform().path, opts.sourceRoot)
   const walk = (c: Child, ctx: Ctx): void => {
+    if (halted) return
     if (c === null || c === undefined || c === false || typeof c === 'string' || typeof c === 'number') return
     if (Array.isArray(c)) {
       for (const k of c) walk(k, ctx)
@@ -1225,6 +1235,10 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
     const n = c
     pulse()
     const self = srcOf(n)
+    if (boundary && self && sameSource(self.file, boundary.file) && self.line === boundary.line && self.col === boundary.col) {
+      halted = true
+      return
+    }
     cur = n
     if (typeof n.type === 'function') {
       const props = propsOf(n)
@@ -1552,8 +1566,7 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
       }
       case 'via': {
         const [x, y] = parseAt(p.at)
-        const drill = mm(p.drill, viaDrill),
-          size = mm(p.size, viaSize)
+        const { drill, size } = resolveVia(flat.rules, flat.via, { drill: mm(p.drill, viaDrill), size: mm(p.size, viaSize) })
         if (!(drill > 0)) throw new CompileError(`<via> drill must be positive${where(n)}`, srcOf(n))
         if (!(size > 0)) throw new CompileError(`<via> size must be positive${where(n)}`, srcOf(n))
         const ls = (p.layers ?? ['F.Cu', 'B.Cu']).map((q: string) => layer(n, q, ctx.flipped)) as [string, string]
@@ -1668,8 +1681,7 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
           ls = cu.filter(l => ls!.includes(l))
         }
         const v = p.via ?? {}
-        const drill = mm(v.drill, viaDrill),
-          size = mm(v.size, viaSize)
+        const { drill, size } = resolveVia(flat.rules, flat.via, { drill: mm(v.drill, viaDrill), size: mm(v.size, viaSize) })
         if (!(drill > 0) || !(size > drill)) fail(`via size ${size} must be more than its drill ${drill}`)
         const padClearance = p.padClearance !== undefined ? mm(p.padClearance) : undefined
         if (padClearance !== undefined && !(padClearance >= 0)) fail('padClearance must be 0 or more')
@@ -2014,7 +2026,7 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
     const other = Object.keys(props).filter(k => !PLACE_PROPS.has(k))
     if (other.length)
       throw new CompileError(
-        `${st.label}: a placement takes at, side, grid, ref:at and thermal, not ${other.join(', ')}; the part's ref, nets, sourcing and options are set where it is made${where(n)}`,
+        `${st.label}: a placement takes at, side, grid, locked, ref:at and thermal, not ${other.join(', ')}; the part's ref, nets, sourcing and options are set where it is made${where(n)}`,
         self,
       )
     placedAt.set(st, self)
@@ -2023,7 +2035,8 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
     const fail = (msg: string): never => {
       throw new CompileError(`${st.label}: ${msg}${where(n)}`, self)
     }
-    const { 'at:initial': initial, 'at:cost': cost, 'at:solver': solver, 'at:follow': follow, name, grid, ...place } = props
+    if (props.locked !== undefined && typeof props.locked !== 'boolean') fail('locked must be true or false')
+    const { 'at:initial': initial, 'at:cost': cost, 'at:solver': solver, 'at:follow': follow, name, grid, locked, ...place } = props
     const snap = placementSnap(grid)
     if (ctx.grid && typeof place.at === 'string') place.at = inGridUnits(place.at, ctx.grid.pitch)
     const auto = autoPlacement(place.at, { initial, cost, solver, follow }, fail)
@@ -2034,6 +2047,7 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
     const out = renderComponent<Child>(footprintRender(st.footprint), fpProps)
     walk(out, { ...ctx, site: ctx.site ?? self, chain: chained(ctx, self), part: bind })
     if (!bind.rec) throw new CompileError(`${st.label}: its footprint rendered no <footprint> with the ref it was given${where(n)}`, self)
+    if (locked) bind.rec.locked = true
     if (ctx.grid) partGrid.set(bind.rec, ctx.grid.name)
     const owned = ctx.own?.get(st)?.node === n
     const k = ownLayout(ctx.layouts, st)
@@ -2136,7 +2150,8 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
   } finally {
     endCompile(scope)
   }
-  unplacedRoutes(flat, srcOf(node), bindings, placedRoutes, opts.files)
+  if (boundary && !halted) throw new CompileError('The failing expression has no placement boundary', boundary)
+  if (!boundary) unplacedRoutes(flat, srcOf(node), bindings, placedRoutes, opts.files)
   for (const b of bindings) {
     for (let i = b.st.owner; i; i = i.parent ?? undefined) {
       const lay = layoutAt.get(i)
@@ -2151,7 +2166,7 @@ export function flatten(root: Child, target?: VariantSpec, opts: CompileOptions 
       )
     }
   }
-  schematicPass(flat, { bindings, snapshot: scope.parts, instances: scope.instances, netObjs, layoutAt, groupAt, refStyle, library: opts.library })
+  schematicPass(flat, { bindings, snapshot: scope.parts, instances: scope.instances, netObjs, layoutAt, groupAt, refStyle, library: opts.library, incomplete: !!boundary })
   netRulesPass(flat, netObjs)
   classPass(flat, (q, name) => layer(node, q, false) ?? name)
   for (const [f, set] of missingOutline) console.warn(`pcbjs: ${flat.name}: no glyph for ${[...set].map(c => JSON.stringify(c)).join(', ')} in ${f}, drawn as its .notdef glyph`)
@@ -2361,6 +2376,7 @@ function schematicPass(
     groupAt: Map<string, Src | undefined>
     refStyle: 'flat' | 'hierarchical'
     library?: string
+    incomplete?: boolean
   },
 ) {
   const nameSite = (st: PartState) => loc(st.explicitRef === undefined ? (st.boundSrc ?? st.src) : st.src)
@@ -2401,7 +2417,7 @@ function schematicPass(
     ...unplacedCircuits.map(i => `the instance ${instancePath(i).join('/')} of ${i.circuit}${i.src ? ` at ${loc(i.src)}` : ''}`),
     ...unplaced.filter(st => !silent.has(st)).map(st => `${named(st) ?? st.label}${st.src ? ` at ${loc(st.src)}` : ''}`),
   ]
-  if (lost.length && !s.library)
+  if (lost.length && !s.library && !s.incomplete)
     throw new CompileError(
       `${lost.join(', ')} ${lost.length > 1 ? 'are' : 'is'} declared but never placed on <PCB ${flat.name}>; place ${lost.length > 1 ? 'them' : 'it'} or remove ${lost.length > 1 ? 'them' : 'it'}`,
       unplacedCircuits[0]?.src ?? unplaced[0]?.src,
@@ -2675,7 +2691,11 @@ function classPass(flat: Flat, lay: (q: unknown, name: string) => string): void 
         na = padAt(job.pair.fromN),
         nb = padAt(job.pair.toN)
       const side = (x: Pad | undefined, qx: unknown, y: Pad | undefined, qy: unknown, which: string): string | undefined => {
-        if (x?.net && y?.net && x.net !== y.net) fail(`pair route: the ${which} ends ${padName(x, qx)} and ${padName(y, qy)} are on two nets, ${x.net} and ${y.net}`)
+        if (x?.net && y?.net && x.net !== y.net)
+          fail(`pair route: ${which} endpoints must be on the same net
+  ${padName(x, qx)}: ${x.net}
+  ${padName(y, qy)}: ${y.net}
+Check the connector pin mapping and the [P, N] order at both ends of the pair.`)
         return x?.net ?? y?.net
       }
       // with pads they must agree

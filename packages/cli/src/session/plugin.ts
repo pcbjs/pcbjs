@@ -13,6 +13,7 @@ import type { ResolvedConfig } from '../project/config.js'
 import { ideBridge } from '../server/bridge.js'
 import type { DocumentStore } from '@pcbjs/lsp'
 import type { Clients, Handlers } from './clients.js'
+import { requestMode } from './access.js'
 import { sessionEndpoint } from './endpoint.js'
 import type { Ready, ReadyInfo, Stale, Tiers } from '@pcbjs/core/protocol'
 import type { EditMode } from './frames.js'
@@ -64,7 +65,7 @@ export interface DevState extends PluginState {
   verbose?: boolean
 }
 
-type EditMethod = 'session/edit/begin' | 'session/edit/update' | 'session/edit/commit' | 'session/edit/cancel' | 'session/edit/undo' | 'session/edit/redo'
+type EditMethod = 'session/edit/lock' | 'session/edit/begin' | 'session/edit/update' | 'session/edit/commit' | 'session/edit/cancel' | 'session/edit/undo' | 'session/edit/redo'
 /** The methods the dev server answers itself. */
 export type ViewMethod = 'session/layout' | 'session/select' | 'session/observe' | 'session/resync' | 'session/hover' | 'session/clients' | EditMethod
 
@@ -86,10 +87,12 @@ export interface SessionHooks {
 export interface ProjectApi {
   root: string
   cfg: ResolvedConfig
+  snapshotStale(snap: Snapshot): Stale | null
   current(): Snapshot | null
   previous(): Snapshot | null
   /** settle before answer: compile what changed, within `timeoutMs`, then the snapshot to answer from */
   settle(timeoutMs: number): Promise<{ snap: Snapshot | null; stale: Stale | null }>
+  refresh(entries: string[], policy: 'stages' | 'all' | 'warm', ms: number): Promise<void>
   /** the draft holding its compile while its block has an error, which settling compiles as the repair makes it */
   hold(): { file: string; line: number } | null
   /** what stays in the compile thread of a board target it holds */
@@ -165,6 +168,7 @@ export function pcbjsPlugin(clientDir: string, shared: DevState, ws: Workspace):
       })
       // ahead of the board endpoints since it never waits for a compile
       const bridge = ideBridge(s, req => hub.rootOfRequest(req), {
+        canOpen: req => requestMode(req, shared.session) === 'rw',
         clients: tools.clients,
         lsp: hub.lsp() ?? undefined,
         atOf: tools.atOf,

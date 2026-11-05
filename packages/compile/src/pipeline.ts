@@ -1,6 +1,6 @@
 // The compile's entry points: a node tree, or an entry the caller loads, through the stages of the stage table; see docs/design.md.
 import { cancelPoint, CancelledError, pulsed } from './cancel.js'
-import type { Child } from '@pcbjs/core/internal/types'
+import type { Child, Src } from '@pcbjs/core/internal/types'
 import { beginCompile, endCompile } from '@pcbjs/core/internal/realm'
 import type { Board } from '@pcbjs/core/model'
 import type { DepGraph, StageName, View } from '@pcbjs/core/internal/plugin'
@@ -8,6 +8,7 @@ import { realm } from '@pcbjs/core/internal/realm'
 import { platform } from '@pcbjs/core/platform'
 import { FACET_NAMES as VIEWS, type StageStatus } from '@pcbjs/core/site-facets'
 import { readStored, servable } from './cache.js'
+import { connectivity } from './connectivity.js'
 import { CompileError, type CompileOptions } from './flatten.js'
 import { planOf, runEntry, type Run } from './runner.js'
 import { allCached, opener, STAGE_DEFS, unpackExports } from './stages.js'
@@ -124,6 +125,29 @@ export function sketch(root: Child, given: Pick<CompileOptions, 'files' | 'sourc
     if (centres?.size) t.board.items = t.board.items.filter(it => !centres.has(it.id))
     return { board: t.board, ...(t.name !== undefined ? { target: t.name } : {}) }
   })
+}
+
+/** Current-source geometry before an error, without routing, checks, plugins or cache output. */
+export function previewBefore(root: Child, src: Src, given: Pick<CompileOptions, 'files' | 'sourceRoot' | 'signal' | 'defaults'> = {}): Board[] {
+  endCompile(beginCompile())
+  const run = runOf({ ...given, previewBefore: src, cache: false }, planOf(STAGE_DEFS, ['meta', 'sch'], ['manualCopper']), { placer: false, first: false })
+  return pulsed(cancelPoint(run.opts.signal), () =>
+    runEntry(run, root, opener()).map(t => {
+      const runs = t.plan?.runs ?? []
+      const routes = runs
+        .filter(r => r.job.route !== undefined && !r.job.sub && !r.pair && !runs.some(q => q.job.route === r.job.route && (q.legs.length || q.pair)))
+        .map(r => ({
+          id: r.job.route!,
+          ...(r.net !== undefined ? { net: r.net } : {}),
+          pts: r.pts,
+          ...(r.job.src ? { src: r.job.src } : {}),
+          ...(r.job.chain ? { chain: r.job.chain } : {}),
+        }))
+      const board = { ...t.board, ...(routes.length ? { routes } : {}), drc: [], erc: [] }
+      const { ratsnest, unconnected } = connectivity(board)
+      return { ...board, ratsnest, unconnected }
+    }),
+  )
 }
 
 function runOf(given: CompileOptions, plan: Set<StageName>, o: { placer: boolean; first: boolean } = { placer: true, first: false }): Run {

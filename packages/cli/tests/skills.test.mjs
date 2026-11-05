@@ -8,7 +8,7 @@ import { skills } from '../dist/skills.js'
 import { codexToml } from '../dist/agent-config.js'
 
 test('skills install: a Codex config keeps its other tables, and the pcbjs table is replaced in place', () => {
-  const table = '[mcp_servers.pcbjs]\ncommand = "npx"\nargs = ["--no-install", "pcbjs", "mcp"]\n'
+  const table = '[mcp_servers.pcbjs]\ncommand = "npx"\nargs = ["--no-install", "pcbjs", "mcp"]\nstartup_timeout_sec = 60\n'
   assert.equal(codexToml(''), table)
   const other = 'model = "o3"\n\n[mcp_servers.other]\ncommand = "x"\n'
   assert.equal(codexToml(other), `${other}\n${table}`)
@@ -50,6 +50,8 @@ test(
     writeFileSync(join(dir, '.claude', 'skills', 'pcbjs-basics', 'SKILL.md'), 'an old copy')
     const first = await quiet(() => skills('install', { cwd: dir }))
     assert.equal(first.code, 0)
+    assert.ok(first.lines.some(l => l.startsWith('MCP configured, not verified in your agent.')))
+    assert.ok(first.lines.some(l => l.includes('one-shot handshake')))
     assert.ok(first.lines.includes('installed  pcbjs-basics  link .agents/skills/pcbjs-basics  link .claude/skills/pcbjs-basics'))
     for (const d of ['.agents', '.claude']) {
       const link = join(dir, d, 'skills', 'pcbjs-basics')

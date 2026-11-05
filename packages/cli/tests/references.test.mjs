@@ -4,7 +4,7 @@ import { sameFile } from '../dist/project/files.js'
 // a board it references changes.
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -67,10 +67,22 @@ test('references: a referenced entry compiles once per content of its graph, fro
   memo().clear()
   assert.equal(r.resolve(join(s.b, 'pcb.tsx')).hash, one.hash)
   assert.equal(st.spawned, spawned + 1)
+  // Source files still match, but a cache from an older model converter must rebuild.
+  const cacheDir = join(s.a, '.pcbjs', 'cache', 'references')
+  const cache = join(
+    cacheDir,
+    readdirSync(cacheDir).find(f => f.endsWith('.json')),
+  )
+  const old = JSON.parse(readFileSync(cache, 'utf8'))
+  old.board.hash = 'legacy-converter-hash'
+  writeFileSync(cache, JSON.stringify(old))
+  memo().clear()
+  assert.equal(r.resolve(join(s.b, 'pcb.tsx')).hash, one.hash)
+  assert.equal(st.spawned, spawned + 2)
   // an edit of its graph compiles it again
   writeFileSync(join(s.b, 'pcb.tsx'), board('B', 'Beta 2'))
   const two = r.resolve(join(s.b, 'pcb.tsx'))
-  assert.equal(st.spawned, spawned + 2)
+  assert.equal(st.spawned, spawned + 3)
   assert.equal(two.title, 'Beta 2')
   assert.notEqual(two.hash, one.hash)
 })

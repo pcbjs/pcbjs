@@ -339,10 +339,8 @@ export class BoardScene {
             envMapIntensity: 0.1,
             transparent: true,
             opacity: MASK_OPACITY,
+            // Real mask thickness separates the surfaces; depth bias can pull the mask in front of silk.
             depthWrite: false,
-            polygonOffset: true,
-            polygonOffsetFactor: -1,
-            polygonOffsetUnits: -2,
           }),
         )
       return { bare: one(shades.bare), copper: one(shades.copper) }

@@ -1,4 +1,5 @@
 // The session's queries over its snapshots: each settles its project first, then answers in an Envelope. docs/session.md has them.
+import { createHash } from 'node:crypto'
 import { under } from '../project/files.js'
 import { readFileSync, realpathSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
@@ -27,11 +28,13 @@ import { renderShot } from '../render/render.js'
 import type { RenderWorker } from '../render/worker-client.js'
 import { MAX_FRAME } from './frames.js'
 import { siteFacets } from '../project/facets.js'
+import { modelReport } from '../project/model-report.js'
 
 /** The references lineage follows: finding ids, nets and part refs. */
 const LINEAGE = /^(drc|erc):|^net:|^[A-Za-z0-9_.+-]+$/
 
 /** s a query waits for its compile, `--timeout` */
+const CHECK_TIMEOUT = 600
 export const TIMEOUT_S = 120
 /** s `events --wait` waits by default */
 export const WAIT_S = 600
@@ -51,17 +54,29 @@ async function projectFor(api: ProjectsApi | undefined, at: unknown, c: Client):
   return p
 }
 
-async function settled(p: ProjectApi, timeout: unknown) {
+async function settled(p: ProjectApi, timeout: unknown, expected?: unknown) {
   const s = Number(timeout ?? TIMEOUT_S)
   const { snap, stale } = await p.settle((Number.isFinite(s) && s > 0 ? s : TIMEOUT_S) * 1000)
   if (!snap) throw new Error(`no compile of ${p.root} finished within ${s} s`)
+  guardSnapshot(snap, stale, expected)
   return { snap, stale }
 }
 
+export function guardSnapshot(snap: Pick<Snapshot, 'id'>, stale: unknown, expected: unknown): void {
+  if (expected === undefined) return
+  if (typeof expected !== 'string' || !expected) throw new Error('expectedSnapshot must be a nonempty string')
+  if (snap.id !== expected || stale) throw new Error(`snapshot changed or stale: expected ${expected.slice(0, 100)}, observed ${snap.id}; run check again`)
+}
+
+function validateEntries(entries: unknown): void {
+  if (entries !== undefined && (!Array.isArray(entries) || !entries.every(e => typeof e === 'string' && e.length))) throw new Error('entries must be an array of nonempty strings')
+}
+
 /** The slots of the named entries, every one without a list. */
-function pick(snap: Snapshot, root: string, entries: unknown): SnapshotSlot[] {
-  if (!Array.isArray(entries) || !entries.length) return snap.slots
-  const want = new Set(entries.filter((e): e is string => typeof e === 'string').map(e => real(resolve(root, e))))
+export function pick(snap: Snapshot, root: string, entries: unknown): SnapshotSlot[] {
+  validateEntries(entries)
+  if (entries === undefined || !(entries as string[]).length) return snap.slots
+  const want = new Set((entries as string[]).map(e => real(resolve(root, e))))
   const out = snap.slots.filter(s => want.has(real(s.entry.file)))
   if (out.length < want.size) throw new Error(`not an entry of ${root}: ${[...want].filter(w => !out.some(s => real(s.entry.file) === w)).join(', ')}`)
   return out
@@ -71,10 +86,16 @@ const boardsOf = (snap: Snapshot): QBoard[] => snapshotBoards(snap.slots, snap.i
 
 /** `pcbjs check` over the settled snapshot: its stdout and exit code; tsc reads the editors' unsaved text too. */
 async function check(api: ProjectsApi | undefined, p: any, c: Client) {
+  validateEntries(p?.entries)
   const t0 = performance.now()
   const prj = await projectFor(api, p?.project, c)
   const hold = prj.hold()
-  const { snap, stale } = await settled(prj, p?.timeout)
+  if (p?.entries !== undefined && (!Array.isArray(p.entries) || !p.entries.every((e: unknown) => typeof e === 'string' && e.length)))
+    throw new Error('entries must be an array of nonempty strings')
+  if (p?.rebuild !== undefined && !['stages', 'all', 'warm'].includes(p.rebuild)) throw new Error('rebuild must be stages, all or warm')
+  if (p?.rebuild && p?.expectedSnapshot) throw new Error('rebuild and expectedSnapshot cannot be combined')
+  if (p?.rebuild) await prj.refresh(p.entries ?? [], p.rebuild, Number(p.timeout ?? CHECK_TIMEOUT) * 1000)
+  const { snap, stale } = await settled(prj, p?.timeout, p?.expectedSnapshot)
   const slots = pick(snap, prj.root, p?.entries)
   const verbose = !!p?.verbose
   const json = typeof p?.json === 'string' && p.json ? p.json : undefined
@@ -88,11 +109,40 @@ async function check(api: ProjectsApi | undefined, p: any, c: Client) {
   const errorOf = (s: unknown) => (s as SnapshotSlot).error
   const lines = [...holdLines(hold), ...checkLines(prj.root, slots, errorOf, { verbose, json }), ...typecheckLines(tc, verbose)]
   let exitCode = slotsFailed(slots) || tc?.errors.length ? 1 : 0
-  const report = json || p?.report ? checkReport(prj.cfg, 'check', slots, errorOf, tc, performance.now() - t0) : undefined
+  const report = checkReport(prj.cfg, 'check', slots, errorOf, tc, performance.now() - t0)
   if (report && json) lines.push(`json   ${writeReport(prj.root, json, report)}`)
   if (report) exitCode = report.exit
-  const out = { stdout: lines.join('\n') + '\n', exitCode }
+  const inputs = createHash('sha256')
+    .update(JSON.stringify([[...snap.stamps].sort(), [...snap.overlay].sort(), [...snap.texts].sort()]))
+    .digest('hex')
+  const provenance = {
+    authority: snap.overlay.size ? ('editor' as const) : ('saved' as const),
+    cachePolicy: p?.rebuild ?? 'settled',
+    cacheNamespaces: slots.flatMap(s =>
+      (s.compiled ?? []).map(c => ({ entry: s.entry.rel, board: c.board.name, target: c.board.variant?.name ?? null, namespace: c.cacheNamespace ?? 'project' })),
+    ),
+    snapshot: snap.id,
+    inputs,
+  }
+  const out = { stdout: lines.join('\n') + '\n', exitCode, result: report.result, provenance }
   return envelope(snap, stale, p?.report ? { ...out, report, sets: fabSets(prj.cfg.fabDir, slots) } : out)
+}
+
+async function models(api: ProjectsApi | undefined, p: any, c: Client) {
+  validateEntries(p?.entries)
+  const prj = await projectFor(api, p?.project, c)
+  const { snap, stale } = await settled(prj, p?.timeout, p?.expectedSnapshot)
+  const slots = pick(snap, prj.root, p?.entries)
+  const failed = slots.filter(s => !s.compiled || s.conflict)
+  const report = modelReport(
+    prj.root,
+    slots.flatMap(s => (!s.conflict && s.compiled ? [s.compiled[0]] : [])),
+  )
+  if (failed.length) {
+    report.exitCode = 1
+    report.stdout = failed.map(s => `${s.entry.rel}  compile error: ${s.conflict ?? errorText(s.error, false, prj.root).line}\n`).join('') + report.stdout
+  }
+  return envelope(snap, stale, report)
 }
 
 /** A draft that held its compile: the check compiled it as the repair makes it. */
@@ -116,7 +166,7 @@ function fabSets(fabDir: string, slots: SnapshotSlot[]) {
 async function resolveIt(api: ProjectsApi | undefined, p: any, c: Client) {
   if (typeof p?.reference !== 'string' || !p.reference) throw new Error('session/resolve needs { reference }')
   const prj = await projectFor(api, p.project, c)
-  const { snap, stale } = await settled(prj, p.timeout)
+  const { snap, stale } = await settled(prj, p.timeout, p.expectedSnapshot)
   const r = resolveRef(snap, prj.previous(), p.reference)
   return envelope(snap, r.stale ?? stale, r)
 }
@@ -125,7 +175,7 @@ async function resolveIt(api: ProjectsApi | undefined, p: any, c: Client) {
 async function query(api: ProjectsApi | undefined, p: any, c: Client) {
   if (typeof p?.reference !== 'string' || !p.reference) throw new Error('session/q needs { reference }')
   const prj = await projectFor(api, p.project, c)
-  const { snap, stale } = await settled(prj, p.timeout)
+  const { snap, stale } = await settled(prj, p.timeout, p.expectedSnapshot)
   const all = boardsOf(snap)
   const o = { board: str(p.board), target: str(p.target) }
   const done = (a: QAnswer, st: typeof stale) => envelope(snap, st, a.exit === 0 ? { exit: 0, record: recordOf(a) } : a)
@@ -141,7 +191,7 @@ async function query(api: ProjectsApi | undefined, p: any, c: Client) {
 /** `pcbjs inspect` over the settled snapshot: what it prints, or the error line of a failed entry. */
 async function inspect(api: ProjectsApi | undefined, p: any, c: Client) {
   const prj = await projectFor(api, p?.project, c)
-  const { snap, stale } = await settled(prj, p?.timeout)
+  const { snap, stale } = await settled(prj, p?.timeout, p?.expectedSnapshot)
   const file = typeof p?.entry === 'string' ? real(resolve(prj.root, p.entry)) : null
   const slot = file ? snap.slots.find(s => real(s.entry.file) === file) : snap.slots.length === 1 ? snap.slots[0] : null
   if (!slot) throw new Error(file ? `not an entry of ${prj.root}: ${file}` : `inspect looks at one board, name its entry: ${snap.slots.map(s => s.entry.rel).join(', ')}`)
@@ -159,9 +209,10 @@ async function inspect(api: ProjectsApi | undefined, p: any, c: Client) {
 
 /** `pcbjs shot`: each entry's boards and targets, and what each `--select` names on them. */
 async function boards(api: ProjectsApi | undefined, p: any, c: Client) {
+  validateEntries(p?.entries)
   const prj = await projectFor(api, p?.project, c)
-  const { snap, stale } = await settled(prj, p?.timeout)
-  const files: string[] = Array.isArray(p?.entries) ? p.entries.map((e: string) => real(resolve(prj.root, e))) : snap.slots.map(s => s.entry.file)
+  const { snap, stale } = await settled(prj, p?.timeout, p?.expectedSnapshot)
+  const files = pick(snap, prj.root, p?.entries).map(s => s.entry.file)
   const list = files.map(f => {
     const s = snap.slots.find(x => real(x.entry.file) === real(f))
     if (!s?.compiled || s.conflict) return { entry: f, current: false, reason: s ? (s.conflict ?? 'its last compile failed') : 'no such entry' }
@@ -182,7 +233,7 @@ async function boards(api: ProjectsApi | undefined, p: any, c: Client) {
 async function facets(api: ProjectsApi | undefined, p: any, c: Client) {
   if (typeof p?.entry !== 'string' || !Array.isArray(p?.facets)) throw new Error('session/facets needs { entry, facets }')
   const prj = await projectFor(api, p.entry, c)
-  const { snap } = await settled(prj, p.timeout)
+  const { snap } = await settled(prj, p.timeout, p.expectedSnapshot)
   const file = real(resolve(prj.root, p.entry))
   const slot = snap.slots.find(s => real(s.entry.file) === file)
   if (!slot) throw new Error(`not an entry of ${prj.root}: ${p.entry}`)
@@ -197,7 +248,7 @@ async function facets(api: ProjectsApi | undefined, p: any, c: Client) {
 async function render(h: QueryHooks, p: any, c: Client) {
   const spec = parseSpec(p?.spec)
   const prj = await projectFor(h.api(), p?.project, c)
-  const { snap, stale } = await settled(prj, p?.timeout)
+  const { snap, stale } = await settled(prj, p?.timeout, p?.expectedSnapshot)
   const [slot] = pick(snap, prj.root, spec.entry ? [spec.entry] : undefined)
   if (!spec.entry && snap.slots.length > 1) throw new Error(`render looks at one board, name its entry: ${snap.slots.map(s => s.entry.rel).join(', ')}`)
   if (!slot.compiled || slot.conflict) throw new Error(`${slot.entry.rel}: ${slot.conflict ?? 'its last compile failed'}`)
@@ -205,9 +256,15 @@ async function render(h: QueryHooks, p: any, c: Client) {
   if (typeof t === 'string') throw new Error(t)
   const findings = snap.findings.get(boardKey(t)) ?? []
   const shot = await renderShot({ compiled: t, glb: () => prj.artifact(t, 'glb'), findings, project: prj.root, snapshot: snap.id, spec, worker: h.renderer })
+  if (p?.expectedSnapshot !== undefined) {
+    const now = await settled(prj, p?.timeout, p.expectedSnapshot)
+    guardSnapshot(now.snap, now.stale, snap.id)
+  }
   const png = Buffer.from(shot.png).toString('base64')
   if (png.length > MAX_FRAME - 65536) throw new Error(`the ${shot.width}x${shot.height} PNG is too large for the session socket; ask for a smaller size`)
-  return envelope(snap, stale, { png, legend: shot.legend, width: shot.width, height: shot.height, ms: Math.round(shot.ms) })
+  const after = prj.current()
+  const renderStale = after && after.id !== snap.id ? { reason: 'changed' as const, current: after.id } : (prj.snapshotStale(snap) ?? stale)
+  return envelope(snap, renderStale, { png, legend: shot.legend, width: shot.width, height: shot.height, ms: Math.round(shot.ms) })
 }
 
 const contexts = new WeakMap<Client, Map<string, { ctx: Context; snapshot: string }>>()
@@ -216,7 +273,7 @@ const contexts = new WeakMap<Client, Map<string, { ctx: Context; snapshot: strin
 async function script(api: ProjectsApi | undefined, p: any, c: Client) {
   if (typeof p?.code !== 'string') throw new Error('session/script needs { code }')
   const prj = await projectFor(api, p.project, c)
-  const { snap, stale } = await settled(prj, undefined)
+  const { snap, stale } = await settled(prj, undefined, p.expectedSnapshot)
   const picked = pickBoards(boardsOf(snap), { target: str(p.target) })
   const board = p.board ? (picked.find(b => b.name === p.board) ?? null) : (picked[0] ?? null)
   if (p.board && !board) throw new Error(`no board ${p.board}; boards: ${picked.map(b => b.name).join(', ')}`)
@@ -236,7 +293,7 @@ async function script(api: ProjectsApi | undefined, p: any, c: Client) {
 /** `pcbjs test`: the snapshot's boards written for `board()` of @pcbjs/cli/test. */
 async function test(api: ProjectsApi | undefined, p: any, c: Client) {
   const prj = await projectFor(api, p?.project, c)
-  const { snap, stale } = await settled(prj, p?.timeout)
+  const { snap, stale } = await settled(prj, p?.timeout, p?.expectedSnapshot)
   const dir = await writeTestDir(prj.root, snap.id, boardsOf(snap), c => prj.artifact(c as Held, 'fab'))
   const failed = snap.slots.filter(s => !s.compiled || s.conflict).map(s => s.entry.rel)
   return envelope(snap, stale, { dir, failed })
@@ -342,6 +399,7 @@ async function events(h: QueryHooks, p: any, c: Client) {
 
 export type QueryMethod =
   | 'session/check'
+  | 'session/models'
   | 'session/resolve'
   | 'session/q'
   | 'session/inspect'
@@ -355,6 +413,7 @@ export type QueryMethod =
 export function queryMethods(h: QueryHooks): Pick<Handlers, QueryMethod> {
   return {
     'session/check': (p, c) => check(h.api(), p, c),
+    'session/models': (p, c) => models(h.api(), p, c),
     'session/resolve': (p, c) => resolveIt(h.api(), p, c),
     'session/q': (p, c) => query(h.api(), p, c),
     'session/inspect': (p, c) => inspect(h.api(), p, c),

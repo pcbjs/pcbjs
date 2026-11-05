@@ -18,7 +18,7 @@ export function useStatus(site: () => SiteData | null, error: () => string | nul
   // a board whose last compile failed stays on show, marked stale: in dev the entry's error, in a built site the board's own
   const staleText = computed(() => {
     const b = site()
-    return b ? (error() ?? (b.stale ? (b.staleError ?? 'the last compile failed') : null)) : null
+    return b ? (error() ?? (b.stale || b.halted ? (b.staleError ?? 'the last compile failed') : null)) : null
   })
   const errorText = computed(() => staleText.value ?? error() ?? '')
   // compiled from the editor's unsaved text, with the statements its repair skipped

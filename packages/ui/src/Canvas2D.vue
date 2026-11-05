@@ -9,6 +9,8 @@ import type { Focus } from './pane'
 import { commandOf } from './source'
 import { EASE_OUT_CSS } from './scene/motion'
 import { useViewBox, type Box } from './viewbox'
+import { usePinch } from './touch'
+import { pointerInside, usePointer } from './pointer'
 import { focusTransaction, type FocusKind } from './focus-transaction'
 import { routeHover } from './routes'
 import { setReady } from './ready'
@@ -106,7 +108,7 @@ const restored = remembered?.box ?? legacy ?? null
 let frameKey = remembered?.frameKey ?? ''
 let focusN = remembered?.focusN
 const snapshot = (): FocusView => ({ box: [...vb.value] as Box, size: [size.value.w, size.value.h], frameKey, focusN })
-const { size, vb, px, fitBox, animateTo, stopAnimation, show, zoomBy, toView, onWheel, resize, press, pan, release, panning } = useViewBox(
+const { size, vb, px, fitBox, animateTo, stopAnimation, show, zoomBy, toView, onWheel, pinch, resize, press, pan, release, panning } = useViewBox(
   svg,
   (restored ?? props.board.viewBox) as Box,
   () => props.board.viewBox[2] * 20,
@@ -468,8 +470,29 @@ function toolHit(e: PointerEvent): ToolHit {
 }
 function onDown(e: PointerEvent) {
   if (/\/pt:\d+$/.test(store.sel.anchor ?? '') && tl.down(e, toolHit(e))) return
+  if (e.pointerType === 'touch' && as.on.value) return press(e)
   if (!as.down(e) && !tl.down(e, toolHit(e))) press(e)
 }
+usePinch(
+  host,
+  () => {
+    release()
+    stopAnimation()
+    tl.cancel()
+    onLeave()
+  },
+  pinch,
+)
+
+usePointer(
+  host,
+  () => {
+    release()
+    tl.cancel()
+  },
+  onLeave,
+)
+
 function onMove(e: PointerEvent) {
   const r = host.value?.getBoundingClientRect()
   if (r) pointer.value = [e.clientX - r.left, e.clientY - r.top]
@@ -484,6 +507,7 @@ function onMove(e: PointerEvent) {
     dotHover.value = null
     return
   }
+  if (!pointerInside(host.value, e)) return onLeave()
   // one hit test a frame, however many moves came: the last one wins
   if (!pending) requestAnimationFrame(hoverNow)
   pending = e
@@ -513,6 +537,11 @@ function onUp(e: PointerEvent) {
   const t = tl.up()
   if (t === 'drag') return
   if (t !== 'click' && !release()) return
+  if (e.pointerType === 'touch' && as.on.value) {
+    as.move(e, boardAt(e))
+    if (as.down(e)) return
+  }
+  if (!pointerInside(host.value, e)) return
   const f = findingAt(e)
   if (f) emit('finding', f, modsOf(e))
   else emit('pick', hitOf(hit(e), boardAt(e)), modsOf(e))
@@ -543,10 +572,9 @@ function onLeave() {
   pending = null
   dotHover.value = null
   hoverLine.value = null
-  if (!panning()) {
-    hoverEl.value = null
-    cursor.value = null
-  }
+  hoverEl.value = null
+  cursor.value = null
+  dotTipAt.value = null
 }
 
 const visibleLayers = () => new Set(props.board.layers.filter(l => !props.hidden.has(l.id)).map(l => l.id))

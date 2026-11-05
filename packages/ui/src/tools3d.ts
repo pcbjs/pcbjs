@@ -107,6 +107,7 @@ export function useTools3d(d: Tools3d) {
   function down(e: PointerEvent, hit: ToolHit): boolean {
     if (/\/pt:\d+$/.test(d.sel().anchor ?? '') && tl.down(e, hit)) return true
     if (as.on.value) {
+      if (e.pointerType === 'touch') return false
       const p = d.planeAt(e, dotPlane.value)
       if (p) as.move(e, p)
       if (as.down(e)) return true

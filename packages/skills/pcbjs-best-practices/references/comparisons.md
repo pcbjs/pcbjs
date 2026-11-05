@@ -33,3 +33,11 @@ export default {
 ## Reporting
 
 Write one table per check with the result per board, then each remaining difference with its cause and whether it is acceptable. Typical acceptable causes: pour reliefs drawn by each tool, polygon chords on curved pads, stroke font glyphs, a mask opening the fab drills through anyway.
+
+## Compare draft findings
+
+Save two ordinary reports with `pcbjs check --fresh=all --json before.json` and, after the edit, `pcbjs check --fresh=all --json after.json`. Preserve each command's exit code; an expected draft failure is still a failure. Record source revision and authority alongside the existing task evidence. Match entry, board and target, and compare versions/cache policy before drawing a cold/warm conclusion. A snapshot identifies board output, not every authored source input.
+
+Run `node node_modules/@pcbjs/skills/pcbjs-best-practices/scripts/compare-reports.mjs before.json after.json` for an optional review summary. It matches repeated fingerprints one-to-one by nearest position, reports added/resolved identities, and compares severity, measured/required values, rule provenance and message on retained identities. Source-line changes alone do not add findings. Matching can be ambiguous when several same-fingerprint findings move together; review the full reports then. Every semantic change needs review, since rules can relax while identity remains the same.
+
+The output retains original result/exit, diagnostics, typecheck and tests for both reports. Inspect these independently, including missing boards and test/config/compile failures; findings alone cannot establish success. This helper creates no waiver, suppresses no check, and never turns a reviewed draft into fabrication approval. Reuse current session deltas for live work rather than repeatedly compiling just to obtain views.

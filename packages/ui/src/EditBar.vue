@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import Bubble from './Bubble.vue'
+import LockButton from './LockButton.vue'
+import { usePlacementLock } from './use/placement-lock'
 import { computed, ref } from 'vue'
 import type { EditUpdate } from '@pcbjs/core/protocol'
 import type { useGesture } from './gesture'
@@ -10,6 +12,7 @@ import { TRACE_METHODS, gridChoices, lengthValue, angleValue, localPose, worldDe
 
 const props = defineProps<{ tl: ReturnType<typeof useGesture>; as: ReturnType<typeof useAssist2d>; chip: { x: number; y: number } }>()
 const ctx = injectPane()!
+const lock = usePlacementLock(ctx)
 const store = ctx.board
 const edit = store.edit
 const node = computed(() => props.tl.node.value)
@@ -91,7 +94,8 @@ async function traceEdit(update: EditUpdate) {
 const chooseMethod = (event: Event) => traceEdit({ command: (event.target as HTMLSelectElement).value as EditUpdate['command'] })
 const chooseRelative = (event: Event) =>
   traceEdit({ command: ((event.target as HTMLInputElement).checked ? command.value.toLowerCase() : command.value.toUpperCase()) as EditUpdate['command'] })
-const place = computed(() => props.tl.targets('move').node)
+const place = computed(() => props.tl.targets('move').node ?? (node.value?.caps.includes('placed') ? node.value : null))
+const canPlace = computed(() => props.tl.rw.value && !!props.tl.targets('move').refs.length)
 const coordinates = computed(() => (place.value ? localPose(place.value) : null))
 const pitches = computed(() => gridChoices(props.tl.sourceGrid.value.pitch))
 const posePending = ref(false)
@@ -173,7 +177,7 @@ function snap(event: Event) {
 
 <template>
   <div
-    v-if="tl.tools.value.length || as.on.value"
+    v-if="tl.tools.value.length || as.on.value || lock.visible.value"
     class="bv-edit"
     data-ui="EditBar"
     data-ui-source="packages/ui/src/EditBar.vue"
@@ -187,6 +191,7 @@ function snap(event: Event) {
         <path v-else d="M8 1v14M1 8h14M8 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10" /></svg
       >{{ trace ? 'Trace' : 'Placement' }}</span
     >
+    <LockButton v-if="!trace" :control="lock" />
     <template v-if="trace && !as.ends.value">
       <select
         :value="command"
@@ -242,7 +247,7 @@ function snap(event: Event) {
           class="coordinate"
           :value="poseValue(0)"
           aria-label="Placement X"
-          :disabled="posePending || gridPending || !tl.rw.value"
+          :disabled="posePending || gridPending || !canPlace"
           @input="($event.target as HTMLInputElement).setCustomValidity('')"
           @keydown.esc.stop.prevent="resetPose($event, 0)"
           @change="coordinate(0, $event)"
@@ -253,7 +258,7 @@ function snap(event: Event) {
           class="coordinate"
           :value="poseValue(1)"
           aria-label="Placement Y"
-          :disabled="posePending || gridPending || !tl.rw.value"
+          :disabled="posePending || gridPending || !canPlace"
           @input="($event.target as HTMLInputElement).setCustomValidity('')"
           @keydown.esc.stop.prevent="resetPose($event, 1)"
           @change="coordinate(1, $event)"
@@ -264,7 +269,7 @@ function snap(event: Event) {
           class="coordinate angle"
           :value="poseValue(2)"
           aria-label="Placement rotation"
-          :disabled="posePending || gridPending || !tl.rw.value"
+          :disabled="posePending || gridPending || !canPlace"
           @input="($event.target as HTMLInputElement).setCustomValidity('')"
           @keydown.esc.stop.prevent="resetPose($event, 2)"
           @change="rotation"
@@ -273,15 +278,15 @@ function snap(event: Event) {
         v-if="tl.targets('layer').refs.length"
         :value="tl.targets('layer').node?.side ?? 'F'"
         aria-label="Placement side"
-        :disabled="posePending || gridPending || !tl.rw.value"
+        :disabled="posePending || gridPending || !canPlace"
         @change="tl.oneShot('layer', { side: ($event.target as HTMLSelectElement).value as 'F' | 'B' })"
       >
         <option value="F">Front</option>
         <option value="B">Back</option>
       </select>
     </template>
-    <label title="Snap to the editing grid"><input type="checkbox" :checked="tl.snapEnabled.value" @change="snap" />Snap</label>
-    <select :value="tl.gridPitch.value ?? tl.sourceGrid.value.pitch" aria-label="Editing grid" :disabled="gridPending || (!trace && (posePending || !tl.rw.value))" @change="grid">
+    <label title="Snap to the editing grid"><input type="checkbox" :checked="tl.snapEnabled.value" :disabled="!trace && !canPlace" @change="snap" />Snap</label>
+    <select :value="tl.gridPitch.value ?? tl.sourceGrid.value.pitch" aria-label="Editing grid" :disabled="gridPending || (!trace && (posePending || !canPlace))" @change="grid">
       <option v-for="pitch in pitches" :key="pitch" :value="pitch">{{ pitch }}mm</option>
     </select>
     <button class="icon" title="Reset view" aria-label="Reset view" @click="ctx.commands.run('fit')">

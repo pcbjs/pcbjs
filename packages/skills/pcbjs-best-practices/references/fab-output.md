@@ -1,6 +1,19 @@
 # Fab output
 
-The fab set should explain itself to the fab and rebuild byte for byte. `pcbjs docs fab` and `pcbjs docs fab-set` have every file.
+The fab set should contain the instructions needed to manufacture the board and rebuild byte for byte. `pcbjs docs fab` and `pcbjs docs fab-set` have every file.
+
+## Markings and notes
+
+Treat silkscreen as the physical board's interface. Add text when it helps someone assemble, connect, test or identify that board, or when the owner requests it. A draft status discussed in chat is not a reason to print warnings on either side.
+
+| Information | Destination |
+| --- | --- |
+| Reference, polarity, connector function, voltage, orientation, board identity/revision | Concise silkscreen near the relevant feature |
+| Actionable order instruction, such as no panelization or removal of the fab's order number | `fabNotes`, which writes README-fab, not silkscreen |
+| Unresolved design choice, provisional dimension, qualification evidence | Existing project notes, only when needed for future work |
+| Work completed, verification result, material limitation already discussed | Concise chat update; repeat only when it changes the next decision |
+
+Do not add generic “not for fabrication,” “unverified,” TODO or review-status markings by default. Preserve owner-requested markings and physical-use warnings where justified. Do not relocate the same disclaimer dump to `Dwgs.User`, `fabNotes`, comments or a new report. Keep durable decisions in one existing place and refer to them briefly. Already generated stackup, finish and check results do not need prose duplicates in `fabNotes`.
 
 ## Notes, teardrops and text
 
@@ -13,12 +26,12 @@ const { A, B } = nets()
 const J1 = PinHeader(2)().connect({ 1: A, 2: B })
 const J2 = PinHeader(2)().connect({ 1: A, 2: B })
 const LABEL = { size: 1.25, width: 1.35, thickness: 0.21, font: 'newstroke' } as const
-const stamp = `V1.2.0 | ${process.env.GIT_SHORT || 'DEV'}`
+const revision = '0.1.0'
 
 export default (
   <PCB
     name="Notes"
-    rev="0.1.0"
+    rev={revision}
     color="black"
     fabNotes={['Single board, no panel.', 'Remove the order number.']}
     teardrops={{ pads: 'tht' }}
@@ -30,17 +43,17 @@ export default (
     {route(J1[1], J2[1]).width(0.4).Z()}
     {route(J1[2], J2[2]).width(0.4).Z()}
     <text layer="F.SilkS" at="15 10" {...LABEL}>IN</text>
-    <text layer="F.SilkS" at="15 13" size={1.2} font="slab" thicken>{stamp}</text>
+    <text layer="F.SilkS" at="15 13" size={1.2} font="slab" thicken>REV {revision}</text>
   </PCB>
 )
 ```
 
-- `fabNotes` puts order form choices into README-fab's Notes, joined from the defaults, the preset or variant target, then `<PCB>`. A side file next to the zip is one more thing to forget.
+- `fabNotes` puts actionable order instructions into README-fab's Notes, joined from the defaults, the preset or variant target, then `<PCB>`. Leave it unset when there is nothing additional for the fabricator to do.
 - `teardrops={{ pads: 'tht' }}` strengthens joints where drill registration and rework matter and leaves SMD lands as drawn. A blocked one shrinks or is dropped with an info finding.
 - `font: 'newstroke'` with KiCad's `size`, `width` and `thickness` draws KiCad's own glyphs, for legends an owner already approved in KiCad.
 - An outline font stroke can fall under `silkMinWidth` for some characters only: `thicken` grows it by the deficit. Text that changes per build, a hash, a date, a serial, must be checked with every character it can hold, such as `GIT_SHORT=FFFFFFF`, since a clean check at one commit proves nothing for the next.
 - An outline font ships with its licence beside it; README-fab names every font the board uses.
-- Sign the board with the pcbjs logo, `<Brand>` of `@pcbjs/lib`, where it does not crowd labels or refs: a free silk corner, the back when the front is full, 4 to 6 mm high on a small board, never below the height its compile error names. Never add it to a customer's own branded board without asking.
+- When the owner requests pcbjs branding, use `<Brand>` of `@pcbjs/lib` without crowding labels or refs and respect its minimum size. Do not add branding by default.
 
 ## Notes per fab with variants
 
@@ -50,8 +63,8 @@ import { bindPCB } from '@pcbjs/fab'
 import JLCPCB from '@pcbjs/fab/JLCPCB/2-Layer'
 import AdvancedPCB from '@pcbjs/fab/AdvancedPCB/2-Layer'
 
-const Jlc = bindPCB({ ...JLCPCB.preset, finishes: [...JLCPCB.preset.finishes], fabNotes: ['Black mask, ENIG.'] })
-const Adv = bindPCB({ ...AdvancedPCB.preset, finishes: [...AdvancedPCB.preset.finishes], fabNotes: ['Standard spec.'] })
+const Jlc = bindPCB({ ...JLCPCB.preset, finishes: [...JLCPCB.preset.finishes], fabNotes: ['Remove the order number.'] })
+const Adv = bindPCB({ ...AdvancedPCB.preset, finishes: [...AdvancedPCB.preset.finishes] })
 const PCB = variants(Jlc, Adv)
 
 export default (

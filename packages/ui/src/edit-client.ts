@@ -21,12 +21,13 @@ export const jumpButtons = (mode: Pick<EditModeMsg, 'editor'> | null): boolean =
 
 export function toolsWhy(
   kind: string | null,
-  node: { caps: readonly string[]; computed?: boolean; owned?: string } | null,
+  node: { caps: readonly string[]; computed?: boolean; owned?: string; locked?: boolean } | null,
   mode: EditModeMsg | null,
   isolated = false,
 ): string | null {
   if (!kind || !mode) return null
   if (mode.mode === 'ro') return 'read-only'
+  if (node?.locked) return 'locked placement'
   if (isolated && node?.owned) return `its own placement in ${node.owned} keeps it; the definition is not written`
   if (node && toolsOf(node.caps).length) return null
   if (node?.computed) return 'its at is computed; set it in the source'
@@ -55,6 +56,7 @@ export function editClient(t: Transport, onCommit?: (r: EditResult, owner?: Edit
     return r
   }
   return {
+    lockState: (p: Params<'session/edit/lock'>) => t.request('session/edit/lock', p),
     begin: (p: Params<'session/edit/begin'>) => {
       const owner = ownerOf?.(p.board) ?? { board: p.board }
       return t.request('session/edit/begin', p.run ? p : { ...p, run: undefined }).then(r => {

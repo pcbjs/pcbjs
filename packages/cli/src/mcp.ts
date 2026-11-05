@@ -1,16 +1,17 @@
 // `pcbjs mcp`: an MCP server on stdio, newline-delimited JSON-RPC, that is a thin client of the session; an `agent` connection named by the
 // harness's initialize. Messages a human sends arrive at the top of the next tool result. docs/mcp.md has the tools and resources.
 import { VERSION } from './server/listen.js'
-import type { SessionConn } from './session/client.js'
+import { connectSession, type SessionConn } from './session/client.js'
 import { lineReader } from './session/frames.js'
 import { attachSession } from './session/starter.js'
-import type { SessionEvent } from '@pcbjs/core/protocol'
+import { liveSession } from './session/start.js'
+import type { Params, SessionEvent } from '@pcbjs/core/protocol'
 import { real } from './session/paths.js'
 import { INSTRUCTIONS, TOOLS, type Content, type ToolContext } from './mcp-tools.js'
 
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
 const LEVELS = ['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency']
-/** ms between attempts to reach the session again while resources are subscribed */
+/** ms between attempts to rejoin an available session while the harness keeps stdin open */
 const RETRY_MS = 2000
 
 type Rpc = { jsonrpc: '2.0'; id?: number | string; method?: string; params?: any }
@@ -43,7 +44,12 @@ export async function mcp(o: { cwd?: string } = {}): Promise<number> {
   let name = 'pcbjs mcp'
   let level = LEVELS.indexOf('info')
   let conn: Promise<SessionConn> | null = null
+  let generation = 0
   let following = false
+  let initialized = false
+  let closing = false
+  let retry: ReturnType<typeof setTimeout> | undefined
+  let about: Params<'session/describe'> = {}
   const pending: SessionEvent<'message'>[] = []
   const subs = new Map<string, string>()
   const cursor: ToolContext['cursor'] = { next: null }
@@ -51,9 +57,32 @@ export async function mcp(o: { cwd?: string } = {}): Promise<number> {
   const notify = (method: string, params: unknown) => out({ jsonrpc: '2.0', method, params })
   const logMessage = (lvl: string, data: string) => LEVELS.indexOf(lvl) >= level && notify('notifications/message', { level: lvl, logger: 'pcbjs', data })
 
-  const connect = (): Promise<SessionConn> =>
-    (conn ??= (async () => {
-      const c = await attachSession(root, { name, role: 'agent', capabilities: ['findings'], log })
+  const reconnect = () => {
+    if (closing || !initialized || retry) return
+    retry = setTimeout(() => {
+      retry = undefined
+      void connect(false)
+        .then(async () => {
+          if (subs.size) await follow()
+        })
+        .catch(() => reconnect())
+    }, RETRY_MS)
+    retry.unref()
+  }
+
+  const connect = (start = true): Promise<SessionConn> => {
+    if (conn) return conn
+    const attempt = ++generation
+    return (conn = (async () => {
+      if (closing) throw new Error('the MCP transport is closing')
+      const options = { name, role: 'agent' as const, capabilities: ['findings'], log }
+      const info = start ? null : await liveSession(root)
+      if (!start && !info) throw new Error('waiting for the pcbjs session to return')
+      const c = info ? await connectSession(info.socket, { ...options, project: root, token: info.token }) : await attachSession(root, options)
+      if (closing) {
+        c.close()
+        throw new Error('the MCP transport is closing')
+      }
       c.onEvent((event, data: any) => {
         if (event === 'session/message') {
           pending.push(data)
@@ -65,23 +94,37 @@ export async function mcp(o: { cwd?: string } = {}): Promise<number> {
         } else if (event === 'session/event' && data?.kind === 'findings') void refresh(data.data.board)
       })
       void c.done.then(() => {
+        if (attempt !== generation) return
         conn = null
         following = false
-        if (subs.size) setTimeout(() => void follow().catch(() => {}), RETRY_MS).unref()
+        reconnect()
       })
-      cursor.next ??= (await c.request('session/events', { project: root })).next
+      try {
+        cursor.next ??= (await c.request('session/events', { project: root })).next
+        if (Object.keys(about).length) await c.request('session/describe', about)
+      } catch (e) {
+        c.close()
+        throw e
+      }
       return c
     })().catch(e => {
-      conn = null
+      if (attempt === generation) conn = null
       throw e
     }))
-  const ask: ToolContext['ask'] = async (method, params, ms) => (await connect()).request(method, params, ms)
+  }
+  const ask: ToolContext['ask'] = async (method, params, ms) => {
+    const result = await (await connect()).request(method, params, ms)
+    if (method === 'session/describe') {
+      for (const key of ['task', 'plan', 'progress'] as const) if (params && (params as any)[key] !== undefined) about = { ...about, [key]: (params as any)[key] }
+    }
+    return result
+  }
   const cx: ToolContext = { root, ask, cursor }
 
   const follow = async () => {
     if (following) return
-    following = true
     await ask('session/events', { project: root, follow: true, kind: ['findings'] })
+    following = true
   }
 
   const entryOf = async (board: string): Promise<string | undefined> => {
@@ -132,9 +175,10 @@ export async function mcp(o: { cwd?: string } = {}): Promise<number> {
   }
 
   const methods: Record<string, (p: any) => unknown> = {
-    initialize: p => {
+    initialize: async p => {
       if (typeof p?.clientInfo?.name === 'string' && p.clientInfo.name) name = p.clientInfo.name
-      void connect().catch(e => log(String(e?.message ?? e)))
+      await connect()
+      initialized = true
       return {
         protocolVersion: PROTOCOLS.includes(p?.protocolVersion) ? p.protocolVersion : PROTOCOLS[0],
         capabilities: { tools: {}, resources: { subscribe: true }, logging: {} },
@@ -219,6 +263,8 @@ export async function mcp(o: { cwd?: string } = {}): Promise<number> {
   )
   return new Promise(done =>
     process.stdin.once('end', async () => {
+      closing = true
+      clearTimeout(retry)
       const c = await conn?.catch(() => null)
       c?.close()
       done(0)

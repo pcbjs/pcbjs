@@ -7,6 +7,7 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').repl
 const ring = (r: Ring) => (r.length ? `M${r.map(([x, y]) => `${f(x)} ${f(y)}`).join('L')}Z` : '')
 
 export function anchorText(r: BoardReference): string {
+  if (r.anchor.kind === 'pose') return `pose ${r.anchor.pose.translation.map(f).join(' ')}, quaternion ${r.anchor.pose.orientation.map(f).join(' ')}`
   if (r.anchor.kind === 'mate')
     return `${r.anchor.local} mates ${r.name} ${r.anchor.remote}, ${r.stack}${r.gap !== undefined ? `, gap ${f(r.gap)} mm` : ''}${r.rotate ? `, rotate ${f(r.rotate)}` : ''}`
   return `at ${r.anchor.at.map(f).join(' ')}${r.flip ? ', flipped' : ''}${r.rotate ? `, rotate ${f(r.rotate)}` : ''}`
@@ -20,6 +21,10 @@ export function referenceMarkup(board: Board, layer: string): string {
     const w = 0.12,
       dash = 'stroke-dasharray="0.8 0.5"'
     const parts: string[] = [`<path fill="none" stroke="currentColor" stroke-width="${w}" ${dash} d="${r.outline.map(ring).join('')}"/>`]
+    if (r.holeOutlines) {
+      parts.push(`<path fill="none" stroke="currentColor" stroke-width="${w / 2}" ${dash} d="${r.holeOutlines.map(ring).join('')}"/>`)
+      if (r.show.bodies) parts.push(`<path fill="none" stroke="currentColor" stroke-width="${w / 2}" ${dash} d="${r.bodies.map(b => ring(b.ring)).join('')}"/>`)
+    }
     for (const h of r.holes)
       parts.push(
         h.len === undefined

@@ -102,6 +102,8 @@ export function useGesture(d: GestureInput) {
     if (!on.value) return null
     if (d.board().variant && d.board().variant!.index !== 0) return 'This target is read-only. Switch to the first target to edit.'
     if (!a) return null
+    if (node.value?.locked) return 'Locked placement. Change locked in the source to edit it.'
+    if (d.sel().refs.some(ref => editNodeOf(d.board(), ref)?.locked)) return 'Selection includes a locked placement.'
     if (tools.value.length) return null
     if (instanceWhy(node.value)) return instanceWhy(node.value)
     if (node.value?.auto?.length) return 'its at is automatic; write a placement in the source before editing'
@@ -149,6 +151,7 @@ export function useGesture(d: GestureInput) {
   const targets = (mode: ToolId) => {
     const needs = mode === 'point' ? 'chain' : mode === 'layer' ? 'layered' : 'placed'
     const refs = mode === 'point' ? [node.value?.ref].filter((r): r is string => !!r) : d.sel().refs
+    if (refs.some(ref => editNodeOf(d.board(), ref)?.locked)) return { refs: [], anchor: null, parts: new Set<string>(), ids: new Set<number>(), pivot: [0, 0] as Pt, node: null }
     const nodes = [
       ...new Map(
         refs.flatMap(ref => {
@@ -251,6 +254,13 @@ export function useGesture(d: GestureInput) {
   })
 
   const drag = shallowRef<Drag | null>(null)
+  watch(
+    () => drag.value?.refs.some(ref => editNodeOf(d.board(), ref)?.locked),
+    locked => {
+      if (locked) cancel()
+    },
+    { flush: 'sync' },
+  )
   const live = shallowRef<(EditUpdate & { at?: Pt }) | null>(null)
   /** a committed move or turn, drawn where it went until the facets that draw the parts there arrive */
   const hold = shallowRef<{ g: Drag; u: EditUpdate; since: Hold } | null>(null)
@@ -355,6 +365,7 @@ export function useGesture(d: GestureInput) {
   function down(e: PointerEvent, hit: ToolHit): boolean {
     const n = node.value
     if (!rw.value || !n || e.button !== 0) return false
+    if (n.locked || d.sel().refs.some(ref => editNodeOf(d.board(), ref)?.locked)) return false
     const kind = hit.tool
     const start = d.boardAt(e)
     const affected = targets(kind === 'ring' ? 'rotate' : 'move')

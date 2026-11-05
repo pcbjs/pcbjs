@@ -1,7 +1,7 @@
 // The project's compile in Node: a Vite server without HTTP that evaluates entries, the slots compiled on it and the one line of a failure.
-import { sourcePath, under } from './files.js'
 import { createLogger, createServer, type Logger, type LogLevel, type ViteDevServer } from 'vite'
-import { isUserFile, localFrames } from '@pcbjs/core/internal/provenance'
+import { strip } from './errors.js'
+export { strip, errorText } from './errors.js'
 import type { ResolvedConfig } from './config.js'
 import { compileConfig } from './vite-base.js'
 import { compileEntry, type EntryOptions } from './project.js'
@@ -36,36 +36,6 @@ export async function compileServer(cfg: ResolvedConfig, o: { verbose?: boolean;
     appType: 'custom',
     mode: 'production',
   })
-}
-
-/** The text without its ANSI colours. */
-export const strip = (t: string): string => t.replace(/\x1b\[[0-9;]*m/g, '')
-
-/** One line, then with --verbose the code frame and the stack below it. */
-export function errorText(e: any, verbose?: boolean, root?: string): { line: string; detail: string[] } {
-  const msg = strip(String(e?.message ?? e))
-  const first = msg.split('\n').find(l => l.trim()) ?? msg
-  const rel = (f: string) => (root ? sourcePath(root, f) : f)
-  // Vite's location of a syntax error, else the first frame of the stack in the project
-  let loc = e?.loc?.file ? `${rel(e.loc.file)}:${e.loc.line}:${e.loc.column}: ` : ''
-  if (!loc && root && !/\.(m?[jt]sx?):\d+:\d+/.test(first)) {
-    const f = localFrames(strip(String(e?.stack ?? ''))).find(f => under(f.file, root) && isUserFile(f.file))
-    if (f) loc = `${rel(f.file)}:${f.line}:${f.col}: `
-  }
-  const detail: string[] = []
-  if (verbose) {
-    const rest = msg
-      .split('\n')
-      .slice(msg.split('\n').indexOf(first) + 1)
-      .filter(l => l.trim())
-    detail.push(...rest)
-    if (e?.frame) detail.push(...strip(String(e.frame)).split('\n'))
-    const stack = strip(String(e?.stack ?? ''))
-      .split('\n')
-      .filter(l => /^\s+at /.test(l))
-    detail.push(...stack)
-  }
-  return { line: `${loc}${first}`, detail }
 }
 
 /** Keeps on after a failure; the error of a failed one goes in `slot.error`. */

@@ -61,7 +61,7 @@ test('overrides: part rules apply to every pad, a later .rules() over an earlier
   assert.throws(() => two().rules({ clearence: 0.1 }), /unknown rule "clearence"; it takes clearance, edgeClearance, holeClearance, trackWidth/)
   assert.throws(() => two().rules({ clearance: -1 }), /clearance must be a non-negative length/)
   // a placement takes no rules: they belong to the part
-  assert.throws(() => board(h(two().connect({ 1: A, 2: B }), { at: '5 5', rules: { clearance: 0.25 } })), /a placement takes at, side, grid, ref:at and thermal, not rules/)
+  assert.throws(() => board(h(two().connect({ 1: A, 2: B }), { at: '5 5', rules: { clearance: 0.25 } })), /a placement takes at, side, grid, locked, ref:at and thermal, not rules/)
 })
 
 test('overrides: precedence pad, part, class, board', () => {

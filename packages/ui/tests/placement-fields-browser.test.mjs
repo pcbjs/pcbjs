@@ -11,6 +11,7 @@ import { chromes, launchAny, stopChrome, cdp, evaluate } from '../../../scripts/
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url)),
   styles = []
+let scopeId = 0
 const entry = `import {createApp,h,provide,reactive,ref} from 'vue';import EditBar from './packages/ui/src/EditBar.vue';
 const node=ref({ref:'R1',at:[10,20,45],m:[1,0,0,1,0,0],caps:['move','rotate']});
 const board=reactive({edit:{mode:{mode:'rw'},client:{}},sel:{anchor:'R1'},site:{layers:[]},note:(text)=>window.note=text});
@@ -30,7 +31,7 @@ const built = await build({
       setup(builder) {
         builder.onLoad({ filter: /\.vue$/ }, args => {
           const { descriptor } = parse(readFileSync(args.path, 'utf8'), { filename: args.path }),
-            id = `placement-${styles.length}`
+            id = `placement-${scopeId++}`
           const script = compileScript(descriptor, { id, inlineTemplate: true })
           for (const style of descriptor.styles) styles.push(compileStyle({ source: style.content, filename: args.path, id: `data-v-${id}`, scoped: !!style.scoped }).code)
           return {

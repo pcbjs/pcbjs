@@ -50,7 +50,8 @@ export function layers2d(board: Board, named: string[] | undefined): string[] {
     courtyard: kind('courtyard'),
     fab: kind('fab'),
   }
-  if (!named?.length) return [...kind('copper'), ...kind('silkscreen'), 'Edge.Cuts']
+  if (!named?.length)
+    return [...new Set([...kind('copper'), ...kind('silkscreen'), 'Edge.Cuts', ...(board.references ?? []).flatMap(r => (r.show.outline ? [r.show.outline] : []))])]
   const out = new Set<string>(['Edge.Cuts'])
   for (const n of named) {
     const id = words[n] ? null : flagLayer(n)

@@ -266,10 +266,10 @@ test('summary line: counts, FAIL and the phase timings', () => {
   assert.equal(timingsText({ route: 0.2, drc: 3 }), 'drc 3 ms')
 })
 
-test('errors: the one-line message first with the project location, the stack only when verbose', () => {
+test('errors: source location, full reason and author calls by default, internal stacks only when verbose', () => {
   const e = new Error('boom is not defined\nmore')
   e.stack = 'Error: boom\n    at f (/p/node_modules/x.js:1:1)\n    at /p/main.tsx:26:13\n    at g (file:///p/lib/a.ts:3:4)'
-  assert.deepEqual(errorText(e, false, '/p'), { line: 'main.tsx:26:13: boom is not defined', detail: [] })
+  assert.deepEqual(errorText(e, false, '/p'), { line: 'main.tsx:26:13: boom is not defined', detail: ['more', '', 'Called from:', '  at lib/a.ts:3:4'] })
   const v = errorText(e, true, '/p')
   assert.equal(v.detail[0], 'more')
   assert.match(v.detail.at(-1), /lib\/a\.ts:3:4/)
@@ -500,19 +500,20 @@ test('check: exit 1 on DRC errors, every finding listed with its id, --json a pc
   assert.deepEqual([bad.diagnostics[0].kind, bad.diagnostics[0].entry], ['compile', 'throws.tsx'])
 })
 
-test('check: exit 1 on a compile error, the one-line message with its location and no stack', async () => {
+test('check: exit 1 on a compile error, source context by default and internal stacks only when verbose', async () => {
   const r = await cli(root, 'check', 'throws.tsx', 'clean.tsx')
   assert.equal(r.code, 1)
   const lines = r.stdout.trim().split('\n')
   assert.equal(lines[0], 'throws.tsx  compile error: throws.tsx:2:11: undefinedThing is not defined')
   assert.doesNotMatch(r.stdout + r.stderr, /^\s+at /m)
+  assert.match(r.stdout, />\s+2 \|.*undefinedThing/)
   // the other entry still compiles
   assert.match(r.stdout, /^Clean 1\.0  clean\.tsx/m)
   assert.match(lines.at(-1), /1 entry failed to compile$/)
   const v = await cli(root, 'check', 'throws.tsx', '--verbose')
   const vl = v.stdout.trim().split('\n')
   assert.match(vl[0], /compile error: throws\.tsx:2:11: undefinedThing is not defined$/)
-  assert.match(vl[1], /^\s+at /)
+  assert.match(v.stdout, /Debug stack:\n\s+at /)
 })
 
 test('check: an entry default-exports the element, never a function returning it', async () => {

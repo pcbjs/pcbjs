@@ -31,7 +31,7 @@ import { isPinRef } from '@pcbjs/core/internal/nets'
 import { isRoutePoint, partOf, pinOfPad } from '@pcbjs/core/internal/part'
 import { apply, IDENTITY, invert, offset, polysToRings, union } from './geom.js'
 import { copperBox, copperLayersOf, copperRings } from './copper.js'
-import { defaultVia } from '@pcbjs/core/internal/rules'
+import { resolveVia } from '@pcbjs/core/internal/rules'
 import { joined } from './connectivity.js'
 import { copperLayers, isCopper, resolveLayer } from './layers.js'
 import { applyPrims, circleRing } from './path.js'
@@ -1650,7 +1650,7 @@ export function planRoutes(board: Board, jobs: AutoRouteJob[], defaults: AutoRou
       ),
     }
     const P = mergeAutoroute(board0, job.params)
-    let via = { drill: P.via?.drill ?? defaultVia(rules).drill, size: P.via?.size ?? defaultVia(rules).size }
+    let via = resolveVia(rules, board.via, P.via)
     const fork = job.fork !== undefined ? forks.get(job.fork) : undefined
     if (job.fork !== undefined && !fork) fail('a branch starts where its trunk forks, but the trunk never reached the fork')
     const padA = job.from !== undefined ? padOf(board, job.from) : null
@@ -1850,7 +1850,7 @@ export function planRoutes(board: Board, jobs: AutoRouteJob[], defaults: AutoRou
           if (st.cross && !pr) fail('route chain: .cross() is for a differential pair')
           const pair = [layer, to].sort((a, b) => order(a) - order(b)) as [string, string]
           const id = nextId++
-          push({ kind: 'via', id, layer: pair[0], ...item(st), at: [at[0], at[1]], drill: st.drill ?? via.drill, size: st.size ?? via.size, layers: pair } as Via)
+          push({ kind: 'via', id, layer: pair[0], ...item(st), at: [at[0], at[1]], ...resolveVia(rules, via, st), layers: pair } as Via)
           manual.push(null)
           if (pr) {
             pr.pieces.push({ kind: 'via', layer: to, ...(st.cross ? { cross: true } : {}) })
@@ -2459,6 +2459,19 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
   }
   // a future `current` on routes and classes would size a shared trunk from the sum of its branch currents here
   const trunkWidth = (t: Task) => legOf(t).width
+  const resultEnds = (res: RouteResult): [Pt, Pt] | null => {
+    const first = res.tracks[0],
+      last = res.tracks.at(-1)
+    if (first && last) return [first.pts[0], last.pts[last.pts.length - 1]]
+    const a = res.vias[0],
+      z = res.vias.at(-1)
+    return a && z
+      ? [
+          [a.x, a.y],
+          [z.x, z.y],
+        ]
+      : null
+  }
   /** The trunk under a joining leg's junctions at the leg's width, or the end whose trunk cannot widen. */
   const widen = (t: Task, res: RouteResult, e: Ends, kept: (0 | 1)[] = []): { strips: Strip[]; narrow?: 0 | 1 } => {
     const leg = legOf(t),
@@ -2498,13 +2511,12 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
   /** The legs a joining leg relies on: those in the copper it joined at each end, or in the copper that already joined its ends. */
   const depsOf = (t: Task, e: Ends, res: RouteResult, sides: [boolean, boolean]): Set<Task> => {
     const on = new Set<Task>(),
-      tr = res.tracks,
+      points = resultEnds(res),
       leg = legOf(t)
-    const empty = !tr.length && !res.vias.length
     const at = (side: 0 | 1) => {
       if (!sides[side]) return false
-      if (empty) return e.connected
-      const p = side ? tr[tr.length - 1].pts[tr[tr.length - 1].pts.length - 1] : tr[0]?.pts[0],
+      if (!points) return e.connected
+      const p = points[side],
         end = side ? leg.to : leg.from
       return !p || !same(p, [end.x, end.y])
     }
@@ -2645,11 +2657,9 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
   }
   /** Whether a joining leg's result met its net's copper away from its pads, or found its ends joined already. */
   const joinedIn = (t: Task, res: RouteResult): boolean => {
-    const tr = res.tracks,
+    const points = resultEnds(res),
       leg = legOf(t)
-    if (!tr.length) return !res.vias.length
-    const z = tr[tr.length - 1].pts[tr[tr.length - 1].pts.length - 1]
-    return !same(tr[0].pts[0], [leg.from.x, leg.from.y]) || !same(z, [leg.to.x, leg.to.y])
+    return !points || !same(points[0], [leg.from.x, leg.from.y]) || !same(points[1], [leg.to.x, leg.to.y])
   }
   /** The signature of the copper a leg sees: what is around it, and for a leg that joined its whole net up to its own turn. */
   const obsOf = (t: Task, box: Box, skip: (it: Item) => boolean): string => {
@@ -2835,16 +2845,16 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
         d.how = undefined
         d.fail = undefined
         d.stored = false
-        orphans.push(d)
+        pending.push(d)
       }
   }
-  const orphans: Task[] = []
+  const pending: Task[] = []
   let onOrphan: ((t: Task) => void) | null = null
-  const routeOrphans = () => {
-    orphans.sort(bySeq)
-    while (orphans.length) {
+  const routePending = () => {
+    pending.sort(bySeq)
+    while (pending.length) {
       pulse()
-      const o = orphans.shift()!
+      const o = pending.shift()!
       if (!o.result && !o.fail && !o.stored) routeHard(o)
     }
   }
@@ -2861,6 +2871,7 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
       o.stored = false
       o.displaced = t
       out.push(o)
+      pending.push(o)
     }
     return out
   }
@@ -2908,7 +2919,7 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
   }
   const rerouteDisplaced = () => {
     for (const t of tasks) if (!t.result && t.displaced && !t.fail) routeHard(t)
-    routeOrphans()
+    routePending()
   }
 
   // a route's solver lays its legs out first, in task order: it reads the solvers before it and nothing routed after
@@ -3022,7 +3033,7 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
     if (!t.result && !t.stored) routeHard(t)
     opts.progress?.({ done: t.seq + 1, legs: tasks.length })
   }
-  routeOrphans()
+  routePending()
   pulse()
 
   let rounds = 0
@@ -3253,9 +3264,9 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
         if (routeSoft(t, pres)) moved.push(t)
         opts.progress?.({ done: i + 1, legs: todo.length, round: n })
       }
-      orphans.sort(bySeq)
-      while (orphans.length) {
-        const o = orphans.shift()!
+      pending.sort(bySeq)
+      while (pending.length) {
+        const o = pending.shift()!
         if (o.result || o.fail || o.stored) continue
         if (softOk(o) ? routeSoft(o, pres) : routeHard(o)) moved.push(o)
       }
@@ -3323,7 +3334,7 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
     return n
   }
 
-  routeOrphans()
+  routePending()
   pulse()
   prune()
   for (const t of tasks) {

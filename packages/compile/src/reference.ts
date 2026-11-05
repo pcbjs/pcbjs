@@ -1,11 +1,11 @@
 import type { Pt, Ring, Board, Footprint, MatePoint, Pad } from '@pcbjs/core/model'
 import type { Src, StepModelSpec } from '@pcbjs/core/internal/types'
 import { isFileModel } from '@pcbjs/core/internal/model-source'
-import type { BoardReference, HeightSource, Mat4, ReferencedBoard, ReferencedFootprint, ReferenceResolver, ReferenceStack } from '@pcbjs/core/internal/reference'
+import type { BoardReference, HeightSource, Mat4, ReferencedBoard, ReferencedFootprint, ReferenceResolver, ReferenceStack, ReferencePose } from '@pcbjs/core/internal/reference'
 import { isPinRef } from '@pcbjs/core/internal/nets'
 import { partOf, pinOfPad, type PartState } from '@pcbjs/core/internal/part'
 import { mm } from '@pcbjs/core/internal/units'
-import type { Mat } from './geom.js'
+import { area, clipRings, type Mat } from './geom.js'
 import { CompileError, type MateJob } from './flatten.js'
 import { bareHole } from './bare.js'
 
@@ -124,11 +124,61 @@ export function mateTransform(g: MateGeometry): Mat4 {
 
 /** The anchor form: the referenced board's origin at x, y of the group frame `m`, its bottom face at z, or turned over with flip and its top face at z. */
 export function anchorTransform(m: Mat, at: [number, number, number], rotate: number, flip: boolean, offset: [number, number, number], thickness = 0): Mat4 {
-  // the 2D group frame lifted to 3D: board y is the view's -y
-  const g: Mat4 = [m[0], -m[1], 0, 0, -m[2], m[3], 0, 0, 0, 0, 1, 0, m[4], -m[5], 0, 1]
   return clean(
-    chain4(translate4(offset[0], -offset[1], offset[2]), g, translate4(at[0], -at[1], at[2]), rotZ4(rotate * DEG), flip ? mul4(TURN, translate4(0, 0, -thickness)) : IDENTITY4),
+    chain4(
+      translate4(offset[0], -offset[1], offset[2]),
+      groupFrame(m),
+      translate4(at[0], -at[1], at[2]),
+      rotZ4(rotate * DEG),
+      flip ? mul4(TURN, translate4(0, 0, -thickness)) : IDENTITY4,
+    ),
   )
+}
+
+const groupFrame = (m: Mat): Mat4 => [m[0], -m[1], 0, 0, -m[2], m[3], 0, 0, 0, 0, 1, 0, m[4], -m[5], 0, 1]
+
+export function referencePose(value: unknown, src?: Src): ReferencePose {
+  const fail = (message: string): never => {
+    throw new ReferenceError(`pose: ${message}`, src)
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return fail('expected { translation: [x, y, z], orientation: [x, y, z, w] }')
+  const p = value as Record<string, unknown>
+  for (const key of Object.keys(p)) if (key !== 'translation' && key !== 'orientation') fail(`unknown field ${JSON.stringify(key)}`)
+  if (!Array.isArray(p.translation) || p.translation.length !== 3) return fail('translation must have three lengths')
+  const translation = Array.from(p.translation, v => len(v, 'pose.translation', src) || 0) as [number, number, number]
+  const q = p.orientation
+  if (!Array.isArray(q) || q.length !== 4 || !Array.from(q).every(v => typeof v === 'number' && Number.isFinite(v)))
+    return fail('orientation must be four finite numbers [x, y, z, w]')
+  const scale = Math.max(...q.map(Math.abs))
+  if (!scale) return fail('orientation must be a nonzero quaternion')
+  const scaled = q.map(v => v / scale)
+  const norm = Math.hypot(...scaled)
+  const sign = (q[3] || q[0] || q[1] || q[2]) < 0 ? -1 : 1
+  return { translation, orientation: scaled.map(v => (v === 0 ? 0 : (v / norm) * sign)) as [number, number, number, number] }
+}
+
+/** T · Q, followed by the enclosing groups; pose translations already use the right-handed 3D frame. */
+export function poseTransform(m: Mat, pose: ReferencePose): Mat4 {
+  const [x, y, z, w] = pose.orientation
+  const rotation = [
+    1 - 2 * (y * y + z * z),
+    2 * (x * y + z * w),
+    2 * (x * z - y * w),
+    0,
+    2 * (x * y - z * w),
+    1 - 2 * (x * x + z * z),
+    2 * (y * z + x * w),
+    0,
+    2 * (x * z + y * w),
+    2 * (y * z - x * w),
+    1 - 2 * (x * x + y * y),
+    0,
+    0,
+    0,
+    0,
+    1,
+  ]
+  return clean(chain4(groupFrame(m), translate4(...pose.translation), rotation))
 }
 
 const len = (v: unknown, what: string, src?: Src): number => {
@@ -144,7 +194,7 @@ const triple = (v: unknown, what: string, src?: Src): [number, number, number] =
   if (!Array.isArray(v) || v.length < 2 || v.length > 3) throw new ReferenceError(`${what} must be [x, y] or [x, y, z] in mm, got ${JSON.stringify(v)}`, src)
   return [len(v[0], what, src), len(v[1], what, src), v[2] === undefined ? 0 : len(v[2], what, src)]
 }
-const KNOWN = new Set(['path', 'file', 'from', 'mate', 'side', 'stack', 'gap', 'at', 'flip', 'rotate', 'offset', 'show'])
+const KNOWN = new Set(['path', 'file', 'from', 'pose', 'mate', 'side', 'stack', 'gap', 'at', 'flip', 'rotate', 'offset', 'show'])
 
 /** The board's named points at the poses their parts have now; a name twice is a compile error. */
 export function matePoints(jobs: readonly MateJob[]): MatePoint[] {
@@ -211,9 +261,11 @@ function resolveOne(j: ReferenceJob, board: Board, partRefs: Map<PartState, stri
     throw new ReferenceError(`${label}: ${msg}`, src)
   }
   for (const k of Object.keys(p))
-    if (!KNOWN.has(k) && k !== '__src') fail(`unknown option ${JSON.stringify(k)}; it takes mate, side, stack, gap, at, flip, rotate, offset and show`)
+    if (!KNOWN.has(k) && k !== '__src') fail(`unknown option ${JSON.stringify(k)}; it takes pose, mate, side, stack, gap, at, flip, rotate, offset and show`)
+  if (p.pose !== undefined)
+    for (const k of ['mate', 'side', 'stack', 'gap', 'at', 'flip', 'rotate', 'offset']) if (p[k] !== undefined) fail(`pose is a complete placement; do not combine it with ${k}`)
   if (p.mate !== undefined && p.at !== undefined) fail('takes mate or at, not both')
-  if (p.mate === undefined && p.at === undefined) fail('needs mate, a mating pair of connectors, or at, an anchor [x, y, z]')
+  if (p.mate === undefined && p.at === undefined && p.pose === undefined) fail('needs mate, a mating pair of connectors, at, an anchor [x, y, z], or pose')
   if (!resolver) fail('references compile through the pcbjs command line; a compile of your own passes CompileOptions.references')
   const file = String(p.file ?? p.path)
   let rb: ReferencedBoard
@@ -251,7 +303,16 @@ function resolveOne(j: ReferenceJob, board: Board, partRefs: Map<PartState, stri
   }
   let transform: Mat4
   let ref: Pick<BoardReference, 'anchor' | 'stack' | 'gap' | 'gapFrom' | 'flip' | 'mate' | 'mates'>
-  if (p.mate !== undefined) {
+  if (p.pose !== undefined) {
+    let pose: ReferencePose
+    try {
+      pose = referencePose(p.pose, src)
+    } catch (e) {
+      return fail((e as Error).message)
+    }
+    transform = poseTransform(j.m, pose)
+    ref = { anchor: { kind: 'pose', pose } }
+  } else if (p.mate !== undefined) {
     // the first pair places the board, every one is checked
     const list: any[] = Array.isArray(p.mate) ? p.mate : [p.mate]
     if (!list.length) fail('mate needs at least one pair { local, remote, pin }')
@@ -313,17 +374,81 @@ function resolveOne(j: ReferenceJob, board: Board, partRefs: Map<PartState, stri
     transform = anchorTransform(j.m, at, rotate, !!p.flip, offset, rb.thickness)
     ref = { anchor: { kind: 'at', at }, ...(p.flip ? { flip: true } : {}) }
   }
-  const zs = [apply4(transform, [0, 0, 0])[2], apply4(transform, [0, 0, rb.thickness])[2]]
+  const slab = projectPrism(rb.outline, 0, rb.thickness, transform)
+  const bodies = rb.footprints.filter(f => f.height > 0).map(f => ({ ...body(f, rb.thickness, transform), height: f.height, ...(f.heightFrom ? { from: f.heightFrom } : {}) }))
+  const solids = [slab, ...bodies.map(b => ({ outline: [b.ring], z: b.z }))]
+  const bounds = solidBounds(solids)
+  const tilted = isTilted(transform)
   return {
     ...base,
     ...ref,
     transform,
     heights,
-    outline: rb.outline.map(r => r.map(q => toBoard(transform, q))),
-    z: [Math.min(...zs), Math.max(...zs)],
-    holes: rb.drills.map(d => placedDrill(transform, d)),
-    bodies: rb.footprints.filter(f => f.height > 0).map(f => ({ ...body(f, rb.thickness, transform), ...(f.heightFrom ? { from: f.heightFrom } : {}) })),
+    outline: slab.outline,
+    z: slab.z,
+    ...(bounds ? { bounds } : {}),
+    holes: tilted ? [] : rb.drills.map(d => placedDrill(transform, d)),
+    ...(tilted ? { holeOutlines: rb.drills.flatMap(d => projectPrism([drillRing(d)], 0, rb.thickness, transform).outline) } : {}),
+    bodies,
   }
+}
+
+const isTilted = (w: Mat4): boolean => [w[2], w[6], w[8], w[9]].some(v => Math.abs(v) > 1e-9)
+
+/** The exact XY silhouette and full Z extent of an extruded polygon; their product is a conservative collision prism. */
+function projectPrism(rings: Ring[], z0: number, z1: number, w: Mat4): { outline: Ring[]; z: [number, number] } {
+  const bottom = rings.map(r => r.map(p => toBoard(w, p, z0)))
+  const z: [number, number] = [Infinity, -Infinity]
+  for (const ring of rings)
+    for (const [x, y] of ring)
+      for (const height of [z0, z1]) {
+        const value = apply4(w, [x, -y, height])[2]
+        z[0] = Math.min(z[0], value)
+        z[1] = Math.max(z[1], value)
+      }
+  if (!Number.isFinite(z[0])) {
+    const a = apply4(w, [0, 0, z0])[2],
+      b = apply4(w, [0, 0, z1])[2]
+    z[0] = Math.min(a, b)
+    z[1] = Math.max(a, b)
+  }
+  if (!isTilted(w)) return { outline: bottom, z }
+  const top = rings.map(r => r.map(p => toBoard(w, p, z1)))
+  const walls = bottom.flatMap((r, k) =>
+    r.map((p, i) => {
+      const j = (i + 1) % r.length
+      const wall = [p, r[j], top[k][j], top[k][i]]
+      return area([wall]) < 0 ? wall.reverse() : wall
+    }),
+  )
+  return { outline: clipRings('union', clipRings('union', bottom, top), walls), z }
+}
+
+function solidBounds(solids: { outline: Ring[]; z: [number, number] }[]): BoardReference['bounds'] {
+  const min: [number, number, number] = [Infinity, Infinity, Infinity]
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity]
+  for (const solid of solids)
+    for (const ring of solid.outline)
+      for (const [x, y] of ring) {
+        min[0] = Math.min(min[0], x)
+        min[1] = Math.min(min[1], y)
+        min[2] = Math.min(min[2], solid.z[0])
+        max[0] = Math.max(max[0], x)
+        max[1] = Math.max(max[1], y)
+        max[2] = Math.max(max[2], solid.z[1])
+      }
+  return Number.isFinite(min[0]) ? { min, max } : undefined
+}
+
+function drillRing(d: ReferencedBoard['drills'][number]): Ring {
+  const angle = (d.a ?? 0) * DEG,
+    half = Math.max(0, (d.len ?? d.d) - d.d) / 2
+  return Array.from({ length: 64 }, (_, i) => {
+    const a = (i * Math.PI) / 32,
+      x = (Math.cos(a) * d.d) / 2 + (Math.cos(a) >= 0 ? half : -half),
+      y = (Math.sin(a) * d.d) / 2
+    return [d.x + x * Math.cos(angle) - y * Math.sin(angle), d.y + x * Math.sin(angle) + y * Math.cos(angle)]
+  })
 }
 
 /** A drill of the referenced board on this one; a slot's axis turns with the board. */
@@ -354,8 +479,8 @@ function body(f: ReferencedFootprint, thickness: number, w: Mat4): { ref: string
   const z0 = f.side === 'F' ? thickness : -f.height,
     z1 = f.side === 'F' ? thickness + f.height : 0
   const ring = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)]
-  const zs = [apply4(w, [ring[0][0], -ring[0][1], z0])[2], apply4(w, [ring[0][0], -ring[0][1], z1])[2]]
-  return { ref: f.ref, ring: ring.map(q => toBoard(w, q, z0)), z: [Math.min(...zs), Math.max(...zs)] }
+  const projected = projectPrism([ring], z0, z1, w)
+  return { ref: f.ref, ring: projected.outline[0] ?? [], z: projected.z }
 }
 
 /** The local part and pad of a mate: a part, which mates at `pin`, or a pin or pad handle. */

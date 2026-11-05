@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AccessMode from './AccessMode.vue'
 // The 2D view of a board as a component: zoom, pan, hover and the selection, the side on top and the mirror; the poster until it mounts.
 import { watch } from 'vue'
 import { useView, type ViewProps, type Hover, type View } from './view'
@@ -52,5 +53,6 @@ watch(
         <img v-if="poster" class="pcbjs-poster" :src="poster" alt="" />
       </template>
     </ClientOnly>
+    <AccessMode v-if="board && props.tools" />
   </div>
 </template>

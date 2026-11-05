@@ -64,8 +64,8 @@ const rangeOf = it => rangeFor(sources, { uid: it.uid }).range
 
 test('stitch(net) keeps its net and gets the range as an argument of its own', () => {
   const out = plain(transformSourceRanges(code, '/p/board.tsx', 'board.tsx').code)
-  assert.ok(out.includes(`{stitch(GND, { __src: { file: "board.tsx", line: 25, col: 6, endLine: 25, endCol: 16 } })}`), out)
-  assert.ok(out.includes(`{stitch(GND, { pitch: 3, __src: { file: "board.tsx", line: 26, col: 6, endLine: 26, endCol: 30 } })}`), out)
+  assert.ok(out.includes(`stitch(GND, { __src: { file: "board.tsx", line: 25, col: 6, endLine: 25, endCol: 16 } })`), out)
+  assert.ok(out.includes(`stitch(GND, { pitch: 3, __src: { file: "board.tsx", line: 26, col: 6, endLine: 26, endCol: 30 } })`), out)
 })
 
 test('a layout element lists the items drawn inside it as outer', () => {

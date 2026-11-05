@@ -32,13 +32,14 @@ export function bindPCB(preset: PresetInput): BoundPCB {
     silkColors,
     finishes: [...(preset.finishes ?? (preset.stackup.finish ? [preset.stackup.finish] : []))],
     ...(preset.sourcing ? { sourcing: [...preset.sourcing] } : {}),
+    ...(preset.via ? { via: { ...preset.via } } : {}),
     ...(preset.autoroute ? { autoroute: cloneData(preset.autoroute) } : {}),
     ...(preset.classes ? { classes: cloneData(preset.classes) } : {}),
     ...(preset.cpl ? { cpl: { ...preset.cpl } } : {}),
     ...(preset.fabNotes ? { fabNotes: [...preset.fabNotes] } : {}),
   }) as PresetSpec
   const Board = function (props: PresetBoardProps): PcbNode {
-    const { children, color, silk, finish, stackup, rules, sourcing, autoroute, classes, cpl, fabNotes, ...rest } = props
+    const { children, color, silk, finish, stackup, rules, sourcing, via, autoroute, classes, cpl, fabNotes, ...rest } = props
     const tags = sourcing ?? spec.sourcing
     const mask = color === undefined || color === null ? undefined : paletteName(colors, String(color))
     const legend = silk === undefined || silk === null ? undefined : paletteName(silkColors, String(silk))
@@ -57,6 +58,7 @@ export function bindPCB(preset: PresetInput): BoundPCB {
           : spec.fabNotes || fabNotes
             ? { fabNotes: [...(spec.fabNotes ?? []), ...(fabNotes ?? [])] }
             : {}),
+        ...(spec.via || via ? { via: { ...spec.via, ...via } } : {}),
         ...(spec.autoroute || autoroute ? { autoroute: mergeAutoroute({}, spec.autoroute, autoroute) } : {}),
         ...(spec.classes || classes
           ? {

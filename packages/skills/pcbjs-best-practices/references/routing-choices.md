@@ -68,3 +68,5 @@ Keep the tolerance at the real budget. A tight window makes the tuner add meande
 - A failed leg wants a waypoint into free board before anything else.
 - A width from current: check the class width against the real current with IPC-2221 and write the numbers in a comment beside the class; change it only when the numbers say so.
 - Routes made in helpers are attributed to the call site; keep helpers small so findings point somewhere useful.
+
+For layer changes, choose the via inventory independently of trace width and reuse the board's preferred dimensions where appropriate. See [Copper](copper.md#via-sizes-as-a-design-choice) for current default and override behavior; a pair router's larger internal search envelope is not a fabricated via diameter.

@@ -1,25 +1,25 @@
-// three.js geometry flattened into @pcbjs/step meshes, one per colour; nothing runs at module scope
+// three.js geometry flattened into @pcbjs/step meshes, one per material; nothing runs at module scope
 import * as THREE from 'three'
-import type { StepMesh } from '@pcbjs/step/internal/mesh'
+import type { MeshMaterial, StepMesh } from '@pcbjs/step'
+import { meshMaterial } from './materials'
 
 export type Rgb = [number, number, number]
 
-/** A colour as the key that merges its triangles. */
-export const colorKey = (c: Rgb): string => c.map(v => v.toFixed(3)).join()
-
 export class Sink {
-  private by = new Map<string, { color: Rgb; pos: number[]; nor: number[] }>()
+  private by = new Map<string, { color: Rgb; material?: MeshMaterial; pos: number[]; nor: number[] }>()
   /** `face` keeps only the triangles facing up or down, for copper and silk whose 35 µm walls a reference never shows */
-  add(color: Rgb, pos: ArrayLike<number>, nor: ArrayLike<number>, m?: THREE.Matrix4, index?: ArrayLike<number> | null, face?: 1 | -1) {
-    const key = colorKey(color)
+  add(color: Rgb, pos: ArrayLike<number>, nor: ArrayLike<number>, m?: THREE.Matrix4, index?: ArrayLike<number> | null, face?: 1 | -1, material?: MeshMaterial) {
+    const key = JSON.stringify([color, material])
     let g = this.by.get(key)
-    if (!g) this.by.set(key, (g = { color, pos: [], nor: [] }))
+    if (!g) this.by.set(key, (g = { color, material, pos: [], nor: [] }))
     const nm = m ? new THREE.Matrix3().getNormalMatrix(m) : null
     const v = new THREE.Vector3(),
       n = new THREE.Vector3()
     const count = index ? index.length : pos.length / 3
+    const mirrored = m && m.determinant() < 0
     for (let k = 0; k < count; k++) {
-      const i = index ? index[k] : k
+      const corner = mirrored && k % 3 ? k + (k % 3 === 1 ? 1 : -1) : k
+      const i = index ? index[corner] : corner
       if (face && k % 3 === 0) {
         // a triangle's corners share its face normal in the extrusions: skip the three when it faces the wrong way
         if ((nor[i * 3 + 2] ?? 0) * face < 0.5) {
@@ -49,10 +49,10 @@ export class Sink {
       if (!pos) return
       const mat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial
       const c = mat?.color ?? new THREE.Color('#888888')
-      this.add([c.r, c.g, c.b], pos.array, nor ? nor.array : new Float32Array(pos.count * 3), mesh.matrixWorld, geo.getIndex()?.array ?? null)
+      this.add([c.r, c.g, c.b], pos.array, nor ? nor.array : new Float32Array(pos.count * 3), mesh.matrixWorld, geo.getIndex()?.array ?? null, undefined, meshMaterial(mat))
     })
   }
-  /** the meshes, one per colour, corners that share a position and a normal merged */
+  /** the meshes, one per material, corners that share a position and a normal merged */
   meshes(): StepMesh[] {
     return [...this.by.values()]
       .filter(g => g.pos.length)
@@ -72,7 +72,7 @@ export class Sink {
           }
           idx.push(at)
         }
-        return { positions: new Float32Array(pos), normals: new Float32Array(nor), indices: new Uint32Array(idx), color: g.color }
+        return { positions: new Float32Array(pos), normals: new Float32Array(nor), indices: new Uint32Array(idx), color: g.color, ...(g.material ? { material: g.material } : {}) }
       })
   }
 }

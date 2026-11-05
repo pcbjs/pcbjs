@@ -11,6 +11,8 @@ import PathChip from './PathChip.vue'
 import Palette from './Palette.vue'
 import DevToolsOverlay from './DevToolsOverlay.vue'
 import PreviewLayout from './PreviewLayout.vue'
+import AccessMode from './AccessMode.vue'
+import CompileHalt from './CompileHalt.vue'
 
 const props = defineProps<{
   /** the views it can show, by mode */
@@ -60,14 +62,14 @@ const reload = () => location.reload()
     data-ui-source="packages/ui/src/BoardFrame.vue"
     :class="{ checks: view.mode === 'checks', split: view.mode === 'sch' && view.split && drawing }"
   >
+    <CompileHalt v-if="error || board?.halted" :halted="board?.halted" />
     <ClientOnly><PreviewLayout /><DevToolsOverlay v-if="board?.dev && view.devtools" /></ClientOnly>
     <ClientOnly v-if="!embed.on"><Palette /></ClientOnly>
     <template v-if="board">
       <!-- the board views measure the page and draw with pointer events and WebGL: the prerendered page holds a box of the board's shape until hydration -->
       <ClientOnly>
         <component :is="views['2d']" v-if="views['2d'] && mounted.includes('2d')" :key="board.name" :beside="view.mode === 'sch'" />
-        <component :is="views.sch" v-if="views.sch && view.mode === 'sch' && drawing" :key="board.name" />
-        <div v-else-if="view.mode === 'sch'" class="empty">No schematic drawing in this build</div>
+        <component :is="views.sch" v-if="views.sch && view.mode === 'sch'" :key="board.name" />
         <component :is="views.checks" v-if="views.checks && view.mode === 'checks'" :key="board.name" />
         <div v-if="views['3d'] && view.mode === '3d'" class="view3d-host">
           <div v-if="view.failed3d" class="empty">3D view failed: {{ view.failed3d }}</div>
@@ -132,6 +134,7 @@ const reload = () => location.reload()
         <button v-if="drawing" :class="{ on: view.mode === 'sch' }" :aria-pressed="view.mode === 'sch'" @click="view.mode = 'sch'">Schematic</button>
         <button v-if="views.checks" :class="{ on: view.mode === 'checks' }" :aria-pressed="view.mode === 'checks'" @click="view.mode = 'checks'">DRC / ERC</button>
       </div>
+      <AccessMode />
       <PathChip v-if="!embed.on && view.mode !== 'checks'" />
     </template>
     <slot v-else name="empty">
@@ -147,15 +150,16 @@ const reload = () => location.reload()
     <div v-if="error && !board" class="error-box" role="alert">
       <div class="error-title"><span class="pill err">compile error</span><span class="dim">no board yet</span></div>
       <div class="error-head">{{ errorHead }}</div>
-      <pre v-if="errorBody">{{ errorBody }}</pre>
+      <pre v-if="errorBody" class="compile-context" aria-label="Source context">{{ errorBody }}</pre>
     </div>
-    <div v-else-if="staleText" class="stale-banner" role="alert">
-      <div class="stale-title"><span class="pill warn">stale</span><span>the last compile failed; this is the board from the compile before</span></div>
+    <div v-else-if="staleText" class="stale-banner" :class="{ halted: !!board?.halted }" role="alert">
+      <div class="stale-title">
+        <span class="pill" :class="board?.halted ? 'err' : 'warn'">{{ board?.halted ? 'halted' : 'stale' }}</span
+        ><span>{{ board?.halted ? 'Partial board before the failing expression' : 'Partial preview unavailable; showing the last successful board' }}</span>
+      </div>
+      <p class="compile-warning">DRC / ERC incomplete for the current source. Fix the compile error before exporting.</p>
       <div class="stale-head">{{ errorHead }}</div>
-      <details v-if="errorBody">
-        <summary>details</summary>
-        <pre>{{ errorBody }}</pre>
-      </details>
+      <pre v-if="errorBody" class="compile-context" aria-label="Source context">{{ errorBody }}</pre>
     </div>
   </main>
 

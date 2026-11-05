@@ -64,9 +64,10 @@ function resolveTarget(t: VariantTarget, i: number): Target {
         stackup: structuredClone(p.stackup) as Stackup,
         rules: { ...p.rules },
         ...(p.sourcing ? { sourcing: [...p.sourcing] } : {}),
-        ...(p.autoroute || p.classes || p.cpl || p.fabNotes
+        ...(p.via || p.autoroute || p.classes || p.cpl || p.fabNotes
           ? {
               board: {
+                ...(p.via ? { via: { ...p.via } } : {}),
                 ...(p.autoroute ? { autoroute: cloneData(p.autoroute) as any } : {}),
                 ...(p.classes ? { classes: cloneData(p.classes) as any } : {}),
                 ...(p.cpl ? { cpl: { ...p.cpl } } : {}),

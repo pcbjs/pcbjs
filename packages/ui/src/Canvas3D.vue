@@ -6,6 +6,8 @@ import Bubble from './Bubble.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { usePinch } from './touch'
+import { pointerInside, usePointer } from './pointer'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import type { SiteData, SiteFootprint } from '@pcbjs/core/site-data'
 import { keyOfSite, NONE, type Stale } from './live'
@@ -1110,6 +1112,41 @@ function zoomBy(f: number) {
   dirty = true
 }
 
+usePinch(
+  host,
+  () => {
+    tt.cancel()
+    toolPress = false
+    downAt = null
+    controls.enabled = true
+    camMoving = false
+    camRestore = null
+    camNearFar = null
+    stackFit.stop()
+    controls.enableDamping = false
+    controls.update()
+    controls.enableDamping = true
+    onLeave()
+  },
+  ({ from, to, scale }) => {
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), controls.target)
+    setRay({ clientX: from[0], clientY: from[1] })
+    const before = raycaster.ray.intersectPlane(plane, new THREE.Vector3())
+    const distance = camera.position.distanceTo(controls.target)
+    const next = Math.max(Math.max(camera.near * 2, controls.minDistance), Math.min(controls.maxDistance, distance * scale))
+    zoomBy(next / distance)
+    camera.updateMatrixWorld()
+    setRay({ clientX: to[0], clientY: to[1] })
+    const after = raycaster.ray.intersectPlane(plane, new THREE.Vector3())
+    if (before && after) {
+      const delta = before.sub(after)
+      controls.target.add(delta)
+      camera.position.add(delta)
+    }
+    controls.update()
+  },
+)
+
 /** The pick grids built in idle time once a build has meshed, a few meshes per idle slice. */
 function warmPicks(my: number) {
   const idle = (fn: (d: { timeRemaining(): number }) => void) =>
@@ -1144,6 +1181,24 @@ function setHover(info: ItemInfo | null) {
   localHover.value = info
   emit('hover', info ? { ...asPicked(info), layer: info.layer } : null)
 }
+usePointer(
+  host,
+  e => {
+    tt.cancel()
+    toolPress = false
+    downAt = null
+    if (controls) controls.enabled = true
+    if (e && renderer) renderer.domElement.dispatchEvent(new PointerEvent('pointercancel', { pointerId: e.pointerId, pointerType: e.pointerType }))
+    if (controls) {
+      const damping = controls.enableDamping
+      controls.enableDamping = false
+      controls.update()
+      controls.enableDamping = damping
+    }
+  },
+  onLeave,
+)
+
 function onMove(e: PointerEvent) {
   if (toolPress) {
     tt.move(e)
@@ -1159,6 +1214,7 @@ function onMove(e: PointerEvent) {
     setDotHover(null, null)
     return
   }
+  if (!pointerInside(host.value, e)) return onLeave()
   pendingHover = e
 }
 // the last pointer move not yet tested, at most one ray and one dot test a frame
@@ -1221,6 +1277,7 @@ function onUp(e: PointerEvent) {
     controls.enabled = true
     downAt = null
     if (tt.up() !== 'click') return
+    if (!pointerInside(host.value, e)) return
     const dot = e.button === 0 ? dotAt(e) : null
     if (dot !== null) return clickDot(dot, e)
     const p = pick(e)
@@ -1232,6 +1289,11 @@ function onUp(e: PointerEvent) {
     return
   }
   downAt = null
+  if (!pointerInside(host.value, e)) return
+  if (e.pointerType === 'touch' && tt.as.on.value) {
+    tt.move(e)
+    if (tt.as.down(e)) return
+  }
   const dot = e.button === 0 ? dotAt(e) : null
   if (dot !== null) return clickDot(dot, e)
   const p = pick(e)
@@ -1247,6 +1309,8 @@ function onDouble(e: MouseEvent) {
   emit('enter', hitOf(p?.info ?? null, p?.at ?? null))
 }
 function onLeave() {
+  if (renderer) renderer.domElement.style.cursor = ''
+  endPointer.value = null
   pendingHover = null
   setDotHover(null, null)
   tt.as.leave()

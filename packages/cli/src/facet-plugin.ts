@@ -29,6 +29,7 @@ import type { SiteReference } from '@pcbjs/core/internal/reference'
 import type { BrowserModule } from '@pcbjs/compile/browser'
 import { workerCompiler } from './session/worker-client.js'
 import { liveSession } from './session/start.js'
+import { sessionFileDeny } from './session/access.js'
 import { proxySession, sameOrigin } from './session/endpoint.js'
 import { connectSession, type SessionConn } from './session/client.js'
 import type { Compiler } from './project/compiler.js'
@@ -443,6 +444,7 @@ export function pcbjs(opts: PcbjsPluginOptions = {}): Plugin {
 
   return {
     name: 'pcbjs:facets',
+    config: (c, env) => (env.command === 'serve' ? { server: { fs: { deny: sessionFileDeny(c.server?.fs?.deny) } } } : undefined),
     enforce: 'pre',
     api: { workers: () => compiler.workers(), boards },
     // Absolute bases keep SSR and browser attributes identical; relative client builds use Rollup's chunk-relative URLs.

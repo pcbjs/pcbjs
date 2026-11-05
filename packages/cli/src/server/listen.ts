@@ -1,3 +1,4 @@
+import { sessionFileDeny } from './access.js'
 import { readFileSync } from 'node:fs'
 import { createServer as createNetServer, type AddressInfo } from 'node:net'
 import { createRequire } from 'node:module'
@@ -53,6 +54,7 @@ export async function listenDev(make: () => InlineConfig, opts: Pick<DevOptions,
     const vc = make()
     // --host exposes the server beyond localhost; it then also answers any Host header, so a tunnel or a LAN name works
     vc.server = { ...vc.server, port: port ?? 5173, host: opts.host, open: opts.open, strictPort: port != null, allowedHosts: opts.host ? true : vc.server?.allowedHosts }
+    vc.server.fs = { ...vc.server.fs, deny: sessionFileDeny(vc.server.fs?.deny) }
     const server = await createServer(vc)
     closeSettled(server, state)
     try {

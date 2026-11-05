@@ -3,6 +3,7 @@ import { polysToRings } from '@pcbjs/compile/internal/geom'
 import { copperLayers } from '@pcbjs/compile/internal/layers'
 import { arcSweep, hasArc } from '@pcbjs/compile/internal/path'
 import { padMask, padPaste } from './pads.js'
+import { referenceMarkup } from './reference.js'
 
 const f = (v: number) => String(Math.round(v * 1e4) / 1e4)
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;').replace(/\n/g, '&#10;')
@@ -96,6 +97,8 @@ export function layerMarkup(board: Board, layer: string, doc = false): string {
         break
     }
   }
+  const references = referenceMarkup(board, layer)
+  if (references) out.push(references)
   return out.join('\n')
 }
 

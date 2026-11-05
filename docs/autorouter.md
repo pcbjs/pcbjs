@@ -40,6 +40,7 @@ When a leg finds no path, PathFinder negotiated congestion routing takes over.
 - Each round, legs sharing copper with another net reroute, from round two also legs near such a spot. The price grows per round and shared cells keep a history cost.
 - A leg pays on cells of its own priority or higher and ignores lower legs; of two colliding legs the lower reroutes, both when equal.
 - After `ripup` rounds, 12 by default, the lowest priority leg with most collisions leaves the board until nothing collides; each tries once more, else `route-failed` naming the route it hit.
+- A late reroute can displace another leg or remove a trunk another leg joined. Both return to the pending queue; every leg finishes with copper or an explicit failure before its result is cached.
 - Deterministic. `board.routing.rounds` and `board.routing.ripped` count rounds and legs taken off; `pcbjs check` prints both.
 
 Give long control lines a lower `priority` than the pairs they cross. `ripup: 0` turns negotiation off; on one route it keeps its legs where the order puts them.
@@ -63,6 +64,7 @@ A lone automatic leg, `route(a, b)`, runs from any copper joined to its start pa
 
 - Net copper joined to neither end is an obstacle, so no leg closes a loop; an unjoined pad is not, and is joined when crossed.
 - A leg whose ends are already joined places nothing. One net's joining legs route widest first, then longest.
+- Copper on different layers can join with a via alone. Such a leg retains its trunk dependencies, reroutes when those trunks are removed, and includes the joined net in its cache signature.
 - A leg joining a thinner trunk relays it at its width to the junction; if that breaks a clearance it runs to its pad, or leaves the trunk thin with the info `trunk-narrow`. A future `current` would size shared trunks.
 - `.direct()` keeps a leg off the rest of its net, for Kelvin sense and star returns.
 - Chains with waypoints, manual commands or vias, pairs, and `.length()` or `.match()` routes never join, except a route ending on a net.

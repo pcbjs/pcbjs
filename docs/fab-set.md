@@ -73,6 +73,7 @@ Manufacturing export entry points reject nonfinite board geometry and nonpositiv
 ORDERABLE means the implemented board checks passed; run `pcbjs check` separately for TypeScript checking. ERC does not model driver, input or power-pin roles, and the Gerber self check does not re-read drills, mask, paste or placement files. Review those outputs and the circuit independently before manufacture.
 
 - `fabNotes={['Single board, no panel.', 'Remove the order number.']}` opens the Notes; `<PCB>`, a preset, a target and `defineDefaultBoard` take it, joined defaults, preset or target, `<PCB>`, each line once.
+- `fabNotes` is text in README-fab, never silkscreen. Use it for additional instructions the fabricator must act on; omit it otherwise. Keep design-review discussion in existing project notes and chat. Silkscreen should help identify, assemble, connect or test the physical board; do not automatically print draft disclaimers, TODOs or validation status. Preserve requested markings and justified physical-use warnings.
 - The Notes name each font: Hershey Simplex and NewStroke with provenance from fonts.md, an outline font with its copyright and licence.
 
 ## BOM and placement

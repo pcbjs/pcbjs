@@ -89,4 +89,9 @@ export function sessionSocket(url: string, socket: (url: string) => WebSocket = 
 }
 
 /** The session socket's URL from a page's own location. */
-export const sessionUrl = (loc: Pick<Location, 'protocol' | 'host'>): string => `${loc.protocol === 'https:' ? 'wss' : 'ws'}://${loc.host}/__pcbjs/session`
+export function sessionUrl(loc: Pick<Location, 'protocol' | 'host'> & { search?: string }): string {
+  const url = new URL(`${loc.protocol === 'https:' ? 'wss' : 'ws'}://${loc.host}/__pcbjs/session`)
+  const token = new URLSearchParams(loc.search).get('token')
+  if (token) url.searchParams.set('token', token)
+  return url.href
+}

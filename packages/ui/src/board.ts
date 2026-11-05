@@ -162,8 +162,8 @@ export function boardContext(board: BoardStore): PaneContext {
     theme: () => prefs.theme ?? 'light',
     toggle: (k: 'grid' | 'ratsnest') => (prefs[k] = !prefs[k]),
     say,
-    open: async (t, quiet) => {
-      if (board.site) await openTarget(board.site, t, say, quiet)
+    open: async (t, quiet, external) => {
+      if (board.site) await openTarget(board.site, t, say, quiet, { editable: board.edit.mode?.mode === 'rw', external })
     },
   } satisfies PaneContext)
   own.set(board, c)

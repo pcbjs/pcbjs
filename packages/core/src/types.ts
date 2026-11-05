@@ -182,6 +182,8 @@ export interface BoardProps {
   fabNotes?: readonly string[]
   /** refs of circuit parts: "flat" (default) numbers them per prefix, "hierarchical" makes `BUCK1_R1` */
   refStyle?: 'flat' | 'hierarchical'
+  /** preferred via dimensions, separate from manufacturing minima; omitted fields keep the legacy fallback */
+  via?: { drill?: Length; size?: Length }
   /** board-wide autoroute parameters, merged key by key over the defaults; a route's `auto` wins */
   autoroute?: Partial<AutoRouteParams>
   /** net classes by name, merged class by class and field by field over the defaults */
@@ -749,6 +751,8 @@ export interface PadRef<D extends string = string> extends PinRef {
 }
 /** The props of a placed part, `<R1 at="12 5" />`; a slot of `at` written `auto` is chosen by the placer, see placement.md. */
 export interface PlaceProps {
+  /** prevent preview changes to this placement; expressions are evaluated on compilation */
+  locked?: boolean
   /** persisted editing pitch, independent of coordinate units */
   grid?: import('./grid.js').PlacementGrid
   /** "x y rot" in the frame of the enclosing groups; `auto` for all three, or for one slot, "10mm auto 90deg" */
@@ -825,7 +829,10 @@ export interface MateProps {
 
 /** The props of a part inside `<Schematic>` or `<Sheet>`, `<R1 at="10 6" flip />`: its symbol, in grid units. */
 export interface SymPlaceProps {
-  at: SchAt
+  /** omitted positions are placed automatically */
+  at?: SchAt
+  /** lock this schematic placement independently of its PCB placement */
+  locked?: boolean
   /** degrees counterclockwise, a multiple of 90 */
   rot?: 0 | 90 | 180 | 270
   /** mirrored left to right before the rotation */

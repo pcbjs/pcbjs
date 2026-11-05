@@ -53,13 +53,14 @@ export function upsertEntry<T extends Pick<SiteData, 'name' | 'variant'>>(boards
   return at
 }
 
-export function drcSummary(b: Pick<SiteData, 'drc' | 'unconnected'>): DrcSummary {
+export function drcSummary(b: Pick<SiteData, 'drc' | 'unconnected' | 'halted' | 'stale'>): DrcSummary {
+  if (b.halted || b.stale) return { state: 'warn', text: 'checks incomplete', errors: 0, warnings: 0, infos: 0 }
   const c = count(b.drc)
   return { state: c.errors || b.unconnected ? 'err' : c.warnings ? 'warn' : 'ok', text: words(c, b.unconnected), ...c }
 }
 
 /** What the checks of one entry read. */
-export type Checked = Pick<SiteData, 'drc' | 'erc' | 'unconnected'>
+export type Checked = Pick<SiteData, 'drc' | 'erc' | 'unconnected' | 'halted' | 'stale'>
 
 const rank: Record<DrcState, number> = { ok: 0, warn: 1, err: 2 }
 /** The target that fares worst on DRC and ERC together: errors first, then warnings, then unconnected; the earliest on a tie. */
@@ -122,7 +123,8 @@ const infoTail = (c: CheckCounts) => (c.infos ? `, ${plural(c.infos, 'info')}` :
 const allClean = (...cs: CheckCounts[]) => cs.every(c => !c.infos)
 
 /** The ERC alone in the shape of `drcSummary`. */
-export function ercSummary(b: Pick<Checked, 'erc'>): DrcSummary {
+export function ercSummary(b: Pick<Checked, 'erc' | 'halted' | 'stale'>): DrcSummary {
+  if (b.halted || b.stale) return { state: 'warn', text: 'checks incomplete', errors: 0, warnings: 0, infos: 0 }
   const c = count(b.erc)
   return { state: c.errors ? 'err' : c.warnings ? 'warn' : 'ok', text: words(c), ...c }
 }
@@ -134,7 +136,7 @@ export function checkSummary(b: Checked): CheckSummary {
     unconnected = b.unconnected
   const errors = drc.errors + erc.errors,
     warnings = drc.warnings + erc.warnings
-  const state: CheckState = errors || unconnected ? 'err' : warnings ? 'warn' : 'ok'
+  const state: CheckState = b.halted || b.stale ? 'warn' : errors || unconnected ? 'err' : warnings ? 'warn' : 'ok'
   // the DRC list holds an `unconnected` error per gap already: only gaps it does not list add to the count
   const listed = b.drc.filter(d => (d as { rule?: string }).rule === 'unconnected').length
   const drcN = drc.errors + drc.warnings + Math.max(0, unconnected - listed)
@@ -146,9 +148,12 @@ export function checkSummary(b: Checked): CheckSummary {
     unconnected,
     drc,
     erc,
-    label: `DRC ${drcN} · ERC ${erc.errors + erc.warnings}`,
-    text: state === 'ok' && allClean(drc, erc) ? 'clean' : `DRC ${words(drc, unconnected, ', ')} · ERC ${words(erc, 0, ', ')}`,
-    title: `${drcTitle}\nERC: ${plural(erc.errors, 'error')}, ${plural(erc.warnings, 'warning')}${infoTail(erc)}`,
+    label: b.halted || b.stale ? 'DRC / ERC incomplete' : `DRC ${drcN} · ERC ${erc.errors + erc.warnings}`,
+    text: b.halted || b.stale ? 'checks incomplete' : state === 'ok' && allClean(drc, erc) ? 'clean' : `DRC ${words(drc, unconnected, ', ')} · ERC ${words(erc, 0, ', ')}`,
+    title:
+      b.halted || b.stale
+        ? 'Compilation halted. DRC and ERC have not completed.'
+        : `${drcTitle}\nERC: ${plural(erc.errors, 'error')}, ${plural(erc.warnings, 'warning')}${infoTail(erc)}`,
   }
 }
 

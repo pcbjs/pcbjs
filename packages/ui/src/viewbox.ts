@@ -1,6 +1,7 @@
 // the pan and zoom of the 2D and schematic views; every length is in the drawing's own unit, mm
 import { computed, onBeforeUnmount, ref, type Ref } from 'vue'
 import { Spring } from './scene/motion'
+import type { Pinch } from './touch'
 
 export type Box = [number, number, number, number]
 
@@ -103,6 +104,13 @@ export function useViewBox(svg: Ref<SVGSVGElement | null>, start: Box, maxW: () 
     const d = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY
     zoomAt(x, y, Math.exp(Math.max(-60, Math.min(60, d)) * 0.004))
   }
+  function pinch({ from, to, scale }: Pinch) {
+    const [x, y] = toView({ clientX: from[0], clientY: from[1] })
+    zoomAt(x, y, scale)
+    const at = toView({ clientX: to[0], clientY: to[1] })
+    stopAnimation()
+    vb.value = [vb.value[0] + x - at[0], vb.value[1] + y - at[1], vb.value[2], vb.value[3]]
+  }
   /** A later resize keeps the scale and the centre. */
   function resize(w: number, h: number) {
     stopAnimation()
@@ -114,13 +122,17 @@ export function useViewBox(svg: Ref<SVGSVGElement | null>, start: Box, maxW: () 
   }
 
   // a press that moves more than a few pixels pans, otherwise it is a click
-  let drag: { x: number; y: number; vb: Box; moved: boolean } | null = null
+  let drag: { pointerId: number; x: number; y: number; vb: Box; moved: boolean } | null = null
   function press(e: PointerEvent) {
-    if (e.button === 0) drag = { x: e.clientX, y: e.clientY, vb: [...vb.value] as Box, moved: false }
+    if (e.button === 0 && !drag) drag = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, vb: [...vb.value] as Box, moved: false }
   }
   /** True while the press pans. */
   function pan(e: PointerEvent): boolean {
-    if (!drag) return false
+    if (!drag || drag.pointerId !== e.pointerId) return false
+    if (!(e.buttons & 1)) {
+      release()
+      return false
+    }
     const dx = e.clientX - drag.x,
       dy = e.clientY - drag.y
     if (!drag.moved && Math.hypot(dx, dy) > 3) {
@@ -142,5 +154,5 @@ export function useViewBox(svg: Ref<SVGSVGElement | null>, start: Box, maxW: () 
   }
   const panning = () => !!drag?.moved
 
-  return { size, vb, px, fitBox, animateTo, stopAnimation, show, zoomAt, zoomBy, toView, onWheel, resize, press, pan, release, panning }
+  return { size, vb, px, fitBox, animateTo, stopAnimation, show, zoomAt, zoomBy, toView, onWheel, pinch, resize, press, pan, release, panning }
 }

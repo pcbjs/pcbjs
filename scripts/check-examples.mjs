@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Runs `pcbjs check` in every example project and fails unless its findings are exactly those in KNOWN, the list in examples/README.md, and every board's schematic draws its symbols.
+// Checks expected example findings and schematic symbols, except the explicitly empty mechanical carrier graph.
 // Vendor models the repository may not carry are fetched first from their `lcsc:<C-number>` line in models/LICENSES.md.
 // Usage: node scripts/check-examples.mjs [--fetch] [project dir under examples/ ...]; --fetch only fetches the models and installs the libraries
 import { spawnSync } from 'node:child_process'
@@ -91,7 +91,9 @@ for (const dir of dirs) {
     for (const d of report.diagnostics ?? []) if (d.kind !== 'type') problems.push(`${d.entry ?? d.kind}: ${d.message}`)
     for (const b of report.boards) {
       if (b.counts?.unconnected) problems.push(`${b.name}: ${b.counts.unconnected} unconnected`)
-      if (!(b.schematic?.symbols > 0)) problems.push(`${b.name}: the schematic drew no symbols`)
+      const emptyCarrier =
+        name === 'board-poses' && b.entry === 'carrier.pcb.tsx' && b.name === 'Carrier' && ['footprints', 'pads', 'nets', 'tracks', 'vias'].every(k => b.stats?.[k] === 0)
+      if (!(b.schematic?.symbols > 0) && !emptyCarrier) problems.push(`${b.name}: the schematic drew no symbols`)
       for (const f of b.findings) {
         const i = expected.indexOf(`${f.severity} ${f.rule}`)
         if (i < 0) problems.push(`${b.name}: ${f.severity} ${f.rule} ${f.message}`)

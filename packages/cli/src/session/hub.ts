@@ -664,6 +664,8 @@ export function sessionHub(server: ViteDevServer, ws: Workspace, shared: DevStat
     current: rt.current,
     previous: rt.previous,
     settle: rt.settle,
+    refresh: rt.refresh,
+    snapshotStale: rt.snapshotStale,
     hold: rt.hold,
     artifact: rt.artifact,
   })

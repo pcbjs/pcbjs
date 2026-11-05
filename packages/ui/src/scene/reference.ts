@@ -5,7 +5,7 @@ import type { SiteReference } from '@pcbjs/core/internal/reference'
 import { shapeOf } from '@pcbjs/core/site-shapes'
 import { meshFromBinary } from '@pcbjs/step/binary'
 import { stepMatrix } from '@pcbjs/step/internal/place'
-import type { StepMesh } from '@pcbjs/step/internal/mesh'
+import type { MeshMaterial, StepMesh } from '@pcbjs/step/internal/mesh'
 import { flatten, packDrills, runJob, type GeoJob } from '@pcbjs/export/internal/scene/geometry'
 import { bodyFace, bodyMatrix, copperSlices, maskThickness, SILK } from '@pcbjs/export/internal/scene/stack'
 import { Sink, type Rgb } from '../models/sink'
@@ -70,7 +70,7 @@ function addBody(sink: Sink, fp: SiteFootprint, face: number, mesh: (hash: strin
   const model = file ?? made
   if (!model) return
   const m = new THREE.Matrix4().fromArray(file ? stepMatrix(fp, fp.step!.transform, face) : bodyMatrix(fp, face))
-  for (const q of model.meshes) sink.add(q.color, q.positions, q.normals, m, q.indices)
+  for (const q of model.meshes) sink.add(q.color, q.positions, q.normals, m, q.indices, undefined, q.material)
 }
 
 /** Where a reference's mesh is: the dev endpoint, or models/boards/<hash>.bin beside the built site. */
@@ -78,7 +78,13 @@ export function referenceUrl(hash: string, dev: boolean, assetUrl: (p: string) =
   return dev ? `/__pcbjs/model/boards/${hash}` : assetUrl(`models/boards/${hash}.bin`)
 }
 
-async function load(url: string): Promise<{ geo: THREE.BufferGeometry; color: THREE.Color }[]> {
+interface LoadedMesh {
+  geo: THREE.BufferGeometry
+  color: THREE.Color
+  material?: MeshMaterial
+}
+
+async function load(url: string): Promise<LoadedMesh[]> {
   const r = await fetch(url)
   if (!r.ok) throw new Error(`${r.status}`)
   return meshFromBinary(await r.arrayBuffer()).meshes.map(m => {
@@ -87,10 +93,10 @@ async function load(url: string): Promise<{ geo: THREE.BufferGeometry; color: TH
     geo.setAttribute('normal', new THREE.BufferAttribute(m.normals, 3))
     geo.setIndex(new THREE.BufferAttribute(m.indices, 1))
     geo.computeBoundingSphere()
-    return { geo, color: new THREE.Color().setRGB(m.color[0], m.color[1], m.color[2]) }
+    return { geo, color: new THREE.Color().setRGB(m.color[0], m.color[1], m.color[2]), material: m.material }
   })
 }
-const loads = new Map<string, Promise<{ geo: THREE.BufferGeometry; color: THREE.Color }[]>>()
+const loads = new Map<string, Promise<LoadedMesh[]>>()
 
 /** A reference as one translucent group placed by its transform; null with one warning when the mesh does not load. */
 export async function referenceGroup(ref: SiteReference, url: string): Promise<THREE.Group | null> {
@@ -100,7 +106,7 @@ export async function referenceGroup(ref: SiteReference, url: string): Promise<T
     loads.set(url, p)
     p.catch(() => loads.delete(url))
   }
-  let parts: { geo: THREE.BufferGeometry; color: THREE.Color }[]
+  let parts: LoadedMesh[]
   try {
     parts = await p
   } catch (e) {
@@ -114,8 +120,10 @@ export async function referenceGroup(ref: SiteReference, url: string): Promise<T
     if (!ref.bodies && ref.split !== undefined && i >= ref.split) break
     const mat = new THREE.MeshStandardMaterial({
       color: q.color.clone().lerp(tint, 0.5),
-      roughness: 0.6,
-      metalness: 0.1,
+      roughness: q.material ? (q.material.roughness ?? 1) : 0.6,
+      metalness: q.material ? (q.material.metalness ?? 1) : 0.1,
+      emissive: new THREE.Color().setRGB(...(q.material?.emissive ?? [0, 0, 0])),
+      side: q.material?.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
       transparent: true,
       opacity: ref.opacity,
       depthWrite: false,

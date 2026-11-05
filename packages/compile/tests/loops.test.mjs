@@ -16,6 +16,66 @@ const rule = (b, r) => b.drc.filter(d => d.rule === r)
 const same = (p, q, tol = 1e-6) => Math.abs(p[0] - q[0]) <= tol && Math.abs(p[1] - q[1]) <= tol
 const ends = ts => [ts[0].pts[0], ts[ts.length - 1].pts[ts[ts.length - 1].pts.length - 1]]
 const length = ts => ts.reduce((s, t) => s + t.pts.reduce((l, q, i) => (i ? l + Math.hypot(q[0] - t.pts[i - 1][0], q[1] - t.pts[i - 1][1]) : l), 0), 0)
+
+test('join: crossing front and back trunks connect with a via-only leg', () => {
+  const back = (ref, x, y) => fp({ ref, at: `${x} ${y}`, side: 'B', nets: { 1: 'N' } }, h('pad', { num: 1, size: 1, type: 'smd' }))
+  const b = compileBoard(
+    board(
+      {},
+      smd('A', 3, 10, 'N'),
+      smd('B', 27, 10, 'N'),
+      back('C', 15, 3),
+      back('D', 15, 17),
+      route(P('A.1'), P('B.1')).width(0.3).Z(),
+      route(P('C.1'), P('D.1')).width(0.3).Z(),
+      route(P('A.1'), P('C.1')).width(0.3),
+    ),
+    opts,
+  )
+  assert.deepEqual(rule(b, 'route-failed'), [])
+  assert.deepEqual(rule(b, 'unconnected'), [])
+  assert.equal(tracks(b, 'route:3').length, 0)
+  const vias = b.items.filter(it => it.kind === 'via' && it.route === 'route:3')
+  assert.equal(vias.length, 1)
+  assert.ok(Math.hypot(vias[0].at[0] - 15, vias[0].at[1] - 10) <= 0.15, 'the via touches both trunks')
+  assert.deepEqual(
+    b.drc.filter(d => d.severity === 'error'),
+    [],
+  )
+})
+
+test('join: via-only legs replay with automatic trunk dependencies and invalidate after trunk edits', () => {
+  const make = (y = 10) =>
+    board(
+      {},
+      smd('A', 3, y, 'N'),
+      smd('B', 27, y, 'N'),
+      fp({ ref: 'C', at: '15 3', side: 'B', nets: { 1: 'N' } }, h('pad', { num: 1, size: 1, type: 'smd' })),
+      fp({ ref: 'D', at: '15 17', side: 'B', nets: { 1: 'N' } }, h('pad', { num: 1, size: 1, type: 'smd' })),
+      route(P('A.1'), P('B.1')).width(0.3).layers(['F.Cu']),
+      route(P('C.1'), P('D.1')).width(0.3).layers(['B.Cu']),
+      route(P('A.1'), P('C.1')).width(0.3),
+    )
+  clearRouteCache()
+  try {
+    const cold = compileBoard(make(), { cache: { dir: null } })
+    assert.deepEqual(
+      cold.drc.filter(d => d.severity === 'error'),
+      [],
+    )
+    assert.equal(tracks(cold, 'route:3').length, 0)
+    assert.equal(cold.items.filter(it => it.kind === 'via' && it.route === 'route:3').length, 1)
+    const warm = compileBoard(make(), { cache: { dir: null } })
+    assert.equal(warm.routing.cached, warm.routing.legs)
+    assert.deepEqual(warm.items, cold.items)
+    const changed = compileBoard(make(9), { cache: { dir: null } })
+    const fresh = compileBoard(make(9), { cache: false })
+    assert.deepEqual(changed.items, fresh.items)
+    assert.deepEqual(changed.drc, fresh.drc)
+  } finally {
+    clearRouteCache()
+  }
+})
 /** Distance from p to the centre line of a track. */
 const toTrack = (p, t) =>
   Math.min(

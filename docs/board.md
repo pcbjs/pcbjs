@@ -29,11 +29,12 @@ A first board sets `name` and `rev` and nothing else: the fab preset it imports,
 | `stackup` | `twoLayer()`, 1.6 mm | every physical layer and so the copper count and thickness, stackup.md |
 | `fonts` | none | outline fonts for `<text font>` by name, `{ Slab: { file: './fonts/RobotoSlab-Bold.ttf' } }`, see fonts.md |
 | `rules` | `BASE` | partial rule set merged key by key, see rules.md |
+| `via` | legacy rule-grown 0.3 / 0.6 mm | preferred `{ drill?, size? }`, merged field by field through defaults, preset or target and props; lengths in mm or units |
 | `autoroute` | `BASE_BOARD.autoroute` | partial parameters merged key by key, see route-options.md |
 | `classes` | `{}` | net classes, `{ power: { width: 0.5 } }`, merged by class then field, see route-options.md |
 | `strict` | false | a leg the router cannot route throws instead of a `route-failed` finding |
 | `sourcing` | `[]` | ordered sourcing tags, see sourcing.md |
-| `fabNotes` | none | lines for the Notes of README-fab, see fab-set.md |
+| `fabNotes` | none | actionable instructions in README-fab, not silkscreen; see fab-set.md |
 | `teardrops` | off | `true` or `{ pads, length, width }`, see route-options.md |
 | `silkRefs` | true | false drops every silk ref, see layout.md |
 | `cpl` | `{ origin: 'footprint' }`, `'center'` for JLCPCB presets | where `cpl.csv` places a part, see fab-set.md |

@@ -1,5 +1,6 @@
 // The read-only board API of `script`, `repl`, `q` and `pcbjs test`: frozen views over one compiled board whose toJSON gives the records of records.ts.
 import type { Board as Model, Footprint, Item, Pt } from '@pcbjs/core/model'
+import { resolveVia } from '@pcbjs/core/internal/rules'
 import type { Finding } from '@pcbjs/core/finding'
 import { boardIndex, resolveRef, RefError, spanLayers, type Resolved } from '@pcbjs/core/ref'
 import { classNameOf, classOf, itemClearance, netClearance, pairProvenance } from '../netclass.js'
@@ -404,13 +405,17 @@ export function boardApi(input: BoardInput): Board {
     source: t => [...entity(t).srcs],
     rulesAt(at, layer, net) {
       const cls = classOf(b, net)
+      const via = resolveVia(b.rules, b.via, cls?.via)
       const out: Record<string, number | string> = {
         layer,
         class: classNameOf(b, net) ?? 'default',
         clearance: netClearance(b, net),
         trackWidth: cls?.width ?? b.rules.minTrackWidth,
-        viaDrill: cls?.via?.drill ?? b.rules.minViaDrill,
-        viaSize: cls?.via?.size ?? b.rules.minViaDiameter,
+        viaDrill: via.drill,
+        viaSize: via.size,
+        minViaDrill: b.rules.minViaDrill,
+        minViaDiameter: b.rules.minViaDiameter,
+        minAnnularRing: b.rules.minAnnularRing,
         holeClearance: b.rules.holeClearance,
         edgeClearance: b.rules.edgeClearance,
       }

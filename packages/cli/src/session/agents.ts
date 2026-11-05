@@ -2,7 +2,7 @@
 // human sends them, queued per connection until acknowledged. docs/mcp.md has the tools over them.
 import { under } from '../project/files.js'
 import { existsSync, realpathSync } from 'node:fs'
-import { isAbsolute, resolve } from 'node:path'
+import { isAbsolute, relative, resolve } from 'node:path'
 import type { ProjectsApi } from './plugin.js'
 import type { Client, Clients, Handlers } from './clients.js'
 import type { By, Message, SessionEvent, TextEdit } from '@pcbjs/core/protocol'
@@ -155,6 +155,11 @@ export function agentMethods(h: AgentHooks): Pick<Handlers, AgentMethod> {
 
   const read = async (p: any, c: Client) => {
     const file = fileOf(c, p?.file)
+    if (c.transport.kind === 'tcp' && c.mode === 'ro') {
+      const project = await projectOf(c)
+      const rel = relative(real(project.root), file).replace(/\\/g, '/')
+      if (!under(file, real(project.root)) || rel.split('/').some(part => part.startsWith('.'))) throw new Error('Read-only source access is limited to non-hidden project files')
+    }
     const got = sourceOf(file)
     if (!got) throw new Error(`no file ${file}`)
     return { file, text: got.text, authority: got.authority, version: got.version }

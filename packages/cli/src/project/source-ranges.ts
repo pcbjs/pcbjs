@@ -153,7 +153,21 @@ export function transformSourceRanges(code: string, id: string, file: string, li
     return `{ file: ${JSON.stringify(file)}, line: ${a.line}, col: ${a.col}, endLine: ${b.line}, endCol: ${b.col}, hash: ${JSON.stringify(textHash(name.getStart(sf), node.getEnd()))} }`
   }
 
+  let capture = '__pcbjsExpression'
+  while (code.includes(capture)) capture += '_'
+  let expressions = false
+  const suspends = (node: ts.Node): boolean =>
+    ts.isAwaitExpression(node) || ts.isYieldExpression(node) || (!ts.isFunctionLike(node) && !!ts.forEachChild(node, n => suspends(n) || undefined))
   const visit = (node: ts.Node): void => {
+    if (ts.isJsxExpression(node) && node.expression && (ts.isJsxElement(node.parent) || ts.isJsxFragment(node.parent)) && !suspends(node.expression)) {
+      const expr = node.expression
+      const start = lc(expr.getStart(sf)),
+        end = lc(expr.end - 1)
+      s.appendLeft(expr.getStart(sf), `${capture}(() => (`)
+      s.appendRight(expr.end, `), ${JSON.stringify([file, start.line, start.col, end.line, end.col])})`)
+      expressions = true
+      edits++
+    }
     if (
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
@@ -219,6 +233,10 @@ export function transformSourceRanges(code: string, id: string, file: string, li
     } else s.appendRight(c.end, `;{ const f = ${BIND}; if (f) { ${c.names.map(n => `f(${n.name}, ${JSON.stringify(n.name)}, ${site(n.pos)}, ${c.local});`).join(' ')} } }`)
     edits++
   }
+  if (expressions)
+    s.append(`
+function ${capture}(run, src) { try { return run() } catch (error) { try { if (error && typeof error === 'object' && !error.src) { const [file, line, col, endLine, endCol] = src; error.src = { file, line, col, endLine, endCol } } } catch {} throw error } }
+`)
   if (!edits) return null
   return { code: s.toString(), map: s.generateMap({ hires: true, source: path, includeContent: true }) }
 }

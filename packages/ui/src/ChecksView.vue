@@ -219,7 +219,7 @@ onBeforeUnmount(() => {
     </div>
     <div class="checks-body">
       <nav v-show="listOpen" id="checks-list" aria-label="DRC and ERC findings">
-        <p v-if="!findings.length" class="dim checks-empty">No DRC or ERC findings for this target.</p>
+        <p v-if="!findings.length" class="dim checks-empty">{{ board?.halted ? 'DRC / ERC incomplete: compilation halted.' : 'No DRC or ERC findings for this target.' }}</p>
         <button
           v-for="(f, at) in findings"
           :key="f.id"

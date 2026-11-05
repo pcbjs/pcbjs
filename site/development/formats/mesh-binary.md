@@ -16,7 +16,7 @@ All multibyte values are little-endian. The header and every block start on a fo
 | Offset | Type | Meaning |
 | --- | --- | --- |
 | 0 | 4 bytes | ASCII `PCBM` |
-| 4 | `uint16` | Version `1` |
+| 4 | `uint16` | Version `2`; the reader also accepts version `1` |
 | 6 | `uint16` | Reserved, written as zero |
 | 8 | `uint32` | Mesh count |
 
@@ -30,8 +30,11 @@ The first mesh begins at byte 12. Meshes follow consecutively in the declared or
 | 12 | `uint32` | Vertex count `N` |
 | 16 | `uint32` | Index count `I` |
 | 20 | `uint32` | Index element size `S`, either 2 or 4 bytes |
+| 24 | `uint32` | Material JSON byte length `M`, version 2 only |
 
-The payload immediately follows this 24-byte header:
+Version 2 has a 28-byte header followed by `M` bytes of UTF-8 material JSON, padded to a four-byte boundary. A zero length means the legacy colour-derived material. Version 1 has a 24-byte header and no material block.
+
+Geometry follows the header and optional material block:
 
 1. Positions: `3 × N` float32 values, x/y/z per vertex, occupying `12 × N` bytes.
 2. Normals: `3 × N` signed int8 values, one x/y/z triple per vertex, padded to a four-byte boundary.
@@ -41,10 +44,16 @@ The encoder rounds normal components multiplied by 127 and clamps to `[-127, 127
 
 The encoder chooses two-byte indices for at most 65,535 vertices, otherwise four-byte indices. The next mesh starts after the final padding. Padding is not geometry and must not be interpreted as extra indices.
 
+## Materials
+
+Material JSON carries the supported scalar PBR subset: `metalness`, `roughness`, `opacity`, `alphaMode`, `alphaCutoff`, `doubleSided`, linear `emissive` RGB and optional `name`. Base colour stays in the fixed header. Explicit materials use glTF defaults for omitted fields; absent material metadata retains the legacy colour heuristic. A material name labels the material; it is not a texture or shader reference.
+
+The writer validates and orders these fields before encoding. Mesh merging includes material properties in its key, so equal colours with different surface properties remain distinct. Textures and material extensions are not represented. Conversion and generated-model cache versions must change when their output semantics change.
+
 ## Reader behavior and limitations
 
-The current decoder rejects a missing/short header, wrong magic, unsupported version and truncated blocks. It returns float32 position/normal arrays and uint32 indices. A zero normal triple remains zero after normalization's zero-length guard.
+The current decoder rejects a missing/short header, wrong magic, unsupported version, truncated blocks and malformed material metadata. It returns float32 position/normal arrays and uint32 indices. A zero normal triple remains zero after normalization's zero-length guard. Older readers cannot read version 2; newer readers preserve version 1's colour-only behavior.
 
-Version acceptance and buffer bounds checks do not establish that every numeric or topology constraint is validated for arbitrary hostile files. The format requires the declared index sizes and meaningful triangle indices; do not infer a complete schema-validation guarantee from the existing decoder. This format is an implementation artifact served with the matching pcbjs build, not a promise of lossless source-model round trips.
+Version acceptance and buffer bounds checks do not establish that every numeric or topology constraint is validated for arbitrary hostile files. The format requires the declared index sizes and meaningful triangle indices; do not infer a complete schema-validation guarantee from the decoder. `validateMesh` separately checks geometry and normal/winding consistency without repairing it or proving watertightness. This format is an implementation artifact served with the matching pcbjs build, not a promise of lossless source-model round trips.
 
 Model conversion options, hashes, cache ownership and placement are specified in [3D descriptors and model artifacts](./3d). A change to this binary contract requires coordinated readers/writers and an appropriate format/cache compatibility review.

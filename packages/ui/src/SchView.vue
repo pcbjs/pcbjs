@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AccessMode from './AccessMode.vue'
 // The schematic of a board as a component: zoom, pan, hover and the selection shared with the board views of the same board.
 import { useView, type ViewProps, type Hover, type View } from './view'
 import BoardSch from './BoardSch.vue'
@@ -18,5 +19,6 @@ const { board, root, poster } = useView(props, emit, 'sch')
         <img v-if="poster" class="pcbjs-poster" :src="poster" alt="" />
       </template>
     </ClientOnly>
+    <AccessMode v-if="board && props.tools" />
   </div>
 </template>

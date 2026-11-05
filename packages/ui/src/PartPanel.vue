@@ -82,7 +82,7 @@ const { part, schPart, selectCircuit, partPath, partPlace, partDef, partRepoUrl,
         <template v-if="partPlace">
           <dt>source</dt>
           <dd class="src src-actions">
-            <a v-if="board?.dev" href="#" title="Open the placement in the editor" @click.prevent="onOpen({ ref: part.ref }, 'placement')">{{
+            <a v-if="board?.dev && ctx.board.edit.mode?.mode === 'rw'" href="#" title="Open the placement in the editor" @click.prevent="onOpen({ ref: part.ref }, 'placement')">{{
               rangeLabel(partPlace.file, asRange(partPlace))
             }}</a>
             <a v-else-if="partRepoUrl(partPlace)" :href="partRepoUrl(partPlace)!" target="_blank" rel="noopener" title="Open the placement on the repository host">{{
@@ -91,7 +91,7 @@ const { part, schPart, selectCircuit, partPath, partPlace, partDef, partRepoUrl,
             <span v-else>{{ rangeLabel(partPlace.file, asRange(partPlace)) }}</span>
             <template v-if="partDef">
               <a
-                v-if="board?.dev"
+                v-if="board?.dev && ctx.board.edit.mode?.mode === 'rw'"
                 class="src-def"
                 href="#"
                 :title="`Open the definition, ${rangeLabel(partDef.file, asRange(partDef))}`"

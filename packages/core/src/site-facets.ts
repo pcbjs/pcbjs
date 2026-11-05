@@ -46,6 +46,7 @@ export const FACETS = {
       stale: 1,
       staleError: 1,
       draft: 1,
+      halted: 1,
     },
     views: ['2d', '3d', 'sch', 'checks'],
     every: true,

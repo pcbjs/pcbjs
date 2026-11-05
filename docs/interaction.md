@@ -9,7 +9,7 @@ Hover changes only transient highlighting. Selection and source navigation chang
 
 An eligible edit previews locally, commits once through the version-checked session edit service, then waits for the compiled result. Escape cancels the current drag before leaving assist, cancelling finding focus, ascending isolation or clearing selection. Cancel writes nothing. With an editor attached, undo/redo uses chronological native history of the single source document last edited for that board, falling back to its entry, including later edits from other panes or code. A request naming multiple distinct source documents is refused before undo; use the source editor for those files. A standalone page uses conflict-checked per-client session history. This is not selective transaction undo in the editor. Failure and stale-version refusal show a reason. Preview motion alone is not a successful write.
 
-Editing requires a writable session and an eligible source node. Built sites and embeds have no editing tools. Non-default target previews are read-only. A library layout edit changes the shared definition while retaining instance overrides. Its local frame and effective parameters come from the selected group. Ordinary placement edits target their instantiation; repeated loop/helper literals can refuse edits. Hidden layers, stale entities and unsupported node types do not gain editing authority from selection. Panel selection keeps hidden layers hidden. Framing uses the target geometry bounds; the chip can identify a selection whose layer remains invisible.
+Editing requires a writable session and an eligible, unlocked source node. `locked` placements remain selectable and traceable to source, but take no geometry tools or assist writes. Their toolbar lock button remains available to remove a bare `locked`; expression-driven states disable the toggle with an explanatory tooltip. Groups containing locked parts and mixed selections cannot bypass the lock. The server rechecks it during update and commit; a new lock cancels an active viewer drag. Built sites and embeds have no editing tools. Non-default target previews are read-only. A library layout edit changes the shared definition while retaining instance overrides. Its local frame and effective parameters come from the selected group. Ordinary placement edits target their instantiation; repeated loop/helper literals can refuse edits. Hidden layers, stale entities and unsupported node types do not gain editing authority from selection. Panel selection keeps hidden layers hidden. Framing uses the target geometry bounds; the chip can identify a selection whose layer remains invisible.
 
 ## Navigation inputs
 
@@ -19,9 +19,14 @@ Editing requires a writable session and an eligible source node. Built sites and
 | 2D/schematic | left drag over 3 px after assist/edit declines | pan; a stationary press selects |
 | 3D | left drag on background | orbit; an eligible active edit takes priority |
 | 3D | middle drag or wheel; right drag | camera dolly; pan, using OrbitControls defaults |
+| 2D/schematic/3D | two-finger pinch and drag | zoom and pan about the finger midpoint, including gestures begun on preview controls or diagnostic labels; never zoom the page |
 | all views | F; view buttons or V | fit board/sheet; change view |
 | movement/control points | Shift drag; Cmd/Ctrl drag | free of snapping; dominant-axis constraint |
 | rotation ring | drag; Shift; Cmd/Ctrl | 15 degree stops; 5 degree stops; free angle |
+
+A second finger cancels an active one-finger edit or selection gesture before navigating. After pinching, remaining fingers cannot select, edit or activate controls until lifted. A new single tap works normally. Native page gestures outside the preview and single-finger scrolling in its menus remain available.
+
+Hover clears at the viewport boundary, including during a captured drag. A captured drag can continue outside the viewport until its initiating button is released. Pointer cancellation, lost capture, window blur, a hidden document or a move with the initiating button no longer held cancels the gesture without a source write or click. A release missed by the canvas also clears its gesture state. Other pointers cannot take over the active gesture; two-finger navigation follows the cancellation rule above.
 
 These are pcbjs bindings, not universal CAD shortcuts. The schematic selects and cross-probes but has no editing tools. Coordinate readouts inspect positions; there is no two-point distance/angle measurement tool or general canvas drawing tool. Route assist writes an already open source slot; route handles edit eligible chains. It is not an unrestricted canvas router.
 

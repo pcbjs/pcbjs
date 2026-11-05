@@ -81,7 +81,7 @@ export function useActions(ctx: PaneContext, view?: '2d' | '3d' | 'sch') {
   function onPick(hit: Hit | null, mods: Mods) {
     const b = site.value
     if (!b) return
-    if (mods.alt) {
+    if (mods.alt && store.edit.mode?.mode === 'rw') {
       const ref = clickTarget(store.sel, b, hit, false)
       if (ref) void ctx.open(refSource(b, ref, 'definition', mode() === 'sch'))
       return

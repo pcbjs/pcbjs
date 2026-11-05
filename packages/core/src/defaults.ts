@@ -25,6 +25,7 @@ export const BASE_BOARD: Readonly<ResolvedBoardSpec> = deepFreeze({
 export function defaultLayer(): BoardSpec {
   const b = realm().defaults
   const out: BoardSpec = { ...(b ?? {}) }
+  if (b?.via) out.via = { ...b.via }
   if (b?.rules) out.rules = { ...b.rules }
   if (b?.autoroute) out.autoroute = { ...b.autoroute }
   if (b?.classes) out.classes = cloneData(b.classes) as BoardSpec['classes']

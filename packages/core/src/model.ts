@@ -157,6 +157,7 @@ export interface Text extends ItemBase {
 export type Item = Track | Via | Pad | Zone | Graphic | Text
 
 export interface Footprint {
+  locked?: boolean
   /** library-preview reference label; ref remains the stable source/selection identity */
   displayRef?: string
   ref: string
@@ -509,6 +510,8 @@ export interface Board {
   /** always present, generated from `copper` and `thickness` when the design gives none */
   stackup: Stackup
   rules: ResolvedRules
+  /** board-wide preferred via dimensions in mm; absent fields use the legacy rule-grown fallback */
+  via?: { drill?: number; size?: number }
   /** the net classes by name, lengths in mm; absent when the board defines none */
   classes?: Record<string, ResolvedNetClass>
   layers: LayerDef[]
@@ -593,6 +596,8 @@ export type Capability = 'placed' | 'layered' | 'chain' | 'viaEnd'
 /** One editable entity: a part, group or instance with its placement, a text with its element, or a route with its chain. */
 export interface EditNode {
   ref: string
+  /** this placement, or a member moved with it, is locked */
+  locked?: boolean
   caps: Capability[]
   /** the element or call that writes each capability's literal */
   src: { at?: Src; chain?: Src }

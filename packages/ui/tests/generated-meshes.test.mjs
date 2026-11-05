@@ -14,8 +14,11 @@ registerHooks({
   },
 })
 const { modelMeshes, generatedModel } = await import('../src/models/index.ts')
-const { referenceMesh } = await import('../src/scene/reference.ts')
+const { referenceMesh, referenceGroup } = await import('../src/scene/reference.ts')
 const { bounds } = await import('@pcbjs/step/internal/mesh')
+const { meshToBinary } = await import('@pcbjs/step/binary')
+const { DoubleSide } = await import('three')
+const { stepMaterial } = await import('../src/models/materials.ts')
 
 const CHIP = { kind: 'chip', part: 'R', body: [1.6, 0.8], cap: 0.3, height: 0.6 }
 const CTX = { height: 0.6, thickness: 1.6 }
@@ -69,4 +72,40 @@ test('referenceMesh: a generated body is the mesh of its hash placed on the body
   const b = bounds({ meshes: out.meshes })
   // x board x, y board -y, z up from the bottom face: the body centre at (10, -5) on the top copper at 1.635
   assert.ok(near(b.min, [9.2, -5.415, 1.635]) && near(b.max, [10.8, -4.585, 2.235]), JSON.stringify(b))
+  assert.deepEqual(
+    out.meshes.map(m => m.material),
+    modelMeshes(CHIP, CTX).meshes.map(m => m.material),
+  )
+})
+
+test('referenceGroup retains surface PBR and sidedness beneath reference tint/opacity', async t => {
+  const model = modelMeshes(CHIP, CTX)
+  const bytes = meshToBinary({
+    meshes: [{ ...model.meshes[0], material: { metalness: 0.9, roughness: 0.2, emissive: [0.1, 0.2, 0.3], doubleSided: true, alphaMode: 'MASK', alphaCutoff: 0.8 } }],
+  })
+  t.mock.method(globalThis, 'fetch', async () => new Response(bytes))
+  const ref = { name: 'custom', bodies: true, color: '#888', opacity: 0.35, transform: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] }
+  const group = await referenceGroup(ref, 'test:material-reference')
+  const mat = group.children[0].material
+  assert.equal(mat.metalness, 0.9)
+  assert.equal(mat.roughness, 0.2)
+  assert.equal(mat.side, DoubleSide)
+  assert.deepEqual(mat.emissive.toArray(), [0.1, 0.2, 0.3])
+  assert.equal(mat.opacity, 0.35)
+  assert.equal(mat.alphaTest, 0, 'reference opacity does not trigger the source mask cutoff')
+})
+
+test('file materials honor explicit PBR, alpha mode and sidedness instead of colour guesses', () => {
+  const color = [0.8, 0.8, 0.8]
+  const opaque = stepMaterial(color, { metalness: 0, roughness: 0.95, opacity: 0.2, alphaMode: 'OPAQUE' })
+  assert.equal(opaque.metalness, 0)
+  assert.equal(opaque.roughness, 0.95)
+  assert.equal(opaque.opacity, 1)
+  assert.equal(opaque.transparent, false)
+  const blend = stepMaterial(color, { metalness: 0.8, roughness: 0.2, opacity: 0.3, alphaMode: 'BLEND', doubleSided: true })
+  assert.notEqual(opaque, blend)
+  assert.equal(blend.opacity, 0.3)
+  assert.equal(blend.transparent, true)
+  assert.equal(blend.side, DoubleSide)
+  assert.equal(stepMaterial(color).metalness, 0.7, 'legacy colour-only material keeps its heuristic')
 })

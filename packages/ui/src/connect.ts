@@ -235,11 +235,16 @@ function session(shell: Shell, t: Transport) {
   })
   // the mode is the connection's; a session older than this viewer misses frames it sends: one banner rather than tools that silently fail
   t.on('pcbjs:ide:ready', r => {
-    edit.mode = { mode: r.mode, editor: edit.mode?.editor ?? false }
     edit.mismatch = sessionMismatch(r)
+    edit.mode = { mode: r.mode === 'rw' && !shell.embed.on && !edit.mismatch ? 'rw' : 'ro', editor: edit.mode?.editor ?? false }
   })
   t.on('pcbjs:editor', m => {
     edit.mode = { mode: edit.mode?.mode ?? 'ro', editor: m.attached }
+  })
+  t.closed(() => {
+    edit.mode = { mode: 'ro', editor: false }
+    edit.client = null
+    edit.assist = null
   })
   if (shell.embed.on) return
   edit.client = markRaw(

@@ -163,7 +163,7 @@ test('compile: net:* on a placement is a CompileError; the part connects its pin
   const J1 = bindRef(PinHeader(2)().connect({ 1: N.A, 2: N.B }), 'J1')
   assert.throws(
     () => compileBoard(h(PCB, { name: 'Bad' }, outline(), h(J1, { at: '2 2', 'net:pad9': 'X' }))),
-    err => err instanceof CompileError && /a placement takes at, side, grid, ref:at and thermal, not net:pad9/.test(err.message),
+    err => err instanceof CompileError && /a placement takes at, side, grid, locked, ref:at and thermal, not net:pad9/.test(err.message),
   )
 })
 

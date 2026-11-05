@@ -1,7 +1,7 @@
 // One loaded project as the session runs it, docs/session.md: its slots and compile thread, its scheduler of the tiers, its snapshots,
 // the facets its viewers hold, and the compile events every report of a compile follows. Runtimes share nothing but the session's
 // drafts and snapshots, so two projects compile at once and a query on one never waits for another's route.
-import { relative, sep } from 'node:path'
+import { relative, resolve, sep } from 'node:path'
 import { fileKey, sameFile, under } from '../project/files.js'
 import { readFileSync } from 'node:fs'
 import type { RouteProgress } from '@pcbjs/compile'
@@ -12,7 +12,7 @@ import type { CompileEvent, Invalidate, Run as RunId, Stale, Tiers } from '@pcbj
 import { entriesReaching, markConflicts, slotName, type BoardSlot, type ModuleLookup } from '../project/boards.js'
 import type { Artifact, Compiler, Held } from '../project/compiler.js'
 import type { ResolvedConfig } from '../project/config.js'
-import { strip } from '../project/compile.js'
+import { strip, errorText, errorTrace } from '../project/errors.js'
 import { holdIn, type Drafts } from './drafts.js'
 import type { StageStatus } from '../project/facets.js'
 import type { BoardOut, Compiled, Preview } from '../project/project.js'
@@ -69,6 +69,8 @@ export interface ProjectRuntime {
   compiledOnce(): Promise<void>
   /** settle before answer: wait for the files to stop changing, compile what changed, answer within `ms` */
   settle(ms: number): Promise<{ snap: Snapshot | null; stale: Stale | null }>
+  refresh(entries: string[], policy: 'stages' | 'all' | 'warm', ms: number): Promise<void>
+  snapshotStale(snap: Snapshot): Stale | null
   current(): Snapshot | null
   previous(): Snapshot | null
   hold(): { file: string; line: number } | null
@@ -88,10 +90,6 @@ export interface ProjectRuntime {
 }
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
-const formatError = (e: any) => {
-  const msg = strip(String(e?.message ?? e))
-  return e?.frame ? `${msg}\n\n${strip(String(e.frame))}` : strip(String(e?.stack ?? msg))
-}
 /** A path relative to a project root, as it is when outside it. */
 export const relTo = (root: string, f: string) => (under(f, root) ? relative(root, f).split(sep).join('/') : f)
 
@@ -129,6 +127,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
     tiers(hooks.tiers),
   )
   const facets = facetStore()
+  const lastGood = new Map<string, Held[]>()
   const listeners = new Set<(e: CompileEvent) => void>()
   const emit = (e: CompileEvent) => {
     for (const fn of [...listeners]) fn(e)
@@ -143,6 +142,8 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
   let cancels = 0
   let invalidates = 0
   let previewDirty = false
+  let refreshQueue: Promise<void> = Promise.resolve()
+  const rebuilds = new Map<string, 'stages' | 'all' | 'warm'>()
 
   const drafts = () => hooks.drafts()
   const compiler = (): Compiler => {
@@ -337,7 +338,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
     for (const [i, s] of slots.entries()) {
       if (hooks.closing()) break
       const entry = s.entry.rel
-      const want = wantOf(r.views.get(s.entry.file))
+      const want = s.error ? undefined : wantOf(r.views.get(s.entry.file))
       emit({
         t: 'started',
         project: root,
@@ -357,6 +358,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
       try {
         const out = await c.compile(s.entry, {
           draft: draftFiles(s.entry.file).length > 0,
+          rebuild: rebuilds.get(s.entry.file),
           progress,
           stage,
           ...(want ? { want } : {}),
@@ -367,7 +369,9 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
           partial.set(s.entry.file, viewsOf(want))
           continue
         }
+        rebuilds.delete(s.entry.file)
         s.compiled = out
+        lastGood.set(s.entry.file, out)
         markDraft(s.compiled, s.entry.file)
         s.compiled.forEach(remeta)
         s.error = null
@@ -384,6 +388,12 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
           left.push(...slots.slice(i).map(x => x.entry.file))
           break
         }
+        if (!live()) {
+          cancelled = true
+          left.push(...slots.slice(i).map(x => x.entry.file))
+          break
+        }
+        rebuilds.delete(s.entry.file)
         failed(s, e, id)
       }
     }
@@ -411,16 +421,19 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
     return { left, partial }
   }
   const causeOf = (r: Run): string[] => [...r.edits.map(e => (e.file ? relTo(root, e.file) : 'added')), ...(r.wanted.length ? [r.tier.name === 'query' ? 'query' : 'demand'] : [])]
-  /** A failed board keeps its last good targets, marked stale. */
+  /** A failed board shows its current source prefix, or explicitly falls back to stale geometry. */
   const failed = (s: Slot, e: any, run: RunId) => {
-    s.error = formatError(e)
+    s.compiled = e?.preview?.length ? e.preview : (lastGood.get(s.entry.file) ?? (s.compiled?.some(c => c.site.halted) ? null : s.compiled))
+    const display = errorText(e, false, root)
+    s.error = [display.line, ...display.detail].join('\n')
     s.failure = e
-    const message = strip(String(e?.message ?? e))
+    const message = display.line
     if (s.compiled)
       for (const c of s.compiled) {
-        c.site.stale = true
+        c.site.stale = !c.site.halted
         c.site.staleError = message
         remeta(c)
+        for (const facet of facets.reconcile(c, run)) emit({ t: 'facet', project: root, facet })
       }
     emit({
       t: 'failed',
@@ -429,7 +442,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
       entry: s.entry.rel,
       name: s.compiled && !s.conflict ? slotName(s) : null,
       message,
-      stack: strip(String(e?.stack ?? '')),
+      stack: errorTrace(e, root).join('\n'),
       text: s.error,
     })
   }
@@ -606,10 +619,29 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
       if (sched.fresh().size || sched.unseen().size) await query()
     },
     settle,
+    refresh(entries, policy, ms) {
+      const run = async () => {
+        const selected = entries.length ? state.slots.filter(s => entries.some(e => sameFile(resolve(root, e), s.entry.file))) : state.slots
+        if (entries.some(e => !selected.some(s => sameFile(resolve(root, e), s.entry.file)))) throw new Error('rebuild entries must name configured entries')
+        const before = await settle(ms)
+        if (!before.snap || before.stale) throw new Error('cannot rebuild a stale snapshot; run check again')
+        for (const s of selected) rebuilds.set(s.entry.file, policy)
+        if (!(await within(query(selected.map(s => s.entry.file)), Date.now() + ms))) throw new Error('rebuild timed out')
+        const after = await settle(ms)
+        if (after.stale || selected.some(s => rebuilds.has(s.entry.file))) throw new Error('rebuild did not finish; run check again')
+      }
+      const next = refreshQueue.then(run, run)
+      refreshQueue = next.catch(() => {})
+      return next
+    },
+    snapshotStale: snap => staleOf(snap, nowOf()),
     current,
     previous: () => hooks.snaps.previous(root),
     hold: () => holdIn(drafts(), root),
-    artifact: (c, kind) => compiler().artifact(c.run, c.board.name, c.board.variant?.name ?? null, kind),
+    artifact: (c, kind) => {
+      if (c.site.halted) return Promise.reject(new Error('Compilation halted; finish the board before exporting artifacts'))
+      return compiler().artifact(c.run, c.board.name, c.board.variant?.name ?? null, kind)
+    },
     busy,
     idle: () => ended,
     stale: () => sched.unseen().size > 0,

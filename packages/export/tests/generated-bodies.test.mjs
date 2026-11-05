@@ -27,8 +27,8 @@ const triangle = {
     { positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]), indices: new Uint32Array([0, 1, 2]), color: [1, 0, 0] },
   ],
 }
-const glbJson = (s, asked = []) => {
-  const g = boardGlb(s, { mesh: hash => (asked.push(hash), triangle), reference: () => null, raster: svgs => svgs.map(() => new Uint8Array([0x89, 0x50, 0x4e, 0x47])) })
+const glbJson = (s, asked = [], model = triangle) => {
+  const g = boardGlb(s, { mesh: hash => (asked.push(hash), model), reference: () => null, raster: svgs => svgs.map(() => new Uint8Array([0x89, 0x50, 0x4e, 0x47])) })
   const len = new DataView(g.buffer, g.byteOffset).getUint32(12, true)
   return JSON.parse(new TextDecoder().decode(g.subarray(20, 20 + len)))
 }
@@ -65,4 +65,61 @@ test('glb: a part without a model is still its body box', () => {
   const u1 = json.nodes.find(n => n.name === 'part:U1')
   assert.equal(json.meshes[u1.mesh].name, 'body:U1')
   assert.ok(json.materials.some(m => m.name === 'body'))
+})
+
+test('glb: file and generated meshes retain distinct PBR materials even with identical RGB', () => {
+  const model = {
+    meshes: [
+      { ...triangle.meshes[0], color: [0.8, 0.8, 0.8], material: { name: 'plastic', metalness: 0, roughness: 0.95 } },
+      {
+        ...triangle.meshes[0],
+        color: [0.8, 0.8, 0.8],
+        material: { name: 'metal', metalness: 1, roughness: 0.2, alphaMode: 'MASK', alphaCutoff: 0.4, opacity: 0.6, doubleSided: true, emissive: [0.1, 0.2, 0.3] },
+      },
+    ],
+  }
+  for (const source of ['file', 'generated']) {
+    const s = site(part('R1', 5, { height: 0.6, model: CHIP }))
+    if (source === 'file') s.footprints[0].step = { mesh: 'file-model', transform: { offset: [0, 0, 0], rotate: [0, 0, 0], scale: [1, 1, 1] } }
+    const json = glbJson(s, [], model)
+    const node = json.nodes.find(n => n.name === 'part:R1')
+    const materials = json.meshes[node.mesh].primitives.map(p => json.materials[p.material])
+    assert.equal(materials.length, 2)
+    assert.deepEqual(
+      materials.map(m => m.pbrMetallicRoughness.metallicFactor),
+      [0, 1],
+      source,
+    )
+    assert.deepEqual(
+      materials.map(m => m.pbrMetallicRoughness.roughnessFactor),
+      [0.95, 0.2],
+      source,
+    )
+    assert.equal(materials[1].alphaMode, 'MASK')
+    assert.equal(materials[1].alphaCutoff, 0.4)
+    assert.equal(materials[1].pbrMetallicRoughness.baseColorFactor[3], 0.6)
+    assert.equal(materials[1].doubleSided, true)
+    assert.deepEqual(materials[1].emissiveFactor, [0.1, 0.2, 0.3])
+  }
+})
+
+test('glb: reference ghost styling retains sidedness and PBR without inheriting source alpha cutoff', () => {
+  const s = site()
+  s.references = [
+    { name: 'module', entry: 'module.pcb.tsx', mesh: 'module', bodies: true, color: '#888', opacity: 0.35, transform: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] },
+  ]
+  const model = {
+    meshes: [{ ...triangle.meshes[0], material: { metalness: 0.9, roughness: 0.2, doubleSided: true, emissive: [0.1, 0.2, 0.3], alphaMode: 'MASK', alphaCutoff: 0.8 } }],
+  }
+  const bytes = boardGlb(s, { mesh: () => null, reference: () => model, raster: svgs => svgs.map(() => new Uint8Array([0x89, 0x50, 0x4e, 0x47])) })
+  const length = new DataView(bytes.buffer, bytes.byteOffset).getUint32(12, true)
+  const json = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + length)))
+  const mat = json.materials.find(m => m.name === 'reference:module:0')
+  assert.equal(mat.pbrMetallicRoughness.metallicFactor, 0.9)
+  assert.equal(mat.pbrMetallicRoughness.roughnessFactor, 0.2)
+  assert.equal(mat.pbrMetallicRoughness.baseColorFactor[3], 0.35)
+  assert.equal(mat.doubleSided, true)
+  assert.deepEqual(mat.emissiveFactor, [0.1, 0.2, 0.3])
+  assert.equal(mat.alphaMode, 'BLEND')
+  assert.equal(mat.alphaCutoff, undefined)
 })

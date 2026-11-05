@@ -31,6 +31,16 @@ export function layerCounts(d: SchDrawing, findings: number): Record<string, num
   return { symbols: d.symbols.length, wires: d.wires.length, labels: d.labels.length - power, power, sheets: d.sheets.length, texts: d.texts.length, findings }
 }
 
+export function validViewBox(box: unknown): box is Box {
+  return Array.isArray(box) && box.length === 4 && box.every(Number.isFinite) && box[2] > 0 && box[3] > 0
+}
+
+export function schematicState(d: SchDrawing | null | undefined): 'ready' | 'empty' | 'invalid' {
+  if (!d || !(d.paper || [d.symbols, d.wires, d.labels, d.texts, d.sheets, d.junctions, d.noConnects].some(items => items.length))) return 'empty'
+  const [x0, y0, x1, y1] = d.page
+  return d.page.every(Number.isFinite) && x1 > x0 && y1 > y0 && Number.isFinite(d.grid) && d.grid > 0 ? 'ready' : 'invalid'
+}
+
 /** The drawn part of the page, every symbol, pin, wire, label, sheet and text, grown by `margin` and kept on the page. */
 export function drawnBox(d: SchDrawing, margin = 4 * d.grid): Box {
   const pts: Pt[] = [

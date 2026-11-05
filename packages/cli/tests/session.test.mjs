@@ -216,7 +216,7 @@ test('a read-only LAN client is refused script; the token, loopback and the sock
     assert.equal(info.edit, 'all')
     assert.ok(info.token && info.token.length >= 22, 'a 128-bit token for the LAN')
     const port = new URL(info.url).port
-    const rpc = async (host, token) => {
+    const rpc = async (host, token, method = 'session/script', params = { code: '1' }) => {
       const ws = new WebSocket(`ws://${host}:${port}/__pcbjs/session${token ? `?token=${token}` : ''}`)
       const frames = []
       ws.on('message', raw => frames.push(JSON.parse(String(raw))))
@@ -225,7 +225,7 @@ test('a read-only LAN client is refused script; the token, loopback and the sock
         ws.once('error', fail)
       })
       ws.send(JSON.stringify({ event: 'pcbjs:ide:hello', data: { name: 'lan', version: '0', protocol: 2, major: 1, capabilities: [], role: 'agent' } }))
-      ws.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'session/script', params: { code: '1' } }))
+      ws.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }))
       await until(() => frames.some(f => f.id === 1) && frames.some(f => f.event === 'pcbjs:ide:ready'), 10000)
       ws.close()
       return { ready: frames.find(f => f.event === 'pcbjs:ide:ready').data, answer: frames.find(f => f.id === 1) }
@@ -234,6 +234,21 @@ test('a read-only LAN client is refused script; the token, loopback and the sock
     assert.equal(lan.ready.mode, 'ro')
     assert.equal(lan.answer.error.code, -32001)
     assert.match(lan.answer.error.message, /read-only/)
+    const status = await rpc(lanAddress(), undefined, 'session/status', {})
+    assert.equal(status.answer.result.token, undefined, 'TCP status must not reveal its authentication credential')
+    const deniedOpen = await rpc(lanAddress(), undefined, 'session/select', { board: 'Lan', refs: ['board:Lan'] })
+    assert.match(deniedOpen.answer.error.message, /Opening the editor requires read-write access/)
+
+    const deniedRead = await rpc(lanAddress(), undefined, 'session/read', { file: join(root, '.pcbjs', 'dev.json') })
+    assert.match(deniedRead.answer.error.message, /Read-only source access/)
+    const sourceRead = await rpc(lanAddress(), undefined, 'session/read', { file: join(root, 'pcb.tsx') })
+    assert.ok(sourceRead.answer.result.text.includes('Lan'), 'read-only clients can still inspect project source')
+    for (const suffix of ['', '?raw', '?import']) {
+      const response = await fetch(`http://127.0.0.1:${port}/@fs/${join(root, '.pcbjs', 'dev.json')}${suffix}`)
+      assert.equal(response.status, 403)
+      assert.ok(!(await response.text()).includes(info.token), 'HTTP cannot serve session credentials')
+    }
+
     const withToken = await rpc(lanAddress(), info.token)
     assert.equal(withToken.ready.mode, 'rw')
     assert.equal(withToken.answer.error, undefined, 'past the gate')

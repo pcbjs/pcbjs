@@ -28,7 +28,7 @@ async function load(hash: string, dev: boolean): Promise<THREE.Group> {
     geo.setAttribute('normal', new THREE.BufferAttribute(m.normals, 3))
     geo.setIndex(new THREE.BufferAttribute(m.indices, 1))
     geo.computeBoundingSphere()
-    g.add(new THREE.Mesh(geo, stepMaterial(m.color)))
+    g.add(new THREE.Mesh(geo, stepMaterial(m.color, m.material)))
   }
   return g
 }

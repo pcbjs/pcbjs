@@ -1,5 +1,5 @@
 // glTF 2.0 and GLB to meshes: metres with y up become KiCad's mm with z up, (x, y, z) to (1000 x, -1000 z, 1000 y).
-import { DEFAULT_COLOR, type StepMesh, type StepModel } from './mesh.js'
+import { normalizeMaterial, type StepMesh, type StepModel } from './mesh.js'
 import { creaseMesh, groupByColor } from './tri.js'
 
 type Mat = number[]
@@ -120,9 +120,26 @@ export function gltfToMesh(content: Uint8Array, opts: GltfOptions = {}): StepMod
       }
     return { data, n, size }
   }
-  const color = (mi: number | undefined): [number, number, number] => {
-    const f = mi === undefined ? undefined : json.materials?.[mi]?.pbrMetallicRoughness?.baseColorFactor
-    return f ? [f[0], f[1], f[2]] : DEFAULT_COLOR
+  const surface = (mi: number | undefined): Pick<StepMesh, 'color' | 'material'> => {
+    const m = mi === undefined ? {} : json.materials?.[mi]
+    if (!m || typeof m !== 'object') throw new Error(`glTF material ${mi} is missing`)
+    const p = m.pbrMetallicRoughness ?? {}
+    const f = p.baseColorFactor ?? [1, 1, 1, 1]
+    if (!Array.isArray(f) || f.length !== 4 || [0, 1, 2, 3].some(i => typeof f[i] !== 'number' || !Number.isFinite(f[i]) || f[i] < 0 || f[i] > 1))
+      throw new Error(`glTF material ${mi ?? 'default'} has an invalid baseColorFactor`)
+    return {
+      color: [f[0], f[1], f[2]],
+      material: normalizeMaterial({
+        metalness: p.metallicFactor ?? 1,
+        roughness: p.roughnessFactor ?? 1,
+        opacity: f[3],
+        alphaMode: m.alphaMode ?? 'OPAQUE',
+        alphaCutoff: m.alphaCutoff ?? 0.5,
+        doubleSided: m.doubleSided ?? false,
+        emissive: m.emissiveFactor ?? [0, 0, 0],
+        ...(m.name === undefined ? {} : { name: m.name }),
+      }),
+    }
   }
   const out: StepMesh[] = []
   // metres, y up, to millimetres, z up
@@ -157,21 +174,34 @@ export function gltfToMesh(content: Uint8Array, opts: GltfOptions = {}): StepMod
       // a mirroring transform turns the triangles inside out; swap two corners to keep them facing out
       const det = m[0] * (m[5] * m[10] - m[9] * m[6]) - m[4] * (m[1] * m[10] - m[9] * m[2]) + m[8] * (m[1] * m[6] - m[5] * m[2])
       if (det < 0) for (let i = 0; i < ix.length; i += 3) [ix[i + 1], ix[i + 2]] = [ix[i + 2], ix[i + 1]]
-      if (p.attributes.NORMAL === undefined) {
-        out.push({ ...creaseMesh(positions, ix), color: color(p.material) })
+      if (p.attributes.NORMAL === undefined || det === 0) {
+        out.push({ ...creaseMesh(positions, ix), ...surface(p.material) })
         continue
       }
+      // The inverse transpose, up to positive scale, preserves normals under nonuniform and mirrored transforms.
+      const sign = Math.sign(det)
+      const normal = [
+        m[5] * m[10] - m[9] * m[6],
+        m[9] * m[2] - m[1] * m[10],
+        m[1] * m[6] - m[5] * m[2],
+        m[8] * m[6] - m[4] * m[10],
+        m[0] * m[10] - m[8] * m[2],
+        m[4] * m[2] - m[0] * m[6],
+        m[4] * m[9] - m[8] * m[5],
+        m[8] * m[1] - m[0] * m[9],
+        m[0] * m[5] - m[4] * m[1],
+      ].map(v => v * sign)
       const nor = accessor(p.attributes.NORMAL),
         normals = new Float32Array(pos.n * 3)
       for (let i = 0; i < pos.n; i++) {
         const x = nor.data[i * 3],
           y = nor.data[i * 3 + 1],
           z = nor.data[i * 3 + 2]
-        const v = [0, 1, 2].map(k => m[k] * x + m[4 + k] * y + m[8 + k] * z),
+        const v = [0, 1, 2].map(k => normal[k * 3] * x + normal[k * 3 + 1] * y + normal[k * 3 + 2] * z),
           l = Math.hypot(v[0], v[1], v[2]) || 1
         for (let k = 0; k < 3; k++) normals[i * 3 + k] = v[k] / l
       }
-      out.push({ positions, normals, indices: new Uint32Array(ix), color: color(p.material) })
+      out.push({ positions, normals, indices: new Uint32Array(ix), ...surface(p.material) })
     }
     for (const c of node.children ?? []) visit(c, m, depth + 1)
   }

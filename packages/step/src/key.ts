@@ -2,7 +2,7 @@ import { DEFAULT_OPTIONS, type StepOptions } from './mesh.js'
 import { sha256 } from './sha256.js'
 
 // bump when the conversion or the binary changes, so older caches convert again
-export const CONVERTER_VERSION = 1
+export const CONVERTER_VERSION = 2
 
 /** The options with their defaults, in a fixed key order. */
 export function fullOptions(opts: StepOptions = {}): Required<StepOptions> {

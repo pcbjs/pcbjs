@@ -234,7 +234,7 @@ export function clientsOf(o: ClientsOptions): Clients {
       const first = !hello
       hello = h
       mode = modeOf(t, o.info().edit, o.info().token, h.token ?? t.token)
-      if (compat(h) !== 'incompatible' && h.project) await o.attach?.(h.project)
+      if (mode === 'rw' && compat(h) !== 'incompatible' && h.project) await o.attach?.(h.project)
       const r = o.ready()
       if (r) c.event('pcbjs:ide:ready', { ...r, session: o.info().session, mode } satisfies Ready)
       for (const name of STICKY) if (sticky.has(name) && takes(c, name)) c.event(name, sticky.get(name) as Events[typeof name])

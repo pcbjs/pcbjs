@@ -88,6 +88,9 @@ export interface RouteRecord {
   group?: string
   skew?: number
   tuned?: number
+  /** `short` means below the length target. */
+  note?: string
+  skewNote?: string
   status: 'ok' | 'short' | 'long' | 'failed' | 'unrouted'
   vias: string[]
   findings: string[]
@@ -419,6 +422,8 @@ export function routeRecord(c: Ctx, r: ModelRoute): RouteRecord {
     ...(r.group !== undefined ? { group: r.group } : {}),
     ...(cu?.skew !== undefined ? { skew: r4(cu.skew) } : {}),
     ...(r.tuned ? { tuned: r4(r.tuned) } : {}),
+    ...(r.note !== undefined ? { note: r.note } : {}),
+    ...(r.skewNote !== undefined ? { skewNote: r.skewNote } : {}),
     status,
     vias: vias.map(uidOf),
     findings: found.map(f => f.id),

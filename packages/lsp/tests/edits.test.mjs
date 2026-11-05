@@ -14,6 +14,8 @@ import {
   routeLayer,
   setAt,
   setSide,
+  setLocked,
+  lockReason,
   setGrid,
   textDoc,
   writeAt,
@@ -23,6 +25,28 @@ import { docOf, parse } from '../dist/doc.js'
 const offsetOf = (text, line, col) => textDoc(text).span({ line, col }).start
 
 const apply = (text, edits) => [...edits].sort((a, b) => b.start - a.start).reduce((t, e) => t.slice(0, e.start) + e.newText + t.slice(e.end), text)
+
+test('placement locks add and remove only a bare attribute, preserving neighboring syntax', () => {
+  for (const text of ['<R1 at="1 2" />', '<R1\n  at={position}\n/>', '<R1><ref at="0 1" /></R1>']) {
+    const el = elementAt(parse(text, 'pcb.tsx'), 0)
+    const locked = apply(text, [setLocked(text, el, true)])
+    const next = elementAt(parse(locked, 'pcb.tsx'), 0)
+    assert.equal(lockReason(next), null)
+    assert.equal(setLocked(locked, next, true), null)
+    assert.equal(apply(locked, [setLocked(locked, next, false)]), text)
+    assert.equal(setLocked(text, el, false), null)
+  }
+  for (const value of ['true', 'false', 'isFixed', 'config.locked', 'isFixed ? true : false']) {
+    const text = `<R1 locked={${value}} />`,
+      el = elementAt(parse(text, 'pcb.tsx'), 0)
+    assert.match(lockReason(el), /derived from an expression and cannot be overridden/)
+    for (const next of [true, false]) assert.throws(() => setLocked(text, el, next), /expression/)
+  }
+  for (const text of ['<R1 {...props} />', '<R1 locked {...props} />', '<R1 {...props} locked />']) {
+    const el = elementAt(parse(text, 'pcb.tsx'), 0)
+    assert.throws(() => setLocked(text, el, false), /props spread/)
+  }
+})
 
 test('trace layer edits use the initial route property or nearest preceding via stage', () => {
   const initial = "route(a,b).H(9).layer('F.Cu').via('In1.Cu').V(12).via('B.Cu').L(20,20)"

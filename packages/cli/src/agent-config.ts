@@ -45,7 +45,7 @@ const merge = (file: string, path: string[], value: unknown) => {
 
 /** The `[mcp_servers.pcbjs]` table of a Codex config, put in place of the one there, every other table kept. */
 export function codexToml(text: string): string {
-  const table = ['[mcp_servers.pcbjs]', `command = "${MCP.command}"`, `args = [${MCP.args.map(a => `"${a}"`).join(', ')}]`]
+  const table = ['[mcp_servers.pcbjs]', `command = "${MCP.command}"`, `args = [${MCP.args.map(a => `"${a}"`).join(', ')}]`, 'startup_timeout_sec = 60']
   const lines = text ? text.replace(/\n$/, '').split('\n') : []
   const at = lines.findIndex(l => l.trim() === '[mcp_servers.pcbjs]')
   if (at < 0) return [...lines, ...(lines.length ? [''] : []), ...table].join('\n') + '\n'

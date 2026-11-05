@@ -33,7 +33,15 @@ export function editNodes(board: Board, flat: Pick<Flat, 'placements' | 'placeJo
       const job = flat.placeJobs.find(j => j.fp === p.fp)
       const auto = job ? SLOTS.filter((_, i) => job.fixed[i] === null) : []
       const fp = p.fp
-      out.push({ ref: fp.ref, caps: ['placed', 'layered'], ...base, ...(auto.length ? { auto } : {}), at: [round(fp.at[0]), round(fp.at[1]), round(fp.rot)], side: fp.side })
+      out.push({
+        ref: fp.ref,
+        caps: ['placed', 'layered'],
+        ...base,
+        ...(fp.locked ? { locked: true } : {}),
+        ...(auto.length ? { auto } : {}),
+        at: [round(fp.at[0]), round(fp.at[1]), round(fp.rot)],
+        side: fp.side,
+      })
     } else if (p.group && p.at) {
       const m = mul(p.m, placement(p.at[0], p.at[1], p.at[2], p.side === 'B'))
       const o = apply(m, [0, 0])
@@ -66,6 +74,8 @@ export function editNodes(board: Board, flat: Pick<Flat, 'placements' | 'placeJo
       out.push({ ref: uids.get(p.text.id)!, caps: ['placed'], ...base, at: [round(o[0]), round(o[1]), round(rotationOf(m))] })
     }
   }
+  const ancestors = new Set(out.filter(n => n.locked).flatMap(n => n.frames?.map(f => f.inst) ?? []))
+  for (const n of out) if (ancestors.has(n.ref)) n.locked = true
   const seen = new Set<string>()
   for (const job of flat.autoRoutes) {
     if (!job.route || job.sub || seen.has(job.route)) continue

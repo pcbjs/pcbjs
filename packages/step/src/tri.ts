@@ -1,4 +1,4 @@
-import type { StepMesh } from './mesh.js'
+import { normalizeMaterial, type StepMesh } from './mesh.js'
 
 /** Vertex normals averaged over the triangles that share each vertex. */
 export function flatNormals(p: Float32Array, ix: Uint32Array): Float32Array {
@@ -94,12 +94,12 @@ export function creaseMesh(p: ArrayLike<number>, ix: ArrayLike<number>, crease =
   return { positions, normals, indices }
 }
 
-/** The meshes merged per colour, in the order each colour first appears; empty meshes dropped. */
+/** Merge equal colours and material properties in first-seen order; drop empty meshes. */
 export function groupByColor(meshes: StepMesh[]): StepMesh[] {
   const groups = new Map<string, StepMesh[]>()
   for (const m of meshes) {
     if (!m.indices.length) continue
-    const k = m.color.map(c => c.toFixed(4)).join()
+    const k = JSON.stringify([m.color, m.material === undefined ? null : normalizeMaterial(m.material)])
     const g = groups.get(k)
     if (g) g.push(m)
     else groups.set(k, [m])
@@ -120,7 +120,7 @@ export function groupByColor(meshes: StepMesh[]): StepMesh[] {
       pv += m.positions.length
       pi += m.indices.length
     }
-    return { positions, normals, indices, color: g[0].color }
+    return { positions, normals, indices, color: g[0].color, ...(g[0].material === undefined ? {} : { material: g[0].material }) }
   })
 }
 

@@ -8,6 +8,7 @@ import type { FacetName } from '@pcbjs/core/site-facets'
 import type { FacetOut, StageStatus } from './facets.js'
 
 export interface CompileJob {
+  rebuild?: 'stages' | 'all' | 'warm'
   /** unsaved text reaches the entry: the route files stay as they are */
   draft: boolean
   /** site data with the dev server's URLs; true unless a build asks */
@@ -30,6 +31,7 @@ export interface DraftCode {
 /** A board target as the session holds it: what its compile thread sent, the facet hashes it computed there, and the run that keeps its artifacts. */
 export interface Held extends BoardOut {
   run: number
+  cacheNamespace?: string
   hashes: Partial<Record<FacetName, string>>
 }
 

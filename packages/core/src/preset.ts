@@ -16,6 +16,7 @@ export interface PresetInput {
   /** sourcing tags in order, such as `['LCSC', 'CN']` */
   sourcing?: readonly string[]
   /** merged under the element's `autoroute` */
+  via?: BoardProps['via']
   autoroute?: Partial<AutoRouteParams>
   /** merged class by class under the element's `classes` */
   classes?: Record<string, NetClass>
@@ -35,6 +36,7 @@ export interface PresetSpec {
   silkColors: Readonly<Record<string, string>>
   finishes: readonly Finish[]
   sourcing?: readonly string[]
+  via?: Readonly<BoardProps['via']>
   autoroute?: Readonly<Partial<AutoRouteParams>>
   classes?: Readonly<Record<string, NetClass>>
   cpl?: Readonly<CplOptions>

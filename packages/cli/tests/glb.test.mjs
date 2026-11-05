@@ -111,15 +111,20 @@ test('glb: every part is its generated mesh, an LED with an opaque lens in its c
   for (const ref of ['J1', 'Q1', 'R1', 'C1']) assert.match(json.meshes[json.nodes.find(n => n.name === `part:${ref}`).mesh].name, /^model:[0-9a-f]{12}$/, ref)
   for (const ref of ['D1', 'D2', 'D3']) {
     const mesh = json.meshes[json.nodes.find(n => n.name === `part:${ref}`).mesh]
-    const mat = mesh.primitives.map(p => json.materials[p.material]).find(m => m.name.startsWith('led:'))
-    assert.equal(mat.name, 'led:#efebd9', 'no color option: the clear lens')
+    const clear = [239, 235, 217].map(c => ((c / 255 + 0.055) / 1.055) ** 2.4)
+    const lenses = mesh.primitives.map(p => json.materials[p.material]).filter(m => clear.every((c, i) => Math.abs(m.pbrMetallicRoughness.baseColorFactor[i] - c) < 1e-6))
+    assert.equal(lenses.length, 1, 'no color option: one clear #efebd9 lens')
+    const [mat] = lenses
     assert.equal(mat.pbrMetallicRoughness.baseColorFactor[3], 1)
+    assert.equal(mat.alphaMode ?? 'OPAQUE', 'OPAQUE')
+    assert.equal(mat.pbrMetallicRoughness.roughnessFactor, 0.25)
+    assert.equal(mat.pbrMetallicRoughness.metallicFactor, 0)
     assert.ok(
-      mat.emissiveFactor.every(v => v > 0 && v < 0.1),
-      'a mild glow',
+      mat.emissiveFactor.every((v, i) => Math.abs(v - clear[i] * 0.06) < 1e-6),
+      'the clear lens keeps its mild glow',
     )
   }
-  const blended = json.materials.filter(m => m.alphaMode).map(m => m.name)
+  const blended = json.materials.filter(m => m.alphaMode === 'BLEND').map(m => m.name)
   assert.deepEqual(blended.sort(), ['mask', 'mask:copper'])
 })
 

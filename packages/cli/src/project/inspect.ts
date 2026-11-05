@@ -432,7 +432,7 @@ export function inspectBoard(b: Board, entry: string, root: string, query?: stri
     const singles = routeRows(s, net.name).filter(r => !r.pair)
     for (const r of singles)
       text.push(
-        `route ${r.ref}  length ${f2(r.length)} with vias${r.target ? `  target ${rangeText(r.target)} ${r.status}` : ''}${r.group ? `  group ${r.group}` : ''}${r.tuned ? `  tuned ${f2(r.tuned)}` : ''}${r.source ? `  ${routeSrc(r)}` : ''}`,
+        `route ${r.ref}  length ${f2(r.length)} with vias${r.target ? `  target ${rangeText(r.target)} ${r.status === 'short' ? 'below length target' : r.status}` : ''}${r.group ? `  group ${r.group}` : ''}${r.tuned ? `  tuned ${f2(r.tuned)}` : ''}${r.source ? `  ${routeSrc(r)}` : ''}`,
       )
     return {
       text,
@@ -587,7 +587,7 @@ function routeTable(rows: RouteRecord[]): string[] {
       r.group ?? '-',
       r.skew === undefined ? '-' : f2(r.skew),
       r.tuned ? f2(r.tuned) : '-',
-      r.status === 'ok' && !r.target ? '-' : r.status,
+      r.status === 'short' ? 'below length target' : r.status === 'ok' && !r.target ? '-' : r.status,
       routeSrc(r) ?? '-',
     ]),
   ])

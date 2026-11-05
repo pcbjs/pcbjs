@@ -29,7 +29,7 @@ export interface PaneContext {
   /** A word to the reader, as the page's toast shows it. */
   say(text: string, err?: boolean): void
   /** Open a source location: the editor in dev, the repository host in a built site. */
-  open(t: SourceTarget | null, quiet?: boolean): Promise<void>
+  open(t: SourceTarget | null, quiet?: boolean, external?: boolean): Promise<void>
 }
 
 export type { SourceKind }

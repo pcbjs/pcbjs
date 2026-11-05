@@ -5,14 +5,14 @@ description: Create a small LED board, inspect its complete source and open the 
 
 # Quickstart
 
-Start with the small LED board below, or follow the [Blinky walkthrough](./npm-setup) for a guided circuit-to-layout example. These pages target pcbjs 0.1.0.
+Start with the small LED board below, or follow the [Blinky walkthrough](./npm-setup) for a guided circuit-to-layout example. These pages use the latest stable pcbjs release.
 
 ## Create a board
 
-With Node 22.12 or newer, create a project with pcbjs 0.1.0:
+With Node 22.12 or newer, create a project with pcbjs:
 
 ```sh
-npx --package @pcbjs/pcbjs@0.1.0 pcbjs create my-board
+npx --package @pcbjs/pcbjs pcbjs create my-board
 cd my-board
 npm install
 npx pcbjs check

@@ -4,7 +4,7 @@ import type { Hold, Patch, PatchKind } from '@pcbjs/core/internal/patch'
 import { opKind } from '@pcbjs/core/internal/patch'
 import { boardIndex, parseRef, printRef, resolveRef, RefError } from '@pcbjs/core/ref'
 import { coordString } from '@pcbjs/core/internal/units'
-import { defaultVia } from '@pcbjs/core/internal/rules'
+import { resolveVia } from '@pcbjs/core/internal/rules'
 import { digest } from './cache.js'
 import { CompileError, REF_AT, ROUTE_IDS } from './flatten.js'
 import { isRoutePoint } from '@pcbjs/core/internal/part'
@@ -281,7 +281,7 @@ function addVia(board: Board, p: Patch): void {
   const c = waypoint(p, op.at)
   const span = (op.span ?? [cu[0], cu[cu.length - 1]]).slice().sort((a, b) => cu.indexOf(a) - cu.indexOf(b)) as [string, string]
   for (const l of span) if (!cu.includes(l)) throw new CompileError(`patch ${p.ref}: via span names ${l}, not a copper layer of this board`, p.src)
-  const d = defaultVia(board.rules)
+  const d = resolveVia(board.rules, board.via, op)
   const net = op.net === null ? undefined : (op.net ?? t.net)
   const id = board.items.reduce((m, it) => Math.max(m, it.id), 0) + 1
   board.items.push(

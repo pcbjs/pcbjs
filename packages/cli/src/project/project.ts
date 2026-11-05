@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { compileBoards, compileLoaded, sketch, type CompileOptions, type CompileResult, type Exporter, type StageTime } from '@pcbjs/compile'
 import { evaluateEntry, type ModuleLoader } from '@pcbjs/compile/internal/entry'
-import { defaultsKey, demanded, exportsKey, servedStages, STAGES } from '@pcbjs/compile/internal/pipeline'
+import { defaultsKey, demanded, exportsKey, servedStages, STAGES, previewBefore } from '@pcbjs/compile/internal/pipeline'
 import { variantSlug } from '@pcbjs/core/internal/variants'
 import type { Board } from '@pcbjs/core/model'
 import { patchesFile } from '@pcbjs/core/internal/patch'
@@ -22,6 +22,7 @@ import { cacheEnv, cacheOf, fileHash, idOf } from './stage-cache.js'
 import type { View } from '@pcbjs/core/internal/plugin'
 import { facetStream, keepLast, stageStatus, type FacetOut, type StageStatus } from './facets.js'
 import { editedIn, touchedIds, type Spans } from './invalidate.js'
+import { errorSource } from './errors.js'
 
 export interface Compiled {
   entry: Entry
@@ -79,6 +80,10 @@ function evaluatedFiles(loader: ModuleLoader, cfg: ResolvedConfig, entry: string
 }
 
 export interface EntryOptions {
+  cacheDir?: string
+  /** Dev session only: attach preview-only geometry to a compile failure. */
+  recover?: boolean
+  recoverLoad?: (error: unknown) => Promise<Awaited<ReturnType<typeof evaluateEntry>> | undefined>
   /** site data with the dev server's URLs */
   dev?: boolean
   /** a compile of unsaved text: the cache is written in memory only */
@@ -103,7 +108,7 @@ export async function compileEntry(loader: ModuleLoader, cfg: ResolvedConfig, en
   const t0 = performance.now()
   const at = new Date().toISOString()
   const formats = exporters(cfg, dev, at).filter(e => !o.formats || o.formats.includes(e.name))
-  const dir = cacheOf(cfg.root)
+  const dir = o.cacheDir ?? cacheOf(cfg.root)
   const env = cacheEnv(cfg, dev)
   const served = draft || cfg.plugins.length ? null : servedStages(dir, entry.rel, { env, exports: exportsKey(formats), defaults: defaultsKey(realm().defaults), hashOf: fileHash })
   if (served) {
@@ -119,9 +124,13 @@ export async function compileEntry(loader: ModuleLoader, cfg: ResolvedConfig, en
   const pf = patchesFile(entry.file)
   let files: Record<string, string> = {}
   let t1 = t0
+  let evaluated: Awaited<ReturnType<typeof evaluateEntry>> | undefined
+  let stage = 'evaluate'
+  const completed = new Set<string>()
   // the evaluate stage: the entry and its patches through the loader, then what the compile keys on, the files they read
   const load = async () => {
-    const { root, patches } = await evaluateEntry(loader, entry, existsSync(pf) ? { file: pf, rel: patchesFile(entry.rel) } : null, signal)
+    evaluated = await evaluateEntry(loader, entry, existsSync(pf) ? { file: pf, rel: patchesFile(entry.rel) } : null, signal)
+    const { root, patches } = evaluated
     t1 = performance.now()
     files = evaluatedFiles(loader, cfg, entry.file)
     if (patches) Object.assign(files, evaluatedFiles(loader, cfg, pf))
@@ -143,16 +152,44 @@ export async function compileEntry(loader: ModuleLoader, cfg: ResolvedConfig, en
     plugins: cfg.plugins,
     exports: formats,
     ...(want ? { want } : {}),
-    ...(o.stage || stream
+    ...(o.stage || stream || o.recover
       ? {
           // a cancelled compile streams nothing more; its next cancel point throws
           stage: e => {
             if (signal?.aborted) return
+            if (e.state === 'running') stage = e.name
+            else completed.add(e.name)
             o.stage?.(stageStatus(e))
             stream?.(e)
           },
         }
       : {}),
+  }).catch(async (caught: any) => {
+    const error = o.recover ? Object.assign(new Error(String(caught?.message ?? caught)), caught, { name: caught?.name ?? 'Error', stack: caught?.stack }) : caught
+    if (o.recover && error?.name !== 'CancelledError' && !signal?.aborted) {
+      error.halted = { stage, stages: [...STAGES], completed: [...completed].filter(s => s !== stage) }
+      const src = errorSource(error)
+      if (!evaluated && src) {
+        try {
+          evaluated = await o.recoverLoad?.(error)
+        } catch (recovery: any) {
+          if (recovery?.name === 'CancelledError') throw recovery
+        }
+      }
+      if (src) error.src = src
+      if (evaluated && src) {
+        try {
+          error.preview = previewBefore(evaluated.root, src, { defaults: realm().defaults, files: loader.imported(entry.file), sourceRoot: cfg.root, signal }).map(board => {
+            const site = siteData(board, { root: cfg.root, dev: true, generatedAt: at, fabUrl: '', fabName: '', fabFiles: [], fabStatus: 'incomplete', svgUrl: '', bom: [] })
+            site.halted = { ...error.halted, src: { ...src, file: sourcePath(cfg.root, src.file) } }
+            return { entry, board, site, stages: [], files: [...loader.imported(entry.file)], ms: performance.now() - t0 } satisfies BoardOut
+          })
+        } catch (recovery: any) {
+          if (recovery?.name === 'CancelledError') throw recovery
+        }
+      }
+    }
+    throw error
   })
   // a patches file yet to be made stays in the cache's list, so making it misses, and out of the watched files
   const watched = Object.keys(files).filter(f => files[f] !== 'missing')

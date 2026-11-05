@@ -10,7 +10,7 @@ import { pulse } from './cancel.js'
 /** Board fields by facet; a field none names is in `rest`. */
 const FIELDS: Record<string, string[]> = {
   meta: ['name', 'title', 'rev', 'copper', 'thickness', 'sourcingTags', 'cpl', 'fabNotes', 'outlineFonts', 'variant'],
-  rules: ['rules', 'classes'],
+  rules: ['rules', 'classes', 'via'],
   stackup: ['stackup', 'layers'],
   outline: ['outline', 'bbox'],
   keepouts: ['keepouts'],

@@ -43,7 +43,7 @@ const { openPlace, openAnchor } = useChip(ctx)
       </dd>
       <dt>parts</dt>
       <dd>{{ circuit.refs.length }}</dd>
-      <template v-if="circuitPlaced && openPlace && board?.dev">
+      <template v-if="circuitPlaced && openPlace && board?.dev && ctx.board.edit.mode?.mode === 'rw'">
         <dt>source</dt>
         <dd class="src src-actions">
           <button :title="rangeLabel(openPlace.file, asRange(openPlace))" @click="openAnchor('placement')">Open placement</button>

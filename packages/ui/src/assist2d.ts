@@ -9,6 +9,7 @@ import { endMarks2d, endsOf, litEnd, nearestEnd, pickEnd } from './ends'
 import type { AssistContext, EditPlan, EndCandidate } from '@pcbjs/core/protocol'
 import type { BoardStore } from './board-store'
 import type { SnapGrid } from './snap'
+import { editNodeOf } from './selection'
 
 type Pt = [number, number]
 /** brightness steps of the field, each one path */
@@ -29,6 +30,7 @@ export function useAssist2d(d: Assist2d) {
   const ctx = computed<AssistContext | null>(() => {
     const a = t.assist
     if (!a || t.assistOff || a.board !== d.board().name || !d.board().dev || t.mode?.mode !== 'rw' || (d.board().variant && d.board().variant!.index !== 0)) return null
+    if (a.ref && editNodeOf(d.board(), a.ref)?.locked) return null
     return (d.visualGrid?.() ?? d.grid?.()) ? { ...a, grid: '__editing' } : a
   })
   const board = computed(() => {

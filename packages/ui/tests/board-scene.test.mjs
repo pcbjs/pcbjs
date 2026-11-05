@@ -337,7 +337,7 @@ test('a pose draws its parts’ pads and its items of no part again where it goe
   for (const p of hidden) assert.notEqual(st(s, p.id), 'gone', 'cancellation restores originals')
 })
 
-test('mask depth bias and transparent layer ordering survive an exploded back-mask hover round trip', () => {
+test('unbiased mask depth and transparent layer ordering survive an exploded back-mask hover round trip', () => {
   const { s, b } = scene()
   s.paint(paint(b, [], { fade: false }), null)
   s.explode(4)
@@ -345,8 +345,7 @@ test('mask depth bias and transparent layer ordering survive an exploded back-ma
   assert.equal(skins.length, 2)
   const base = skins.map(m => ({ mesh: m, material: m.material, z: m.parent.position.z, order: m.renderOrder }))
   for (const m of skins) {
-    assert.equal(m.material.polygonOffset, true)
-    assert.ok(m.material.polygonOffsetFactor < 0)
+    assert.equal(m.material.polygonOffset, false)
     assert.equal(m.renderOrder, 0, 'sort transparent layers by depth together')
   }
   s.hoverLayer('B.Mask')

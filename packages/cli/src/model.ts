@@ -4,7 +4,7 @@ import { inflateRawSync } from 'node:zlib'
 import ts from 'typescript'
 import type { Board, Footprint, Pad } from '@pcbjs/core/model'
 import type { SiteFootprint } from '@pcbjs/core/site-data'
-import { isFileModel, MODEL_LABEL, modelSource } from '@pcbjs/core/internal/model-source'
+import { isFileModel } from '@pcbjs/core/internal/model-source'
 import { textDoc, toSite } from '@pcbjs/core/internal/textdoc'
 import { sourceWriter } from './session/source-write.js'
 import { meshKey } from '@pcbjs/step/internal/key'
@@ -21,6 +21,9 @@ import { viteLoader } from './project/loader.js'
 import { meshFor, modelsDir } from './project/models.js'
 import { courtyardRect, toFootprint } from '@pcbjs/export/internal/models'
 import { fetchedDir, lcscModel, noteSource, retryFetches } from './project/fetch-model.js'
+
+import { modelReport, stdlibLine } from './project/model-report.js'
+export { modelReport, modelRows, stdlibLine, type ModelRow } from './project/model-report.js'
 
 export { lcscModel, noteSource }
 import type { Compiled } from './project/project.js'
@@ -642,87 +645,11 @@ export interface ModelCheckOptions {
   verbose?: boolean
 }
 
-export interface ModelRow {
-  board: string
-  ref: string
-  source: string
-  status: 'ok' | 'missing' | 'unread' | 'off'
-  issue?: string
-}
-
-export function modelRows(c: Compiled): ModelRow[] {
-  return c.site.footprints.map(sf => {
-    const s = sf.step
-    if (!s) {
-      const box = sf.model?.kind === 'box' ? sf.model : null
-      if (box?.fetch) return { board: c.board.name, ref: sf.ref, source: `not fetched ${box.fetch}`, status: 'missing' as const, issue: 'the model did not download' }
-      if (box?.reason) return { board: c.board.name, ref: sf.ref, source: 'no model', status: 'ok' as const, issue: box.reason }
-      const from = modelSource(sf.model, sf.height)
-      return { board: c.board.name, ref: sf.ref, source: from === 'generated' ? `generated ${sf.model!.kind}` : MODEL_LABEL[from], status: 'ok' as const }
-    }
-    const status = !s.mesh ? 'missing' : s.issue?.startsWith('the file did not read') ? 'unread' : s.issue ? 'off' : 'ok'
-    const issue = status === 'missing' ? 'the file is missing' : s.issue
-    return { board: c.board.name, ref: sf.ref, source: `file ${s.file}`, status, ...(issue ? { issue } : {}) }
-  })
-}
-
 export async function modelCheck(o: ModelCheckOptions): Promise<number> {
   const p = await compileProject(o.entries, o)
-  const many = p.compiled.length > 1
-  let flagged = 0,
-    files = 0,
-    total = 0,
-    generated = 0,
-    missing = 0
-  for (const c of p.compiled) {
-    const rows = modelRows(c).sort((a, b) => a.ref.localeCompare(b.ref, undefined, { numeric: true }))
-    const entry = posix(relative(p.cfg.root, c.entry.file))
-    console.log(`${c.board.name}  ${entry}`)
-    const w = Math.max(...rows.map(r => r.ref.length), 3),
-      ws = Math.max(...rows.map(r => r.source.length), 6)
-    for (const r of rows) {
-      total++
-      if (r.source.startsWith('file')) files++
-      else if (r.source.startsWith('generated')) generated++
-      else if (r.source === 'no model') missing++
-      console.log(`  ${r.ref.padEnd(w)}  ${r.source.padEnd(ws)}  ${r.status}${r.issue ? `: ${r.issue}` : ''}`)
-      if (r.status !== 'ok') {
-        flagged++
-        const ref = many ? `${r.ref} --entry ${entry}` : r.ref
-        console.log(
-          `  ${' '.repeat(w)}  fix: ${r.source.startsWith('not fetched') ? 'pcbjs model fetch' : r.status === 'missing' ? `pcbjs model add <file-or-url> --ref ${ref} --write` : r.status === 'unread' ? `pcbjs model add <file-or-url> --ref ${ref} --write --force, a STEP, glTF or WRL file` : `pcbjs model align ${r.ref}${many ? ` --entry ${entry}` : ''}`}`,
-        )
-      }
-    }
-  }
-  console.log(`${total} footprints, ${files} with a model file, ${generated} generated, ${missing} with no model, ${flagged} flagged`)
-  console.log(stdlibLine(p.compiled))
-  return flagged ? 1 : 0
-}
-
-/** How the standard library's parts got their bodies, and those still to fetch. */
-export function stdlibLine(compiled: Compiled[]): string {
-  let n = 0,
-    fetched = 0,
-    generated = 0,
-    bare = 0,
-    waiting = 0,
-    outline = 0
-  for (const c of compiled)
-    for (const sf of c.site.footprints) {
-      if (!sf.id.startsWith('pcbjs:')) continue
-      n++
-      const m = sf.model
-      if (sf.step?.mesh) fetched++
-      else if (m?.kind === 'box' && m.fetch) waiting++
-      else if (m?.kind === 'box') outline++
-      else if (modelSource(m, sf.height) === 'generated') generated++
-      else bare++
-    }
-  const parts = [`${fetched} with fetched models`, `${generated} generated`, `${bare} with no body`]
-  if (waiting) parts.push(`${waiting} not fetched yet, pcbjs model fetch`)
-  if (outline) parts.push(`${outline} with no model`)
-  return `standard library: ${n} part${n === 1 ? '' : 's'}, ${parts.join(', ')}`
+  const report = modelReport(p.cfg.root, p.compiled)
+  process.stdout.write(report.stdout)
+  return report.exitCode
 }
 
 export interface ModelFetchOptions {

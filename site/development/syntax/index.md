@@ -41,6 +41,8 @@ A schematic module supplied through `schematic={sch}` exposes its exported desig
 | Back side | Mirroring and layer swapping are part of placement semantics, not merely a camera operation |
 | Numeric validity | Converted lengths, positions and angles must be finite; dimensions such as pad/drill axes and via sizes must be positive where required |
 
+`locked` on a part placement is shorthand for `locked={true}`. Boolean expressions are evaluated during compilation; `false` or omission unlocks. PCB and schematic placements carry independent locks. Locks protect preview editing, not source code or automatic placement. See [Placement](./placement#placement-locks).
+
 Coordinate grids and editor snapping are distinct. A toolbar snapping change writes `grid.snap` without reinterpreting existing placement geometry. `maxLevel` bounds eligible editing subdivisions, defaulting to two. The full attribute contract is in [Grids](./grids).
 
 ## Composition, overrides and labels

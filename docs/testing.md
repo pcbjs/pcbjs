@@ -69,3 +69,5 @@ const empty: Tests = { status: 'skipped', passed: 0, failed: 0, ms: 0, results: 
 ## For agents
 
 When asked to keep a property of the design, write it as a test beside the boards rather than a note: the next edit that breaks it fails `pcbjs check --test`, whoever makes it.
+
+For a reviewed pin map or custom cable, compare the complete physical pad set against an independent manufacturer table and assert selected endpoint nets/polarity from independently reviewed literals. Keep deliberately unused, true NC and required unresolved pins distinct; repeated GND/NC names need not be unique. Inspect-derived global escape points also need a position/rotation/side guard, or a shared local frame that transforms the points with the part. The best-practices skill's electrical-intent reference contains the focused recipe.

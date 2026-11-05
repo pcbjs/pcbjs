@@ -5,8 +5,7 @@ How the `@pcbjs/*` packages are versioned and published from this repository wit
 ## Version scheme
 
 - Every package carries in the tree the version of the last train that moved it, written by `release.yml`. `0.0.0` is the placeholder published once by hand to reserve each name on npm and let its trusted publishers be configured; it holds a package.json and a README.md, no code.
-- The prepared release is **0.1.0**, published under `latest`. `.changeset/first-stable-release.md` requests a minor bump for every `@pcbjs/*` package and `.changeset/pre.json` records the beta exit. Package manifests keep their last train versions until the release workflow calculates the new ones.
-- Exiting beta alone would select stable `0.0.1`. The all-package minor changeset is what selects `0.1.0`; do not remove it before versioning.
+- The next prepared release is **0.1.1**, under `latest`. The tree is on the stable 0.1 line, with pending patch changesets and no prerelease state. Keep manifests at their last released versions; the workflow calculates the patch train.
 - `pcbjs doctor` compares major.minor. Install the 0.1 components together through `@pcbjs/pcbjs`; its repair command uses `latest` for stable releases.
 
 ## Model
@@ -30,13 +29,11 @@ How the `@pcbjs/*` packages are versioned and published from this repository wit
 
 Every change to the behaviour of a published package adds one: `npm run changeset`, pick the packages, the bump and a one-line summary for the changelog. Commit the file in `.changeset/` with the change. A fix is a patch; a new feature or a breaking change before 1.0 is a minor. A change to `packages/vscode` names `@pcbjs/cli` too, since the cli ships the VSIX. Docs, tests, examples and CI need none.
 
-## The first 0.1 release
+## The 0.1.1 patch
 
-The release plan is prepared: the all-package minor changeset includes the private extension, and prerelease mode is marked for exit. Keep package versions for the workflow to calculate. Its dry run must show all 15 components at `0.1.0`, compatible dependency ranges, the extension at `0.1.999` with `preRelease: false`, and no beta tag before the real run starts.
+Pending patch changesets describe the changed packages. Before dispatch, inspect the Changesets release plan: affected linked packages and exact dependency dependents should select `0.1.1`; unaffected packages may remain at `0.1.0`. The private extension is versioned when selected, with train `0.1.1` mapped to Marketplace `0.1.1999` and `preRelease: false`. No beta exit or all-package minor changeset is needed.
 
-The documentation targets 0.1.0 and installation examples select the stable 0.1 line. This is release preparation, not proof of registry publication: source-checkout instructions remain available until 0.1.0 reaches npm.
-
-Every new public workspace package, including `@pcbjs/ui`, needs its placeholder and trusted publishers configured before the train. The tarball test uses local overrides for the workspace packages, so it proves the packaged files and runtime but cannot prove registry availability or dist-tags. After publishing, install `@pcbjs/pcbjs@<train>` in a fresh folder without overrides, run `pcbjs create`, install that project and check and build it; verify `latest` names the intended stable train.
+The dry run must validate that calculated tree and packed runtime before publication. Local tarball overrides prove packaging, not registry availability or dist-tags. After publishing, install `@pcbjs/pcbjs@<train>` in a fresh folder without overrides, run `pcbjs create`, install that project and check and build it; verify `latest` names the intended stable train. New public packages still require placeholder/trusted-publisher setup first.
 
 ## A core-only patch
 
@@ -79,7 +76,7 @@ The run, one job on Ubuntu:
 2. Installs npm 11.21.1 and runs `npm ci`. For a new train, `npx changeset version` calculates the versions and changelogs, the example templates are synced, and `npm install --package-lock-only` updates the lock. It commits the result as `pcbjs <version of @pcbjs/pcbjs>` in the runner.
 3. Builds that versioned tree, bundles the VSIX, fetches the models and installs the libraries the tests use, runs `npm test`, checks every example cold and runs `scripts/stage-equality.mjs` through cold, warm and cache-recovery paths, builds the demo and checks its fab sets are orderable, and runs `scripts/pack-smoke.mjs`. A tracked change left by validation fails the run. Dry runs stop after printing this validated train.
 4. Pushes the new version commit to main only after validation. A rejected push means main moved, and nothing from this run is published. Start a new run against the updated main.
-5. Runs `npx changeset publish` with provenance to publish missing npm versions in dependency order. An active prerelease state chooses its tag; the prepared stable release uses `latest`. It pushes package tags and ensures the train's meta-package tag exists even on a retry that finds the npm versions already published.
+5. Runs `npx changeset publish` with provenance to publish missing npm versions in dependency order. An active prerelease state chooses its tag; a stable release uses `latest`. It pushes package tags and ensures the train's meta-package tag exists even on a retry that finds the npm versions already published.
 6. Publishes the extension when a new train moved it, see The VS Code extension. Recovery runs skip extension registries to avoid republishing a version a previous attempt already sent.
 7. Creates the GitHub Release on `@pcbjs/pcbjs@<version>`, titled `pcbjs <version>`, marked pre-release only when the version has a prerelease tag. Notes come from `scripts/release-notes.mjs`; above 100,000 characters it links to the package changelogs at the release tag, keeping below GitHub's body limit. It uploads the VSIX and its manifest when those assets are missing, including on an existing release whose asset upload failed earlier.
 8. Starts `pages.yml` so https://pcbjs.dev shows the train.
@@ -96,4 +93,4 @@ If a run failed before its version commit reached main, fix the failure and star
 
 The resume selector accepts version commits made by this release workflow. An old tag on a different kind of commit needs manual inspection and recovery. GitHub Release assets already present are kept; replace a corrupt asset only after inspecting it.
 
-The first train, 0.0.1-beta.0, used the former Version packages pull request. Later trains use this release round; choose the stable version explicitly as described above. After a train, check `npm view @pcbjs/pcbjs dist-tags` and the provenance badge on its npm page. For 0.1.0, confirm `latest` points to `0.1.0`, not the old `0.0.0` placeholder.
+The first train, 0.0.1-beta.0, used the former Version packages pull request. Later trains use this release round; choose the stable version explicitly as described above. After a train, check `npm view @pcbjs/pcbjs dist-tags` and the provenance badge on its npm page. For this patch, confirm `latest` points to the released `0.1.1` train.

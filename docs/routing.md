@@ -37,7 +37,7 @@ Basic. route-options.md has the builder methods, teardrops, autoroute parameters
 | `.L(p)` | manual track to a waypoint, `'5 16'`, `[5, 16]` or a via |
 | `.H(x)`, `.h(dx)`, `.V(y)`, `.v(dy)` | manual track along x or y |
 | `.A(x, y, angle)`, `.a(dx, dy, angle)` | manual arc to the point, turning through `angle`, degrees or `'1.2rad'`, counter-clockwise on screen when positive |
-| `.via(layer, { drill, size })` | via at the cursor, continue on `layer`; `drill` and `size` set this via, default the route's `.vias()`, then the rules |
+| `.via(layer, { drill, size })` | via at the cursor, continue on `layer`; `drill` and `size` set this via, default the route's `.vias()`, class, board `autoroute.via`, board `via`, then legacy fallback |
 | `.cross(layer)` | pairs only, a crossover, pairs.md |
 | `.X(p)` | automatic leg to a waypoint |
 | `.width(w)` | the track width from here on |
@@ -117,3 +117,5 @@ export const chan = circuit('chan', ({ VCC, LED }: Ports<'VCC' | 'LED'>) => {
 ```
 
 P first; the chain is the centre line, offset into tracks `w + g` apart, a via pair per layer change; no branches or arcs; pairs.md, examples/highspeed.
+
+Via dimensions resolve field by field: legacy rule-grown fallback, board `via`, board `autoroute.via`, class `autoroute.via`, class `via`, route `.vias()`, then chain `.via()` dimensions. Standalone `via()`, stitching and via patches use board `via` followed by their call dimensions; class and `autoroute` settings retain their route-only scope. Pair search envelopes grow to fit both holes, while physical pair vias retain the resolved fabrication dimensions. Explicit dimensions never grow silently to satisfy minima.

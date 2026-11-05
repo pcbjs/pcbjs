@@ -11,7 +11,7 @@ import { siteFindings } from './findings.js'
 import { generatedOf, modelHash, placedModel, type MeshBounds } from './models.js'
 import { routesCopper, type RouteCopper } from '@pcbjs/compile/internal/pair-info'
 import { bareHole } from '@pcbjs/compile/internal/bare'
-import { referenceLayer, referenceMarkup, siteReferences } from './reference.js'
+import { referenceLayer, siteReferences } from './reference.js'
 import { SCH_THEMES, schematicMarkup, schematicStyle } from './sch-svg.js'
 
 export type * from '@pcbjs/core/site-data'
@@ -78,6 +78,7 @@ export function metaFacet(board: Board, opts: SiteOptions): FacetData['meta'] {
     nets: board.nets.map(n => n.name),
     footprints: board.footprints.map(fp => ({
       ref: fp.ref,
+      ...(fp.locked ? { locked: true } : {}),
       ...(fp.displayRef ? { displayRef: fp.displayRef } : {}),
       value: fp.value,
       id: fp.id,
@@ -193,7 +194,7 @@ export function layersFacet(board: Board, root: string, items: ShapedItem[], car
     layers: [
       ...[...board.layers]
         .sort((a, b) => a.order - b.order)
-        .map(l => ({ id: l.id, name: l.name, kind: l.kind, side: l.side, color: l.color, order: l.order, svg: layerMarkup(board, l.id) + referenceMarkup(board, l.id) })),
+        .map(l => ({ id: l.id, name: l.name, kind: l.kind, side: l.side, color: l.color, order: l.order, svg: layerMarkup(board, l.id) })),
       ...referenceLayer(board),
     ],
     holes: holesMarkup(board),

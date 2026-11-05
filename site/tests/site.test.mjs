@@ -138,7 +138,8 @@ test('syntax colors share a content-addressed stylesheet across documentation pa
     const link = html.match(/href="([^"]*assets\/code-tokens\.[a-f0-9]+\.css)"/)?.[1]
     assert.ok(link, `${p} loads syntax colors`)
     const css = readFileSync(join(dist, link.replace(/^.*?(assets\/)/, '$1')), 'utf8')
-    const tokens = [...html.matchAll(/class="(?:[^" ]+ )*(t\d+)(?: [^"]*)?"/g)].map(m => m[1])
+    const code = [...html.matchAll(/<pre\b[^>]*class="shiki [^"]*"[^>]*>[\s\S]*?<\/pre>/g)].map(m => m[0]).join('')
+    const tokens = [...code.matchAll(/class="(?:[^" ]+ )*(t\d+)(?: [^"]*)?"/g)].map(m => m[1])
     assert.ok(tokens.length, `${p} has highlighted code`)
     for (const token of tokens) assert.ok(css.includes(`.${token}{`), `${p}: missing ${token}`)
     return link

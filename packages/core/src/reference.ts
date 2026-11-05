@@ -9,6 +9,12 @@ import { platform } from './platform.js'
 /** Where the referenced board lies against this one: over its top face, under its bottom face, or in its plane. */
 export type ReferenceStack = 'above' | 'below' | 'coplanar'
 
+/** A rigid pose in the right-handed 3D frame: x board x, y board -y, z up; quaternion order x, y, z, w. */
+export interface ReferencePose<T = number> {
+  translation: readonly [T, T, T]
+  orientation: readonly [number, number, number, number]
+}
+
 /** The mating pair: a part or a pin handle of this board, and the ref and pin of the connector on the referenced board. */
 export interface ReferenceMate {
   /** a part, such as `J1`, a pin handle, such as `J1[19]`, or a part of a group, such as `PORTS[2].J` */
@@ -37,6 +43,8 @@ export interface ReferenceShow {
 }
 
 export interface ReferenceOptions {
+  /** complete anchored placement, rotation about the referenced bottom-face origin before translation; exclusive with the other placement options */
+  pose?: ReferencePose<Length>
   /** one or more mating pairs: the first places the board; a pair without `nets` takes the first pair's */
   mate?: ReferenceMate | ReferenceMate[]
   /** with `mate`: the face the referenced board lies on, F over the top or B under the bottom; default the local part's side */
@@ -56,7 +64,7 @@ export interface ReferenceOptions {
   show?: ReferenceShow
 }
 
-/** Another entry's board as a mechanical reference, placed by `mate` or `at`; the path is relative to the calling file, or a package's board such as '@acme/power/boards/driver'. */
+/** Another entry's board as a mechanical reference, placed by `mate`, `at` or `pose`; the path is relative to the calling file, or a package's board. */
 export function reference(path: string, opts: ReferenceOptions = {}): PcbNode {
   if (typeof path !== 'string' || !path.trim()) throw new TypeError("reference(path, options) needs the path of another entry, such as '../driver/pcb.tsx'")
   if (opts === null || typeof opts !== 'object') throw new TypeError(`reference(${JSON.stringify(path)}, options): options must be an object`)
@@ -130,7 +138,7 @@ export interface BoardReference {
   mesh?: string
   split?: number
   status: string
-  anchor: { kind: 'mate'; local: string; remote: string } | { kind: 'at'; at: [number, number, number] }
+  anchor: { kind: 'mate'; local: string; remote: string } | { kind: 'at'; at: [number, number, number] } | { kind: 'pose'; pose: ReferencePose }
   stack?: ReferenceStack
   gap?: number
   rotate: number
@@ -139,18 +147,22 @@ export interface BoardReference {
   /** where the referenced board's own frame goes in this board's 3D frame */
   transform: Mat4
   show: { outline: string | null; bodies: boolean; opacity: number; color: string }
-  /** its outline rings in this board's mm, seen from the top */
+  /** its slab silhouette in this board's mm, seen from the top, including thickness when tilted */
   outline: Ring[]
   /** the z range of its slab in this board's 3D frame */
   z: [number, number]
+  /** slab and body bounds in carrier board mm: x right, y down, z up from the carrier bottom */
+  bounds?: { min: [number, number, number]; max: [number, number, number] }
   /** its drills in this board's mm, a slot with its length and axis turned onto this board */
   holes: SiteData['drills']
+  /** projected drill volumes for tilted references; holes holds the unchanged planar representation */
+  holeOutlines?: Ring[]
   /** the mating pair; with `nets`, pads carry net names and each local pad the remote name it wants */
   mate?: MatePair
   /** every mating pair, the first one `mate`, when the mate names several */
   mates?: MatePair[]
   /** its part bodies as prisms in this board's frame, with where each height comes from */
-  bodies: { ref: string; ring: Ring; z: [number, number]; from?: HeightSource }[]
+  bodies: { ref: string; ring: Ring; z: [number, number]; height?: number; from?: HeightSource }[]
   /** this board's part bodies the collision check counts: the height of each and where it comes from */
   heights?: { ref: string; height: number; from: HeightSource }[]
   /** where the default gap came from: the local part's height, its model box, or 8 mm */
