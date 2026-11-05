@@ -187,3 +187,28 @@ test('two projects with their own defaults, KiCad libraries and fonts, compiled 
     await stop(child)
   }
 })
+
+test('an obsolete queued sketch rejects before loading its entry and the latest sketch still draws', { timeout: 30000 }, async () => {
+  const root = tmp('pcbjs-sketch-queue-')
+  linkPackages(root)
+  writeFileSync(join(root, 'pcb.config.ts'), "import { defineConfig } from '@pcbjs/core'\nexport default defineConfig({ entries: ['pcb.tsx'] })\n")
+  const file = join(root, 'pcb.tsx')
+  const code = `import PCB from '@pcbjs/core'
+export default <PCB name="Latest"><rect layer="Edge.Cuts" x={0} y={0} w={10} h={10}/><text layer="F.SilkS" at="5 5">latest</text></PCB>`
+  writeFileSync(file, code)
+  const c = workerCompiler({ root, configFile: join(root, 'pcb.config.ts'), log() {} })
+  try {
+    const old = join(root, 'obsolete.tsx')
+    const obsolete = code.replace('Latest', 'Obsolete').replace('latest', 'obsolete')
+    writeFileSync(old, obsolete)
+    const stale = c.sketch({ file: old, rel: 'obsolete.tsx' }, { file: old, code: obsolete, spans: [[1, 3]], base: 1 })
+    c.cancelSketch()
+    await assert.rejects(stale, e => e.name === 'CancelledError')
+    assert.equal(c.graph().getModulesByFile(old), undefined, 'cancelled entry never enters the loader graph')
+    const latest = await c.sketch({ file, rel: 'pcb.tsx' }, { file, code, spans: [[1, 3]], base: 1 })
+    assert.equal(latest.board, 'Latest')
+    assert.ok(latest.data.items.some(it => it.kind === 'text'))
+  } finally {
+    await c.close()
+  }
+})

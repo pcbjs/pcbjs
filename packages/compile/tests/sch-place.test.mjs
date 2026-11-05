@@ -4,7 +4,8 @@ import assert from 'node:assert/strict'
 import PCB, { h, nets, bindRef, defineFootprint, resetDefaults, Schematic, Place } from '@pcbjs/core'
 import { autoSymbol } from '@pcbjs/core/internal/sch-symbol'
 import { compileBoard } from '../dist/index.js'
-import { clusters, place } from '../dist/sch-place.js'
+import { pulsed, CancelledError } from '../dist/cancel.js'
+import { clusters, pack, place } from '../dist/sch-place.js'
 
 afterEach(() => resetDefaults())
 
@@ -214,4 +215,26 @@ test('place: hand placements stay where they are and the rest packs around them'
     const [a0, b0, a1, b1] = s.box
     assert.ok(a1 <= x0 || a0 >= x1 || b1 <= y0 || b0 >= y1, `${s.ref} clear of the hand-placed symbol`)
   }
+})
+
+test('schematic packing reads cancellation between rectangles without changing the layout', () => {
+  const rects = Array.from({ length: 30 }, (_, i) => ({ w: 5 + (i % 3), h: 3 + (i % 4), nets: new Set([`N${i % 5}`]) }))
+  const expected = pack(rects, 40)
+  let reads = 0
+  assert.throws(
+    () =>
+      pulsed(
+        () => {
+          if (++reads === 7) throw new CancelledError()
+        },
+        () => pack(rects, 40),
+      ),
+    CancelledError,
+  )
+  assert.equal(reads, 7, 'cancellation lands inside the packing loop')
+  const actual = pulsed(
+    () => {},
+    () => pack(rects, 40),
+  )
+  assert.deepEqual(actual, expected)
 })

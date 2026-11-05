@@ -4,6 +4,7 @@ import { cpSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { forgetRouteCache } from '@pcbjs/compile/internal/route-cache'
 import { clearStageCache } from '@pcbjs/compile/internal/cache'
+import { CancelledError } from '@pcbjs/compile'
 import { fileKey } from '../project/files.js'
 import { createHash } from 'node:crypto'
 import { serialize } from 'node:v8'
@@ -256,7 +257,11 @@ async function handle(m: ToWorker): Promise<void> {
   if (m.t === 'preview') return answer(m.id, (cfg, vite) => reply(compilePreview(viteLoader(vite), cfg, m.file, m.rel)))
   if (m.t === 'sketch') {
     const { t: _t, id, entry, ...job } = m
-    return answer(id, (cfg, vite) => reply(sketchEntry(viteLoader(vite, { file: job.file, code: job.code }), cfg, entry, { ...job, signal: signalOf(id, 1) })))
+    return answer(id, (cfg, vite) => {
+      const signal = signalOf(id, 1)
+      if (signal.aborted) throw new CancelledError()
+      return reply(sketchEntry(viteLoader(vite, { file: job.file, code: job.code }), cfg, entry, { ...job, signal }))
+    })
   }
   const { vite } = await booted
   if (m.t === 'draft') {

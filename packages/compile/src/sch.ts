@@ -111,6 +111,7 @@ function sheetScale(v: unknown, pitch: number, src?: Src): number {
 
 /** The schematic of a compiled board, and its sch-* findings; `root` is the <Schematic> given to <PCB>, or none for an automatic one. */
 export function compileSchematic(board: Board, partRefs: Map<PartState, string>, root?: unknown): { drawing: SchDrawing; findings: DrcMarker[] } {
+  pulse()
   const findings: DrcMarker[] = []
   const node = root === undefined || root === null ? null : resolveRoot(root)
   const p = node?.props ?? {}
@@ -174,6 +175,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
   }
   /** `k` schematic pitches per unit of the sheet's own grid */
   const walk = (c: unknown, off: Pt, depth: number, k = 1): void => {
+    pulse()
     if (depth > 64 || c === null || c === undefined || typeof c === 'boolean') return
     const list = childList(c)
     if (list) {
@@ -245,6 +247,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
   // symbols: hand placed, then the rest on a grid in declaration order
   const placed: Placed[] = []
   for (const [ref, s] of syms) {
+    pulse()
     if (!s.at) continue
     const part = byRef.get(ref)!,
       st = stOf.get(ref)
@@ -292,6 +295,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
   const pinCount = new Map(board.schematic.nets.map(n => [n.name, n.pins.length]))
   const wired = (net: string) => !power(net) && (pinCount.get(net) ?? 0) >= 2 && (pinCount.get(net) ?? 0) <= labelOver
   const items: (PlaceItem & { part: BoardSchematicPart; st?: PartState })[] = rest.map((part, order) => {
+    pulse()
     const st = stOf.get(part.ref)
     return {
       ref: part.ref,
@@ -311,6 +315,7 @@ export function compileSchematic(board: Board, partRefs: Map<PartState, string>,
     return [
       ...placed,
       ...items.map(it => {
+        pulse()
         const q = r.at.get(it.ref)!
         const own = syms.get(it.ref)
         return {

@@ -1,5 +1,6 @@
 // Automatic schematic placement: small parts clustered onto the symbol they connect to, the clusters and group sheets packed
 // in reading order into a free page of about A-paper proportions, or the paper asked for, with wire channels between blocks that share nets. Grid units, y down.
+import { pulse } from './cancel.js'
 import type { Mat, Pt } from '@pcbjs/core/model'
 import type { PinSide } from '@pcbjs/core/internal/sch-model'
 import { textUnits, type SymbolDef } from '@pcbjs/core/internal/sch-symbol'
@@ -200,6 +201,7 @@ function linkSmalls(items: PlaceItem[], anchors: PlaceItem[], power: (n: string)
     return false
   }
   for (const s of items) {
+    pulse()
     if (anchors.includes(s)) continue
     const mates = anchors.filter(a => (a.path[0] ?? '') === (s.path[0] ?? ''))
     const sig = new Set(s.pins.filter(q => q.net && !power(q.net)).map(q => q.net!))
@@ -244,6 +246,7 @@ interface ChainPart {
 function chainFrom(head: ChainPart, free: Set<PlaceItem>, byNet: Map<string, PlaceItem[]>, power: (n: string) => boolean): ChainPart[] {
   const out = [head]
   for (let i = 0; i < out.length; i++) {
+    pulse()
     const c = out[i]
     for (const q of c.it.pins) {
       if (!q.net || power(q.net) || q.name === c.entry) continue
@@ -265,6 +268,7 @@ function layChain(chain: ChainPart[], dir: PinSide, start: number, lane: number,
   const horiz = dir === 'left' || dir === 'right'
   let cur = start
   for (const c of chain) {
+    pulse()
     const [rot, flip] = orientFor(c.it, c.entry, OPPOSITE[dir])
     const net = c.it.pins.find(q => q.name === c.entry)?.net
     const bare = c.entry && net && wired(net) ? c.entry : undefined
@@ -437,6 +441,7 @@ export function pack(rects: Rect[], width: number, fixed: Box[] = []): Pt[] {
   const done: { r: Rect; b: Box }[] = []
   const out: Pt[] = []
   for (const r of rects) {
+    pulse()
     const walls = [...done.map(d => ({ b: d.b, g: gapOf(r, d.r) })), ...fixed.map(b => ({ b, g: GAP }))]
     const xs = [...new Set([0, ...walls.map(w => w.b[2] + w.g)])].filter(x => x >= 0).sort((a, b) => a - b)
     const ys = [...new Set([0, ...walls.map(w => w.b[3] + w.g)])].filter(y => y >= 0).sort((a, b) => a - b)
@@ -464,6 +469,7 @@ function linked<T extends { pins: number; order: number; nets: Set<string> }>(xs
     out: T[] = []
   const seen = new Set<string>()
   while (left.length) {
+    pulse()
     let bi = 0,
       bn = -1
     left.forEach((x, i) => {
@@ -491,6 +497,7 @@ function groupUnit(blocks: Block[], how: PlaceOrder, pad: boolean): Unit {
   const widths = [...new Set(Array.from({ length: 13 }, (_, i) => Math.round(most + (sum - most) * (i / 12) ** 2)))]
   let best: { offs: Pt[]; w: number; h: number; cost: number } | null = null
   for (const width of widths) {
+    pulse()
     const offs = pack(rects, width)
     const w = Math.max(...offs.map((o, i) => o[0] + rects[i].w)),
       h = Math.max(...offs.map((o, i) => o[1] + rects[i].h))
@@ -530,6 +537,7 @@ export function place(input: PlaceInput): PlaceResult {
     width = 0
   const papers: [string, number, number][] = typeof sheet === 'number' ? PAPERS.slice(sheet) : sheet ? [['custom', ...sheet]] : []
   for (const [name, w, h] of papers) {
+    pulse()
     const W = Math.floor(w / grid) - 2 * MARGIN - 2,
       H = Math.floor((h - TITLE) / grid) - 2 * MARGIN - 2
     const o = pack(list, W, fixed)
