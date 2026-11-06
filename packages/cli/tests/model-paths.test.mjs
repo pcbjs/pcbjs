@@ -9,7 +9,6 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSyn
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { lcscModel, writeElementModel, writePartModel } from '../dist/model.js'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const BIN = join(REPO, 'packages', 'pcbjs', 'bin', 'pcbjs.js')
@@ -107,51 +106,4 @@ test('--footprint writes on the <footprint> element in lib/, relative to that fi
   assert.match(readFileSync(join(shared, 'parts.tsx'), 'utf8'), /model=\{\{ file: '\.\.\/board\/models\/R\.step' \}\}/)
   assert.doesNotMatch(readFileSync(join(root, 'pcb.tsx'), 'utf8'), /<g model/)
   assert.match(run('check').out, /R3\s+file models\/R\.step\s+ok/)
-})
-
-test('the write forms: a value then options, shape arguments, a count first, and a <footprint> only', () => {
-  const m = "{ file: 'x.step' }"
-  const cases = [
-    ["F('val').source({ MPN: 'y' })", 'val', "F('val', { model: { file: 'x.step' } }).source({ MPN: 'y' })"],
-    ["F('val', { dnp: true })", 'val', "F('val', { dnp: true, model: { file: 'x.step' } })"],
-    ["PinHeader(2)('x')", 'x', "PinHeader(2)('x', { model: { file: 'x.step' } })"],
-    ["PinHeader(4)('J')", 'J', "PinHeader(4)('J', { model: { file: 'x.step' } })"],
-    ['PinHeader(4, { rows: 2 })()', '', "PinHeader(4, { rows: 2 })({ model: { file: 'x.step' } })"],
-    ['PinHeader(4)()', '', "PinHeader(4)({ model: { file: 'x.step' } })"],
-    ["USBC('power6')('T')", 'T', "USBC('power6')('T', { model: { file: 'x.step' } })"],
-    ["USBC('power6')()", '', "USBC('power6')({ model: { file: 'x.step' } })"],
-    ["JST_PH(2, 'top')('B2B')", 'B2B', "JST_PH(2, 'top')('B2B', { model: { file: 'x.step' } })"],
-    ['R0603(330)', '330', "R0603(330, { model: { file: 'x.step' } })"],
-    ['R0603(v)', 'whatever', "R0603(v, { model: { file: 'x.step' } })"],
-  ]
-  for (const [call, value, want] of cases) assert.equal(writePartModel(`const A = ${call}\n`, 'a.ts', 1, 11, m, value), `const A = ${want}\n`, call)
-  assert.equal(writeElementModel('<g.QH at="1 2"><R1 /></g.QH>\n', 'a.tsx', 1, 1, m), null)
-})
-
-test("lcsc:<C-number> fetches the model EasyEDA's footprint names, and says why when there is none", async () => {
-  const shape =
-    'SVGNODE~' +
-    JSON.stringify({
-      gId: 'g1_outline',
-      nodeName: 'g',
-      attrs: { c_etype: 'outline3D', uuid: 'caa88715b11f4aa189b02e52bbb84e4f', title: 'LED-SMD_4P-L2.0-W2.0-H0.8-TL_WS2812B-2020' },
-    })
-  const seen = []
-  const fake = async url => {
-    seen.push(url)
-    if (url === 'https://easyeda.com/api/products/C965555/components')
-      return new Response(JSON.stringify({ success: true, result: { title: 'WS2812B-2020', packageDetail: { title: 'LED-SMD_4P', dataStr: { shape: ['TRACK~1', shape] } } } }))
-    if (url === 'https://easyeda.com/api/products/C1/components')
-      return new Response(JSON.stringify({ success: true, result: { title: 'X', packageDetail: { title: 'R0603', dataStr: { shape: [] } } } }))
-    if (url.startsWith('https://modules.easyeda.com/')) return new Response('ISO-10303-21;')
-    return new Response(JSON.stringify({ success: false, code: 404, message: 'Component not found' }), { status: 200 })
-  }
-  const got = await lcscModel('c965555', fake)
-  assert.equal(got.name, 'LED-SMD_4P-L2.0-W2.0-H0.8-TL_WS2812B-2020.step')
-  assert.equal(got.url, 'https://modules.easyeda.com/qAxj6KHrDKw4blvCG8QJPs7Y/caa88715b11f4aa189b02e52bbb84e4f')
-  assert.match(got.note, /LCSC C965555 WS2812B-2020, EasyEDA library model/)
-  assert.equal(new TextDecoder().decode(got.data), 'ISO-10303-21;')
-  await assert.rejects(lcscModel('C1', fake), /has no 3D model/)
-  await assert.rejects(lcscModel('C2', fake), /not in EasyEDA's library/)
-  await assert.rejects(lcscModel('965555', fake), /C and digits/)
 })

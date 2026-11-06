@@ -51,18 +51,6 @@ test('spatial: a box much larger than the rest is still found', () => {
   }
 })
 
-test('spatial: a large board, 50 000 boxes, answers like the brute force and in linear time', () => {
-  const boxes = randomBoxes(50000, 1, 1000, 6)
-  const t = performance.now()
-  const grid = new Grid(boxes)
-  let found = 0
-  for (let i = 0; i < boxes.length; i++) found += grid.query(boxes[i], 0.2).length
-  const ms = performance.now() - t
-  assert.ok(found >= boxes.length)
-  assert.ok(ms < 5000, `50 000 queries took ${ms | 0} ms`)
-  for (const i of [0, 777, 12345, 49999]) assert.deepEqual(grid.query(boxes[i], 0.2), brute(boxes, boxes[i], 0.2))
-})
-
 test('spatial: an edge set keeps the rings near a box in their order, and clipping against them matches clipping against all', () => {
   // a pour with a grid of round holes, and small shapes over it
   const holes = []

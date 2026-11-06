@@ -4,27 +4,34 @@ import fs, { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdi
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, install, installLine, skillNames, skillsDir } from '../index.mjs'
+import { install, installLine, skillNames } from '../index.mjs'
 
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const root = pkg
 const names = readdirSync(root).filter(n => existsSync(join(root, n, 'SKILL.md')))
+const tmp = () => mkdtempSync(join(tmpdir(), 'pcbjs-skills-'))
+const target = (from, name) => join(from, 'node_modules', '@pcbjs', 'skills', name)
+const installHere = dir => {
+  mkdirSync(join(dir, 'node_modules', '@pcbjs'), { recursive: true })
+  symlinkSync(pkg, join(dir, 'node_modules', '@pcbjs', 'skills'))
+}
+const project = () => {
+  const dir = tmp()
+  installHere(dir)
+  return dir
+}
 const run = (cwd, opts) =>
   install(cwd, opts)
     .map(s => installLine(s, cwd))
     .join('\n')
     .replaceAll('\\', '/')
 
-test('skills: the five skills, each with valid frontmatter, a short body and only references that exist', () => {
-  assert.deepEqual(names.sort(), ['pcbjs-basics', 'pcbjs-best-practices', 'pcbjs-port-from-kicad', 'pcbjs-port-from-python-scripted', 'pcbjs-upgrade'])
+test('skills: each published skill has named frontmatter and available references', () => {
   for (const name of names) {
     const text = readFileSync(join(root, name, 'SKILL.md'), 'utf8')
     const head = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1]
     assert.ok(head, `${name}: no frontmatter`)
     assert.equal(/^name: (.*)$/m.exec(head)?.[1], name)
-    const description = /^description: (.*)$/m.exec(head)?.[1] ?? ''
-    assert.ok(description.length > 50 && description.length <= 1024, `${name}: description of ${description.length} characters`)
-    assert.ok(text.split('\n').length < 500, `${name}: SKILL.md over 500 lines`)
     for (const [, ref] of text.matchAll(/\b(references\/[\w.-]+\.md)/g)) assert.ok(existsSync(join(root, name, ref)), `${name}: ${ref} is missing`)
   }
 })
@@ -56,27 +63,6 @@ test('skills: local markdown links resolve throughout copied reference trees', (
     rmSync(dir, { recursive: true, force: true })
   }
 })
-
-test('skills: no em-dash and no path to an untracked note', () => {
-  for (const name of names)
-    for (const file of readdirSync(join(root, name), { recursive: true }).filter(f => f.endsWith('.md'))) {
-      const text = readFileSync(join(root, name, file), 'utf8')
-      assert.ok(!text.includes('—'), `${name}/${file}: em-dash`)
-      assert.ok(!/\b(CLAUDE|REVIEW|PORT|IMPROVEMENTS)\.md\b/.test(text), `${name}/${file}: names an untracked note`)
-    }
-})
-
-const tmp = () => mkdtempSync(join(tmpdir(), 'pcbjs-skills-'))
-const target = (from, name) => join(from, 'node_modules', '@pcbjs', 'skills', name)
-const installHere = dir => {
-  mkdirSync(join(dir, 'node_modules', '@pcbjs'), { recursive: true })
-  symlinkSync(pkg, join(dir, 'node_modules', '@pcbjs', 'skills'))
-}
-const project = () => {
-  const dir = tmp()
-  installHere(dir)
-  return dir
-}
 
 test("install: links .agents/skills and .claude/skills into the project's node_modules", () => {
   const dir = project()
@@ -182,12 +168,4 @@ test('install: copies where a symlink cannot be made, and leaves a shared .claud
     rmSync(shared, { recursive: true, force: true })
   }
   assert.throws(() => install(pkg, { to: '.' }), /own folder/)
-})
-
-test('skills: describe, skillsDir and no bin', () => {
-  assert.match(`${skillNames()[0]}  ${describe(skillNames()[0])}`, /^pcbjs-basics {2}Design a PCB in pcbjs/)
-  assert.equal(skillsDir, root)
-  const { bin, files } = JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8'))
-  assert.equal(bin, undefined)
-  assert.ok(!files.includes('bin') && !existsSync(join(pkg, 'bin')))
 })

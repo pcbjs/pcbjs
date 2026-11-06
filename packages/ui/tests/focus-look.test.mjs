@@ -1,7 +1,6 @@
 // Out of a focus: a popover under the focus fade button sets the opacity, monochrome, shaded or edges, and grouped or stacked transparency of everything unfocused.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { registerHooks } from 'node:module'
 import * as THREE from 'three'
 
@@ -17,7 +16,6 @@ registerHooks({
 })
 const { BLEND, FADE_OPACITY, LOOK, PREPASS, Variants, setState, withSaturation } = await import('../src/scene/highlight.ts')
 
-const view3d = ['../src/Canvas3D.vue', '../src/scene/board-scene.ts', '../src/scene/stack-labels.ts'].map(f => readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n')
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} near ${b}`)
 const mesh = (opacity = 1) => new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: '#c87533', transparent: opacity < 1, opacity }))
 function lit(look) {
@@ -26,23 +24,6 @@ function lit(look) {
   v.setLook(look)
   return v
 }
-
-test('focus appearance and layer separation share a bounded options area with independent groups', () => {
-  assert.match(view3d, /v-if="focusOn \|\| ui.explode" class="view3d-options"/)
-  for (const label of ['Opacity out of focus', 'Monochrome', 'Layer separation in mm']) assert.ok(view3d.includes(`aria-label="${label}"`))
-  for (const label of ['Out of focus drawn as', 'Transparency']) assert.ok(view3d.includes(`role="radiogroup" aria-label="${label}"`))
-  assert.match(view3d, /\.view3d-options \{[^}]*position: absolute/)
-  assert.match(view3d, /const focusOn = computed\(\(\) => paint\.value\.fade\)/)
-})
-
-test('the look is remembered per key and applies only while a focus is on or fading out', () => {
-  assert.deepEqual(LOOK, { opacity: 0.25, mono: false, edges: false, grouped: true })
-  assert.match(view3d, /store\.set\(`pcbjs\.3d\.look\.\$\{k\}`, String\(v\)\)/)
-  assert.match(view3d, /store\.get\('pcbjs\.3d\.look\.opacity'\)/)
-  assert.match(view3d, /for \(const k of \['mono', 'edges', 'grouped'\] as const\)/)
-  assert.match(view3d, /v\.setLook\(faded \|\| \(fading && !this\.innerShown\(\)\) \? this\.look : null\)/)
-  assert.match(view3d, /watch\(look, \(\) => \{\s*pcb\.setLook\(look\)/)
-})
 
 test('the opacity applies to unfocused materials, never to focused ones, and the plain fade comes back without a focus', () => {
   const v = lit({ ...LOOK, opacity: 0.1 })

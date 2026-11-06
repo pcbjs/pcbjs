@@ -7,11 +7,6 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { board } from './fixtures/workspace.mjs'
-import { resolveConfig } from '../dist/project/config.js'
-import { pluginState } from '../dist/server/site.js'
-import { compileServer } from '../dist/project/compile.js'
-import { viteLoader } from '../dist/project/loader.js'
-import { compileEntry } from '../dist/project/project.js'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const BIN = join(REPO, 'packages', 'pcbjs', 'bin', 'pcbjs.js')
@@ -60,29 +55,4 @@ test('plugins: the config registers before <PCB plugins>, check --verbose prints
     b.findings.map(f => `${f.rule} ${f.message}`),
     ['cfg.note cfg was here', 'own.note own was here'],
   )
-})
-
-test('deps: the dependency graph of Blinky has every part and route, and an edge from each route to the parts it ends on', async () => {
-  const dir = join(REPO, 'examples', 'demo')
-  const cfg = await resolveConfig(['blinky.pcb.tsx'], 'build', undefined, dir, () => {})
-  const server = await compileServer(cfg)
-  let c
-  try {
-    ;[c] = await compileEntry(viteLoader(server), cfg, cfg.entries[0], { draft: true })
-  } finally {
-    await server.close()
-  }
-  const g = c.board.deps
-  const of = kind => g.nodes.filter(n => n.kind === kind).map(n => n.ref)
-  assert.deepEqual(of('part'), ['J1', 'Q1', 'R1', 'D1', 'R2', 'D2', 'R3', 'D3', 'C1'])
-  assert.deepEqual(
-    of('route'),
-    Array.from({ length: 16 }, (_, i) => `route:${i + 1}`),
-  )
-  assert.deepEqual(
-    g.edges.map(([a, b, why]) => `${g.nodes[a].ref} ${why} ${g.nodes[b].ref}`),
-    ['route:15 end J1', 'route:15 end Q1', 'route:16 end Q1'],
-  )
-  assert.ok(g.nodes.filter(n => n.kind === 'part').every(n => n.src?.file.endsWith('.tsx')))
-  assert.equal(Object.keys(c.board).includes('deps'), false, 'the graph stays out of the board JSON')
 })

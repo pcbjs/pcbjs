@@ -122,7 +122,7 @@ Advanced. Each row is a file under `site/features/`, shown at https://pcbjs.dev/
 
 | Feature | Support | Evidence |
 | --- | --- | --- |
-| The compiler in a browser | supported | `packages/pcbjs/tests/browser-equality.test.mjs` |
+| The compiler in a browser | supported | `scripts/browser-equality.mjs` |
 | A cached compile stage graph | supported | `packages/pcbjs/tests/stage-cache.test.mjs` |
 | A first board in nine steps | supported | `packages/cli/tests/docs-topics.test.mjs` |
 | A project in one command | supported | `packages/cli/tests/create.test.mjs` |

@@ -1,6 +1,5 @@
 // The parts planes of the exploded view: the board outline and an inner grid at the ground grid's step, cut out where the outline is.
 import { test } from 'node:test'
-import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { gridSegs, outlineSegs } from '../src/scene/wire.ts'
 
@@ -43,13 +42,4 @@ test('a cutout splits the lines across it, so the hole stays open', () => {
 test('no rings or no step, no grid', () => {
   assert.deepEqual(gridSegs([], 1), [])
   assert.deepEqual(gridSegs([rect(0, 0, 10, 10)], 0), [])
-})
-
-test('four planes on a two-sided board: the parts and the silk of each side, the silk in its callout colour', () => {
-  const scene = readFileSync(new URL('../src/scene/board-scene.ts', import.meta.url), 'utf8')
-  const loop = /for \(const side of \['F', 'B'\] as const\) \{([\s\S]*?)\n    \}/.exec(/private calloutsOf[\s\S]*?\n  \}\n/.exec(scene)[0])[1]
-  const planes = [...loop.matchAll(/planes\.push\(\{ group: `([^`]+)`/g)].map(m => m[1])
-  assert.deepEqual(planes.sort(), ['${side}.SilkS', 'bodies:${side}'])
-  assert.equal(planes.length * 2, 4)
-  assert.match(loop, /const silk = railOf\(`\$\{side\}\.SilkS`[\s\S]*planes\.push\(\{ group: `\$\{side\}\.SilkS`, [^\n]*color: silk \}\)/)
 })

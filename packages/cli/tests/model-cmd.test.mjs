@@ -45,9 +45,10 @@ writeFileSync(join(root, 'models', 'bad.glb'), 'glTF but not really')
 mkdirSync(join(root, 'downloads'))
 copyFileSync(join(KICAD, 'PinHeader_1x04_P2.54mm_Vertical.step'), join(root, 'downloads', 'header.step'))
 after(() => rmSync(root, { recursive: true, force: true }))
+const env = { ...process.env, PCBJS_CACHE_DIR: join(root, 'model-cache'), NO_COLOR: '1' }
 
 const run = (...args) => {
-  const r = spawnSync(process.execPath, [BIN, 'model', ...args], { cwd: root, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } })
+  const r = spawnSync(process.execPath, [BIN, 'model', ...args], { cwd: root, encoding: 'utf8', env })
   return { code: r.status, out: r.stdout.replaceAll('\\', '/'), err: r.stderr }
 }
 
@@ -142,7 +143,7 @@ test('add downloads a URL, takes the name from the URL, and notes the URL as the
     const url = `http://127.0.0.1:${port}/dl/R_0603.step`
     const r = await new Promise(resolve => {
       // spawned, not spawnSync, so this process's server can answer the download
-      const child = spawn(process.execPath, [BIN, 'model', 'add', url, '--ref', 'R1', '--as', 'r0603'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } })
+      const child = spawn(process.execPath, [BIN, 'model', 'add', url, '--ref', 'R1', '--as', 'r0603'], { cwd: root, env })
       let out = '',
         err = ''
       child.stdout.on('data', d => {
@@ -160,7 +161,7 @@ test('add downloads a URL, takes the name from the URL, and notes the URL as the
     assert.match(r.out, /paste it into the options of R1 at pcb\.tsx:4/)
     assert.match(readFileSync(join(root, 'models', 'LICENSES.md'), 'utf8'), new RegExp(`- \`r0603\\.step\`: ${url.replace(/[.]/g, '\\.')}, added`))
     const miss = await new Promise(resolve => {
-      const child = spawn(process.execPath, [BIN, 'model', 'add', `http://127.0.0.1:${port}/nothing.step`], { cwd: root })
+      const child = spawn(process.execPath, [BIN, 'model', 'add', `http://127.0.0.1:${port}/nothing.step`], { cwd: root, env })
       let err = ''
       child.stderr.on('data', d => {
         err += d
@@ -189,9 +190,9 @@ test('add asks the server again: an unchanged file comes from the model cache, a
   })
   await new Promise(r => server.listen(0, '127.0.0.1', r))
   const url = `http://127.0.0.1:${server.address().port}/v/part.step`
-  const add = () =>
+  const add = (cacheDir = env.PCBJS_CACHE_DIR) =>
     new Promise(resolve => {
-      const child = spawn(process.execPath, [BIN, 'model', 'add', url, '--as', 'etag-part'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } })
+      const child = spawn(process.execPath, [BIN, 'model', 'add', url, '--as', 'etag-part'], { cwd: root, env: { ...env, PCBJS_CACHE_DIR: cacheDir } })
       let out = '',
         err = ''
       child.stdout.on('data', d => (out += d))
@@ -209,6 +210,11 @@ test('add asks the server again: an unchanged file comes from the model cache, a
     assert.doesNotMatch(changed.out, /from the model cache/)
     assert.match(changed.err, /exists with other content/)
     assert.deepEqual(asked, [null, '"v1"', '"v1"'])
+    body = readFileSync(join(KICAD, 'R_0603_1608Metric.step'))
+    etag = '"v1"'
+    const isolated = await add(join(root, 'fresh-model-cache'))
+    assert.equal(isolated.code, 0, isolated.err)
+    assert.deepEqual(asked, [null, '"v1"', '"v1"', null])
   } finally {
     server.close()
   }
@@ -296,7 +302,7 @@ test('add of a zipped download saves the licence file it ships and names it in L
   try {
     const url = `http://127.0.0.1:${port}/documents?path=%2Fmodel`
     const r = await new Promise(resolve => {
-      const child = spawn(process.execPath, [BIN, 'model', 'add', url], { cwd: root, env: { ...process.env, NO_COLOR: '1' } })
+      const child = spawn(process.execPath, [BIN, 'model', 'add', url], { cwd: root, env })
       let out = '',
         err = ''
       child.stdout.on('data', d => {

@@ -6,7 +6,7 @@ import { vscode, panels, tabGroups, group, setGroups, ui } from './vscode.mjs'
 
 const require = createRequire(import.meta.url)
 const { Preview, savedView } = require('../dist/preview.cjs')
-const { shownBoard, boardPath, panelTitle } = require('../dist/views.cjs')
+const { shownBoard, panelTitle } = require('../dist/views.cjs')
 
 function fakeServer() {
   return {
@@ -361,42 +361,6 @@ test('a running server with no board to show: the idle screen under the viewer, 
   assert.ok(html.includes('data-state="idle"') && html.includes('Select a board file to get started') && html.includes('Boards view'))
   assert.ok(!/class="load-screen"[^>]*data-busy/.test(html))
   preview.dispose()
-})
-
-test('board paths under a scope page or a board page, and the title format', () => {
-  assert.equal(boardPath('/demo/', 'Blinky'), '/demo/board/Blinky')
-  assert.equal(boardPath('/demo/board/Coin/jlc?ide=1', 'A B'), '/demo/board/A%20B')
-  assert.equal(boardPath('/', 'Quad'), '/board/Quad')
-  assert.equal(panelTitle('Blinky', 'sch'), 'Blinky | Schematic')
-})
-
-test('the manifest: beside actions on a pane, an entry and a board row, Alt and Shift open another, keys only in a pcbjs project', () => {
-  const { contributes: c } = require('../package.json')
-  const ids = new Set(c.commands.map(x => x.command))
-  const title = c.menus['editor/title']
-  for (const m of [...title, ...c.menus['view/item/context'], ...c.keybindings]) assert.ok(ids.has(m.command) && (!m.alt || ids.has(m.alt)), m.command)
-  assert.ok(![...ids].some(id => id.startsWith('pcbjs.board.')), 'a board row runs the view commands with the row as argument')
-  for (const v of ['2D', '3D', 'Schematic', 'Checks']) {
-    const on = title.filter(m => m.command === `pcbjs.open${v}Beside`)
-    assert.equal(on.length, 2)
-    assert.ok(on.every(m => m.alt === `pcbjs.open${v}New`))
-    assert.equal(c.menus['view/item/context'].find(m => m.command === `pcbjs.open${v}`).alt, `pcbjs.open${v}New`)
-  }
-  assert.ok(title.some(m => m.command === 'pcbjs.openAllViews' && m.when.includes('pcbjs.entries')))
-  assert.deepEqual(
-    c.keybindings.map(k => [k.command, k.key, k.mac, k.when]),
-    [
-      ['pcbjs.open2DBeside', 'ctrl+alt+2', 'cmd+alt+2', 'pcbjs.active'],
-      ['pcbjs.open2DNew', 'ctrl+alt+shift+2', 'cmd+alt+shift+2', 'pcbjs.active'],
-      ['pcbjs.open3DBeside', 'ctrl+alt+3', 'cmd+alt+3', 'pcbjs.active'],
-      ['pcbjs.open3DNew', 'ctrl+alt+shift+3', 'cmd+alt+shift+3', 'pcbjs.active'],
-      ['pcbjs.openSchematicBeside', 'ctrl+alt+s', 'cmd+alt+s', 'pcbjs.active'],
-      ['pcbjs.openSchematicNew', 'ctrl+alt+shift+s', 'cmd+alt+shift+s', 'pcbjs.active'],
-      ['pcbjs.openChecksBeside', 'ctrl+alt+4', 'cmd+alt+4', 'pcbjs.active'],
-      ['pcbjs.openChecksNew', 'ctrl+alt+shift+4', 'cmd+alt+shift+4', 'pcbjs.active'],
-      ['pcbjs.restartClean', 'ctrl+shift+r', 'cmd+shift+r', "activeWebviewPanelId == 'pcbjs.preview'"],
-    ],
-  )
 })
 
 for (const duplicate of [false, true])

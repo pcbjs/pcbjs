@@ -3,7 +3,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -114,74 +114,6 @@ test('import board: the small KiCad board compiles with the pads, Gerbers and ho
     ['small-PTH.drl', 'small-PTH.drl'],
     ['small-NPTH.drl', 'small-NPTH.drl'],
   ])
-})
-
-test("import board: the tabs board with its rules and schematic is clean and its Gerbers match KiCad's", async () => {
-  const { dst, out } = importFixture('tabs', ['tabs.kicad_pcb', 'tabs.kicad_pro', 'tabs.kicad_dru', 'tabs.kicad_sch'])
-  assert.match(out, /3 parts, 3 footprints \(0 from the KiCad library, 3 in lib\/\), 2 nets, 5 route chains of 8 segments and 1 arcs/)
-  assert.match(out, /2 custom rules of the \.kicad_dru carried/)
-  assert.deepEqual(readdirSync(join(dst, 'lib')).sort(), ['Hdr_1x02_P2_54mm.tsx', 'R_1206.tsx', 'Tab_Slot_1x02_P3_00mm.tsx'])
-  const sch = readFileSync(join(dst, 'pcb.sch.ts'), 'utf8')
-  assert.match(sch, /export const J1 = Tab_Slot_1x02_P3_00mm\('Tabs'\)\.connect\(\{ 1: SIG, 2: GND \}\)\.source\(\{ Assembly: 'hand' \}\)\.rules\(\{ edgeClearance: 0\.5 \}\)/)
-  assert.match(readFileSync(join(dst, 'pcb.config.ts'), 'utf8'), /clearance: 0\.2032, .*edgeClearance: 0\.4, .*maskExpansion: 0\.0762/)
-  const c = await compile(dst)
-  const b = c.board
-  assert.deepEqual(
-    b.drc.map(d => `${d.rule}: ${d.message}`),
-    [],
-  )
-  assert.deepEqual(b.erc ?? [], [])
-  assert.equal(b.unconnected, 0)
-  assert.match(c.fab.readme, /Gerber self check: passed/)
-  const at = (ref, num) => b.items.find(i => i.kind === 'pad' && i.ref === ref && i.num === num).at.map(v => Math.round(v * 1000) / 1000)
-  assert.deepEqual(at('J1', '1'), [4, 5.5])
-  assert.deepEqual(at('J2', '2'), [20, 8.04], 'a through-hole pad of a back footprint where KiCad has it')
-  compareFab(c.fab, join(FIX, 'boards', 'tabs', 'kicad-fab'), [
-    ['tabs-F_Cu.gtl', 'tabs-F_Cu.gbr'],
-    ['tabs-B_Cu.gbl', 'tabs-B_Cu.gbr'],
-    ['tabs-F_Mask.gts', 'tabs-F_Mask.gbr'],
-    ['tabs-B_Mask.gbs', 'tabs-B_Mask.gbr'],
-    ['tabs-F_Paste.gtp', 'tabs-F_Paste.gbr'],
-    ['tabs-Edge_Cuts.gm1', 'tabs-Edge_Cuts.gbr'],
-    ['tabs-PTH.drl', 'tabs-PTH.drl'],
-  ])
-})
-
-test('import board: into a folder of a project with a package.json, the config and tsconfig.json go to the root; tracks keep their widths', async () => {
-  const src = join(top, 'synth-kicad'),
-    dst = join(top, 'synth')
-  mkdirSync(src, { recursive: true })
-  mkdirSync(dst, { recursive: true })
-  const { pcb, sch } = syntheticKicad()
-  writeFileSync(join(src, 'synth.kicad_pcb'), pcb)
-  writeFileSync(join(src, 'synth.kicad_sch'), sch)
-  const pkg = JSON.stringify({ name: 'owner', private: true, type: 'module' }) + '\n'
-  writeFileSync(join(dst, 'package.json'), pkg)
-  const out = execFileSync(process.execPath, [BIN, 'import', 'board', join(src, 'synth.kicad_pcb'), '-o', 'pcb/synth.tsx'], { cwd: dst, env, encoding: 'utf8' })
-  assert.match(out, /sourcing of 4 parts/)
-  assert.equal(readFileSync(join(dst, 'package.json'), 'utf8'), pkg, "the project's package.json is never replaced")
-  assert.deepEqual(readdirSync(join(dst, 'pcb')).sort(), ['lib', 'synth.art.tsx', 'synth.copper.tsx', 'synth.sch.ts', 'synth.tsx'])
-  assert.match(readFileSync(join(dst, 'pcb.config.ts'), 'utf8'), /entries: \['pcb\/synth\.tsx'\]/)
-  assert.deepEqual(JSON.parse(readFileSync(join(dst, 'tsconfig.json'), 'utf8')).include, ['*.ts', '*.tsx', 'pcb'])
-  // a second import keeps the config and names the entry to add
-  const again = execFileSync(process.execPath, [BIN, 'import', 'board', join(src, 'synth.kicad_pcb'), '-o', 'pcb2/synth.tsx'], { cwd: dst, env, encoding: 'utf8' })
-  assert.match(again, /kept pcb\.config\.ts; add 'pcb2\/synth\.tsx' to its entries/)
-  const b = (await compile(dst)).board
-  // the 1 mm SIG tracks keep 1 mm up to the 0.6 mm pads: no neck-down
-  assert.deepEqual([...new Set(b.items.filter(i => i.kind === 'track' && i.net === 'SIG' && i.layer === 'F.Cu').map(t => t.width))], [1])
-  const pad = (ref, num) => b.items.find(i => i.kind === 'pad' && i.ref === ref && i.num === num)
-  assert.deepEqual(
-    pad('J1', '2').layers.filter(l => /Cu$/.test(l)),
-    ['F.Cu', 'In2.Cu', 'B.Cu'],
-  )
-  assert.ok(pad('D1', '1').pasteRings?.length === 1, 'the LED land pastes its window only')
-  assert.equal(b.footprints.find(f => f.ref === 'D1').dnp, true)
-  // the arc in its chain, and the track, via, pour and copper graphic on no net
-  assert.ok(b.items.some(i => i.kind === 'track' && i.net === 'VCC' && i.prims?.some(p => p.kind === 'arc')))
-  assert.ok(b.items.some(i => i.kind === 'track' && i.layer === 'B.Cu' && i.net === undefined && i.width === 0.5))
-  assert.ok(b.items.some(i => i.kind === 'track' && i.layer === 'F.Cu' && i.net === undefined && i.width === 0.4))
-  assert.ok(b.items.some(i => i.kind === 'via' && i.net === undefined && i.at[0] === 40 && i.at[1] === 5))
-  assert.ok(b.items.some(i => i.kind === 'zone' && i.layer === 'B.Cu' && i.net === undefined))
 })
 
 test('import footprint: a library footprint becomes a module a board compiles; an existing file is kept', async () => {

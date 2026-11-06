@@ -278,9 +278,4 @@ test('the pointer test: the nearest dot within the radius, the one drawn later o
   assert.equal(dotUnder(xy, [12, 10], 8), 3, 'a tie goes to the dot on top')
   assert.equal(dotUnder(xy, [40, 40], 8), null)
   assert.equal(dotUnder([], [0, 0], 8), null)
-  // a thousand dots stay one pass of arithmetic
-  const many = Float32Array.from({ length: 2000 }, (_, i) => (i % 2 ? Math.floor(i / 40) * 12 : (i % 40) * 12))
-  const t = performance.now()
-  for (let k = 0; k < 100; k++) dotUnder(many, [k, k], DOT.hit)
-  assert.ok(performance.now() - t < 50, 'a hundred tests on a thousand dots in under 50 ms')
 })

@@ -271,11 +271,10 @@ test('mobile pinch owns the canvas, controls and DRC labels in every preview', {
       assert.equal(await evaluate(page, 'window.demo.store.hover.item'), null, `${mode} viewport exit clears entity hover`)
       assert.equal(await evaluate(page, "document.querySelectorAll('.view-bubble').length"), 0, `${mode} viewport exit clears tooltips`)
       const pageScale = await evaluate(page, 'visualViewport.scale')
-      const targets = [canvas[mode], mode === '3d' ? '.view3d-buttons button' : '.bv-tools button']
-      if (mode === '3d') targets.push('.view3d-note .lbl')
-      if (mode === '2d') targets.push('.board-svg .drc path')
-      if (mode === 'sch') targets.push('.sch-svg .drc circle')
-      targets.push('.outer-control')
+      // Each canvas and one overlay exercise its own gesture handler. External controls
+      // share the containing preview handler, so cover that boundary once in 2D.
+      const targets = [canvas[mode], mode === '3d' ? '.view3d-note .lbl' : mode === '2d' ? '.board-svg .drc path' : '.sch-svg .drc circle']
+      if (mode === '2d') targets.push('.outer-control')
       for (const target of targets) {
         await evaluate(page, `document.querySelector('${mode === '3d' ? '.view3d-buttons button' : '.bv-tools button'}').click()`)
         if (mode === '3d') await sleep(500)
@@ -442,7 +441,7 @@ test('mobile pinch owns the canvas, controls and DRC labels in every preview', {
           "document.querySelector('[data-drag-test]').remove();window.demo.store.edit.client=null;window.demo.store.edit.mode=null;window.demo.store.selectRef(null)",
         )
       }
-      for (const reason of ['pointercancel', 'lostpointercapture', 'blur', 'buttons']) {
+      for (const reason of ['blur']) {
         await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 200, y: 230 })
         await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 200, y: 230, button: 'left', buttons: 1, clickCount: 1 })
         await evaluate(

@@ -25,11 +25,11 @@ Keep the candidate revision, package/extension build, platform, test command and
 | --- | --- |
 | Syntax and samples | `packages/pcbjs/tests/docs-samples.test.mjs`, `site-samples.test.mjs`; compiler/parser suites |
 | Canonical model and facets | `packages/pcbjs/tests/site-facets.test.mjs`; stage/cache and export suites |
-| Browser parity | `packages/pcbjs/tests/browser-equality.test.mjs`, `browser-compile.test.mjs` |
-| Transport and shared selection | `packages/cli/tests/protocol.test.mjs`, `selection-state.test.mjs`, `finding-focus.test.mjs` |
+| Browser parity | `scripts/browser-equality.mjs`, `packages/pcbjs/tests/browser-compile.test.mjs` |
+| Transport and shared selection | `packages/cli/tests/protocol.test.mjs`, `selection-transitions.test.mjs`, `finding-focus.test.mjs` |
 | Focus/camera transactions | `packages/ui/tests/focus-transaction.test.mjs`, `focus-transaction-browser.test.mjs` |
-| UI inventory | `scripts/ui-contracts.json`, `packages/ui/tests/ui-contracts.test.mjs` |
-| Editor inventory and lifetime | `scripts/vscode-contracts.json`, `packages/vscode/tests/contracts.test.mjs`, `lifecycle.test.mjs` |
+| UI interactions | `packages/ui/tests/focus-transaction-browser.test.mjs`, `checks-view.test.mjs`; interaction suites |
+| Editor inventory and lifetime | `scripts/vscode-contracts.json`, `packages/vscode/tests/panels.test.mjs`, `lifecycle.test.mjs` |
 | Documentation navigation and isolation | Site specification, guide, browser and local-report tests |
 
 Inventories record source/test traceability and remaining acceptance. A command appearing in an inventory does not mean that its end-to-end behavior passed. Consult [Testing](/docs/testing) and [Development](./architecture/development) for running checks, and keep unpublished candidate results in local review reports.

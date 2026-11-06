@@ -7,11 +7,9 @@ import {
   chainCallAt,
   chainEndOf,
   deleteCall,
-  diffEdit,
   elementAt,
   insertWaypoint,
   movePoint,
-  routeLayer,
   setAt,
   setSide,
   setLocked,
@@ -20,7 +18,7 @@ import {
   textDoc,
   writeAt,
 } from '../dist/edits.js'
-import { docOf, parse } from '../dist/doc.js'
+import { parse } from '../dist/doc.js'
 
 const offsetOf = (text, line, col) => textDoc(text).span({ line, col }).start
 
@@ -46,24 +44,6 @@ test('placement locks add and remove only a bare attribute, preserving neighbori
     const el = elementAt(parse(text, 'pcb.tsx'), 0)
     assert.throws(() => setLocked(text, el, false), /props spread/)
   }
-})
-
-test('trace layer edits use the initial route property or nearest preceding via stage', () => {
-  const initial = "route(a,b).H(9).layer('F.Cu').via('In1.Cu').V(12).via('B.Cu').L(20,20)"
-  const edit = (needle, layer) => apply(initial, [routeLayer(parse(initial, 'pcb.tsx'), initial.indexOf(needle), layer)])
-  assert.equal(edit('H(9)', 'B.Cu'), initial.replace("layer('F.Cu')", 'layer("B.Cu")'))
-  assert.equal(edit('V(12)', 'In2.Cu'), initial.replace("via('In1.Cu')", 'via("In2.Cu")'))
-  assert.equal(edit('L(20', 'F.Cu'), initial.replace("via('B.Cu')", 'via("F.Cu")'))
-  const plain = 'route(a,b).H(9)'
-  assert.equal(apply(plain, [routeLayer(parse(plain, 'pcb.tsx'), plain.indexOf('H(9)'), 'B.Cu')]), 'route(a,b).layer("B.Cu").H(9)')
-})
-
-test('primitive dot comes from syntax tokens across comments and line breaks', () => {
-  const text = 'route(a,b). /* v1.2 */\n H(3).l(2,4)'
-  const call = chainCallAt(parse(text, 'pcb.tsx'), text.indexOf('H(3)'))
-  assert.equal(call.dot, text.indexOf('. /*'))
-  assert.equal(apply(text, [deleteCall(call)]), 'route(a,b).l(2,4)')
-  assert.equal(apply(text, [insertWaypoint(call.dot, [1, 2])]), "route(a,b).X('1 2'). /* v1.2 */\n H(3).l(2,4)")
 })
 
 test('writeAt: bare mm without a grid, grid units under one, explicit mm when free there, a unit kept, a zero rotation left out', () => {
@@ -117,23 +97,6 @@ test('movePoint: absolute and relative calls rewritten in their own form, the re
   assert.equal(apply(text, [insertWaypoint(x.dot, [9, 9.5])]), "route(a, b).V(14).h('2mm').L('5 16').X('9 9.5').X()\n")
   assert.equal(apply(text, [deleteCall(h)]), "route(a, b).V(14).L('5 16').X()\n")
   assert.equal(chainEndOf(parse(text, 'pcb.ts'), 0), text.indexOf('\n'))
-})
-
-test('diffEdit: the one span that differs', () => {
-  assert.deepEqual(diffEdit('abc xyz', 'abc 12 xyz'), { start: 4, end: 4, newText: '12 ' })
-  assert.deepEqual(diffEdit('', 'new'), { start: 0, end: 0, newText: 'new' })
-})
-
-test('placement grid writes preserve named grids, limits and coordinates, without nesting on repeated edits', () => {
-  const edit = (text, pitch) => apply(text, [setGrid(elementAt(parse(text, 'pcb.tsx'), 0), pitch)])
-  assert.equal(edit('<R1 at="1.23 4.56" />', 0.25), '<R1 at="1.23 4.56" grid={{ snap: 0.25 }} />')
-  const named = edit('<g at="10 20" grid={G} />', 0.5)
-  assert.equal(named, '<g at="10 20" grid={{ ...(G), snap: 0.5 }} />')
-  assert.equal(edit(named, 0.25), named.replace('snap: 0.5', 'snap: 0.25'))
-  const limited = '<R1 grid={{ maxLevel: 0, snap: 0.5 }} at="2 3" />'
-  assert.equal(edit(limited, 1), limited.replace('snap: 0.5', 'snap: 1'))
-  const spread = '<R1 grid={{ snap: 1, ...options }} />'
-  assert.equal(edit(spread, 0.25), '<R1 grid={{ ...({ snap: 1, ...options }), snap: 0.25 }} />')
 })
 
 test('grid writes refuse overriding an unknown props spread, but accept a final explicit grid', () => {

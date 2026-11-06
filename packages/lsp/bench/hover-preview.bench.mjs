@@ -5,10 +5,10 @@ import assert from 'node:assert/strict'
 import { readFileSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { dev } from './fixtures/dev.mjs'
+import { dev } from '../tests/fixtures/dev.mjs'
 import { renderPreview } from '../dist/preview.js'
-import { makeProject } from './fixtures/project.mjs'
-import { initParams, posOf, sessionClient } from './fixtures/client.mjs'
+import { makeProject } from '../tests/fixtures/project.mjs'
+import { initParams, posOf, sessionClient } from '../tests/fixtures/client.mjs'
 import { shapeOf } from '@pcbjs/core/site-shapes'
 
 const EXAMPLES = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'examples')

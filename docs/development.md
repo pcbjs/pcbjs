@@ -9,7 +9,7 @@ Advanced. Rationale is in design.md; guidance for agents in skills.md and the RE
 npm install
 npm run build                       # tsc -b, every package in dependency order, then @pcbjs/ui's Vite library build
 npm run watch                       # tsc -b --watch
-npm test                            # every package's tests against dist: build first
+npm test                            # correctness and user interaction contracts; build first
 npm test -w @pcbjs/compile          # one package's tests
 npm run demo:dev                    # pcbjs dev with the four demo boards
 npm run demo:build                  # pcbjs build with the four demo boards
@@ -23,7 +23,15 @@ npm run docs:dev                    # the docs site with hot reload; docs:build 
 
 The CLI and tests use `dist`: rebuild after changing `src`. Outside `node_modules`, `pcbjs dev` keys the UI prebundle on the built `@pcbjs/ui` and `@pcbjs/core` content; rebuilding either triggers prebundling and reload. The root `tsconfig.json` references all packages; each references its dependencies. In `examples/demo`, `pcbjs check` checks four entries, Multi as three targets.
 
-Tests set `PCBJS_FREEZE=1`, design.md. The typing latency benchmark starts its session with `PCBJS_FREEZE=0` to measure shipped behavior; other correctness cases retain the mutation guards. Hover rendering and cancellation gaps measure thread CPU work, reporting elapsed time separately; end-to-end typing and cached hover checks use elapsed time. Cancellation measurements cap coarse CPU ticks at the elapsed time of the same interval: one thread cannot do more work than that interval permits. `scripts/test-watchdog.mjs` fails a test file still running after 10 minutes, `PCBJS_TEST_FILE_MS`. `scripts/stage-equality.mjs`, run by CI, compiles each example cold, warm, from route memos alone and past a corrupt object, failing unless all agree and warm hits every stage.
+Tests set `PCBJS_FREEZE=1` to catch mutation of compiled inputs. Each test owns its temporary files, caches, ports and processes. `scripts/test-watchdog.mjs` stops stuck test files after 10 minutes; this is a deadlock guard, not a performance budget.
+
+## Testing policy
+
+Tests guard generated PCB geometry, connectivity, routing, DRC/ERC, fabrication output and documented user interactions, including source edits, synchronized views and editor/session lifecycle. A new feature or optimization does not automatically need a test. Extend a representative existing case when it catches a meaningful failure; otherwise rely on existing coverage and a focused manual check.
+
+Prefer observable results at the lowest useful layer. Remove superseded cases, source-text assertions, private implementation snapshots and repeated end-to-end matrices. Reuse fixtures instead of starting another browser or session for the same contract. Performance profiling is opt-in and never a routine release gate. Millisecond limits and incidental cache or queue counts must not block a correctness release.
+
+Run affected checks during development and the full correctness suite once for a release candidate. Other runtimes and operating systems run a focused compatibility slice. The release workflow requires passing CI for the exact source commit, then checks the versioned installable artifacts without repeating source tests. See the tracked `AGENTS.md` for the policy contributors and agents must follow.
 
 `site/` renders these topics, one page each; `pages.yml` deploys `main` to https://pcbjs.dev and the last train's docs to https://pcbjs.dev/stable/, site/README.md has the rest.
 
@@ -106,19 +114,15 @@ examples/<name>/           the other boards; examples/README.md lists each with 
 
 ## Releases
 
-Changesets publishes linked trains: `@pcbjs/core` is a peer of its importers; `@pcbjs/pcbjs` pins all components. Versions record the last train and change only during releases. The 0.1.0 release plan exits beta and requests a minor bump for every component. Subsequent fixes use patch changesets; features and breaking changes before 1.0 use minor changesets. RELEASING.md covers workflows and owner setup. Published behaviour changes require `npm run changeset`.
+Changesets publishes linked trains: `@pcbjs/core` is a peer of its importers; `@pcbjs/pcbjs` pins all components. Versions record the last train and change only during releases. The stable line uses patch changesets for fixes; features and breaking changes before 1.0 use minor changesets. RELEASING.md covers workflows and owner setup. Published behaviour changes require `npm run changeset`.
 
 ## CI
 
-`ci.yml` runs on pushes to `main` and `beta2` and pull requests: Prettier; build and test on ubuntu with Node 22 and 24, Windows and macOS with 22; `scripts/check-examples.mjs`, failing unless each example's findings match examples/README.md; the pack smoke test; the benchmark.
+`ci.yml` runs each correctness package once on Node 22/Linux, in three independent groups: board output, session/language server, and user interactions. Node 24, Windows and macOS run a small compatibility slice covering paths, live updates, source mapping and editor lifecycle. Separate jobs check formatting/import boundaries, browser-versus-Node compiler output, example findings, fabrication and package installation.
 
-CLI, browser-heavy and language-server test files run serially so concurrent work does not distort latency checks. Set `PCBJS_DEBUG_SKETCH=1` to log draft preparation, module evaluation and geometry timings. Cancellation checkpoints also separate stage bodies from item identity generation.
+Every example is checked once. Cache recovery compares geometry, findings, drawings and fabrication output for representative demo and high-speed boards cold, warm and after corruption. Run `node scripts/stage-equality.mjs` explicitly for all examples when changing cache architecture.
 
-`scripts/bench.mjs` times `pcbjs check` per example cold, without `.pcbjs/cache` and the typecheck cache, and warm, and `keystroke-to-first-facet`, ms from a key in Blinky's text block to its facet through a session, failing over a budget of `bench.json` by 20 percent and half a second or 30 ms; budgets are per machine kind, `ci` when `CI` is set, `--write` records this machine's medians, uploaded by the bench job. `view` drives the viewer on usb3-hub in a headless Chromium, `packages/pcbjs/tests/view-perf.mjs`, also run by `view-perf.test.mjs`: the main thread's work per frame, timed from the first animation callback to the end of that frame rather than the preceding vsync timestamp, WebGL rasterising nothing, idle, pointer move, wheel and drag, plain and with the 50 or more findings a drop of U1 makes, and in frames the hover and a drag's first response, against the fixed `view.budgets`: idle and move 4 ms, a wheel step 8 ms in 2D and 4 ms in 3D, a drag frame 16 ms, one frame, 3D draws at rest and under U1's fade exactly, else failing over by a quarter plus the run's peak one-minute load per CPU above a half.
-
-The session compiles each project in a worker thread, `session/worker.ts`, which an edit cancels through shared memory in a few ms and which keeps the GLB, fab set and drawings, sending a board and site only when changed; a keystroke runs the keystroke tier, the full compile waits for the quiet period, session.md. `keystroke.test.mjs`, `worker-boundary.test.mjs` and compile's `cancel.test.mjs` hold their latencies.
-
-Compile workers keep the process alive while a request is pending, including a retry after a worker crash. Idle workers do not prevent shutdown. Windows session events use portable project-relative source names; file identity accepts native, Vite and TypeScript separators. Length-tuning searches check cancellation between batches of columns; route collision checks do so between items and track segments. Board snapshots and unit boundaries also check cancellation.
+Performance investigations are local and opt-in: `node scripts/bench.mjs` records compile and editing timings; its view mode profiles rendering. These are diagnostic tools, not release criteria. Use `PCBJS_DEBUG_SKETCH=1` when investigating draft preparation, evaluation or geometry latency. Deterministic cancellation and stale-write tests remain correctness checks.
 
 ## Support
 

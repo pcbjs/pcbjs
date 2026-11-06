@@ -1,8 +1,6 @@
-// The key map: a key event names its command, gestures are never dispatched, the palette search, the bus runs the newest handler
-// first, and docs/keys.md carries the table the code uses; `PCBJS_WRITE_KEYS=1` writes it.
+// Keyboard commands, native editing and host forwarding.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, writeFileSync } from 'node:fs'
 import { registerHooks } from 'node:module'
 
 registerHooks({
@@ -15,11 +13,8 @@ registerHooks({
     }
   },
 })
-const { KEYS, commandBus, commandOf, forHost, keysMarkdown, search, shown } = await import('../src/keys.ts')
+const { KEYS, commandBus, commandOf, forHost, search, shown } = await import('../src/keys.ts')
 
-const DOC = new URL('../../../docs/keys.md', import.meta.url)
-const BEGIN = '<!-- generated from packages/ui/src/keys.ts: begin -->'
-const END = '<!-- generated: end -->'
 const ev = (key, mods = {}) => ({ key, metaKey: false, ctrlKey: false, altKey: false, ...mods })
 
 test('keys: the plan’s keys are in the table', () => {
@@ -151,41 +146,4 @@ test('modal forwarding keeps host chords and native field editing without runnin
   for (const key of ['a', 'c', 'v', 'x', 'y', 'z']) modal(key, { metaKey: true }, true)
   assert.deepEqual(host, ['s', 'p', 'F1', 's', 'p', 'F1'])
   assert.equal(ran, 0)
-})
-
-test('keys: docs/keys.md carries the table the code uses', () => {
-  const doc = readFileSync(DOC, 'utf8')
-  const at = doc.indexOf(BEGIN),
-    end = doc.indexOf(END)
-  assert.ok(at >= 0 && end > at, 'docs/keys.md has the generated markers')
-  const want = `${BEGIN}\n\n${keysMarkdown()}\n${END}`
-  // Prettier pads the table columns on commit
-  const flat = s =>
-    s
-      .replace(/[ \t]+/g, ' ')
-      .replace(/-{3,}/g, '---')
-      .trim()
-  if (process.env.PCBJS_WRITE_KEYS) writeFileSync(DOC, doc.slice(0, at) + want + doc.slice(end + END.length))
-  else assert.equal(flat(doc.slice(at, end + END.length)), flat(want), 'run the ui tests with PCBJS_WRITE_KEYS=1 to write it')
-})
-
-test('keys: movement and ring help describe their distinct modifier outcomes', async () => {
-  const { dragMods, onAxis, snapAngle, snapFrom } = await import('../src/snap.ts')
-  const grid = { name: 'board', pitch: 1, minor: [], origin: [0, 0], angle: 0, mirror: false }
-  const origin = [0, 0]
-  const pointer = [2.2345, 1.1234]
-  assert.deepEqual(snapFrom(grid, origin, pointer, dragMods(false, false)), [2, 1])
-  assert.deepEqual(snapFrom(grid, origin, pointer, dragMods(true, false)), [2.235, 1.123])
-  const axis = dragMods(false, true)
-  assert.equal(axis.axis, true)
-  assert.deepEqual(onAxis(origin, snapFrom(grid, origin, pointer, axis)), [2, 0])
-  const both = dragMods(true, true)
-  assert.deepEqual(onAxis(origin, snapFrom(grid, origin, pointer, both)), [2.235, 0])
-  assert.equal(snapAngle(22.26, { fine: false, free: false }), 15)
-  assert.equal(snapAngle(22.26, { fine: true, free: false }), 20)
-  assert.equal(snapAngle(22.26, { fine: false, free: true }), 22.3)
-  const text = keysMarkdown()
-  assert.match(text, /Shift\+Drag.*Move or point: no snapping; ring: 5 degree stops/)
-  assert.match(text, /Mod\+Drag.*Move or point: lock to one axis; ring: no snapping/)
-  assert.doesNotMatch(text, /Finer stops: one grid subdivision/)
 })

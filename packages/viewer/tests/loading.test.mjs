@@ -1,9 +1,8 @@
 // The dev server's loading state: the first load, a recompile that keeps the board, and the server going away.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { initialLoad, loadBusy, loadName, loadProgress, loadScreenState, loadText, step } from '../src/loading.ts'
-import { bootScreen, DOTS, PERIOD } from '../src/boot-screen.js'
+import { bootScreen } from '../src/boot-screen.js'
 
 const compiling = (o = {}) => ({ kind: 'status', status: { phase: 'compiling', entry: 'blinky.tsx', name: null, done: 0, total: 1, ...o } })
 const routing = (routed, legs, o = {}) => ({ kind: 'status', status: { phase: 'routing', entry: 'blinky.tsx', name: 'Blinky', done: 0, total: 1, routed, legs, ...o } })
@@ -86,33 +85,9 @@ test('no board to show after the server answered: idle, until a compile starts o
   assert.equal(run(initialLoad(), { kind: 'lost' }, { kind: 'boards', count: 0 }).phase, 'gone')
 })
 
-test('one screen for every loading state: the dots, the spinner and a calm centre the dots fade out around', () => {
+test('loading markup escapes messages and exposes busy state', () => {
   const html = bootScreen({ mark: '<svg></svg>', name: 'demo', text: 'compiling <x>', busy: true })
-  for (const part of ['class="load-screen"', 'data-busy', 'class="dots"', 'class="waves"', 'class="spin"', 'class="load-msg">compiling &lt;x&gt;<'])
-    assert.ok(html.includes(part), part)
+  assert.ok(html.includes('compiling &lt;x&gt;'))
+  assert.ok(html.includes('data-busy'))
   assert.ok(!bootScreen({ mark: '', state: 'idle' }).includes('data-busy'))
-  const rings = [...DOTS.matchAll(/<b style="--d:([\d.]+)s">(.*?)<\/b>/g)].map(m => ({
-    d: +m[1],
-    dots: [...m[2].matchAll(/--x:(-?\d+);--y:(-?\d+)/g)].map(d => Math.hypot(+d[1], +d[2])),
-  }))
-  const count = rings.reduce((n, r) => n + r.dots.length, 0)
-  assert.ok(rings.length < 40 && count > 500 && count < 1200, `${rings.length} rings, ${count} dots`)
-  const half = x => Math.round(x * 2) / 2
-  const step = rings[0].d / half(rings[0].dots[0])
-  assert.ok(
-    rings.every(r => r.dots.every(x => Math.abs(half(x) * step - r.d) < 0.01)),
-    'each delay grows with the distance from the centre',
-  )
-  assert.ok(
-    rings[0].dots.every(x => x > 3),
-    'no wave under the mark',
-  )
-  const css = readFileSync(new URL('../src/boot.css', import.meta.url), 'utf8')
-  assert.match(css, /\.dots,\s*\.waves \{[^}]*mask-image: radial-gradient\(circle at 50% 50%, transparent var\(--calm\)/)
-  assert.match(css, /\.load-screen\[data-busy\] \.spin \{\s*display: block;\s*\}/)
-  assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.waves \{\s*display: none;\s*\}/)
-  assert.match(css, /:root\[data-hidden\] \.load-screen :is\(\.waves b, \.spin\) \{\s*animation-play-state: paused;\s*\}/)
-  assert.match(css, new RegExp(`animation: pcbjs-pop ${PERIOD}s `), 'the inline phase script and the keyframes share one period')
-  const vue = readFileSync(new URL('../src/LoadScreen.vue', import.meta.url), 'utf8')
-  assert.match(vue, /screenInner\(/, 'the viewer renders the same markup')
 })

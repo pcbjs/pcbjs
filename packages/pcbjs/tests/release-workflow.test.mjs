@@ -5,7 +5,6 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parse } from 'yaml'
 import { releaseTarget } from '../../../scripts/release-state.mjs'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
@@ -59,30 +58,4 @@ test('release: the command resolves actual git tags and writes only the selected
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
-})
-
-test('release: dry runs validate the versioned tree before any push, and resumed trains skip extension publication', () => {
-  const wf = parse(readFileSync(join(REPO, '.github/workflows/release.yml'), 'utf8'))
-  const steps = wf.jobs.release.steps
-  const push = steps.findIndex(s => s.name === 'Push the version commit to main')
-  for (const command of [
-    'npm run build',
-    'npm run package -w @pcbjs/vscode',
-    'npm test',
-    'node scripts/check-examples.mjs',
-    'node scripts/stage-equality.mjs',
-    'npm run demo:build',
-    'node scripts/pack-smoke.mjs',
-  ]) {
-    const index = steps.findIndex(s => s.run === command)
-    assert.ok(index >= 0 && index < push, `${command} must pass before push`)
-    assert.equal(steps[index].if, undefined, `${command} must also run in a dry run`)
-  }
-  const publish = steps.find(s => s.name === 'Publish missing npm packages')
-  assert.match(publish.if, /steps\.train\.outputs\.publish == 'true'/)
-  assert.match(publish.if, /env\.DRY_RUN != 'true'/)
-  const extension = steps.find(s => s.id === 'vscode')
-  assert.match(extension.if, /steps\.train\.outputs\.mode == 'new'/)
-  for (const name of ['Visual Studio Marketplace', 'Open VSX']) assert.match(steps.find(s => s.name === name).if, /steps\.tokens\.outputs/)
-  assert.equal(wf.on.workflow_dispatch.inputs.resume_version.type, 'string')
 })

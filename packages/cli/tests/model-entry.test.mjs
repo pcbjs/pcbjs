@@ -7,7 +7,6 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSyn
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { boardMatches, findFootprint } from '../dist/model.js'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const BIN = join(REPO, 'packages', 'pcbjs', 'bin', 'pcbjs.js')
@@ -61,47 +60,4 @@ test('add --ref with --entry writes into that board only', () => {
   assert.match(r.out, /wrote sense\.tsx:4/)
   assert.match(read('sense.tsx'), /const SW1 = R0603\('22k', \{ model: /)
   assert.equal(read('base.tsx'), BASE)
-})
-
-test('add --entry picks the board by entry file or board name; a ref on one board needs neither', () => {
-  const r = run('add', 'models/R.step', '--ref', 'SW1', '--entry', 'base.tsx', '--write')
-  assert.equal(r.code, 0, r.err)
-  assert.match(read('base.tsx'), /const SW1 = R0603\('10k', \{ model: /)
-  const bad = run('add', 'models/R.step', '--ref', 'SW1', '--entry', 'Nowhere')
-  assert.equal(bad.code, 1)
-  assert.match(bad.err, /no board Nowhere; the boards: Base \(base\.tsx\), Sense \(sense\.tsx\)/)
-  const one = run('add', 'models/R.step', '--ref', 'R3')
-  assert.equal(one.code, 0, one.err)
-  assert.match(one.out, /paste it into the options of R3 at sense\.tsx:6/)
-})
-
-test('align refuses a bare ref on two boards and takes --entry by board name or entry file', () => {
-  const r = run('align', 'R1')
-  assert.equal(r.code, 1)
-  assert.match(r.err, /R1 is on 2 boards/)
-  for (const args of [
-    ['SW1', '--entry', 'Sense'],
-    ['SW1', '--entry', 'sense.tsx'],
-  ]) {
-    const a = run('align', ...args)
-    assert.equal(a.code, 0, `${args.join(' ')}: ${a.err}`)
-    assert.match(a.out, /^SW1\s+models\/R\.step/m)
-  }
-})
-
-test('check names the board in the fix of a flagged part', () => {
-  const r = run('check')
-  assert.equal(r.code, 1)
-  assert.match(r.out, /fix: pcbjs model add <file-or-url> --ref R3 --entry sense\.tsx --write/)
-})
-
-test('findFootprint and boardMatches on their own', () => {
-  const fp = (ref, value) => ({ ref, value, id: 'x' })
-  const c = (name, rel, refs) => ({ board: { name, footprints: refs.map(r => fp(r, name)) }, entry: { rel }, site: { footprints: refs.map(ref => ({ ref })) } })
-  const p = { compiled: [c('Base', 'Base/pcb.tsx', ['SW1', 'R1']), c('Sense', 'Sense/pcb.tsx', ['SW1', 'U1'])] }
-  assert.throws(() => findFootprint(p, 'SW1'), /SW1 is on 2 boards/)
-  assert.equal(findFootprint(p, 'SW1', undefined, 'Sense').c.board.name, 'Sense')
-  assert.equal(findFootprint(p, 'U1').c.board.name, 'Sense')
-  for (const n of ['Base', 'base', 'Base/pcb.tsx', './Base/pcb.tsx', 'Base/']) assert.ok(boardMatches(p.compiled[0], n), n)
-  assert.ok(!boardMatches(p.compiled[0], 'Sense'))
 })

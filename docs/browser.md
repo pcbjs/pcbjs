@@ -75,4 +75,4 @@ compileInBrowser(board, { worker, want: ['layers', 'findings'], facet: f => cons
 - Chromium is `$PCBJS_CHROME`, else Chrome, Chromium or Edge in the usual places, else a Playwright download; one that exits at once gives way to the next. Without one the script prints a notice and exits 0.
 - It drives the browser over the DevTools protocol with Node's own WebSocket, no Playwright or Puppeteer.
 - The Node side runs from a folder named `node_modules`, so no route takes the test as its caller, as none takes the CLI.
-- `packages/pcbjs/tests/browser-equality.test.mjs` runs it in `npm test`, skipped with a notice without a Chromium or on Windows; CI's `browser` job runs it on Linux with Chromium set up.
+- CI's dedicated `browser` job runs this check once on Linux with Chromium set up. It is not repeated inside the package test suite.

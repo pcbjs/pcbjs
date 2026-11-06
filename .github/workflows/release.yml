@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: Version and validate the train, including installed tarballs, without pushing or publishing
+        description: Build and validate the versioned packages without publishing; source CI must already pass
         type: boolean
         default: false
       resume_version:
@@ -51,6 +51,18 @@ jobs:
         run: git checkout --detach "$TRAIN_REF"
         env:
           TRAIN_REF: ${{ steps.train.outputs.ref }}
+      - name: Require passing correctness checks for this source commit
+        run: |
+          source=$(git rev-parse HEAD)
+          if [ "$RELEASE_MODE" = resume ]; then source=$(git rev-parse HEAD^); fi
+          result=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --commit "$source" --limit 1 --json conclusion --jq '.[0].conclusion // "missing"')
+          if [ "$result" != success ]; then
+            echo "::error::Source CI for $source must pass before release (found $result)."
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_MODE: ${{ steps.train.outputs.mode }}
       # no npm cache and no registry-url: npm authenticates through OIDC, never a token
       - name: npm with trusted publishing
         run: npm install -g npm@11.21.1
@@ -69,20 +81,6 @@ jobs:
       - run: npm run build
       - name: Bundle the VS Code extension into @pcbjs/cli
         run: npm run package -w @pcbjs/vscode
-      - name: Fetch the vendor models and install the libraries the tests read
-        run: node scripts/check-examples.mjs --fetch
-      - run: npm test
-      - name: Check every example, cold
-        run: node scripts/check-examples.mjs
-      - name: Every example agrees cold, warm and through cache recovery
-        run: node scripts/stage-equality.mjs
-      - name: Build the demo fab sets
-        run: npm run demo:build
-      - name: Every demo fab set is orderable
-        run: |
-          files=$(find examples/demo/.pcbjs/fab -name README-fab.txt)
-          test -n "$files"
-          for f in $files; do grep -q 'STATUS: ORDERABLE' "$f" || { echo "$f is not orderable"; exit 1; }; done
       - name: Install and exercise the versioned tarballs
         run: node scripts/pack-smoke.mjs
       - name: Validation left the version commit unchanged

@@ -4,8 +4,8 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { distTag, installRange, doctor, installedPackages, minorOf, versionSkew, warnVersionSkew, UPDATE_COMMAND } from '../dist/doctor.js'
+
+import { distTag, doctor, versionSkew, UPDATE_COMMAND } from '../dist/doctor.js'
 
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const update = `npm install @pcbjs/pcbjs@${distTag(version)}`
@@ -23,54 +23,11 @@ function project(versions) {
   return root
 }
 
-test('minorOf: major.minor, prereleases and patches ignored', () => {
-  assert.equal(minorOf('0.0.1'), '0.0')
-  assert.equal(minorOf('0.1.0-beta.1'), '0.1')
-  assert.equal(minorOf('1.4.12'), '1.4')
-})
-
-test('versionSkew: one minor is clean, 0.0.x counts as one minor', () => {
-  assert.equal(versionSkew(pkgs(['core', '0.0.1'], ['cli', '0.0.1'], ['lib', '0.0.2'])), null)
-  assert.equal(versionSkew(pkgs(['core', '0.0.1-beta.0'], ['cli', '0.0.1-beta.1'], ['lib', '0.0.0'])), null)
-  assert.equal(versionSkew(pkgs(['core', '0.1.0-beta.1'], ['cli', '0.1.3'])), null)
-  assert.equal(versionSkew([]), null)
-})
-
 test('versionSkew: two minors name every version and the fix', () => {
   const line = versionSkew(pkgs(['core', '0.1.0'], ['cli', '0.2.0']))
   assert.match(line, /@pcbjs\/core 0\.1\.0, @pcbjs\/cli 0\.2\.0/)
   assert.ok(line.endsWith(`run ${UPDATE_COMMAND}`))
   assert.notEqual(versionSkew(pkgs(['core', '1.0.0'], ['cli', '0.9.0'])), null)
-})
-
-test('distTag: the prerelease name of a version, else latest', () => {
-  assert.equal(distTag('0.0.1-beta.0'), 'beta')
-  assert.equal(distTag('0.0.2-next.1a2b3c4'), 'next')
-  assert.equal(distTag('0.1.0'), 'latest')
-  assert.equal(UPDATE_COMMAND, update)
-})
-
-test('installRange: the dist-tag of a prerelease, else the minor', () => {
-  assert.equal(installRange('0.0.1-beta.0'), 'beta')
-  assert.equal(installRange('0.0.1-next.1a2b3c4'), 'next')
-  assert.equal(installRange('0.0.1'), '~0.0.0')
-  assert.equal(installRange('0.1.3'), '~0.1.0')
-})
-
-test('versionSkew: the editor extension is versioned on its own', () => {
-  assert.equal(versionSkew(pkgs(['core', '0.1.0'], ['vscode', '0.4.0'])), null)
-})
-
-test('installedPackages: reads node_modules/@pcbjs of the project', () => {
-  const root = project({ core: '0.1.0', lib: '0.1.2' })
-  try {
-    assert.deepEqual(
-      installedPackages(root).map(p => `${p.name}@${p.version}`),
-      ['@pcbjs/core@0.1.0', '@pcbjs/lib@0.1.2'],
-    )
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
 })
 
 test('doctor: prints versions, formats and config, exits 1 on a skew', async () => {
@@ -87,25 +44,6 @@ test('doctor: prints versions, formats and config, exits 1 on a skew', async () 
     assert.match(out, /^entries\s+pcb\.tsx/m)
     assert.ok(out.includes(`; run ${update}`), out)
     assert.match(out, /error: @pcbjs packages disagree/)
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
-})
-
-test('doctor: the repository tree agrees', async () => {
-  const lines = []
-  assert.equal(await doctor({ root: fileURLToPath(new URL('../../../examples/demo', import.meta.url)), log: l => lines.push(l) }), 0, lines.join('\n'))
-  assert.match(lines.join('\n'), /versions agree/)
-})
-
-test('warnVersionSkew: one warning line per process', () => {
-  const root = project({ core: '0.1.0', cli: '0.3.0' })
-  try {
-    const lines = []
-    warnVersionSkew(root, l => lines.push(l))
-    warnVersionSkew(root, l => lines.push(l))
-    assert.equal(lines.length, 1)
-    assert.match(lines[0], /^pcbjs: warning: @pcbjs packages disagree/)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

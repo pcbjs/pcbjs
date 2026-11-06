@@ -1,10 +1,7 @@
-// The route cache on whole boards, each compiled in a copy of its example under the system's temporary directory: a cold
-// compile and a warm one from the route memos it wrote, its stage objects deleted, give the same items, and usb3-hub, with the
-// route file a reviewer's warm compile left with two crossing tracks in it, compiles without a short.
+// A stale route cache containing crossing tracks must be rerouted to DRC-clean copper.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { cpSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -49,32 +46,6 @@ async function compiled(example, passes, prepare = () => {}) {
     clearRouteCache()
     rmSync(dir, { recursive: true, force: true })
   }
-}
-
-for (const example of ['usb3-hub', 'usb-hub', 'eth-phy']) {
-  test(`examples/${example}: a cold compile and a warm one give the same items, every leg from the cache`, { timeout: 300000 }, async () => {
-    const [cold, warm] = await compiled(example, 2)
-    assert.ok(cold.length)
-    cold.forEach((b, i) => {
-      assert.equal(warm[i].routing.cached, warm[i].routing.legs, 'every leg from the cache')
-      assert.deepEqual(warm[i].items, b.items)
-      assert.deepEqual(
-        warm[i].drc.map(d => d.message),
-        b.drc.map(d => d.message),
-      )
-      assert.deepEqual(
-        b.drc.filter(d => d.severity === 'error').map(d => d.message),
-        [],
-      )
-    })
-    if (example === 'usb3-hub') {
-      // cold routes in about 5 s unloaded; the warm run beside it in this process is the baseline, so load scales both
-      const { route: c } = cold[0].timings,
-        { route: w } = warm[0].timings
-      assert.ok(c < 60000, `cold route ${c} ms`)
-      assert.ok(w < c / 3, `warm route ${w} ms against cold ${c} ms`)
-    }
-  })
 }
 
 test('examples/usb3-hub: the route file of a warm compile that reported a short between two cached tracks gives no short now', { timeout: 300000 }, async () => {

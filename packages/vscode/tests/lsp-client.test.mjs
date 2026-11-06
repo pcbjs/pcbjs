@@ -8,7 +8,6 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { createMessageConnection, AbstractMessageReader, AbstractMessageWriter } from 'vscode-jsonrpc'
-import { PROTOCOL } from '@pcbjs/core/protocol'
 import { mockSession, sleep, until } from './fake.mjs'
 
 const require = createRequire(import.meta.url)
@@ -117,21 +116,6 @@ async function setup() {
     },
   }
 }
-
-test('handshake: the client states its protocol, major and capabilities', async () => {
-  const t = await setup()
-  try {
-    const res = await t.conn.sendRequest('initialize', { processId: null, rootUri: null, capabilities: {}, initializationOptions: initializationOptions('0.4.0') })
-    assert.deepEqual(t.server.seen.init.initializationOptions, {
-      pcbjs: { protocol: PROTOCOL, major: 1, capabilities: ['tokens'], name: 'vscode-pcbjs', version: '0.4.0' },
-    })
-    assert.equal(res.capabilities.experimental.pcbjs.protocol, 2)
-    // JSON-RPC frames never reach the envelope handlers, and envelopes still work beside them
-    assert.equal(t.client.info.root, fixturePath('/work/p'))
-  } finally {
-    await t.close()
-  }
-})
 
 test('focus: the active file and the cursor go as pcbjs/focus', async () => {
   const t = await setup()

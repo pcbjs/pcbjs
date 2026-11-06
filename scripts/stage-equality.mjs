@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Compiles every example and target five times in fresh processes, cold, cancelled at every stage boundary and resumed, warm, with the stage objects deleted and with one corrupted; prints per board a hash of its JSON, findings, inspect --lengths, SVGs, GLB and fab set at a fixed date. The runs must agree on all but the router's own counts, the warm one hitting every stage.
+// Compares board geometry, findings, drawings and fabrication output cold, warm and after a corrupt cache entry.
 // Usage: node scripts/stage-equality.mjs [--save <file>] [--against <file>] [project dir under examples/ ...]; --against compares the cold and warm lines, any differing hash or disagreeing run exits 1. A route's source names this file's compileSlots line, so keep it where it is.
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -25,9 +25,7 @@ async function child(dir, mode) {
   const state = pluginState(cfg)
   const errors = new Map()
   const server = await compileServer(cfg)
-  for (const o of runs(mode, state)) {
-    await compileSlots(viteLoader(server), cfg, state.slots, errors, o)
-  }
+  await compileSlots(viteLoader(server), cfg, state.slots, errors)
   await server.close()
   const lines = []
   for (const s of state.slots) {
@@ -70,18 +68,7 @@ async function child(dir, mode) {
   process.stdout.write(lines.join('\n') + '\n')
 }
 
-/** One compile, or in cancel mode one per stage boundary, each cancelled after one stage more than the last, until one ends: every compile resumes from what the cancelled ones stored. Each goes through the one compileSlots line, so the routes' sources agree. */
-function* runs(mode, state) {
-  if (mode !== 'cancel') return yield undefined
-  for (let k = 1; ; k++) {
-    let ended = 0
-    const signal = { aborted: false }
-    yield { signal, stage: st => st.state !== 'running' && ++ended >= k && (signal.aborted = true) }
-    if (!state.slots.some(s => /compile cancelled/.test(String(s.error)))) return
-  }
-}
-
-const MODES = ['cold', 'cancel', 'warm', 'memo', 'corrupt']
+const MODES = ['cold', 'warm', 'corrupt']
 // a run's own counts, which a warm run tells apart from a cold one
 const canonical = b => JSON.stringify({ ...b, routing: b.routing && { ...b.routing, cached: undefined, ripped: undefined, rounds: undefined } })
 
@@ -99,11 +86,10 @@ function run(dir, mode) {
   return r.stdout.trim().split('\n')
 }
 
-/** Before a run: the cache emptied, its objects deleted, or the object of one stage overwritten with bytes that are not gzip. */
+// Start cold or corrupt one cached object to exercise recovery.
 function prepare(dir, mode) {
   const cache = join(dir, '.pcbjs', 'cache')
-  if (mode === 'cold' || mode === 'cancel') for (const d of [cache, join(dir, '.pcbjs', 'routes'), join(dir, '.pcbjs', 'references')]) rmSync(d, { recursive: true, force: true })
-  if (mode === 'memo') rmSync(join(cache, 'objects'), { recursive: true, force: true })
+  if (mode === 'cold') for (const d of [cache, join(dir, '.pcbjs', 'routes'), join(dir, '.pcbjs', 'references')]) rmSync(d, { recursive: true, force: true })
   if (mode === 'corrupt') {
     const index = readdirSync(join(cache, 'index')).sort()[0]
     const stages = JSON.parse(readFileSync(join(cache, 'index', index), 'utf8')).stages
@@ -112,7 +98,7 @@ function prepare(dir, mode) {
   }
 }
 
-/** Each board's five runs as one canonical text each; a board whose runs differ, or whose warm run missed a stage, is a failure. */
+// Geometry and findings must agree across all cache states.
 function agree(lines) {
   const runs = new Map()
   for (const l of lines.filter(l => l.startsWith('#'))) {

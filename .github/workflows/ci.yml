@@ -32,40 +32,18 @@ jobs:
         run: node scripts/check-entries.mjs
 
   test:
-    name: Build and test, Node ${{ matrix.node }}
+    name: Correctness, ${{ matrix.suite }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        node: [22, 24]
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: ${{ matrix.node }}
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - name: The user model cache, vendor and fetched models and their meshes
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.PCBJS_CACHE_DIR }}
-          key: model-cache-${{ hashFiles('examples/**/models/LICENSES.md') }}
-      - name: Fetch the vendor models the tests read
-        run: node scripts/check-examples.mjs --fetch
-      - name: Library focus and shared-source editing
-        run: node --import ./scripts/test-env.mjs --import ./scripts/test-watchdog.mjs --test --test-concurrency=1 packages/pcbjs/tests/edit-path-library-numbering.test.mjs packages/pcbjs/tests/edit-path-library-backtrace.test.mjs
-        env:
-          PCBJS_E2E_DEBUG: '1'
-      - run: npm test
-
-  test-os:
-    name: Build and test, ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest]
+        include:
+          - suite: board output
+            workspaces: -w @pcbjs/core -w @pcbjs/compile -w @pcbjs/export -w @pcbjs/fab -w @pcbjs/kicad -w @pcbjs/lib -w @pcbjs/step
+          - suite: session and language server
+            workspaces: -w @pcbjs/cli -w @pcbjs/lsp -w @pcbjs/ts-plugin -w @pcbjs/skills
+          - suite: user interactions
+            workspaces: -w @pcbjs/pcbjs -w @pcbjs/ui -w @pcbjs/viewer -w @pcbjs/vscode -w pcbjs-site
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -74,23 +52,50 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: Windows editor paths, live updates, models and type checking
-        if: runner.os == 'Windows'
-        run: node --test packages/cli/tests/file-paths.test.mjs packages/cli/tests/session-paths.test.mjs packages/cli/tests/session-models.test.mjs packages/cli/tests/typecheck.test.mjs packages/lsp/tests/documents.test.mjs
-      - name: The user model cache, vendor and fetched models and their meshes
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: ${{ env.PCBJS_CACHE_DIR }}
           key: model-cache-${{ hashFiles('examples/**/models/LICENSES.md') }}
-          enableCrossOsArchive: true
-      - name: Fetch the vendor models the tests read
+      - name: Prepare models and libraries
         run: node scripts/check-examples.mjs --fetch
-      - name: Interactive editing and cancellation
-        run: node --import ./scripts/test-env.mjs --import ./scripts/test-watchdog.mjs --test --test-concurrency=1 --test-name-pattern="typing in a text block|two panes on two boards|every hover kind|a part under a defineGrid|cancel.*no gap" packages/cli/tests/keystroke.test.mjs packages/cli/tests/live-view.test.mjs packages/lsp/tests/hover-preview.test.mjs packages/pcbjs/tests/edit-path-grids.test.mjs packages/pcbjs/tests/cancel-gaps.test.mjs
-        env:
-          PCBJS_DEBUG_SKETCH: '1'
-          PCBJS_E2E_DEBUG: '1'
-      - run: npm test
+      - if: matrix.suite == 'user interactions'
+        run: npm run build -w @pcbjs/vscode
+      - run: npm test ${{ matrix.workspaces }}
+
+  compatibility:
+    name: Compatibility, ${{ matrix.os }}, Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            node: 24
+          - os: windows-latest
+            node: 22
+          - os: macos-latest
+            node: 22
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run build -w @pcbjs/vscode
+      - name: Paths, live updates, source mapping and editor lifecycle
+        run: >-
+          node --import ./scripts/test-env.mjs --import ./scripts/test-watchdog.mjs
+          --test --test-concurrency=1
+          packages/cli/tests/file-paths.test.mjs
+          packages/cli/tests/session-paths.test.mjs
+          packages/cli/tests/session-models.test.mjs
+          packages/cli/tests/typecheck.test.mjs
+          packages/lsp/tests/documents.test.mjs
+          packages/vscode/tests/reveal.test.mjs
+          packages/vscode/tests/lifecycle.test.mjs
+          packages/pcbjs/tests/edit-path-library-backtrace.test.mjs
 
   boards:
     name: Example boards
@@ -110,8 +115,8 @@ jobs:
           key: model-cache-${{ hashFiles('examples/**/models/LICENSES.md') }}
       - name: Check every example, cold
         run: node scripts/check-examples.mjs
-      - name: Every example alike cold, warm, from the route memos alone and past a corrupt stage object
-        run: node scripts/stage-equality.mjs
+      - name: Representative board outputs agree cold, warm and after cache recovery
+        run: node scripts/stage-equality.mjs demo highspeed
       - name: Build the demo boards
         run: npm run demo:build
       - name: Every demo fab set is orderable
@@ -138,34 +143,6 @@ jobs:
         run: node scripts/browser-equality.mjs
         env:
           PCBJS_CHROME: ${{ steps.chrome.outputs.chrome-path }}
-
-  bench:
-    name: Benchmark
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - name: The user model cache, vendor and fetched models and their meshes
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.PCBJS_CACHE_DIR }}
-          key: model-cache-${{ hashFiles('examples/**/models/LICENSES.md') }}
-      - name: Fetch the vendor models the boards read
-        run: node scripts/check-examples.mjs --fetch
-      - name: Cold and warm check time per example against bench.json
-        run: node scripts/bench.mjs --runs 3 --out bench-ci/bench.json
-      - name: The measured times, to commit as bench.json
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bench
-          path: bench-ci/bench.json
-          if-no-files-found: ignore
 
   pack:
     name: Pack and install

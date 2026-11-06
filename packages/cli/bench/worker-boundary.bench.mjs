@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
-import { boundaryBench } from './worker-boundary.mjs'
+import { boundaryBench } from '../tests/worker-boundary.mjs'
 
 const ROOT = join(import.meta.dirname, '..', '..', '..', 'examples', 'usb3-hub')
 const MB = 1024 * 1024

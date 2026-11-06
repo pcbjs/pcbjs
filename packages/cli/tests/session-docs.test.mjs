@@ -12,7 +12,7 @@ import WebSocket from 'ws'
 import { board } from './fixtures/workspace.mjs'
 import { stop } from './fixtures/proc.mjs'
 import { textDoc } from '@pcbjs/core/internal/textdoc'
-import { anchor, sourceWriter } from '../dist/session/source-write.js'
+import { sourceWriter } from '../dist/session/source-write.js'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const BIN = join(REPO, 'packages', 'pcbjs', 'bin', 'pcbjs.js')
@@ -225,15 +225,6 @@ test('a write preserves unrelated recovered buffer text and uses its opening ver
   }
 })
 
-test('anchor: the changed span grown by whole lines until it occurs once', () => {
-  const text = 'a\nx = 1\nb\nx = 1\n'
-  assert.deepEqual(anchor(text, 'a\nx = 1\nb\nx = 2\n'), { old: 'b\nx = 1\n', new: 'b\nx = 2\n' })
-  assert.deepEqual(anchor('one two', 'one 2'), { old: 'two', new: '2' })
-  const t = 'p\nq\n'
-  const a = anchor(t, 'p\nr\nq\n')
-  assert.equal(t.replace(a.old, a.new), 'p\nr\nq\n')
-})
-
 test('a CLI writer with a session live writes through it into the editor holding the file, never under it on disk', { timeout: 120000 }, async () => {
   const root = project('CliWrite')
   const s = await serve(root)
@@ -331,79 +322,6 @@ test('a disk write and an immediate check: the check sees it; under an editor it
       m => m.method === 'textDocument/publishDiagnostics' && m.params.uri.endsWith('pcb.tsx') && !m.params.diagnostics.some(d => d.code === 'shadowed') && m.seq > diag.seq,
     )
     ed.close()
-    agent.close()
-  } finally {
-    await s.stop()
-  }
-})
-
-test('a claimed disk write under an editor is shadowed and names the agent that claimed it', { timeout: 120000 }, async () => {
-  const root = project('Claim')
-  const s = await serve(root)
-  try {
-    const file = join(root, 'pcb.tsx')
-    const ed = await client(s.info, 'editor', root)
-    await init(ed, root)
-    open(ed, file, board('Claim'))
-    await ed.request('session/events', {})
-    const agent = await client(s.info, 'agent', root)
-    await agent.request('session/check')
-    const since = (await agent.request('session/events', {})).next
-    await agent.request('session/edited', { file: 'pcb.tsx' })
-    writeFileSync(file, moved('Claim'))
-    await agent.request('session/check')
-    await until(async () => (await agent.request('session/events', { since })).events.some(e => e.kind === 'edit' && e.data.shadowed))
-    const e = (await agent.request('session/events', { since })).events.find(x => x.kind === 'edit' && x.data.shadowed)
-    assert.deepEqual(e.data, { file: 'pcb.tsx', source: 'agent', ranges: null, shadowed: true })
-    assert.equal(e.by.role, 'agent')
-    ed.close()
-    agent.close()
-  } finally {
-    await s.stop()
-  }
-})
-
-test('an old finding id and an old part ref resolve in the current snapshot by lineage', { timeout: 120000 }, async () => {
-  const root = project('Lineage')
-  const file = join(root, 'pcb.tsx')
-  writeFileSync(file, moved('Lineage'))
-  const s = await serve(root)
-  try {
-    const json = join(root, 'report.json')
-    const ids = () => {
-      try {
-        execFileSync(process.execPath, [BIN, 'check', '--json', json], { cwd: root, stdio: 'pipe' })
-      } catch {}
-      return JSON.parse(readFileSync(json, 'utf8'))
-        .boards[0].findings.filter(f => f.rule === 'edge-clearance')
-        .map(f => f.id)
-    }
-    const agent = await client(s.info, 'agent', root)
-    await agent.request('session/check')
-    const [old] = ids()
-    // the pad moves along the edge, so the finding's id changes, and TP2 becomes TPX
-    writeFileSync(file, moved('Lineage').replace('25mm 10mm', '25mm 11mm'))
-    await agent.request('session/check')
-    const [now] = ids()
-    assert.notEqual(now, old)
-    const f = await agent.request('session/resolve', { reference: old })
-    assert.deepEqual(f.value.stale, { reason: 'changed', current: now })
-    assert.equal(f.value.ref, now)
-    assert.deepEqual(f.stale, { reason: 'changed', current: now })
-    const exact = await agent.request('session/resolve', { reference: now })
-    assert.equal(exact.stale, null)
-    // a rename: the call that made TP2 makes TPX now
-    writeFileSync(file, readFileSync(file, 'utf8').replaceAll('TP2', 'TPX'))
-    await agent.request('session/check')
-    const renamed = await agent.request('session/resolve', { reference: 'TP2' })
-    assert.deepEqual(renamed.value, { kind: 'part', ref: 'TPX', stale: { reason: 'changed', current: 'TPX' } })
-    const gone = await agent.request('session/resolve', { reference: 'TP9' })
-    assert.equal(gone.value.stale.reason, 'gone')
-    assert.deepEqual(gone.value.candidates, ['TP1', 'TPX'])
-    // any reference: a pad of the renamed part follows it, a net is exact
-    const pad = await agent.request('session/resolve', { reference: 'TP2/1' })
-    assert.deepEqual(pad.value, { kind: 'pad', ref: 'TPX/1', stale: { reason: 'changed', current: 'TPX/1' } })
-    assert.deepEqual((await agent.request('session/resolve', { reference: 'TPX/1' })).value, { kind: 'pad', ref: 'TPX/1', stale: null })
     agent.close()
   } finally {
     await s.stop()

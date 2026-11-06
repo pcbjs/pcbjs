@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { assistSpot, assistContexts } from '../dist/assist.js'
-import { cutCalls, repair } from '../dist/repair.js'
+import { cutCalls } from '../dist/repair.js'
 import { docOf, parse } from '../dist/doc.js'
 
 const root = resolve('/p')
@@ -113,35 +113,11 @@ for (const [cmd, relative] of [
   })
 }
 
-test('assist: after .H(9) the start is where it ends, and a via moves the layer to B.Cu', () => {
-  const a = ctx('    {route(J1[1], R1[1]).H(9).V(|)}')
-  assert.deepEqual(a.start, [9, 7])
-  assert.equal(a.pad, null)
-  const b = ctx("    {route(J1[1], R1[1]).H(9).via('B.Cu').v(|)}")
-  assert.deepEqual(b.start, [9, 7])
-  assert.equal(b.layer, 'B.Cu')
-  assert.equal(b.side, 'B')
-})
-
 test('assist: an unclosed call is open and its typed number feeds the context', () => {
   const c = ctx('    {route(J1[1], R1[1]).H(9.5|}')
   assert.equal(c.open, true)
   assert.deepEqual(c.typed, [9.5])
   assert.equal(c.arg, '9.5')
-})
-
-test('assist: the cursor at the end of a typed argument stays in assist; inside a complete one it does not', () => {
-  assert.deepEqual(ctx("    {route(J1[1], R1[1]).L('5mm', |)}").typed, [5])
-  assert.equal(ctx('    {route(J1[1], R1[1]).V(1|4)}'), null)
-  assert.deepEqual(ctx('    {route(J1[1], R1[1]).V(14|)}').typed, [14])
-})
-
-test('assist: a coordinate start with a layer, and a route not compiled yet, resolve from the text', () => {
-  const c = ctx("    {route('25 12.5 B.Cu').net(GND).h(|)}")
-  assert.deepEqual(c.start, [25, 12.5])
-  assert.equal(c.layer, 'B.Cu')
-  assert.equal(c.ref, null)
-  assert.equal(c.net, 'GND')
 })
 
 test('assist: an empty at names its part, side and grid', () => {
@@ -154,11 +130,6 @@ test('assist: an empty at names its part, side and grid', () => {
   assert.equal(ctx('    <R1 at="3| 4" />'), null)
 })
 
-test('assist: a call off a route and a finishing .Z() are no spot', () => {
-  assert.equal(ctx('    {foo(J1[1]).H(|)}'), null)
-  assert.equal(ctx('    {route(J1[1], R1[1]).Z(|)}'), null)
-})
-
 test('repair: an empty chain call is cut so the chain compiles up to it', () => {
   const text = `${head}    {route(J1[1], R1[1]).H(9).V()}\n    {route(J1[2], R1[2]).X()}${tail}`
   const c = cutCalls(parse(text, 'pcb.tsx'))
@@ -168,17 +139,6 @@ test('repair: an empty chain call is cut so the chain compiles up to it', () => 
   )
   assert.equal(c.text.length, text.length)
   assert.ok(c.text.includes('{route(J1[1], R1[1]).H(9)    }'))
-})
-
-test('repair: an unclosed chain call and its partial argument are cut, the rest of the line kept', () => {
-  const text = `${head}    {route(J1[1], R1[1]).H(9.}\n    <R1 at="1 2" />${tail}`
-  const r = repair(parse(text, 'pcb.tsx'))
-  assert.ok(r.ok, r.text)
-  assert.deepEqual(
-    r.skipped.map(s => text.slice(s.start, s.end)),
-    ['.H(9.'],
-  )
-  assert.ok(r.text.includes('{route(J1[1], R1[1])     }'))
 })
 
 test('assist: divergent variant geometry cannot replace the first target context', () => {

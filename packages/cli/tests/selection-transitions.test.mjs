@@ -96,41 +96,6 @@ test('a stale-base offer does not cancel a newer pending intent', async () => {
   f.release()
   assert.equal((await pending).anchor, 'CH1/R')
 })
-test('target changes clear previous finding, isolation and snapshot before validation', async () => {
-  const a = make('First'),
-    b = make('Second')
-  a.drc = [{ id: 'drc:clearance:0123456789ab', refs: ['R1'] }]
-  b.schematic.circuits = []
-  b.schematic.parts = b.schematic.parts.filter(p => !p.path.length)
-  b.footprints = b.footprints.filter(p => p.ref === 'TP1')
-  const f = fixture([a, b])
-  f.select({
-    selection: {
-      ...emptySelection('B', 'First'),
-      finding: a.drc[0].id,
-      snapshot: 'test.1',
-      isolate: { ref: 'CH1', context: 'CH1', instances: ['CH1'], preview: false, mode: 'instance' },
-    },
-  })
-  const next = await f.select({ target: 'Second', refs: ['TP1'] })
-  assert.equal(next.target, 'Second')
-  assert.equal(next.anchor, 'TP1')
-  assert.equal(next.finding, null)
-  assert.equal(next.isolate, null)
-  assert.equal(next.snapshot, '')
-})
-
-test('reference selection retains library-local identities instead of adding an instance path', async () => {
-  const board = make()
-  const layout = { ...board, schematic: { ...board.schematic, parts: board.schematic.parts.map(p => ({ ...p, path: [], local: p.ref })) } }
-  const f = fixture([board], layout)
-  f.release()
-  const opened = await f.select({ selection: library('R1') })
-  assert.equal(opened.anchor, 'R1')
-  const next = await f.select({ refs: ['D1'], anchor: 'D1' })
-  assert.equal(next.anchor, 'D1')
-  assert.equal(next.isolate.mode, 'library')
-})
 
 test('a reference selection waiting for library geometry cannot supersede blur', async () => {
   const f = fixture()

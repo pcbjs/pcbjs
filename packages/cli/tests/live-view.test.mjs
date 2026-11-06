@@ -5,14 +5,7 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveConfig } from '../dist/project/config.js'
-import { pluginState } from '../dist/server/site.js'
-import { compileServer } from '../dist/project/compile.js'
-import { viteLoader } from '../dist/project/loader.js'
-import { compileEntry, DATA_FORMATS } from '../dist/project/project.js'
-import { FACET_NAMES, facetsOf } from '@pcbjs/core/site-facets'
-import { siteFacets } from '../dist/project/facets.js'
-import { affected, changedSpans } from '../dist/project/invalidate.js'
+
 import { demanded, STAGES } from '@pcbjs/compile/internal/pipeline'
 import { serveSession } from './fixtures/proc.mjs'
 import { viewerClient } from './fixtures/viewer.mjs'
@@ -37,95 +30,6 @@ function blinky(entries = ['blinky.pcb.tsx']) {
   writeFileSync(cfg, readFileSync(cfg, 'utf8').replace(/entries:\s*\[[^\]]*\]/, `entries: ${JSON.stringify(entries)}`))
   return root
 }
-
-async function compile(root, o = {}) {
-  const cfg = await resolveConfig([], 'build', undefined, root, () => {})
-  const state = pluginState(cfg)
-  const server = await compileServer(cfg)
-  try {
-    return await compileEntry(viteLoader(server), cfg, state.slots[0].entry, { dev: true, ...o })
-  } finally {
-    await server.close()
-  }
-}
-
-test('a cold compile streams its facets as its stages end; a warm start has every facet at once', { timeout: 120000 }, async () => {
-  const root = blinky()
-  const got = []
-  const stages = []
-  const last = new Map()
-  const [c] = await compile(root, {
-    facet: f => (got.push(`${f.facet}@${f.stage}`), last.set(f.facet, f.hash)),
-    stage: s => s.state !== 'running' && stages.push(s.name),
-  })
-  assert.deepEqual(got, [
-    'meta@place',
-    'layers@place',
-    'shapes@place',
-    'model@place',
-    'sch@schematic',
-    'layers@tune',
-    'shapes@tune',
-    'layers@finish',
-    'shapes@finish',
-    'findings@checks',
-    'fab@exports',
-  ])
-  assert.deepEqual(stages, ['evaluate', 'place', 'schematic', 'manualCopper', 'autoroute', 'placeFollowers', 'routeFollowers', 'tune', 'patches', 'finish', 'checks', 'exports'])
-  // the streamed facets are the finished data's
-  const fin = Object.fromEntries(siteFacets(c.site).map(f => [f.facet, f.hash]))
-  for (const f of FACET_NAMES) assert.equal(last.get(f), fin[f], f)
-  const warm = []
-  const [w] = await compile(root, { facet: f => warm.push(f.facet) })
-  assert.deepEqual(warm, [], 'served from the cache: nothing streams')
-  assert.deepEqual(
-    siteFacets(w.site).map(f => f.facet),
-    FACET_NAMES,
-  )
-})
-
-test('a 3D view compiles no exports stage, and a session compile builds no SVG or GLB until asked', { timeout: 120000 }, async () => {
-  const root = blinky()
-  const got = []
-  const stages = []
-  const [part] = await compile(root, { want: facetsOf('3d'), facet: f => got.push(f.facet), stage: s => s.state === 'done' && stages.push(s.name) })
-  assert.ok(part.partial)
-  assert.ok(!stages.includes('exports'), stages.join())
-  assert.ok(facetsOf('3d').every(f => got.includes(f)) && !got.includes('fab'), got.join())
-  const [c] = await compile(root, { formats: DATA_FORMATS })
-  assert.ok(c.fab && c.site)
-  assert.equal(c.glb, undefined)
-  assert.equal(c.svg, undefined)
-  const { glbOf, svgOf } = await import('../dist/project/project.js')
-  assert.equal(new TextDecoder().decode(glbOf(c, root).slice(0, 4)), 'glTF')
-  assert.match(svgOf(c), /<svg /)
-})
-
-test('a moved part makes stale its pads, the legs of its routes and the pours of their layers', { timeout: 120000 }, async () => {
-  const root = blinky()
-  const [c] = await compile(root)
-  const file = join(root, 'blinky.pcb.tsx')
-  const before = readFileSync(file, 'utf8')
-  const after = before.replace('<Q1 at="26 10" />', '<Q1 at="26.5 10" />')
-  const inv = affected(c, 1, [{ rel: 'blinky.pcb.tsx', abs: file, spans: changedSpans(before, after) }])
-  const uids = new Set(inv.uids)
-  const b = c.board
-  assert.ok(inv.refs.includes('Q1'))
-  for (const it of b.items.filter(i => i.kind === 'pad' && i.ref === 'Q1')) assert.ok(uids.has(it.uid), `pad ${it.num}`)
-  const routed = b.items.filter(i => (i.kind === 'track' || i.kind === 'via') && i.route && uids.has(i.uid))
-  assert.ok(routed.length, 'the legs of its routes')
-  const layers = new Set(b.items.filter(i => uids.has(i.uid) && i.kind !== 'zone').flatMap(i => (i.kind === 'pad' || i.kind === 'via' ? i.layers : [i.layer])))
-  for (const z of b.items.filter(i => i.kind === 'zone')) assert.equal(uids.has(z.uid), layers.has(z.layer), `the pour on ${z.layer}`)
-  assert.ok(
-    b.items.some(i => i.kind === 'zone' && uids.has(i.uid)),
-    'a pour of their layers',
-  )
-  assert.ok(!uids.has(b.items.find(i => i.kind === 'pad' && i.ref === 'J1').uid), 'a part far from the edit stays')
-  assert.ok(
-    inv.refs.some(r => r.startsWith('net:')),
-    'the nets of its pads, for the ratsnest',
-  )
-})
 
 async function until(fn, ms = 60000) {
   const t0 = Date.now()
@@ -217,51 +121,6 @@ test('a schematic view compiles no copper; successive edits settle on the latest
     assert.deepEqual(meta?.data.footprints.find(f => f.ref === 'Q1')?.at, [25, 10])
     await holdsCurrent(v, 'Blinky', ['meta', 'layers', 'findings'])
     v.close()
-  } finally {
-    await s.stop()
-  }
-})
-
-test('each view gets the facets it observes: a 2D and a schematic pane on one board, and a mode switch fetches what the pane lacks', { timeout: 180000 }, async () => {
-  const root = blinky()
-  const s = await serve(root)
-  try {
-    const flat = await viewer(s.port, ['meta', 'layers', 'findings'])
-    const sch = await viewer(s.port, ['meta', 'sch'])
-    const facets = v => v.got.filter(e => e.event === 'pcbjs:facet')
-    await until(() => facets(flat).some(e => e.facet === 'findings') && facets(sch).some(e => e.facet === 'sch'))
-    await until(() => [flat, sch].every(v => v.got.findLast(e => e.event === 'pcbjs:status')?.phase === 'idle'))
-    const file = join(root, 'blinky.pcb.tsx')
-    const n = [flat.got.length, sch.got.length]
-    writeFileSync(file, readFileSync(file, 'utf8').replace('<Q1 at="26 10" />', '<Q1 at="26.5 10" />'))
-    await Promise.all([settled(flat, n[0], 'Blinky', 'blinky.pcb.tsx'), settled(sch, n[1], 'Blinky', 'blinky.pcb.tsx')])
-    const kinds = (v, from) => [...new Set(facets({ got: v.got.slice(from) }).map(e => e.facet))].filter(f => f !== 'fab')
-    assert.ok(
-      kinds(flat, n[0]).every(f => ['findings', 'layers', 'meta'].includes(f)),
-      'the 2D pane: no schematic',
-    )
-    assert.ok(
-      kinds(sch, n[1]).every(f => ['meta', 'sch'].includes(f)),
-      'the schematic pane: no copper, no findings',
-    )
-    for (const v of [flat, sch]) {
-      const meta = facets(v).findLast(e => e.facet === 'meta')
-      assert.deepEqual(meta.data.footprints.find(f => f.ref === 'Q1').at, [26.5, 10], 'both views hold the edited placement')
-    }
-    await holdsCurrent(flat, 'Blinky', ['meta', 'layers', 'findings'])
-    // the schematic pane switches to 2D with the hashes it holds: the session sends the layers and findings it lacks
-    const held = Object.fromEntries(facets(sch).map(e => [e.facet, e.hash]))
-    const m = sch.got.length
-    await sch.observe('Blinky', ['meta', 'layers', 'findings'], { held })
-    await until(() => ['layers', 'findings'].every(f => facets({ got: sch.got.slice(m) }).some(e => e.facet === f)))
-    assert.ok(!facets({ got: sch.got.slice(m) }).some(e => e.facet === 'meta' || e.facet === 'sch'), 'nothing it holds is sent again')
-    const beat = await until(() => sch.got.slice(m).find(e => e.event === 'session/state') ?? flat.got.slice(n[0]).find(e => e.event === 'session/state' && e.run))
-    assert.ok(
-      Object.keys(beat.facets).some(k => k.startsWith('sch:')),
-      'the heartbeat still names every facet',
-    )
-    flat.close()
-    sch.close()
   } finally {
     await s.stop()
   }

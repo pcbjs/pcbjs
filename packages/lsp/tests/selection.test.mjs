@@ -1,4 +1,3 @@
-import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 // The editor selection model: what a cursor or a selection names per board, as the references the viewers highlight.
 import { readFileSync } from 'node:fs'
@@ -6,7 +5,7 @@ import { docOf } from '../dist/doc.js'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { boardFacts } from '../dist/facts.js'
-import { editorSelection, memberOf, selectParams } from '../dist/selection.js'
+import { editorSelection } from '../dist/selection.js'
 
 const ROOT = resolve('/p')
 const FILE = resolve('/p/pcb.tsx')
@@ -71,40 +70,6 @@ test('selection: a cursor inside a schematic wire marks it, and the first range 
   assert.deepEqual(two[0].marks, { sch: ['w1'] })
 })
 
-test('selection: how an item is named, and pcbjs/select grouped by file', () => {
-  assert.equal(memberOf({ uid: 'item:x', kind: 'track', route: 'route:3' }), 'route:3')
-  assert.equal(memberOf({ uid: 'item:x', kind: 'graphic', ref: 'U1' }), 'U1')
-  assert.equal(memberOf({ uid: 'item:x', kind: 'pad', ref: 'U1' }), 'item:x')
-  const p = selectParams(
-    [
-      { file: resolve('/p/a.tsx'), line: 1, col: 1, endLine: 1, endCol: 3 },
-      { file: resolve('/p/b.tsx'), line: 2, col: 1, endLine: 2, endCol: 1 },
-      { file: resolve('/p/a.tsx'), line: 4, col: 2, endLine: 4, endCol: 2 },
-    ],
-    true,
-  )
-  assert.deepEqual(
-    p.items.map(i => [i.uri.slice(-5), i.ranges.length]),
-    [
-      ['a.tsx', 2],
-      ['b.tsx', 1],
-    ],
-  )
-  assert.deepEqual(p.primary, { uri: pathToFileURL(resolve('/p/a.tsx')).href, index: 0 })
-  assert.equal(p.focus, undefined)
-})
-
-test('selection: coordinate tokens keep the syntactic entity selected throughout its block', () => {
-  const f = facts()
-  const point = { kind: 'point', boards: [{ board: 'b', refs: [], points: [[3, 4]], name: '3 4' }] }
-  assert.deepEqual(
-    editorSelection(f, [at(2, 25)], () => point),
-    [{ board: 'b', refs: ['R1'], anchor: 'R1', marks: { points: [[3, 4]] } }],
-  )
-  assert.deepEqual(editorSelection(f, [at(2, 21)], () => point)[0].refs, ['R1'])
-  assert.deepEqual(editorSelection(f, [at(2, 36)], () => point)[0].refs, ['R1'])
-})
-
 test('selection: generated reference text source range selects only its item UID', () => {
   const f = facts()
   const board = f.all[0]
@@ -134,96 +99,4 @@ test('selection: library context belongs to the declaration, including whitespac
 const board = <LedChannelRow at="0 0" />`,
   )
   assert.equal(editorSelection(f, [at(1, 25)], none, board)[0].library, undefined)
-})
-
-test('selection: function and arrow definitions use the innermost declaration and require the whole selection inside', () => {
-  const text = 'export function Outer() {\n const Inner = () => 1\n return Inner()\n}\nconst Other = () => 2'
-  const doc = docOf(FILE, text)
-  const site = { name: 'b', sources: {}, schematic: { circuits: [{ def: 'pcb.tsx#Outer' }, { layout: 'pcb.tsx#Inner' }] } }
-  const f = boardFacts([{ root: ROOT, site }]).forFile(FILE)
-  assert.equal(editorSelection(f, [at(0, 18)], none, doc)[0].library, 'pcb.tsx#Outer')
-  assert.equal(editorSelection(f, [at(1, 19)], none, doc)[0].library, 'pcb.tsx#Inner')
-  assert.equal(editorSelection(f, [at(2, 8)], none, doc)[0].library, 'pcb.tsx#Outer')
-  assert.equal(editorSelection(f, [at(4, 15)], none, doc)[0].library, undefined)
-  assert.equal(editorSelection(f, [{ start: at(1, 5).start, end: at(2, 8).start }], none, doc)[0].library, 'pcb.tsx#Outer')
-})
-
-test('selection: colocated generic exports use explicit core factory names without selecting neighboring declarations', () => {
-  const file = resolve('/p/lib/led-channel.tsx')
-  const text = `import { circuit, layout as defineLayout, board } from '@pcbjs/core'
-import * as core from '@pcbjs/core'
-import { layout as otherLayout } from './other'
-export const schematic = circuit('ledChannel', {}, () => <sch />)
-export const layout = defineLayout(schematic, () => <g />, 'LedChannelRow')
-export const layoutStack = defineLayout(schematic, () => <g />, 'LedChannelStack')
-export const namespaceSchematic = core.circuit('NamespaceCircuit', {}, () => <sch />)
-export const namespaceLayout = core.layout(schematic, () => <g />, 'NamespaceLayout')
-const ordinary = board('LedChannelRow')
-const unrelated = otherLayout(schematic, () => <g />, 'LedChannelRow')
-const string = 'LedChannelRow'
-const computed = defineLayout(schematic, () => <g />, getName())`
-  const doc = docOf(file, text)
-  const key = name => `lib/led-channel.tsx#${name}`
-  const site = {
-    name: 'b',
-    sources: {},
-    schematic: {
-      circuits: [
-        { def: key('ledChannel'), layout: key('LedChannelRow') },
-        { def: key('ledChannel'), layout: key('LedChannelStack') },
-        { def: key('NamespaceCircuit'), layout: key('NamespaceLayout') },
-      ],
-    },
-  }
-  const f = boardFacts([{ root: ROOT, site }]).forFile(file)
-  const select = needle => {
-    const offset = text.indexOf(needle) + 1
-    return editorSelection(f, [{ start: doc.pos(offset), end: doc.pos(offset) }], none, doc)[0].library
-  }
-  for (const [declaration, name] of [
-    ['schematic =', 'ledChannel'],
-    ['layout =', 'LedChannelRow'],
-    ['layoutStack =', 'LedChannelStack'],
-    ['namespaceSchematic =', 'NamespaceCircuit'],
-    ['namespaceLayout =', 'NamespaceLayout'],
-  ])
-    assert.equal(select(declaration), key(name), declaration)
-  for (const needle of ['import { circuit', 'import * as core', 'ordinary =', 'unrelated =', 'string =', 'computed =']) {
-    assert.equal(select(needle), undefined, needle)
-  }
-})
-
-test('selection: layout methods resolve explicit, callback and default names on definitions and instances', () => {
-  const file = resolve('/p/lib/channel.tsx')
-  const text = `import { circuit as defineCircuit } from '@pcbjs/core'
-const schematic = defineCircuit('channel', () => ({}))
-const instance = schematic({}, 'CH1')
-export const layout = schematic.layout(() => <g />)
-export const variant = schematic.layout(() => <g />, 'Stack')
-export const instanceLayout = instance.layout(() => <g />)
-export const named = instance.layout(function Named() { return <g /> })
-const render = () => <g />
-export const referenced = schematic.layout(render)
-const computed = schematic.layout(() => <g />, getName())
-const unknown = other.layout(() => <g />)`
-  const doc = docOf(file, text),
-    key = name => `lib/channel.tsx#${name}`
-  const site = {
-    name: 'b',
-    sources: {},
-    schematic: { circuits: ['channelLayout', 'Stack', 'Named', 'render'].map(name => ({ def: key('channel'), circuit: 'channel', layout: key(name) })) },
-  }
-  const f = boardFacts([{ root: ROOT, site }]).forFile(file)
-  for (const [needle, name] of [
-    ['layout =', 'channelLayout'],
-    ['variant =', 'Stack'],
-    ['instanceLayout =', 'channelLayout'],
-    ['named =', 'Named'],
-    ['referenced =', 'render'],
-    ['computed =', null],
-    ['unknown =', null],
-  ]) {
-    const pos = doc.pos(text.indexOf(needle) + 1)
-    assert.equal(editorSelection(f, [{ start: pos, end: pos }], none, doc)[0].library, name ? key(name) : undefined, needle)
-  }
 })

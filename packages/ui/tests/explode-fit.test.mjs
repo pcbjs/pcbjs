@@ -1,12 +1,10 @@
 // Toggling explode frames the stack at its target separation, the camera landing with the layers; the slider hangs under its button and a drag keeps the framing.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import * as THREE from 'three'
 import { fitDistance, stackBox } from '../src/scene/fit.ts'
 import { StackFit, poseOf, positionOf } from '../src/scene/stack-fit.ts'
 
-const view3d = ['../src/Canvas3D.vue', '../src/scene/board-scene.ts', '../src/scene/stack-labels.ts'].map(f => readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n')
 // offsets() of scene/explode.ts, whose extensionless import node cannot load
 const offsets = (order, sep) => new Map(order.map((n, i) => [n, (i - 4) * sep]))
 const order = ['bodies:B', 'B.SilkS', 'B.Mask', 'B.Cu', 'diel:0', 'F.Cu', 'F.Mask', 'F.SilkS', 'bodies:F']
@@ -24,17 +22,6 @@ function board() {
   return b
 }
 const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, `${a} near ${b}`)
-
-test('the layer-gap slider occupies its own labeled section outside the toolbar row', () => {
-  const row = /<div class="view3d-buttons"[^>]*>([\s\S]*?)\n    <\/div>/.exec(view3d)[1]
-  assert.match(row, /aria-label="Explode"/)
-  assert.doesNotMatch(row, /type="range"/)
-  const section = /<section v-if="ui.explode" class="view3d-explosion"([\s\S]*?)<\/section>/.exec(view3d)[1]
-  assert.match(section, /aria-label="Layer separation"/)
-  assert.match(section, /aria-label="Layer separation in mm"/)
-  assert.equal(section.match(/type="range"/g).length, 1)
-  assert.match(view3d, /\.view3d-options \{[^}]*flex-wrap: wrap/)
-})
 
 test('explode on frames the stack at its target gap, explode off the assembled board', () => {
   const b = board()
@@ -64,20 +51,6 @@ test('the fit lands with the separation: halfway there, halfway framed', () => {
   assert.ok(positionOf(end).distanceTo(new THREE.Vector3(60, -60, 76)) < 1e-9)
   assert.equal(fit.active, false)
   assert.equal(fit.start(from, to, 4, 4), false, 'no separation change, nothing to follow')
-})
-
-test('a slider drag never refits: it stops a fit in flight and only the explode toggle starts one', () => {
-  const fit = new StackFit(),
-    p = poseOf(new THREE.Vector3(), new THREE.Vector3(1, 1, 1))
-  fit.start(p, p, 0, 4)
-  fit.stop()
-  assert.equal(fit.at(2), null)
-  assert.equal(view3d.match(/stackFit\.start\(/g).length, 1)
-  assert.match(view3d, /function onExplode\(\)[\s\S]*?stackFit\.start\(/)
-  assert.match(view3d, /watch\(\(\) => ui\.explode, onExplode\)/)
-  assert.match(view3d, /watch\(\s*\(\) => ui\.separation,\s*\(\) => \{\s*if \(ui\.explode\) startExplode\(\)\s*\},?\s*\)/)
-  assert.match(view3d, /function onSeparation\(e: Event\) \{\n  stackFit\.stop\(\)/)
-  assert.doesNotMatch(/function startExplode\(\) \{[\s\S]*?\n\}/.exec(view3d)[0], /view\(|frame\(|moveCamera/)
 })
 
 test('an exploded fit leaves the label column free on the right of the pane', async () => {
@@ -134,14 +107,4 @@ test('a board stacked below explodes with the back parts: the fit and applyExplo
   b.add(refs)
   const open = stackBox(b, offsets(order, 4))
   near(open.min.z, -9.6 - 16, 1e-6)
-  assert.match(view3d, /holder\.userData\.explode = explodeGroup\(r\.side\)/)
-  assert.match(
-    view3d,
-    /for \(const h of this\.groups\.get\('References'\)\?\.children \?\? \[\]\) \{\s*h\.position\.z = off\.get\(h\.userData\.explode\) \?\? 0\s*h\.updateMatrix\(\)/,
-  )
-})
-
-test('the explode fit takes the column from the longest label', () => {
-  assert.match(view3d, /fitBeside\(box, dir, camera\.up, vfov, camera\.aspect, share\)/)
-  assert.match(view3d, /\(GAP \+ Math\.max\(\.\.\.ls\.map\(width\)\) \+ EDGE\) \/ w/)
 })

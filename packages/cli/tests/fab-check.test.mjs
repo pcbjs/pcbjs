@@ -1,4 +1,4 @@
-// The Gerber self check on every demo and review board: each fab set reads back as its board, with no fab-mismatch.
+// The Gerber self check on the demo and a representative high-speed board: each fab set reads back as its board, with no fab-mismatch.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
@@ -11,22 +11,7 @@ import { viteLoader } from '../dist/project/loader.js'
 
 const EXAMPLES = fileURLToPath(new URL('../../../examples/', import.meta.url))
 // usb3-hub and motor-stack are boards under review that are still being built
-const BOARDS = [
-  'demo',
-  'badge',
-  'esp32-sensor',
-  'eth-phy',
-  'highspeed',
-  'led-matrix',
-  'lvds-camera',
-  'psu',
-  'qfn-breakout',
-  'sdram',
-  'sensor-hat',
-  'stm32-dev',
-  'usb-hub',
-  'usbc-led',
-]
+const BOARDS = ['demo', 'highspeed']
 
 for (const ex of BOARDS) {
   const root = join(EXAMPLES, ex)

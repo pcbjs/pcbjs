@@ -5,7 +5,7 @@ docs: browser
 fixture: examples/demo/blinky.pcb.tsx
 view: 3d
 flag: @pcbjs/compile/browser
-evidence: packages/pcbjs/tests/browser-equality.test.mjs
+evidence: scripts/browser-equality.mjs
 key: true
 ---
 

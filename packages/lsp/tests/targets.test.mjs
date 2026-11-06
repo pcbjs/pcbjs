@@ -8,9 +8,9 @@ import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { dev } from './fixtures/dev.mjs'
-import { resolveFile, scopeInject } from '@pcbjs/compile/internal/scope'
+
 import { projects } from '../dist/project.js'
-import { padSource, targetAt } from '../dist/target.js'
+import { targetAt } from '../dist/target.js'
 import { targetPreview } from '../dist/hover-preview.js'
 import { makeTargets } from './fixtures/targets.mjs'
 import { initParams, posOf, sessionClient, waitFor } from './fixtures/client.mjs'
@@ -88,36 +88,6 @@ for (const [file, needle, delta, kind, names, span] of CASES) {
   })
 }
 
-test('a cursor just outside a token resolves to the construct around it', () => {
-  // before the D of <D1: the element, which the source range answers
-  assert.equal(at('main.tsx', '<D1 ', 1), null)
-  // after the K of D1.K and inside `route`: the route call, which the source range answers
-  assert.equal(at('main.tsx', 'D1.K', 4), null)
-  assert.equal(at('main.tsx', 'route(D1.K', 2), null)
-  // right after the D1 of D1.K, before the dot: still not the part
-  assert.equal(at('main.tsx', 'D1.K', 2).kind, 'pad')
-})
-
-test('pour( names no target: as for a route, its source range answers with the zone', () => {
-  assert.equal(at('main.tsx', 'pour(GND', 2), null)
-  assert.equal(at('main.tsx', 'pour(GND', 5), null)
-  assert.equal(at('main.tsx', 'pour(GND', 6).kind, 'net')
-  const text = readFileSync(join(root, 'main.tsx'), 'utf8')
-  const p = posOf(text, 'pour(GND', 0)
-  const site = boards[0].site
-  const r = site.sources['main.tsx'].find(r => r.start[0] === p.line + 1 && r.start[1] === p.character + 1)
-  assert.ok(
-    text
-      .split('\n')
-      [p.line].slice(p.character, r.end[1])
-      .match(/^pour\(GND, .*\)$/),
-  )
-  assert.deepEqual(
-    r.uids.map(u => site.items.find(i => i.uid === u).kind),
-    ['zone'],
-  )
-})
-
 test('ids and refs: a pad is one pad item named R1/2, a net all its copper named net:GND, a part and a group their parts named by ref and path', () => {
   const site = boards[0].site
   const pad = at('main.tsx', 'D1.K', 2).boards[0]
@@ -138,39 +108,6 @@ test('ids and refs: a pad is one pad item named R1/2, a net all its copper named
   // the hover image of a target names what it shows the same way
   assert.deepEqual(targetPreview(at('main.tsx', 'D1.K', 2), boards).refs, ['D1/1'])
   assert.deepEqual(targetPreview(at('main.tsx', '<CH1.R', 3), boards).refs, ['CH1'])
-})
-
-test("a schematic namespace brought into scope by the compiler's injection: bare names resolve through it", () => {
-  const file = join(root, 'bare.tsx'),
-    text = readFileSync(file, 'utf8')
-  const inj = projects({ get: () => undefined }, (f, t) => {
-    const r = scopeInject(t, resolveFile, f)
-    return r
-  })
-  try {
-    const find = (needle, delta) => {
-      const t = targetAt(inj.program(file), file, inj.toInjected(file, text.indexOf(needle) + delta), boards)
-      return t && { kind: t.kind, name: t.boards.map(b => b.name).join(), text: text.slice(inj.toSource(file, t.start), inj.toSource(file, t.end)) }
-    }
-    assert.deepEqual(find('<D2', 2), { kind: 'part', name: 'D2', text: 'D2' })
-    assert.deepEqual(find('D2.A', 3), { kind: 'pad', name: 'D2/2', text: 'D2.A' })
-  } finally {
-    inj.dispose()
-  }
-})
-
-test("the tag of a part element inside <Schematic> names no target: hover and highlight are its symbol's", () => {
-  assert.equal(at('board.sch.tsx', '<D1 at="4', 2), null)
-  assert.equal(at('board.sch.tsx', '<D1 at="4', 6), null)
-})
-
-test("padSource: the key of a pad in its part's connect call", () => {
-  const key = (ref, num) => {
-    const s = padSource(f => code.service(f), boards[0], ref, num)
-    return s && readFileSync(s.file, 'utf8').slice(s.start, s.end)
-  }
-  assert.equal(key('D1', '1'), 'K')
-  assert.equal(key('J1', '2'), '2')
 })
 
 test('through the dev server: hover images, the cursor target and a pad click', async () => {

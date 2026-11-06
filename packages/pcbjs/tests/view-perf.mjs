@@ -1,6 +1,6 @@
 // The preview's frame budgets on usb3-hub, measured end to end: a real `pcbjs session serve` on a scratch copy of the example and the viewer
 // in a headless Chromium driven through DevTools input events. Each probe times the main thread's work of a frame, from the event or the
-// frame's start to the end of its rendering, in the page itself; see docs/bench.md. Used by view-perf.test.mjs and scripts/bench.mjs.
+// frame's start to the end of its rendering, in the page itself; see docs/bench.md. Used by the opt-in scripts/bench.mjs.
 import { spawn } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { cpus, loadavg, tmpdir } from 'node:os'

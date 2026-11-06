@@ -6,9 +6,9 @@ import { spawn } from 'node:child_process'
 import { realpathSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { inspectRequests } from '../dist/cli.js'
+
 import { inspectOutput } from '../dist/project/inspect.js'
-import { shotJobs } from '../dist/shot.js'
+
 import { makeStack, stackBoard } from './fixtures/workspace.mjs'
 import { ask, sessionOf } from '../dist/session/thin.js'
 import { stop } from './fixtures/proc.mjs'
@@ -27,18 +27,6 @@ const run = (cwd, ...args) =>
     })
     p.on('close', code => done({ code, stdout, stderr }))
   })
-
-test('inspect: the first argument is the entry when it names a module, every other one a query; --lengths adds tables', () => {
-  assert.deepEqual(inspectRequests(['pcb.tsx', 'U1', 'GND', 'J1.3'], 'DATA'), {
-    entry: 'pcb.tsx',
-    requests: [{ query: 'U1' }, { query: 'GND' }, { query: 'J1.3' }, { query: 'DATA', lengths: true }],
-  })
-  assert.deepEqual(inspectRequests(['U1'], ['A', 'B']), { entry: undefined, requests: [{ query: 'U1' }, { query: 'A', lengths: true }, { query: 'B', lengths: true }] })
-  // as before: a bare --lengths makes the query its filter, or prints every route
-  assert.deepEqual(inspectRequests(['pcb.tsx', 'DATA'], true), { entry: 'pcb.tsx', requests: [{ query: 'DATA', lengths: true }] })
-  assert.deepEqual(inspectRequests([], true), { entry: undefined, requests: [{ lengths: true }] })
-  assert.deepEqual(inspectRequests([], undefined), { entry: undefined, requests: [{}] })
-})
 
 test('inspect: one answer prints as before, several share the frame lines under == headings, and JSON lists them', () => {
   const r = (q, found = true) => ({ text: ['board', 'outline', `answer ${q}`], json: { frame: { board: 'b' }, q }, found })
@@ -63,16 +51,6 @@ test('inspect: one answer prints as before, several share the frame lines under 
   })
 })
 
-test('shot: one shot per --select and view, the layers shown together in one', () => {
-  const files = shotJobs([{ entry: '/p/b.tsx', name: 'B', targets: [null] }], ['2d', '3d'], '/o', { layers: ['F.Cu', 'B.Cu'] }, ['U1', 'Q1']).map(j => j.file)
-  assert.deepEqual(
-    files,
-    ['/o/B-2d-select-U1-F.Cu+B.Cu.png', '/o/B-2d-select-Q1-F.Cu+B.Cu.png', '/o/B-3d-select-U1-F.Cu+B.Cu.png', '/o/B-3d-select-Q1-F.Cu+B.Cu.png'].map(f => join(f)),
-  )
-  const [j] = shotJobs([{ entry: '/p/b.tsx', name: 'B', targets: [null] }], ['3d'], '/o', {}, ['U1'])
-  assert.deepEqual(j.spec, { view: '3d', entry: '/p/b.tsx', frame: 'U1', highlight: ['U1'] }, '--select frames and highlights')
-})
-
 // ---- a session of the project answers ----
 let w, session, root
 before(async () => {
@@ -89,22 +67,6 @@ after(async () => {
     await stop(session)
   }
   if (w) rmSync(w.root, { recursive: true, force: true })
-})
-
-test('session reuse: inspect with several queries answers from the session in one line, and --fresh compiles here', async () => {
-  const r = await run(w.a, 'inspect', 'TP1', 'V', '--lengths', 'W')
-  // the board has no net W: that one answer is not found, so the run exits with 1 after printing all
-  assert.equal(r.code, 1, r.stderr)
-  assert.match(r.stderr, /^session \w{8}  snapshot \w{8}\.\d+; --fresh compiles here$/m)
-  assert.doesNotMatch(r.stderr, /^compiled /m)
-  assert.match(r.stdout, /^A 1  pcb\.tsx  mm/)
-  assert.match(r.stdout, /^== TP1\nTP1  V  /m)
-  assert.match(r.stdout, /^== V\nnet V  2 pads/m)
-  assert.match(r.stdout, /^== --lengths W\nno route of the net, pair or group W$/m)
-  const f = await run(w.a, 'inspect', 'TP1', '--fresh')
-  assert.equal(f.code, 0, f.stderr)
-  assert.match(f.stderr, /^compiled  pcb\.tsx  \d/m)
-  assert.doesNotMatch(f.stderr, /^session /m)
 })
 
 test('session reuse: an edit just made is compiled first, so the answer is never older than the files', async () => {

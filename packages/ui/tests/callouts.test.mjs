@@ -2,7 +2,6 @@
 // a hovered layer turns the others see-through, and a selection turns the board see-through.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { DIMMED, REST, anchor, calloutOpacity, column, hull, leader, project } from '../src/scene/callouts.ts'
 import { layerDimmed, slabState } from '../src/scene/focus.ts'
 
@@ -122,9 +121,6 @@ test('the labels stand in one column, the rightmost anchor x plus the gap, each 
 test('a leader is one plain line from its anchor to a few px short of its label', () => {
   const p = { at: [100, 120], label: [164, 100] }
   assert.equal(leader(p, 3), 'M100.0 120.0L161.0 100.0')
-  const view3d = ['../src/Canvas3D.vue', '../src/scene/board-scene.ts', '../src/scene/stack-labels.ts'].map(f => readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n')
-  assert.doesNotMatch(view3d, /circle r=|class="ico"|GLYPH/, 'no endpoint dots and no layer icons')
-  assert.match(view3d, /createElementNS\('http:\/\/www.w3.org\/2000\/svg', 'path'\)/)
 })
 
 test('callouts are faint at rest, opaque only for the hovered layer, fainter for the others', () => {
