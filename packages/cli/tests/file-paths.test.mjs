@@ -1,6 +1,7 @@
 import { test } from 'node:test'
+import { spawnSync } from 'node:child_process'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileKey, sameFile, sourcePath, under } from '../dist/project/files.js'
@@ -108,5 +109,77 @@ test('Windows source frames use the module graph identity before Vite maps gener
     }
   } finally {
     Object.defineProperty(process, 'platform', platform)
+  }
+})
+
+test('Vite maps real TSX stack frames, route steps and helper callers to original source positions', async t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-source-map-')))
+  const file = join(root, 'pcb.tsx')
+  const code = `import PCB, { nets, route } from '@pcbjs/core'
+const { SIG } = nets()
+export const raw = new Error('source frame').stack
+const manual = route('5 5').net(SIG).width(0.01)
+  .H(10)
+const inline = [8].map(y => route([5, y]).net(SIG).H(10))
+const wire = (y: number) => route([5, y]).net(SIG).H(10)
+export default (
+  <PCB name="SourceMap">
+    <rect layer="Edge.Cuts" x={0} y={0} w={20} h={20} />
+    {manual}
+    {inline}
+    {wire(10)}
+  </PCB>
+)
+`
+  try {
+    writeFileSync(join(root, 'package.json'), '{"type":"module"}')
+    writeFileSync(join(root, 'pcb.config.ts'), "export default { entries: ['pcb.tsx'] }")
+    writeFileSync(file, code)
+    mkdirSync(join(root, 'node_modules'))
+    symlinkSync(new URL('../../../node_modules/@pcbjs', import.meta.url), join(root, 'node_modules/@pcbjs'), 'dir')
+    const child = join(root, 'node_modules/source-map-check.mjs')
+    writeFileSync(
+      child,
+      `
+      import { resolveConfig } from ${JSON.stringify(new URL('../dist/project/config.js', import.meta.url).href)};
+      import { compileServer } from ${JSON.stringify(new URL('../dist/project/compile.js', import.meta.url).href)};
+      import { viteLoader } from ${JSON.stringify(new URL('../dist/project/loader.js', import.meta.url).href)};
+      import { evaluateEntry } from '@pcbjs/compile/internal/entry';
+      import { compileBoard } from '@pcbjs/compile';
+      import { localFrames } from '@pcbjs/core/internal/provenance';
+      const root=process.cwd(),file=${JSON.stringify(file)};
+      const cfg=await resolveConfig([], 'build', undefined, root),server=await compileServer(cfg);
+      try {
+        const loader=viteLoader(server),evaluated=await evaluateEntry(loader,{file,rel:'pcb.tsx'}),mod=await loader.load(file);
+        const raw=localFrames(mod.raw).find(f=>/[\\\\/]pcb\\.tsx$/.test(f.file));
+        const node=[...server.environments.ssr.moduleGraph.idToModuleMap.values()].find(m=>m.file?.replaceAll('\\\\','/').toLowerCase()===file.replaceAll('\\\\','/').toLowerCase());
+        const mapped=raw&&loader.mapSrc(raw);
+        const alias=process.platform==='win32'&&raw?loader.mapSrc({...raw,file:raw.file.toLowerCase().replaceAll('/','\\\\')}):mapped;
+        const board=compileBoard(evaluated.root,{cache:false,files:loader.imported(file),sourceRoot:root});
+        console.log(JSON.stringify({raw,mapped,alias,id:node?.id,file:node?.file,sources:node?.transformResult?.map?.sources,rawStack:mod.raw,tracks:board.items.filter(i=>i.kind==='track').map(i=>({src:i.src,chain:i.chain}))}));
+      } finally {await server.close()}
+    `,
+    )
+    const run = spawnSync(process.execPath, [child], { cwd: root, encoding: 'utf8', timeout: 30000 })
+    assert.equal(run.status, 0, run.stderr)
+    const { raw, mapped, alias, tracks, ...diagnostic } = JSON.parse(run.stdout.trim())
+    assert.ok(raw, diagnostic.rawStack)
+    const detail = JSON.stringify({ raw, mapped, ...diagnostic })
+    t.diagnostic(detail)
+    assert.equal(mapped.line, 3, detail)
+    assert.equal(mapped.col, code.split('\n')[2].indexOf('new Error') + 1, detail)
+    assert.deepEqual(alias, mapped, detail)
+    assert.deepEqual(
+      tracks.map(i => i.src?.line),
+      [5, 6, 7],
+      JSON.stringify(tracks.map(i => ({ src: i.src, chain: i.chain }))),
+    )
+    assert.equal(tracks[0].src.col, code.split('\n')[4].indexOf('.H') + 2)
+    for (const item of tracks.slice(0, 2)) assert.ok(!item.chain?.some(s => s.call && /[\\/]?pcb\.tsx$/.test(s.file)), JSON.stringify(item.chain))
+    const caller = tracks[2].chain?.findLast(s => s.call)
+    assert.equal(caller?.line, 13, JSON.stringify(caller))
+    assert.equal(caller?.col, code.split('\n')[12].indexOf('wire') + 1, JSON.stringify(caller))
+  } finally {
+    rmSync(root, { recursive: true, force: true })
   }
 })

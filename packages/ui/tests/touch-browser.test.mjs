@@ -118,6 +118,7 @@ const compiled = await build({
       return [mode,{board:store,pane,prefs:reactive({grid:false,ratsnest:false,deep:false,theme:'dark'}),commands:commandBus(),shell:null,theme:()=> 'dark',toggle(){},say(){},open:async()=>{}}];
     }));
     const state=reactive({mode:'2d',mounted:true,clicks:0});window.demo={state,store,contexts};
+    window.touchTrace=[];for(const type of ['pointerdown','pointermove','pointerup','pointercancel'])window.addEventListener(type,e=>{if(e.pointerType==='touch')window.touchTrace.push([type,e.pointerId,e.clientX,e.clientY])},true);
     const Host={props:['mode'],setup(p){provide(Symbol.for('pcbjs:pane'),contexts[p.mode]);return()=>h({'2d':Board2D,sch:BoardSch,'3d':Board3D}[p.mode])}};
     window.errors=[];const app=createApp({render:()=>[state.mounted?h(Host,{key:state.mode,mode:state.mode}):null,h('button',{class:'outer-control',style:'position:absolute;left:15px;bottom:55px;z-index:10',onClick:()=>state.clicks++},'Pane control')]});app.config.errorHandler=e=>{window.errors.push(e.stack);console.error(e.stack)};app.mount('#app');
   `,
@@ -165,18 +166,49 @@ async function until(page, expression) {
 const canvas = { '2d': '.board-svg', sch: '.sch-svg', '3d': '.view3d-canvas' }
 const state = (page, mode) =>
   evaluate(page, mode === '3d' ? 'window.__pcbjs3d.camera.position.toArray()' : `document.querySelector('${canvas[mode]}').getAttribute('viewBox').split(' ').map(Number)`)
+async function settledViewBox(page, mode) {
+  await evaluate(
+    page,
+    `new Promise((resolve,reject)=>{
+    let previous=null,stable=0;const start=performance.now();
+    const frame=()=>{const value=document.querySelector('${canvas[mode]}').getAttribute('viewBox').split(' ').map(Number);
+      stable=previous&&value.every((v,i)=>v===previous[i])?stable+1:0;previous=value;
+      if(stable===3)return resolve();if(performance.now()-start>5000)return reject(new Error('viewBox did not settle: '+JSON.stringify(value)));
+      requestAnimationFrame(frame);
+    };requestAnimationFrame(frame);
+  })`,
+  )
+}
 const touch = (page, type, points) => page.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, y], id) => ({ x, y, id, radiusX: 2, radiusY: 2, force: 1 })) })
 async function point(page, selector) {
   return evaluate(page, `(()=>{const el=document.querySelector(${JSON.stringify(selector)}),r=el.getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2]})()`)
 }
 async function pinch(page, from, cancel = false) {
+  await evaluate(page, 'window.touchTrace=[]')
   const second = [from[0] < 240 ? from[0] + 95 : from[0] - 95, Math.min(420, from[1] + 95)]
   await touch(page, 'touchStart', [from])
   await touch(page, 'touchStart', [from, second])
   for (let i = 1; i <= 5; i++) await touch(page, 'touchMove', [from, [second[0] + (second[0] > from[0] ? 8 : -8) * i, second[1] + 6 * i]])
+  const last = [second[0] + (second[0] > from[0] ? 40 : -40), second[1] + 30]
+  await until(
+    page,
+    `(()=>{const down=window.touchTrace.filter(e=>e[0]==='pointerdown'),move=window.touchTrace.findLast(e=>e[0]==='pointermove'&&e[1]===down[1]?.[1]);return move&&Math.abs(move[2]-${last[0]})<1e-4&&Math.abs(move[3]-${last[1]})<1e-4})()`,
+  )
+  const trace = await evaluate(page, 'window.touchTrace')
+  const down = trace.filter(e => e[0] === 'pointerdown')
+  const end = trace.findLast(e => e[0] === 'pointermove' && e[1] === down[1][1])
+  for (const [event, expected] of [
+    [down[0], from],
+    [down[1], second],
+    [end, last],
+  ])
+    assert.ok(
+      expected.every((v, axis) => Math.abs(event[axis + 2] - v) < 1e-4),
+      `delivered touch ${JSON.stringify(event)} matches ${expected}`,
+    )
   await touch(page, cancel ? 'touchCancel' : 'touchEnd', [])
   await sleep(150)
-  return { from: [(from[0] + second[0]) / 2, (from[1] + second[1]) / 2], to: [(from[0] + second[0] + (second[0] > from[0] ? 40 : -40)) / 2, (from[1] + second[1] + 30) / 2] }
+  return { from: [(down[0][2] + down[1][2]) / 2, (down[0][3] + down[1][3]) / 2], to: [(down[0][2] + end[2]) / 2, (down[0][3] + end[3]) / 2] }
 }
 
 test('mobile pinch owns the canvas, controls and DRC labels in every preview', { skip: chromes().length ? false : 'no Chromium', timeout: 60000 }, async () => {
@@ -239,7 +271,8 @@ test('mobile pinch owns the canvas, controls and DRC labels in every preview', {
       targets.push('.outer-control')
       for (const target of targets) {
         await evaluate(page, `document.querySelector('${mode === '3d' ? '.view3d-buttons button' : '.bv-tools button'}').click()`)
-        await sleep(500)
+        if (mode === '3d') await sleep(500)
+        else await settledViewBox(page, mode)
         await until(page, `!!document.querySelector(${JSON.stringify(target)})`)
         const before = await state(page, mode)
         const anchor = await evaluate(page, 'window.demo.store.sel.anchor')
@@ -261,11 +294,29 @@ test('mobile pinch owns the canvas, controls and DRC labels in every preview', {
           for (let axis = 0; axis < 2; axis++) {
             const start = before[axis] + ((gesture.from[axis] - rect[axis]) * before[axis + 2]) / rect[axis + 2]
             const end = after[axis] + ((gesture.to[axis] - rect[axis]) * after[axis + 2]) / rect[axis + 2]
-            assert.ok(Math.abs(start - end) < 0.02, `${mode} keeps the midpoint anchored`)
+            assert.ok(
+              Math.abs(start - end) < 0.02,
+              `${mode} keeps the midpoint anchored: ${JSON.stringify({ target, axis, start, end, before, after, gesture, rect, trace: await evaluate(page, 'window.touchTrace') })}`,
+            )
           }
         }
         assert.equal(await evaluate(page, 'visualViewport.scale'), pageScale, `${mode} does not zoom the page`)
         assert.equal(await evaluate(page, 'window.demo.store.sel.anchor'), anchor, `${mode} pinch does not select an entity or finding`)
+      }
+      if (mode !== '3d') {
+        const zoomed = await state(page, mode)
+        await evaluate(page, `document.querySelector('.bv-tools button').click()`)
+        await evaluate(page, 'new Promise(resolve=>requestAnimationFrame(resolve))')
+        assert.notDeepEqual(await state(page, mode), zoomed, `${mode} starts an animated fit`)
+        await touch(page, 'touchStart', [[180, 220]])
+        await touch(page, 'touchStart', [
+          [180, 220],
+          [280, 220],
+        ])
+        const owned = await state(page, mode)
+        await sleep(150)
+        assert.deepEqual(await state(page, mode), owned, `${mode} pinch start cancels the running fit animation`)
+        await touch(page, 'touchEnd', [])
       }
       assert.equal(await evaluate(page, 'window.demo.state.clicks'), 0, 'pinching on a sibling control does not click it')
       const control = await point(page, '.outer-control')

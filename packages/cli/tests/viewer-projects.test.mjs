@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { viewerTools } from '../dist/session/viewers.js'
@@ -343,6 +344,8 @@ test('library lock reads use fresh advisory geometry while the full snapshot rem
   const { emptySelection } = await import('@pcbjs/core/internal/selection')
   const { runtimes, viewers, tools, h } = fixture()
   const rt = runtimes[0]
+  rt.root = join(tmpdir(), 'pcbjs-advisory-lock-test')
+  rt.state.slots[0].entry.file = join(rt.root, 'pcb.tsx')
   const file = join(rt.root, 'layout.tsx')
   const node = { ref: 'R1', caps: ['placed'], at: [1, 2, 0], side: 'F', src: { at: { file, line: 1, col: 1 } } }
   const model = {

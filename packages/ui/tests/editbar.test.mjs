@@ -53,6 +53,7 @@ const render = async node => {
     commands: { run() {} },
     pane: { mode: '2d' },
     board: {
+      invalid: {},
       sel: { refs: [node.ref], anchor: node.caps.includes('chain') ? `${node.ref}/pt:1` : node.ref },
       site: {
         layers: [

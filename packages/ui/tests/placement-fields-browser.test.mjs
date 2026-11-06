@@ -14,10 +14,10 @@ const repo = fileURLToPath(new URL('../../../', import.meta.url)),
 let scopeId = 0
 const entry = `import {createApp,h,provide,reactive,ref} from 'vue';import EditBar from './packages/ui/src/EditBar.vue';
 const node=ref({ref:'R1',at:[10,20,45],m:[1,0,0,1,0,0],caps:['move','rotate']});
-const board=reactive({edit:{mode:{mode:'rw'},client:{}},sel:{anchor:'R1'},site:{layers:[]},note:(text)=>window.note=text});
+const board=reactive({invalid:{},edit:{mode:{mode:'rw'},client:{}},sel:{anchor:'R1'},site:{layers:[]},note:(text)=>window.note=text});
 const calls=[],rw=ref(true),tl={node,tools:ref(['move','rotate']),rw,targets:()=>({node:node.value,refs:['R1']}),banner:ref(''),sourceGrid:ref({pitch:1}),snapEnabled:ref(true),snapOverride:ref(null),gridPitch:ref(null),oneShot:(tool,update)=>{calls.push({tool,update});return new Promise((resolve,reject)=>{window.finish=resolve;window.fail=reject})}};
 const as={on:ref(false),ends:ref(false),ctx:ref(null)};
-window.demo={node,calls,rw};createApp({setup(){provide(Symbol.for('pcbjs:pane'),{board,commands:{run(){}}});return()=>h(EditBar,{tl,as,chip:{x:0,y:0}})}}).mount('#app');`
+window.demo={node,calls,rw};createApp({setup(){provide(Symbol.for('pcbjs:pane'),{board,pane:{mode:'2d'},commands:{run(){}}});return()=>h(EditBar,{tl,as,chip:{x:0,y:0}})}}).mount('#app');`
 const built = await build({
   stdin: { contents: entry, resolveDir: repo, sourcefile: 'placement-fields.ts', loader: 'ts' },
   bundle: true,
