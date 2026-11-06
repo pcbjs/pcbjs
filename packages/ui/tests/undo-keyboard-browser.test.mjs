@@ -54,7 +54,7 @@ test(
       await page.send('Runtime.enable')
       await page.send('Page.enable')
       await page.send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` })
-      await until(page, 'document.querySelector("iframe").contentWindow.ready')
+      await until(page, 'document.querySelector("iframe")?.contentWindow?.ready')
       const f = 'document.querySelector("iframe").contentWindow'
       await evaluate(page, `${f}.document.body.focus()`)
       async function key(redo = false) {
