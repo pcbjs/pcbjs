@@ -128,6 +128,7 @@ export default (
     {manual}
     {inline}
     {wire(10)}
+    {route('5 12').net(SIG).H(10)}
   </PCB>
 )
 `
@@ -171,11 +172,12 @@ export default (
     assert.deepEqual(alias, mapped, detail)
     assert.deepEqual(
       tracks.map(i => i.src?.line),
-      [5, 6, 7],
+      [5, 6, 7, 14],
       JSON.stringify(tracks.map(i => ({ src: i.src, chain: i.chain }))),
     )
     assert.equal(tracks[0].src.col, code.split('\n')[4].indexOf('.H') + 2)
     for (const item of tracks.slice(0, 2)) assert.ok(!item.chain?.some(s => s.call && /[\\/]?pcb\.tsx$/.test(s.file)), JSON.stringify(item.chain))
+    assert.ok(!tracks[3].chain?.some(s => s.call), JSON.stringify(tracks[3].chain))
     const caller = tracks[2].chain?.findLast(s => s.call)
     assert.equal(caller?.line, 13, JSON.stringify(caller))
     assert.equal(caller?.col, code.split('\n')[12].indexOf('wire') + 1, JSON.stringify(caller))

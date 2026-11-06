@@ -3,6 +3,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { framesOf, isOwnFile, isUserFile, localFrames, parseFrame, userFrames } from '../dist/provenance.js'
+import { route } from '../dist/route.js'
+import { memoryPlatform, platform, setPlatform } from '../dist/platform.js'
+import { realm } from '../dist/realm.js'
 import { CHAIN, CHAIN_NAMES, methodOf } from '../dist/syntax.js'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
@@ -42,4 +45,39 @@ test('syntax: methodOf names the chain method each step came from', () => {
   assert.equal(methodOf({ op: 'XZ' }), 'X')
   assert.equal(methodOf({ op: 'W' }), 'width')
   assert.equal(methodOf({ op: 'B' }), 'branch')
+})
+
+test('route provenance compares Windows mapped and unmapped frames by file identity', () => {
+  const previous = platform(),
+    map = realm().mapSrc
+  const call = new Function(
+    'route',
+    `
+return capture(() => route('5 5', { __src: { file: 'pcb.tsx', line: 1, col: 1, endLine: 1, endCol: 99 } }));
+function capture(run) { return run() }
+//# sourceURL=C:/board/pcb.tsx
+`,
+  )
+  try {
+    realm().mapSrc = null
+    setPlatform(
+      memoryPlatform({
+        frame: f => (f.file === 'C:/board/pcb.tsx' ? { file: f.line === 4 ? 'c:\\board\\pcb.tsx' : 'C:/BOARD/PCB.tsx', line: f.line === 4 ? 1 : 100, col: 1 } : null),
+      }),
+    )
+    assert.equal(call(route).props.__src.call, undefined, 'an unmapped capture frame of the same source is not a helper caller')
+    setPlatform(
+      memoryPlatform({
+        frame: f => (f.file === 'C:/board/pcb.tsx' ? { file: f.line === 4 ? 'C:\\board\\PCB.tsx' : 'c:/BOARD/other.tsx', line: f.line === 4 ? 1 : 12, col: 3 } : null),
+      }),
+    )
+    assert.deepEqual(call(route).props.__src.call, { file: 'other.tsx', line: 12, col: 3 })
+    setPlatform(
+      memoryPlatform({ frame: f => (f.file === 'C:/board/pcb.tsx' ? { file: f.line === 4 ? '/board/pcb.tsx' : '/board/PCB.tsx', line: f.line === 4 ? 1 : 12, col: 3 } : null) }),
+    )
+    assert.deepEqual(call(route).props.__src.call, { file: 'PCB.tsx', line: 12, col: 3 }, 'POSIX case still identifies different files')
+  } finally {
+    realm().mapSrc = map
+    setPlatform(previous)
+  }
 })

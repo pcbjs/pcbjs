@@ -55,6 +55,9 @@ const node = (type: string, props: Record<string, any>): PcbNode => ({ $$: 'pcb'
 
 /** Vite's mapping of a frame in Node; a platform that maps frames has mapped them already. */
 const frameMap = (): ((f: Frame) => Frame) | undefined => realm().mapSrc ?? (platform().frame ? f => f : undefined)
+// Vite maps Windows paths to native separators but leaves unmapped capture frames with sourceURL separators.
+const windowsFrame = (file: string): boolean => /^(?:[a-z]:[\\/]|\\\\|\/\/)/i.test(file)
+const frameKey = (file: string): string => (windowsFrame(file) ? file.replace(/\\/g, '/').toLowerCase() : file)
 /** Where the helper that made a route was called from, by the stack past the innermost function around the call; undefined inline or without a source mapper. */
 function callSite(src: unknown): Frame | undefined {
   const s = src as { file?: unknown; line?: unknown; endLine?: unknown; fn?: { line?: unknown; endLine?: unknown } } | undefined
@@ -85,7 +88,8 @@ function callSite(src: unknown): Frame | undefined {
   let i = 0
   for (; i < Math.min(raw.length, 4); i++) {
     const f = at(i)!
-    if (f.file.replace(/\\/g, '/').endsWith('/' + rel) && f.line >= first && f.line <= last) break
+    const suffix = windowsFrame(f.file) ? rel.toLowerCase() : rel
+    if (frameKey(f.file).endsWith('/' + suffix) && f.line >= first && f.line <= last) break
   }
   if (i >= Math.min(raw.length, 4)) return undefined
   const own = at(i)!,
@@ -94,11 +98,11 @@ function callSite(src: unknown): Frame | undefined {
   let up: Frame | undefined
   for (let k = i + 1; k < raw.length && k < i + 24; k++) {
     const f = at(k)!
-    if (f.file !== own.file) {
+    if (frameKey(f.file) !== frameKey(own.file)) {
       up = f
       break
     }
-    if (own.file !== entry) continue
+    if (frameKey(own.file) !== frameKey(entry)) continue
     // in the entry, frames inside the helper are its callbacks; the first one outside is the call
     if (fn) {
       if (f.line < fn.line || f.line > fn.endLine) {
@@ -111,7 +115,9 @@ function callSite(src: unknown): Frame | undefined {
     break
   }
   if (!up) return undefined
-  return { file: up.file.startsWith(root) ? up.file.slice(root.length) : up.file, line: up.line, col: up.col }
+  const relative = up.file.slice(root.length)
+  const file = frameKey(up.file).startsWith(frameKey(root)) ? (frameKey(up.file) === up.file ? relative : relative.replace(/\\/g, '/')) : up.file
+  return { file, line: up.line, col: up.col }
 }
 /** The `__src` of a route call with its caller, see callSite. */
 function withCall(src: { __src?: unknown }): { __src?: unknown } {
