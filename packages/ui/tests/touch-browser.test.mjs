@@ -211,7 +211,7 @@ async function pinch(page, from, cancel = false) {
   return { from: [(down[0][2] + down[1][2]) / 2, (down[0][3] + down[1][3]) / 2], to: [(down[0][2] + end[2]) / 2, (down[0][3] + end[3]) / 2] }
 }
 
-test('mobile pinch owns the canvas, controls and DRC labels in every preview', { skip: chromes().length ? false : 'no Chromium', timeout: 60000 }, async () => {
+test('mobile pinch owns the canvas, controls and DRC labels in every preview', { skip: chromes().length ? false : 'no Chromium', timeout: 180000 }, async t => {
   const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${readFileSync(resolve(repo, 'packages/ui/src/style.css'), 'utf8')}\n${styles.join('\n')}\nhtml,body{margin:0}#app{position:relative;width:480px;height:540px}</style></head><body><div id="app" class="pcbjs-ui pcbjs-view" data-theme="dark"></div><p id="outside">Outside preview</p><script src="/app.js"></script></body></html>`
   const server = createServer((req, res) =>
     res.writeHead(200, { 'content-type': req.url === '/app.js' ? 'text/javascript' : 'text/html' }).end(req.url === '/app.js' ? compiled.outputFiles[0].text : html),
@@ -224,11 +224,18 @@ test('mobile pinch owns the canvas, controls and DRC labels in every preview', {
     page = await cdp(chrome.socket)
     await page.send('Runtime.enable')
     await page.send('Page.enable')
+    const cpuRate = Number(process.env.PCBJS_TOUCH_CPU_RATE ?? 1)
+    assert.ok(Number.isFinite(cpuRate) && cpuRate >= 1, 'touch CPU throttle must be at least 1')
+    if (cpuRate !== 1) await page.send('Emulation.setCPUThrottlingRate', { rate: cpuRate })
+    t.diagnostic(`touch matrix CPU throttle ${cpuRate}x`)
+    const started = performance.now()
+    const progress = message => t.diagnostic(`${message}: ${Math.round(performance.now() - started)} ms`)
     await page.send('Emulation.setDeviceMetricsOverride', { width: 480, height: 640, deviceScaleFactor: 1, mobile: true })
     await page.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
     await page.send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` })
     await until(page, '!!window.demo')
     for (const mode of ['2d', 'sch', '3d']) {
+      progress(`${mode} start`)
       await evaluate(page, `window.demo.state.mode='${mode}'`)
       await until(page, `!!document.querySelector('${canvas[mode]}')`)
       if (mode === '3d') await until(page, `!!window.__pcbjs3d&&!!document.querySelector('.view3d-note .lbl')`)
@@ -302,6 +309,7 @@ test('mobile pinch owns the canvas, controls and DRC labels in every preview', {
         }
         assert.equal(await evaluate(page, 'visualViewport.scale'), pageScale, `${mode} does not zoom the page`)
         assert.equal(await evaluate(page, 'window.demo.store.sel.anchor'), anchor, `${mode} pinch does not select an entity or finding`)
+        progress(`${mode} pinch on ${target}`)
       }
       if (mode !== '3d') {
         const zoomed = await state(page, mode)
@@ -354,6 +362,7 @@ test('mobile pinch owns the canvas, controls and DRC labels in every preview', {
       await touch(page, 'touchEnd', [])
       await until(page, "document.querySelector('#scroll-menu').scrollTop>0")
       await evaluate(page, "document.querySelector('#scroll-menu').remove()")
+      progress(`${mode} controls and scrolling`)
       const beforeCancel = await state(page, mode)
       await pinch(page, [200, 230], true)
       assert.notDeepEqual(await state(page, mode), beforeCancel)
@@ -471,10 +480,12 @@ test('mobile pinch owns the canvas, controls and DRC labels in every preview', {
         )
         assert.equal(await evaluate(page, 'window.demo.store.sel.anchor'), anchor, `${mode} ${reason} cannot become a click`)
       }
+      progress(`${mode} interaction matrix complete`)
       await evaluate(page, 'window.demo.state.mounted=false')
       await until(page, `!document.querySelector('${canvas[mode]}')`)
       await evaluate(page, 'window.demo.state.mounted=true')
       await until(page, `!!document.querySelector('${canvas[mode]}')`)
+      progress(`${mode} remounted`)
     }
     assert.equal(await evaluate(page, `getComputedStyle(document.querySelector('#outside')).touchAction`), 'auto', 'page outside the preview keeps native gestures')
     assert.deepEqual(await evaluate(page, 'window.errors'), [])
