@@ -224,20 +224,26 @@ export interface Sketch {
 /** The keystroke tier, docs/session.md: the entry evaluated by a loader serving the edited file's code, then the geometry of what the changed lines draw; null when they draw nothing. No cache is read or written. */
 export async function sketchEntry(loader: ModuleLoader, cfg: ResolvedConfig, entry: Entry, job: SketchJob): Promise<Sketch | null> {
   const start = performance.now()
-  const { root } = await evaluateEntry(loader, entry, null, job.signal)
-  const evaluated = performance.now()
-  const { board, target } = sketch(root, { defaults: realm().defaults, files: loader.imported(entry.file), sourceRoot: cfg.root, signal: job.signal })
-  // as the site data names files: the transform gives them relative to the root, jsxDEV absolute
-  const rel = (f: string) => sourcePath(cfg.root, f)
-  const { uids, refs } = editedIn(sourceIndex(board, rel)[rel(job.file)] ?? [], job.spans)
-  const ids = touchedIds(board, uids, refs)
-  if (!ids.size) return null
-  let id = job.base
-  const items = board.items.filter(it => ids.has(it.id)).map(it => ({ ...it, id: id++ }))
-  const part = { ...board, items, footprints: board.footprints.filter(fp => refs.has(fp.ref)) }
-  const shaped = siteItems(part)
-  if (process.env.PCBJS_DEBUG_SKETCH) console.error(`sketch evaluate ${(evaluated - start).toFixed(1)} ms, geometry ${(performance.now() - evaluated).toFixed(1)} ms`)
-  return { board: board.name, ...(target !== undefined ? { target } : {}), data: { ...layersFacet(part, cfg.root, shaped), ...shapesFacet(part, shaped) } }
+  let phase = 'evaluate'
+  try {
+    const { root } = await evaluateEntry(loader, entry, null, job.signal)
+    phase = 'geometry'
+    const evaluated = performance.now()
+    const { board, target } = sketch(root, { defaults: realm().defaults, files: loader.imported(entry.file), sourceRoot: cfg.root, signal: job.signal })
+    // as the site data names files: the transform gives them relative to the root, jsxDEV absolute
+    const rel = (f: string) => sourcePath(cfg.root, f)
+    const { uids, refs } = editedIn(sourceIndex(board, rel)[rel(job.file)] ?? [], job.spans)
+    const ids = touchedIds(board, uids, refs)
+    if (!ids.size) return null
+    let id = job.base
+    const items = board.items.filter(it => ids.has(it.id)).map(it => ({ ...it, id: id++ }))
+    const part = { ...board, items, footprints: board.footprints.filter(fp => refs.has(fp.ref)) }
+    const shaped = siteItems(part)
+    if (process.env.PCBJS_DEBUG_SKETCH) console.error(`sketch evaluate ${(evaluated - start).toFixed(1)} ms, geometry ${(performance.now() - evaluated).toFixed(1)} ms`)
+    return { board: board.name, ...(target !== undefined ? { target } : {}), data: { ...layersFacet(part, cfg.root, shaped), ...shapesFacet(part, shaped) } }
+  } finally {
+    if (process.env.PCBJS_DEBUG_SKETCH) console.error(`sketch ${phase} total ${(performance.now() - start).toFixed(1)} ms, cancelled ${!!job.signal?.aborted}`)
+  }
 }
 
 /** The results as Compiled, references linked and models placed; `load` and `run` the ms of loading the entry and of the compile. */

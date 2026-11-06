@@ -4,6 +4,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { h } from '@pcbjs/core/jsx-runtime'
 import PCB, { route, pour } from '@pcbjs/core'
+import { edgeChecks } from '../dist/drc.js'
+import { pulsed } from '../dist/cancel.js'
 import { compileStages, CancelledError } from '../dist/index.js'
 import { fp, P, N } from './parts.mjs'
 
@@ -78,4 +80,35 @@ test('cancel: the router reads the signal inside one leg, not only between legs'
   compileStages(board(), { signal, stage: e => (routing = e.name === 'autoroute' && e.state === 'running') })
   // one read per leg would be 12
   assert.ok(reads > 24, `${reads} cancel points in autoroute`)
+})
+
+test('cancel: edge clearance reads the signal between copper items without changing findings', () => {
+  const tracks = Array.from({ length: 12 }, (_, i) =>
+    route(`0.1 ${2 + i}`)
+      .net(N[`EDGE${i}`])
+      .width(0.4)
+      .H(1),
+  )
+  const b = compileStages(h(PCB, { name: 'EdgeCancel' }, h('rect', { layer: 'Edge.Cuts', x: 0, y: 0, w: 20, h: 20 }), ...tracks), { cache: false })[0].board
+  const expected = edgeChecks(b)
+  assert.equal(expected.length, 12, 'each track violates the same edge rule')
+  let reads = 0
+  assert.throws(
+    () =>
+      pulsed(
+        () => {
+          if (++reads === 7) throw new CancelledError()
+        },
+        () => edgeChecks(b),
+      ),
+    CancelledError,
+  )
+  assert.equal(reads, 7, 'cancellation lands inside the item loop')
+  assert.deepEqual(
+    pulsed(
+      () => {},
+      () => edgeChecks(b),
+    ),
+    expected,
+  )
 })

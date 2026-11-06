@@ -72,6 +72,7 @@ export interface WorkerError {
 
 interface Job {
   msg: Extract<ToWorker, { id: number }>
+  sentAt?: number
   ok(v: unknown): void
   fail(e: unknown): void
   progress?: (p: RouteProgress) => void
@@ -200,6 +201,7 @@ export function workerCompiler(o: WorkerOptions): Compiler {
     const job = jobs.get(m.id)
     if (!job) return
     jobs.delete(m.id)
+    if (job.sentAt !== undefined) o.log(`sketch ${m.id} round trip ${(performance.now() - job.sentAt).toFixed(1)} ms`)
     if (!jobs.size) worker?.unref()
     restarted = false
     if (m.graph) graph = mirrorGraph(m.graph)
@@ -224,7 +226,7 @@ export function workerCompiler(o: WorkerOptions): Compiler {
 
   const ask = <T>(msg: Job['msg'], on: Pick<Job, 'progress' | 'facet' | 'stage'> = {}) =>
     new Promise<T>((ok, fail) => {
-      jobs.set(msg.id, { msg, ok: ok as (v: unknown) => void, fail, ...on })
+      jobs.set(msg.id, { msg, ok: ok as (v: unknown) => void, fail, ...on, ...(msg.t === 'sketch' && process.env.PCBJS_DEBUG_SKETCH ? { sentAt: performance.now() } : {}) })
       const w = thread()
       w.ref()
       w.postMessage(msg)

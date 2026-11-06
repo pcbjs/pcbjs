@@ -165,6 +165,7 @@ const signalOf = (id: number, at = 0) => ({
 })
 
 const rebuildCaches = new Map<string, string>()
+const editable = new Set<string>()
 process.on('exit', () => {
   for (const dir of rebuildCaches.values()) rmSync(dir, { recursive: true, force: true })
 })
@@ -211,6 +212,12 @@ function compile(id: number, entry: Entry, draft: boolean, dev: boolean, formats
       facet: f => post({ t: 'facet', id, f }),
       stage: s => post({ t: 'stage', id, s }),
     })
+    if (dev && !editable.has(entry.file) && !out.some(c => c.site?.halted)) {
+      const start = performance.now()
+      if (![...(modulesFor(vite.environments.ssr.moduleGraph, entry.file) ?? [])].some(m => m.ssrModule)) await evaluateEntry(viteLoader(vite), entry, null, signal)
+      editable.add(entry.file)
+      if (process.env.PCBJS_DEBUG_SKETCH) post({ t: 'log', line: `editable source ready ${entry.rel} ${(performance.now() - start).toFixed(1)} ms` })
+    }
     // the dependency graph is not enumerable, so a message would drop it
     if (out[0]?.partial) return { value: out.map(c => ({ ...c, deps: c.board.deps })) }
     keep(id, entry.file, out)
@@ -276,7 +283,19 @@ let queue: Promise<void> = Promise.resolve()
 parentPort!.on('message', (m: ToWorker) => {
   // an artifact is read from what is kept, never behind a compile
   if (m.t === 'artifact') return artifact(m)
-  queue = queue.then(() => handle(m)).catch(e => post({ t: 'log', line: `compile thread: ${String(e?.message ?? e)}` }))
+  const queued = performance.now()
+  queue = queue
+    .then(async () => {
+      const start = performance.now()
+      if (m.t === 'sketch' && process.env.PCBJS_DEBUG_SKETCH) post({ t: 'log', line: `sketch ${m.id} queued ${(start - queued).toFixed(1)} ms` })
+      try {
+        await handle(m)
+      } finally {
+        if (m.t === 'sketch' && process.env.PCBJS_DEBUG_SKETCH)
+          post({ t: 'log', line: `sketch ${m.id} handled ${(performance.now() - start).toFixed(1)} ms, cancelled ${signalOf(m.id, 1).aborted}` })
+      }
+    })
+    .catch(e => post({ t: 'log', line: `compile thread: ${String(e?.message ?? e)}` }))
 })
 booted.then(
   () => post({ t: 'ready' }),

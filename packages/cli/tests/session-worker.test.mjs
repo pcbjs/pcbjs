@@ -212,3 +212,46 @@ export default <PCB name="Latest"><rect layer="Edge.Cuts" x={0} y={0} w={10} h={
     await c.close()
   }
 })
+
+test('a cached interactive board prepares its source graph before accepting the first edit', { timeout: 30000 }, async () => {
+  const root = tmp('pcbjs-sketch-ready-')
+  linkPackages(root)
+  writeFileSync(join(root, 'pcb.config.ts'), "import { defineConfig } from '@pcbjs/core'\nexport default defineConfig({ entries: ['pcb.tsx'] })\n")
+  const file = join(root, 'pcb.tsx')
+  const code = `import PCB from '@pcbjs/core'
+if (process.env.PCBJS_TEST_EDITABLE_FAIL === '1') throw new Error('editable source preparation failed')
+export default <PCB name="Prepared"><rect layer="Edge.Cuts" x={0} y={0} w={10} h={10}/><text layer="F.SilkS" at="5 5">before</text></PCB>`
+  writeFileSync(file, code)
+  const entry = { file, rel: 'pcb.tsx' }
+  const options = { root, configFile: join(root, 'pcb.config.ts'), log() {} }
+  const seed = workerCompiler(options)
+  try {
+    await seed.compile(entry, { draft: false })
+  } finally {
+    await seed.close()
+  }
+  const interactive = workerCompiler(options)
+  try {
+    const [cached] = await interactive.compile(entry, { draft: false })
+    assert.ok(
+      cached.stages.some(s => s.hit),
+      'the ready board reuses its saved stage cache',
+    )
+    assert.ok(interactive.graph().getModulesByFile(file)?.length, 'editable readiness includes the source evaluation lane')
+    const latest = await interactive.sketch(entry, { file, code: code.replace('before', 'after'), spans: [[1, 4]], base: 1 })
+    assert.equal(latest.board, 'Prepared')
+    assert.ok(latest.data.items.some(it => it.kind === 'text'))
+  } finally {
+    await interactive.close()
+  }
+  const before = process.env.PCBJS_TEST_EDITABLE_FAIL
+  process.env.PCBJS_TEST_EDITABLE_FAIL = '1'
+  const failed = workerCompiler(options)
+  try {
+    await assert.rejects(failed.compile(entry, { draft: false }), /editable source preparation failed/)
+  } finally {
+    await failed.close()
+    if (before === undefined) delete process.env.PCBJS_TEST_EDITABLE_FAIL
+    else process.env.PCBJS_TEST_EDITABLE_FAIL = before
+  }
+})

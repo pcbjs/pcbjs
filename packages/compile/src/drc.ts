@@ -123,6 +123,7 @@ export function edgeChecks(board: Board): DrcMarker[] {
     }
     for (const layer of cu)
       for (const it of board.items) {
+        pulse()
         if (it.kind === 'zone' || !copperLayersOf(it, cu).includes(layer)) continue
         const rings = copperRings(it, layer)
         if (!rings.length) continue
