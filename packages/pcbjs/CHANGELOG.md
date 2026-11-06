@@ -1,5 +1,20 @@
 # @pcbjs/pcbjs
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`b8482c7`](https://github.com/pcbjs/pcbjs/commit/b8482c7ef6a5890b18800947119dfbb8557e56f0), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`2414c09`](https://github.com/pcbjs/pcbjs/commit/2414c092c668a10c8fed0303cec6fc37f5753d27), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`2414c09`](https://github.com/pcbjs/pcbjs/commit/2414c092c668a10c8fed0303cec6fc37f5753d27), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`34214fa`](https://github.com/pcbjs/pcbjs/commit/34214fa00cba59f15e4fb55b19ac9d7c2b03c538), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`b8482c7`](https://github.com/pcbjs/pcbjs/commit/b8482c7ef6a5890b18800947119dfbb8557e56f0), [`34214fa`](https://github.com/pcbjs/pcbjs/commit/34214fa00cba59f15e4fb55b19ac9d7c2b03c538), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`d17d78b`](https://github.com/pcbjs/pcbjs/commit/d17d78b32795061d4d63991f620529c5a1c023d6), [`b8482c7`](https://github.com/pcbjs/pcbjs/commit/b8482c7ef6a5890b18800947119dfbb8557e56f0)]:
+  - @pcbjs/cli@0.1.1
+  - @pcbjs/ui@0.1.1
+  - @pcbjs/skills@0.1.1
+  - @pcbjs/compile@0.1.1
+  - @pcbjs/core@0.1.1
+  - @pcbjs/step@0.1.1
+  - @pcbjs/export@0.1.1
+  - @pcbjs/lsp@0.1.1
+  - @pcbjs/fab@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes

@@ -1,5 +1,27 @@
 # @pcbjs/skills
 
+## 0.1.1
+
+### Patch Changes
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Keep agent-authored board markings focused on physical use. Separate fabrication instructions from review caveats, discourage repeated disclaimers across artifacts, and make branding opt-in.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Preserve supported scalar PBR materials through model conversion, mesh caches, previews and GLB export, and correct imported normals under nonuniform transforms. Retain compatibility with legacy colour-only meshes.
+  
+  Provide shared custom-model composition and GLB authoring APIs, add mesh geometry and winding diagnostics to model checks and MCP, and document reusable stdlib models and custom-model validation.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Verify MCP session attachment before completing initialization and reconnect persistent agents after server restarts even without resource subscriptions. Restore task context, cancel reconnects on transport closure, and avoid restarting stopped servers in the background.
+  
+  Distinguish configured integrations from live agent inboxes in setup output, skills and guidance. Require message-consumption checkpoints and give Codex registrations time to complete the session handshake.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Clear stale hover and recover interrupted pointer gestures across the 2D, schematic and 3D previews. Keep silkscreen visible above solder mask at overview zoom without changing fabrication geometry.
+  
+  Guide agents to inspect actual via dimensions, reuse intentional via sizes across routing APIs, and distinguish rendering defects from fabrication geometry.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Make agent skills load topic references on demand and favor bounded worker tasks for independent work. Keep coordinator context focused on interfaces, decisions and verification, with explicit file and shared MCP inbox ownership. Split the basics tutorial and board patterns into focused references and align MCP guidance with progressive documentation discovery.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Add focused pin/endpoint and placement contracts, shared-project board defaults, resumed-task handoffs and draft-report comparisons that retain failing checks.
+
 ## 0.1.0
 
 ### Minor Changes

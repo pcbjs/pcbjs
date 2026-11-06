@@ -1,5 +1,27 @@
 # @pcbjs/core
 
+## 0.1.1
+
+### Patch Changes
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Recover preview-only geometry before a failing source expression and show a static progress bar with the failed stage in red. Mark DRC/ERC incomplete, reject partial artifact exports, and require a full successful recompile to clear the halted state. Preserve exact source ranges for synchronous JSX expression failures.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Preserve supported scalar PBR materials through model conversion, mesh caches, previews and GLB export, and correct imported normals under nonuniform transforms. Retain compatibility with legacy colour-only meshes.
+  
+  Provide shared custom-model composition and GLB authoring APIs, add mesh geometry and winding diagnostics to model checks and MCP, and document reusable stdlib models and custom-model validation.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Support boolean locked attributes on PCB and schematic part placements. Bare locked means true, while expressions are evaluated on each compile. Carry independent lock flags through viewer metadata, show a selection badge, and refuse preview edits to locked placements or groups containing them. Recheck locks before writing and cancel active drags when targets become locked. Schematic part declarations without at retain automatic placement.
+  
+  Add a toolbar lock toggle for bare attributes, backed by source-aware checks and the existing undo/redo transactions. Expression-based lock states disable the control with an explanatory tooltip and cannot be overwritten by a stale client.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Validate MCP arguments before dispatch, retain structured check provenance, guard live snapshot reuse, and expose selected-entry cold and warm checks through the session scheduler without discarding editor overlays.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Add a board-wide via preference shared by standalone, routed, paired, stitched and patched vias, preserving explicit dimensions and keeping manufacturing minima separate. Report consistent board/class defaults in rulesAt. Describe underlength routes as below their length target and include existing tuning notes in query records.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Support native board-reference poses with 3D translation and quaternion orientation. Preserve scalar rotation and flip, project tilted slabs, bodies and drills correctly, and expose transformed bounds and normals in reference inspection. Collision checks use conservative transformed prisms; referenced boards keep independent fabrication output.
+
+- [`d17d78b`](https://github.com/pcbjs/pcbjs/commit/d17d78b32795061d4d63991f620529c5a1c023d6) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Compare Windows source-frame paths by file identity when attributing route helper callers. Keep generated JSX capture frames from becoming false source locations while preserving real helper call sites and POSIX path case.
+
 ## 0.1.0
 
 ### Minor Changes

@@ -1,5 +1,37 @@
 # @pcbjs/compile
 
+## 0.1.1
+
+### Patch Changes
+
+- [`2414c09`](https://github.com/pcbjs/pcbjs/commit/2414c092c668a10c8fed0303cec6fc37f5753d27) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Read cancellation between copper items in edge-clearance checks so a long outline check can stop promptly without changing its findings.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Keep empty schematic page bounds finite and show a ready empty state for placement-only drafts instead of crashing or leaving the preview loading. Reject invalid cached drawing bounds and recover from invalid saved schematic camera positions.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Recover preview-only geometry before a failing source expression and show a static progress bar with the failed stage in red. Mark DRC/ERC incomplete, reject partial artifact exports, and require a full successful recompile to clear the halted state. Preserve exact source ranges for synchronous JSX expression failures.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Support boolean locked attributes on PCB and schematic part placements. Bare locked means true, while expressions are evaluated on each compile. Carry independent lock flags through viewer metadata, show a selection badge, and refuse preview edits to locked placements or groups containing them. Recheck locks before writing and cancel active drags when targets become locked. Schematic part declarations without at retain automatic placement.
+  
+  Add a toolbar lock toggle for bare attributes, backed by source-aware checks and the existing undo/redo transactions. Expression-based lock states disable the control with an explanatory tooltip and cannot be overwritten by a stale client.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Show compile failures with author source locations, draft-aware code excerpts and useful author call sites instead of pcbjs implementation stacks. Preserve source ranges across the compile worker, keep internal traces behind explicit CLI debugging, and explain differential-pair endpoint net mismatches with actionable context.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Retain current completed manual-route points and copper connectivity in halted previews so endpoint completion and viewer assistance continue working while a route call is unfinished. Automatic routes and pairs remain incomplete and DRC/ERC findings remain unset.
+
+- [`34214fa`](https://github.com/pcbjs/pcbjs/commit/34214fa00cba59f15e4fb55b19ac9d7c2b03c538) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Read cancellation during schematic preparation, clustering and packing instead of waiting until symbol drawing begins. Preserve placement output while keeping long automatic schematic runs responsive to edits.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Validate MCP arguments before dispatch, retain structured check provenance, guard live snapshot reuse, and expose selected-entry cold and warm checks through the session scheduler without discarding editor overlays.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Add a board-wide via preference shared by standalone, routed, paired, stitched and patched vias, preserving explicit dimensions and keeping manufacturing minima separate. Report consistent board/class defaults in rulesAt. Describe underlength routes as below their length target and include existing tuning notes in query records.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Support native board-reference poses with 3D translation and quaternion orientation. Preserve scalar rotation and flip, project tilted slabs, bodies and drills correctly, and expose transformed bounds and normals in reference inspection. Collision checks use conservative transformed prisms; referenced boards keep independent fabrication output.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Fix internal routing failures when same-net trunks on different layers connect with a via and no tracks. Preserve the via-only leg's copper dependencies and cache invalidation so negotiation can reroute it when a supporting trunk moves. Invalidate older router memos, including cached internal failures.
+  
+  Queue legs displaced by late reroutes, including reroutes of dependent branches, so no leg silently loses its result and changes the board when route memos replay.
+- Updated dependencies [[`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`d17d78b`](https://github.com/pcbjs/pcbjs/commit/d17d78b32795061d4d63991f620529c5a1c023d6)]:
+  - @pcbjs/core@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes

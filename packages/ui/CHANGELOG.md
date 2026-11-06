@@ -1,5 +1,39 @@
 # @pcbjs/ui
 
+## 0.1.1
+
+### Patch Changes
+
+- [`b8482c7`](https://github.com/pcbjs/pcbjs/commit/b8482c7ef6a5890b18800947119dfbb8557e56f0) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Read placement lock state from coherent current view geometry without upgrading a view-only compile to a full check. Return pending for changed or unavailable geometry and retry when its facets settle, while preserving full edit transaction guards.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Keep empty schematic page bounds finite and show a ready empty state for placement-only drafts instead of crashing or leaving the preview loading. Reject invalid cached drawing bounds and recover from invalid saved schematic camera positions.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Recover preview-only geometry before a failing source expression and show a static progress bar with the failed stage in red. Mark DRC/ERC incomplete, reject partial artifact exports, and require a full successful recompile to clear the halted state. Preserve exact source ranges for synchronous JSX expression failures.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Support two-finger pinch zoom and pan in 2D and schematic previews, and route gestures over controls and diagnostic labels into the preview in all three views. Cancel active edits when a pinch takes over, prevent accidental post-pinch clicks, and preserve native page gestures outside the preview.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Preserve supported scalar PBR materials through model conversion, mesh caches, previews and GLB export, and correct imported normals under nonuniform transforms. Retain compatibility with legacy colour-only meshes.
+  
+  Provide shared custom-model composition and GLB authoring APIs, add mesh geometry and winding diagnostics to model checks and MCP, and document reusable stdlib models and custom-model validation.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Support boolean locked attributes on PCB and schematic part placements. Bare locked means true, while expressions are evaluated on each compile. Carry independent lock flags through viewer metadata, show a selection badge, and refuse preview edits to locked placements or groups containing them. Recheck locks before writing and cancel active drags when targets become locked. Schematic part declarations without at retain automatic placement.
+  
+  Add a toolbar lock toggle for bare attributes, backed by source-aware checks and the existing undo/redo transactions. Expression-based lock states disable the control with an explanatory tooltip and cannot be overwritten by a stale client.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Clear stale hover and recover interrupted pointer gestures across the 2D, schematic and 3D previews. Keep silkscreen visible above solder mask at overview zoom without changing fabrication geometry.
+  
+  Guide agents to inspect actual via dimensions, reuse intentional via sizes across routing APIs, and distinguish rendering defects from fabrication geometry.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Show compile failures with author source locations, draft-aware code excerpts and useful author call sites instead of pcbjs implementation stacks. Preserve source ranges across the compile worker, keep internal traces behind explicit CLI debugging, and explain differential-pair endpoint net mismatches with actionable context.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Make read-only access visible, use server-granted permissions for editing and source navigation, and revoke editing on disconnect. Keep repository navigation behind explicit source actions. Preserve remote read-only permissions through tunnels and component proxies, enforce editor HTTP access, and carry configured remote-edit tokens into viewer connections. Keep credentials out of TCP status and HTTP assets, restrict read-only source reads to non-hidden project files, and prevent read-only handshakes from attaching additional projects.
+
+- [`b8482c7`](https://github.com/pcbjs/pcbjs/commit/b8482c7ef6a5890b18800947119dfbb8557e56f0) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Keep solder mask from tinting silkscreen when distant surfaces round to the same depth on software renderers. Apply a small depth-unit bias to silk, preserve it in grouped highlight prepasses, and retain occlusion by nearby component bodies.
+- Updated dependencies [[`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`d17d78b`](https://github.com/pcbjs/pcbjs/commit/d17d78b32795061d4d63991f620529c5a1c023d6)]:
+  - @pcbjs/core@0.1.1
+  - @pcbjs/step@0.1.1
+  - @pcbjs/export@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes

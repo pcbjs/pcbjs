@@ -1,5 +1,23 @@
 # @pcbjs/export
 
+## 0.1.1
+
+### Patch Changes
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Preserve supported scalar PBR materials through model conversion, mesh caches, previews and GLB export, and correct imported normals under nonuniform transforms. Retain compatibility with legacy colour-only meshes.
+  
+  Provide shared custom-model composition and GLB authoring APIs, add mesh geometry and winding diagnostics to model checks and MCP, and document reusable stdlib models and custom-model validation.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Support boolean locked attributes on PCB and schematic part placements. Bare locked means true, while expressions are evaluated on each compile. Carry independent lock flags through viewer metadata, show a selection badge, and refuse preview edits to locked placements or groups containing them. Recheck locks before writing and cancel active drags when targets become locked. Schematic part declarations without at retain automatic placement.
+  
+  Add a toolbar lock toggle for bare attributes, backed by source-aware checks and the existing undo/redo transactions. Expression-based lock states disable the control with an explanatory tooltip and cannot be overwritten by a stale client.
+
+- [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Support native board-reference poses with 3D translation and quaternion orientation. Preserve scalar rotation and flip, project tilted slabs, bodies and drills correctly, and expose transformed bounds and normals in reference inspection. Collision checks use conservative transformed prisms; referenced boards keep independent fabrication output.
+- Updated dependencies [[`2414c09`](https://github.com/pcbjs/pcbjs/commit/2414c092c668a10c8fed0303cec6fc37f5753d27), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`34214fa`](https://github.com/pcbjs/pcbjs/commit/34214fa00cba59f15e4fb55b19ac9d7c2b03c538), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`90ec7d2`](https://github.com/pcbjs/pcbjs/commit/90ec7d2d933d2f9144fc65c16ed47e3f0b7f0243), [`d17d78b`](https://github.com/pcbjs/pcbjs/commit/d17d78b32795061d4d63991f620529c5a1c023d6)]:
+  - @pcbjs/compile@0.1.1
+  - @pcbjs/core@0.1.1
+  - @pcbjs/step@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes

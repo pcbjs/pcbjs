@@ -8,9 +8,9 @@
     "preview": "pcbjs preview"
   },
   "devDependencies": {
-    "@pcbjs/pcbjs": "0.1.0",
-    "@pcbjs/core": "0.1.0",
-    "@pcbjs/fab": "0.1.0",
+    "@pcbjs/pcbjs": "0.1.1",
+    "@pcbjs/core": "0.1.1",
+    "@pcbjs/fab": "0.1.1",
     "@pcbjs/lib": "0.1.0"
   }
 }
