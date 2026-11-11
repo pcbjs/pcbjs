@@ -141,6 +141,22 @@ export function cyclesOf(g: DepGraph): number[][] {
 export function checkCycles(g: DepGraph): void {
   const [first] = cyclesOf(g)
   if (!first) return
-  const members = first.map(i => g.nodes[i])
+  const inside = new Set(first)
+  const next = new Map(first.map(v => [v, g.edges.filter(([a, b]) => a === v && inside.has(b)).map(([, b]) => b)]))
+  const path = [first[0]]
+  const seen = new Set(path)
+  const close = (v: number): boolean => {
+    for (const w of next.get(v)!) {
+      if (w === path[0]) return true
+      if (seen.has(w)) continue
+      seen.add(w)
+      path.push(w)
+      if (close(w)) return true
+      path.pop()
+    }
+    return false
+  }
+  close(first[0])
+  const members = path.map(i => g.nodes[i])
   throw new CycleError(codeOf(members), members)
 }

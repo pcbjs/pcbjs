@@ -1,18 +1,18 @@
-// `.pcbjs/cache/route/<board>.json` v1: { version, board, groups: { <"" or variant slug>: { legs, tunes? } } }
-// Leg: obs hashes the pass's final copper in box without the leg's own route; a failed leg has result null and the board as box.
+// `.pcbjs/cache/route/<board>.json` v2: { version, board, groups: { <"" or variant slug>: { legs, tunes? } } }
+// Leg: reads records the original hard search inputs; legacy result-box entries are not reused.
 // Tune: obs hashes the copper, holes, courtyards and silk around the meanders when the step ran.
 // Only the entries a compile used are written back.
 import type { RouteResult } from '@pcbjs/core/internal/types'
 import type { Prim } from '@pcbjs/core/model'
+import type { RoutingReads } from './routing-reads.js'
 import { platform } from '@pcbjs/core/platform'
 
-/** `narrow`: the end of a joining leg kept off a trunk too narrow for it, see autorouter.md */
+/** A raw built-in maze result at its original search inputs; joining state is recomputed. */
 export interface LegEntry {
-  obs: string
-  box: [number, number, number, number]
-  result: RouteResult | null
-  fail?: { reason: string; layers: string[]; ripup: number }
-  narrow?: { side: 0 | 1; kept: boolean }
+  reads: RoutingReads
+  /** Exact result encoding guards accidental memo corruption at the file boundary. */
+  value: string
+  result: RouteResult
 }
 /** A pair as the tuner leaves it: its centre line and its layout. */
 export interface PairState {
@@ -43,13 +43,13 @@ interface Group {
   tunes?: Record<string, TuneEntry>
 }
 interface CacheFile {
-  version: 1
+  version: 2
   board: string
   groups: Record<string, Group>
 }
 
 /** Bumped whenever the router changes what it produces, so old entries are not reused. */
-export const ROUTER_VERSION = 'maze-7'
+export const ROUTER_VERSION = 'maze-8'
 
 const KEY = Symbol.for('pcbjs.routeCache')
 function store(): Map<string, CacheFile> {
@@ -80,8 +80,8 @@ export class RouteCache {
   ) {
     const key = `${dir ?? ''}\u0000${board}`
     let f = store().get(key)
-    if (!f) {
-      f = this.read() ?? { version: 1, board, groups: {} }
+    if (!f || f.version !== 2) {
+      f = this.read() ?? { version: 2, board, groups: {} }
       store().set(key, f)
     }
     this.file = f
@@ -97,7 +97,8 @@ export class RouteCache {
   }
 
   leg(key: string): LegEntry | undefined {
-    return this.used.legs[key] ?? this.stored.legs[key]
+    const entry = this.used.legs[key] ?? this.stored.legs[key]
+    return validLeg(entry) ? entry : undefined
   }
   putLeg(key: string, e: LegEntry) {
     this.used.legs[key] = e
@@ -128,31 +129,88 @@ export class RouteCache {
       }
       return
     }
-    const before = JSON.stringify(this.file.groups[this.group] ?? null)
+    const before = this.file.groups[this.group]
     this.file.groups[this.group] = this.used
     const p = platform()
-    if (!p.store || !this.dir || JSON.stringify(this.used) === before) return
+    if (!p.store || !this.dir || (before && sameEntries(before.legs, this.used.legs) && sameEntries(before.tunes, this.used.tunes))) return
     p.store.write(p.path.join(this.dir, fileName(this.board)), format(this.file))
   }
 }
 
-/** The file as JSON with one leg or tune per line, so a diff of it shows which routes changed. */
+const sameEntries = (a: Record<string, unknown> = {}, b: Record<string, unknown> = {}): boolean => {
+  const keys = Object.keys(a)
+  return keys.length === Object.keys(b).length && keys.every(k => a[k] === b[k])
+}
+
+/** Persist each identical exact topology once; references are dictionary indices,
+ * not digests standing in for equality. Runtime entries retain the exact string. */
 function format(f: CacheFile): string {
-  const J = JSON.stringify
-  const entries = (o: Record<string, unknown>) =>
-    Object.entries(o)
-      .map(([k, v]) => `    ${J(k)}: ${J(v)}`)
-      .join(',\n')
-  const groups = Object.entries(f.groups)
-    .map(([name, g]) => `  ${J(name)}: {\n   "legs": {\n${entries(g.legs)}\n   }${g.tunes ? `,\n   "tunes": {\n${entries(g.tunes)}\n   }` : ''}\n  }`)
-    .join(',\n')
-  return `{\n "version": 1,\n "board": ${J(f.board)},\n "groups": {\n${groups}\n }\n}\n`
+  const topologies: string[] = []
+  const indices = new Map<string, number>()
+  const intern = (value: string) => {
+    let index = indices.get(value)
+    if (index === undefined) {
+      index = topologies.length
+      indices.set(value, index)
+      topologies.push(value)
+    }
+    return index
+  }
+  const groups = Object.fromEntries(
+    Object.entries(f.groups).map(([name, group]) => [
+      name,
+      {
+        ...group,
+        legs: Object.fromEntries(
+          Object.entries(group.legs)
+            .filter(([, leg]) => validLeg(leg))
+            .map(([key, leg]) => [key, { ...leg, reads: { ...leg.reads, topology: intern(leg.reads.topology) } }]),
+        ),
+      },
+    ]),
+  )
+  return JSON.stringify({ version: f.version, board: f.board, topologies, groups }, null, 1) + '\n'
+}
+
+/** The persisted boundary rejects incomplete or malformed read certificates. */
+function validLeg(value: unknown): value is LegEntry {
+  if (!value || typeof value !== 'object') return false
+  const e = value as Partial<LegEntry>,
+    r = e.reads
+  if (!r || r.version !== 2 || typeof r.globals !== 'string' || typeof r.topology !== 'string' || typeof r.requests !== 'string' || typeof e.value !== 'string') return false
+  if (!e.result || !Array.isArray(e.result.tracks) || !Array.isArray(e.result.vias)) return false
+  const m = r.maze
+  return (
+    !!m &&
+    typeof m.global === 'string' &&
+    Array.isArray(m.fields) &&
+    m.fields.every(
+      f =>
+        f &&
+        typeof f.name === 'string' &&
+        Number.isSafeInteger(f.size) &&
+        f.size >= 0 &&
+        Array.isArray(f.runs) &&
+        f.runs.every(run => Array.isArray(run) && run.length === 2 && Number.isSafeInteger(run[0]) && run[0] >= 0 && typeof run[1] === 'string'),
+    ) &&
+    Array.isArray(m.queries) &&
+    m.queries.every(q => q && (q.kind === 'point' || q.kind === 'segment') && Array.isArray(q.args) && typeof q.value === 'boolean')
+  )
 }
 
 function parseMemo(text: string | null): CacheFile | null {
   try {
     const data = text === null ? null : JSON.parse(text)
-    return data && data.version === 1 && data.groups && typeof data.groups === 'object' ? data : null
+    if (!data || data.version !== 2 || !data.groups || typeof data.groups !== 'object') return null
+    for (const group of Object.values(data.groups) as Group[]) {
+      if (!group || typeof group !== 'object' || !group.legs || typeof group.legs !== 'object') return null
+      for (const [key, raw] of Object.entries(group.legs)) {
+        const token: unknown = raw?.reads?.topology
+        if (typeof token === 'number' && Number.isSafeInteger(token) && token >= 0 && typeof data.topologies?.[token] === 'string') raw.reads.topology = data.topologies[token]
+        if (!validLeg(raw)) delete group.legs[key]
+      }
+    }
+    return { version: 2, board: data.board, groups: data.groups }
   } catch {
     return null
   }

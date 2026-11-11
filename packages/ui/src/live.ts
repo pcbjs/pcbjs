@@ -59,9 +59,20 @@ export function mergeLive(h: LiveBoard | undefined, set: FacetSet, run: Run | nu
   return { live: h, changed }
 }
 
+/** Results belong to the geometry shown only after their facet catches up, including cancelled runs. */
+export function facetCurrent(b: LiveBoard, facet: 'findings' | 'fab'): boolean {
+  const held = b.facets[facet]
+  const geometry = Math.max(runN(b.facets.meta?.run), runN(b.facets.layers?.run))
+  return !!held && runN(held.run) >= geometry && (b.edit === undefined || runN(held.run) > b.edit)
+}
+
 /** The board's data from its facets, the sketch drawn over its layers and its shapes. */
 export function siteOfLive(b: LiveBoard): SiteData {
-  const site = joinSite(Object.fromEntries(Object.entries(b.facets).map(([f, h]) => [f, h!.data])) as Facets)
+  const facets = Object.fromEntries(Object.entries(b.facets).map(([f, h]) => [f, h!.data])) as Facets
+  const pending = (['findings', 'fab'] as const).filter(f => !facetCurrent(b, f))
+  for (const f of pending) delete facets[f]
+  const site = joinSite(facets)
+  if (pending.length) site.pending = pending
   const d = b.sketch?.data as Partial<SiteData> | undefined
   if (!d) return site
   const svg = new Map((d.layers ?? []).map(l => [l.id, l.svg]))

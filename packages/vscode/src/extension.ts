@@ -126,7 +126,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const merger = new Merger({ log: line => output.appendLine(`[merge] ${line}`) })
   const activity = new Activity()
-  const told = new Set<string>()
   /** each board's selection as the session last logged it */
   const selections = new Map<string, string[]>()
   const sender = new AgentSender({
@@ -154,7 +153,6 @@ export function activate(context: vscode.ExtensionContext): void {
     if (!activity.event(e)) return
     renderAgents()
     if (e.kind === 'edit' && e.data?.shadowed) void merger.shadowed(path.join(e.project, e.data.file), e.by?.name ?? null)
-    if (e.kind === 'message' && e.data?.to === 'editor' && e.by?.role === 'agent') announcePlan(server, e)
   }
 
   /** A board's selection: kept for Stop and tell, and its anchor revealed in the Boards tree when the board is shown. */
@@ -162,18 +160,6 @@ export function activate(context: vscode.ExtensionContext): void {
     if (!sel?.board || !Array.isArray(sel.refs)) return
     selections.set(sel.board, sel.refs)
     if (sel.board === boardOf()?.name) sidebar.reveal(sel.refs, sel.anchor)
-  }
-
-  /** An agent's plan as a notification; Reply opens the input bound to it. */
-  function announcePlan(server: PcbjsServer, e: SessionEvent<'message'>): void {
-    const d = e.data
-    if (!d.plan?.length || told.has(e.id)) return
-    told.add(e.id)
-    const name = e.by!.name
-    const text = `pcbjs: ${name} plans${d.task ? ` ${d.task}` : ''}: ${d.plan.map((l: string, i: number) => `${i + 1}. ${l}`).join(' ')}`
-    void vscode.window.showInformationMessage(text, 'Reply').then(a => {
-      if (a) void tell(e.by!.client, `Reply to ${name}`)
-    })
   }
 
   /** A note to one agent with the current selection, through `session/send` as the MCP server reads it. */

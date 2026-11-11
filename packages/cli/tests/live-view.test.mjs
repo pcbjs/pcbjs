@@ -108,7 +108,7 @@ test('a schematic view compiles no copper; successive edits settle on the latest
     writeFileSync(file, text.replace('<Q1 at="26 10" />', '<Q1 at="25.5 10" />'))
     await until(() => v.got.slice(n).find(e => e.event === 'pcbjs:facet'))
     n = v.got.length
-    writeFileSync(file, text.replace('<Q1 at="26 10" />', '<Q1 at="25 10" />'))
+    writeFileSync(file, text.replace('<Q1 at="26 10" />', '<Q1 at="25 10" />').replace("route('3 10').net(VCC).width(0.3).H(9)", "route('3 10').net(VCC).width(0.31).H(8.5)"))
     const latest = await until(() => v.got.slice(n).find(e => e.event === 'pcbjs:invalidate'))
     await until(() => v.got.slice(n).find(e => e.event === 'pcbjs:status' && e.phase === 'idle' && e.run > latest.edit))
     const events = v.got.slice(v.got.indexOf(latest) + 1)
@@ -117,9 +117,35 @@ test('a schematic view compiles no copper; successive edits settle on the latest
       facets.every(e => e.run > latest.edit),
       'no facets from a superseded edit',
     )
+    const base = facets.find(e => e.facet === 'layers')
+    assert.ok(base, 'the latest edit streams a geometry base')
+    assert.equal(base.stage, 'manual', 'explicit geometry is the first rebuild drawing')
+    assert.deepEqual(
+      facets.find(e => e.facet === 'meta' && e.run === base.run)?.data.footprints.find(f => f.ref === 'Q1')?.at,
+      [25, 10],
+      'the base uses the latest explicit placement',
+    )
+    for (const layer of facets.filter(e => e.facet === 'layers'))
+      assert.ok(
+        layer.data.items.some(it => it.kind === 'track' && it.width === 0.31 && it.box?.[0] < 3 && it.box[2] > 8.5 && it.box[2] < 9 && it.box[1] < 10 && it.box[3] > 10),
+        `${layer.stage} keeps the edited VCC leg from 3,10 to 8.5,10 visible`,
+      )
+    const solver = events.findIndex(e => e.event === 'pcbjs:status' && e.run === base.run && e.stages?.some(g => g.name === 'autoroute' && g.state === 'running'))
+    assert.ok(solver > events.indexOf(base), 'manual geometry arrives before routing starts')
+    const final = facets.findLast(e => e.facet === 'layers')
+    assert.equal(final.run, base.run, 'finished geometry replaces the base within its run')
+    assert.ok(events.indexOf(final) > solver, 'finished geometry arrives after routing starts')
+    assert.ok(!events.slice(0, solver).some(e => e.event === 'pcbjs:facet' && e.facet === 'findings'), 'the base does not publish completed checks')
     const meta = v.got.findLast(e => e.event === 'pcbjs:facet' && e.facet === 'meta')
     assert.deepEqual(meta?.data.footprints.find(f => f.ref === 'Q1')?.at, [25, 10])
     await holdsCurrent(v, 'Blinky', ['meta', 'layers', 'findings'])
+    // A download requested before the watcher catches this write must build the current revision.
+    writeFileSync(file, readFileSync(file, 'utf8').replace('rev="0.1.0"', 'rev="0.1.2"'))
+    const zip = await fetch(`http://127.0.0.1:${s.port}/__pcbjs/Blinky/fab/latest.zip`)
+    assert.equal(zip.status, 200)
+    assert.match(zip.headers.get('content-disposition'), /Blinky-fab-0\.1\.2\.zip/)
+    assert.equal(zip.headers.get('content-type'), 'application/zip')
+    assert.ok((await zip.arrayBuffer()).byteLength > 0)
     v.close()
   } finally {
     await s.stop()

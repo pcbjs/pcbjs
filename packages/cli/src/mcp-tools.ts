@@ -294,7 +294,8 @@ export const TOOLS: Tool[] = [
   },
   {
     name: 'session',
-    description: 'Say what you do, before your first edit and as it changes: task one line, plan up to five lines, progress one line. Returns the session and its clients.',
+    description:
+      'Record task, plan and progress in agent activity: task one line, plan up to five lines, progress one line. Notify the user in your main chat; this does not show a VS Code notification. Returns the session and its clients.',
     inputSchema: obj({ task: { type: 'string' }, plan: strings, progress: { type: 'string' } }),
     async run(a, cx) {
       const said = a.task || a.plan || a.progress ? await cx.ask('session/describe', { task: a.task, plan: a.plan, progress: a.progress }) : null
@@ -317,6 +318,7 @@ for (const tool of TOOLS) {
 export const INSTRUCTIONS = [
   'pcbjs designs printed circuit boards as TypeScript and JSX; this server is a client of the pcbjs session that compiles them.',
   'Before your first edit call session with your task and a plan of up to five lines, and update progress as you go. If workers share this connection, the coordinator owns its task/progress and inbox; workers must not overwrite them.',
+  'Notify the user of plans, meaningful progress, questions and completion in your main chat session. The session tool records agent activity; it does not notify the user through VS Code. Workers report to the coordinator, who communicates with the user.',
   'Use check after each change, query and inspect for detail, render to look. Change source with write, edits anchored on text you read; never overwrite an existing file whole.',
   'Messages from the human arrive at the top of a tool result; act on them first and relay relevant corrections to workers. Discover docs with no arguments, then load only the needed topic; combine topic and grep for a focused search. Do not preload all docs or skill references.',
   'For independent work areas, prefer focused workers when the harness permits delegation. Give bounded outcomes, file ownership, constraints and checks. Workers load their own detailed context and return decisions, changed paths, verification and risks with evidence links. Keep coordinator context to scope, interfaces, decisions and integration; small tasks can stay in one agent.',

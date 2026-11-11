@@ -17,7 +17,7 @@ async function artifactFile(
 ): Promise<{ type: string; body: string | Buffer; name?: string } | null> {
   const zip = c.site.fab.name
   if (file === `${c.board.name}.pcb.svg`) return { type: 'image/svg+xml', body: (await fetch('svg')) ?? '' }
-  if (file === `fab/${zip}`) return { type: 'application/zip', body: Buffer.from(zipFab(await fetch('fab'))), name: zip }
+  if (file === 'fab/latest.zip' || file === `fab/${zip}`) return { type: 'application/zip', body: Buffer.from(zipFab(await fetch('fab'))), name: zip }
   const name = file.slice('fab/'.length)
   if (file.startsWith('fab/') && c.site.fab.files.includes(name)) return { type: 'text/plain; charset=utf-8', body: (await fetch('fab')).files[name] }
   return null
@@ -79,6 +79,12 @@ export function httpRoutes(h: Hub): Connect.NextHandleFunction {
     const sc = ws.scopes.find(s => s.dir === root)
     const rt = sc ? await h.load(sc) : null
     await rt?.compiledOnce()
+    const settled = rt ? await rt.settle(120_000) : null
+    if (rt && (!settled?.snap || settled.stale)) {
+      res.statusCode = 503
+      res.end('Current board outputs are not ready. Try again after compilation settles.')
+      return
+    }
     const slots = rt?.state.slots ?? []
     const live = liveSlots(slots)
     const route = routeEndpoint(url.slice('/__pcbjs/'.length), live.map(slotName), slugsOf(slots))
@@ -91,6 +97,11 @@ export function httpRoutes(h: Hub): Connect.NextHandleFunction {
     const c = targets.find(t => !route.variant || (t.board.variant && variantSlug(t.board.variant.name) === route.variant)) ?? targets[0]
     if (route.file === 'board.json') return json(res, c.site)
     const got = await artifactFile(c, route.file, kind => rt.artifact(c, kind)).catch((e: Error) => e)
+    if (settled?.snap && rt.snapshotStale(settled.snap)) {
+      res.statusCode = 503
+      res.end('The board changed while preparing its outputs. Try again after compilation settles.')
+      return
+    }
     if (!got || got instanceof Error) {
       res.statusCode = 404
       res.end(got ? got.message : 'not found')

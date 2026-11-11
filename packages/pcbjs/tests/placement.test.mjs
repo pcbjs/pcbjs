@@ -99,13 +99,35 @@ test('at:cost: null forbids a pose and a number adds to the search', () => {
 test('at:solver: wins over at:cost, may call it, sees at:initial and the fixed slots, and a fixed slot wins over its pose', () => {
   const N = nets()
   const seen = []
+  let manual
   const solver = (layout, req) => {
+    assert.ok(manual, 'fixed placements stream before placement solvers')
+    assert.deepEqual(
+      manual.footprints.map(f => f.ref),
+      ['J1'],
+    )
+    assert.ok(
+      manual.items.every(i => i.ref !== 'R1'),
+      'unresolved pads are not current geometry',
+    )
+    assert.equal(manual.items[manual.footprints[0].pads[0] - 1].ref, 'J1', 'projected pad ids address the projected items')
+    const tracks = manual.items.filter(i => i.kind === 'track')
+    assert.ok(
+      tracks.some(t => t.pts.some(p => p[0] === 8 && p[1] === 14)),
+      'a known numeric prefix point remains usable',
+    )
+    assert.ok(!tracks.some(t => t.pts.some(p => p[1] === 12)), 'an unresolved authored end never aliases its known prefix')
     seen.push({ ...req, cost: req.cost(5, 5, 0), j1: layout.part('J1')?.x })
     return { x: 7, y: 8, r: 45 }
   }
-  const b = compileBoard(
-    board({}, chip('J1', { at: '4 10' }, N.A, N.B), chip('R1', { at: 'auto auto 180', 'at:initial': '1 2 180', 'at:solver': solver, 'at:cost': () => 3 }, N.A, N.B)),
-  )
+  const R1 = chip('R1', { at: 'auto auto 180', 'at:initial': '1 2 180', 'at:solver': solver, 'at:cost': () => 3 }, N.A, N.B)
+  const J1 = chip('J1', { at: '4 10' }, N.A, N.B)
+  const trunk = route(handle('J1.1'), handle('R1.1')).H(8).Z()
+  const b = compileBoard(board({}, R1, J1, trunk, route(trunk.end, '8 12').net(N.A).Z(), route(trunk.pt(1), '8 14').net(N.A).Z()), {
+    stage: e => {
+      if (e.name === 'manual' && e.board) manual = e.board
+    },
+  })
   assert.deepEqual(at(b, 'R1').at, [7, 8])
   assert.equal(at(b, 'R1').rot, 180)
   assert.equal(seen[0].ref, 'R1')

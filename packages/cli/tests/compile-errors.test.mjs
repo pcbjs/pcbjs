@@ -148,7 +148,7 @@ test('pair error survives worker transport with its exact draft range and clean 
         error.preview[0].site.footprints.map(p => p.ref),
         ['J9', 'J1'],
       )
-      assert.equal(error.preview[0].site.halted.stage, 'place')
+      assert.equal(error.preview[0].site.halted.stage, 'manual')
       assert.deepEqual(error.preview[0].site.drc, [])
       assert.deepEqual(error.preview[0].site.erc, [])
       assert.equal(error.preview[0].site.fab.status, 'incomplete')
@@ -175,7 +175,7 @@ test('preview payloads and error events carry source context without internal st
     const slug = workspace.scopes[0].slug
     const payload = await (await fetch(base + '/__pcbjs/scope/' + slug)).json()
     const text = payload.errors['pcb.tsx']
-    assert.equal(payload.boards[0].facets.meta.halted.stage, 'place')
+    assert.equal(payload.boards[0].facets.meta.halted.stage, 'manual')
     assert.deepEqual(
       payload.boards[0].facets.meta.footprints.map(p => p.ref),
       ['J9', 'J1'],

@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { h } from '@pcbjs/core/jsx-runtime'
 import PCB, { route, resetDefaults } from '@pcbjs/core'
 import { compileBoard } from '@pcbjs/compile'
-import { clearRouteCache, hash } from '@pcbjs/compile/internal/route-cache'
+import { clearRouteCache } from '@pcbjs/compile/internal/route-cache'
 import { fp, handle } from './parts.mjs'
 
 afterEach(() => resetDefaults())
@@ -36,7 +36,7 @@ const withDir = async f => {
 
 // ---- 1. the cache ----
 
-test('cache: two stored legs that cross, each with a matching obstacle hash, are not both reused: the later one routes again', () =>
+test('cache: a damaged raw search result is rejected before it can introduce crossing copper', () =>
   withDir(dir => {
     // A runs across, B down through it on F.Cu only by the stored result; B on two layers can go under A
     const mk = () =>
@@ -54,16 +54,12 @@ test('cache: two stored legs that cross, each with a matching obstacle hash, are
     const opts = { cache: { dir } }
     const cold = compileBoard(mk(), opts)
     assert.deepEqual(errors(cold), [])
-    // a cache as a run that went wrong left it: B straight across A on F.Cu, and both obstacle hashes over an empty box far away,
-    // so the hash check alone passes both
+    // Keep the input certificate but damage B's result; the persisted value must
+    // agree before replay, even when its input queries remain valid.
     const file = join(dir, 'route', 'Bad.json'),
       data = JSON.parse(readFileSync(file, 'utf8'))
-    const legs = data.groups[''].legs,
-      far = [1000, 1000, 1001, 1001],
-      empty = hash('')
+    const legs = data.groups[''].legs
     for (const e of Object.values(legs)) {
-      e.box = far
-      e.obs = empty
       if (e.result.tracks[0].pts[0][0] === 15) {
         e.result.tracks = [
           {

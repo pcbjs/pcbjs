@@ -40,7 +40,7 @@ When a leg finds no path, PathFinder negotiated congestion routing takes over.
 - Each round, legs sharing copper with another net reroute, from round two also legs near such a spot. The price grows per round and shared cells keep a history cost.
 - A leg pays on cells of its own priority or higher and ignores lower legs; of two colliding legs the lower reroutes, both when equal.
 - After `ripup` rounds, 12 by default, the lowest priority leg with most collisions leaves the board until nothing collides; each tries once more, else `route-failed` naming the route it hit.
-- A late reroute can displace another leg or remove a trunk another leg joined. Both return to the pending queue; every leg finishes with copper or an explicit failure before its result is cached.
+- A late reroute can displace another leg or remove a trunk another leg joined. Both return to the pending queue; every leg finishes with copper or an explicit failure.
 - Deterministic. `board.routing.rounds` and `board.routing.ripped` count rounds and legs taken off; `pcbjs check` prints both.
 
 Give long control lines a lower `priority` than the pairs they cross. `ripup: 0` turns negotiation off; on one route it keeps its legs where the order puts them.
@@ -100,13 +100,13 @@ error    route-failed  F.Cu  at (12.00, 7.50)  R1, D1, J1  pcb.tsx:16:6: cannot 
 
 ## Cache and holds
 
-Each automatic leg is cached by its request, priority included, and a hash of the copper around it, laid out pairs in. A leg of a route with a chain, branches or more than two ends is keyed on the whole route as written too, so two routes that differ in a branch share no leg. A warm compile places stored legs, and a leg that collides or whose surroundings or priority changed reroutes, with the legs around it. A joining leg stores only its copper from the junction, its hash including its net's earlier copper.
+The built-in maze search records the occupied and free cells it consults, via guards, avoidance reads and exact point/segment checks, including rejected shortcuts. Reuse validates those reads against the routing world at the original solve point. A moved obstacle can invalidate a rejected alternative even when it is far from the finished trace; unrelated changes can leave the search reusable. Requests, rules, topology and global search inputs must also match.
 
-- In memory for the process, and on disk in `.pcbjs/cache/route/<board>.json`, read and written by `pcbjs build`, `check`, `inspect`, `dev` and the session; `compileBoards` writes it only when given `cache: { dir }`. These are the leg and tune memos of the `autoroute` and `tune` stages: a stage hit skips the router, a miss takes every leg whose obstacle hash still matches. Their keys start with `ROUTER_VERSION` and `TUNE_VERSION`, so another compiler version keeps routing warm while every stage output misses; see design.md.
-- One leg or tune step per line; only entries the last compile used stay. Delete the file, or run `check --fresh=all`, to reroute everything.
-- A failed leg stays failed until the board or its `ripup` changes.
-- A custom `RouteFn` is never cached. Length tuning steps share the file, see length.md.
-- A cold compile may differ from a warm one after many edits.
+- In memory for the process, and on disk in `.pcbjs/cache/route/<board>.json`, read and written by `pcbjs build`, `check`, `inspect`, `dev` and the session; `compileBoards` writes it only when given `cache: { dir }`. A whole-stage hit skips routing; otherwise individual pure searches may be reused. `ROUTER_VERSION` and `TUNE_VERSION` invalidate incompatible memos; see design.md.
+- Only raw search results are reused. Joining, widening, ownership and route ordering are evaluated against current geometry. Congestion negotiation and custom routers bypass individual search reuse; the existing stage cache remains available for unchanged coupled work.
+- Failed attempts are rerun before a later successful search may be reused. Removing a blocker can therefore make an earlier attempt succeed. Failures and cancellation are not stored as reusable search results.
+- Only entries the last compile used stay. Shared topology values are stored once in a dictionary and compared exactly after loading. Delete the file, or run `check --fresh=all`, to reroute everything. Length tuning shares the file, see length.md.
+- Search reuse requires identical recorded values, not merely a DRC-clean result. This preserves deterministic search behavior; it does not claim global route optimality or machine-checked equivalence of the entire compiler.
 
 `pcbjs patch hold route:3` freezes a route: it writes the copper of its automatic legs into the `.patches.ts` file beside the entry, tracked source, and the router places that copper first, an obstacle to every other leg, until the route's request, ends, net, width or layers change; tuning runs over it as over any leg. A held route crossing new copper is a DRC finding, not a move. patches.md has the rest.
 

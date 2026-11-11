@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { fileKey } from '../project/files.js'
 import { deserialize } from 'node:v8'
 import { Worker } from 'node:worker_threads'
-import type { RouteProgress } from '@pcbjs/compile'
+import { CancelledError, type RouteProgress } from '@pcbjs/compile'
 import type { Entry } from '../project/config.js'
 import type { ModuleLookup } from '../project/boards.js'
 import type { BoardOut, Compiled, Library, Preview, Sketch, SketchJob } from '../project/project.js'
@@ -247,7 +247,12 @@ export function workerCompiler(o: WorkerOptions): Compiler {
           ...(job.want ? { want: job.want } : {}),
         },
         { progress: job.progress, facet: job.facet, stage: job.stage },
-      ).then(out => out.map(c => ('partial' in c && c.partial ? partialOf(run, c as BoardOut) : crossed(run, entry, c as Crossed))))
+      ).then(out => {
+        // Consume the transport baseline even when an edit made the finished result obsolete.
+        const decoded = out.map(c => ('partial' in c && c.partial ? partialOf(run, c as BoardOut) : crossed(run, entry, c as Crossed)))
+        if (run <= Atomics.load(cancelled, 0)) throw new CancelledError()
+        return decoded
+      })
     },
     artifact<K extends Artifact>(run: number, board: string, target: string | null, kind: K): Promise<Compiled[K]> {
       const key = `${run}|${board}|${target ?? ''}|${kind}`

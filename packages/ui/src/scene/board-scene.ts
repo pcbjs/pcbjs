@@ -519,7 +519,7 @@ export class BoardScene {
       const my = this.gen
       loads.push(
         step.then(m => {
-          if (!m || my !== this.gen || this.disposed) return
+          if (!m || my !== this.gen || this.disposed || !this.bodies.includes(wrap)) return
           wrap.remove(g)
           wrap.add(freeze(m))
           this.bodyMeshes.set(fp.ref, meshesOf(m))

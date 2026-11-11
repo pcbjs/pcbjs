@@ -5,6 +5,7 @@ import { usePane, type BoardInput } from './board'
 import { BROKEN_ICON, labelOf } from './finding-marks'
 import { failedLeg, findingTitle, pillOf, useFindings, useTargets } from './use/findings'
 import { mm } from './format'
+import { checksPending } from './variants'
 
 const props = defineProps<{
   board?: BoardInput
@@ -17,6 +18,7 @@ const emit = defineEmits<{ 'update:focus': [string | null] }>()
 const ctx = usePane(props.board, ['meta', 'findings'])
 const { board: store, pane } = ctx
 const board = computed(() => store.site)
+const pending = computed(() => !!board.value && checksPending(board.value))
 const activeRef = computed(() => store.activeRef)
 const { multi, stripRows, targetHref, onTargetLink } = useTargets(ctx)
 const { erc, gotoFinding, gotoDrc, blockersOf, gotoBlocker } = useFindings(ctx)
@@ -45,7 +47,8 @@ watch(
       </a>
     </div>
     <div v-if="board.halted" class="empty" role="status">DRC / ERC incomplete: compilation halted.</div>
-    <template v-if="!board.halted && shows('erc')">
+    <div v-else-if="pending" class="empty" role="status">DRC / ERC pending for the geometry shown.</div>
+    <template v-if="!board.halted && !pending && shows('erc')">
       <div v-if="!erc" class="empty">No ERC data in this build</div>
       <div v-else-if="!erc.length" class="empty">No findings</div>
       <button
@@ -65,7 +68,7 @@ watch(
         <span v-if="d.at && (d.at[0] || d.at[1])" class="at">{{ mm(d.at[0]) }}, {{ mm(d.at[1]) }} mm</span>
       </button>
     </template>
-    <template v-if="!board.halted && shows('drc')">
+    <template v-if="!board.halted && !pending && shows('drc')">
       <div v-if="!board.drc.length" class="empty">
         No findings<template v-if="board.unconnected">, {{ board.unconnected }} unconnected</template>
       </div>

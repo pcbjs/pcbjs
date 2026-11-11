@@ -35,6 +35,8 @@ export interface SiteOptions {
   variant?: Board['variant']
   /** reads a STEP model's mesh for the model facet's extent and issue; without it the facet has neither */
   meshBounds?: MeshBounds
+  /** Early explicit geometry has no connectivity pass yet. */
+  airwires?: boolean
 }
 export interface FabOptions {
   fabUrl: string
@@ -99,7 +101,7 @@ export function metaFacet(board: Board, opts: SiteOptions): FacetData['meta'] {
         .map(it => (it.kind === 'pad' ? { num: it.num, name: it.name, net: it.net, at: it.at, ...(it.uid ? { uid: it.uid } : {}) } : null!))
         .filter(Boolean),
     })),
-    airwires: airwires(board),
+    airwires: opts.airwires === false ? [] : airwires(board),
     sourcingTags: [...(board.sourcingTags ?? [])],
     generatedAt: opts.generatedAt ?? new Date().toISOString(),
     dev: opts.dev,

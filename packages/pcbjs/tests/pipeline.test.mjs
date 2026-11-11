@@ -45,7 +45,6 @@ const names = r => r.stages.map(s => s.name).filter(n => !n.includes(':'))
 test('stages: every built-in stage runs in the order of the table', () => {
   const [r] = compileStages(board())
   assert.deepEqual(names(r), [...STAGES])
-  assert.equal(STAGES.length, 12)
   assert.ok(r.stages.every(s => s.ms >= 0))
 })
 
@@ -81,6 +80,7 @@ test('plugins: a stage in each slot adds copper, findings and data the board car
   const b = r.board
   assert.deepEqual(names(r), [
     'evaluate',
+    'manual',
     'place',
     'schematic',
     'manualCopper',
@@ -119,7 +119,9 @@ test('plugins: before and after hooks of every stage run in order, and their del
     if (name === 'before:exports') return { findings: [{ kind: 'erc', severity: 'warning', rule: 'hooks.late', message: 'late', at: [0, 0] }] }
     return { data: { [name]: b.items.length > 0 } }
   }
-  const allowed = STAGES.slice(1).flatMap(s => (s === 'place' ? [`after:${s}`] : [`before:${s}`, `after:${s}`]))
+  const allowed = STAGES.slice(1)
+    .filter(s => s !== 'manual')
+    .flatMap(s => (s === 'place' ? [`after:${s}`] : [`before:${s}`, `after:${s}`]))
   const before = Object.fromEntries(allowed.filter(n => n.startsWith('before:')).map(n => [n.slice(7), hook(n)]))
   const after = Object.fromEntries(allowed.filter(n => n.startsWith('after:')).map(n => [n.slice(6), hook(n)]))
   const exported = []
@@ -219,7 +221,22 @@ test('plugins: under PCBJS_FREEZE a stage that writes its input throws', () => {
 })
 
 test('sketch: the keystroke board lays the manual copper of every route, a chain with an automatic leg too, and routes nothing', () => {
-  const b = h(PCB, { name: 'Sketch' }, edge(), smd('J1', 3, 3, 'A'), smd('J2', 17, 3, 'A'), route(handle('J1.1'), handle('J2.1')).width(0.25).H(8).X())
+  let early = false
+  const b = h(
+    PCB,
+    { name: 'Sketch' },
+    edge(),
+    smd('J1', 3, 3, 'A'),
+    smd('J2', 17, 3, 'A'),
+    route(handle('J1.1'), handle('J2.1'))
+      .width(0.25)
+      .H(8)
+      .X()
+      .solver(() => {
+        assert.ok(early, 'authored copper precedes route solvers')
+        return null
+      }),
+  )
   const tracks = sketch(b).board.items.filter(i => i.kind === 'track')
   assert.deepEqual(
     tracks.map(t => [t.pts, t.width]),
@@ -234,18 +251,73 @@ test('sketch: the keystroke board lays the manual copper of every route, a chain
     ],
   )
   assert.ok(tracks[0].uid)
-  const [full] = compileStages(b)
+  const events = []
+  const [full] = compileStages(b, {
+    stage: e => {
+      events.push(e)
+      if (e.name === 'manual' && e.board) early = true
+    },
+  })
+  const manual = events.find(e => e.name === 'manual' && e.board)
+  assert.deepEqual(
+    manual.board.items.filter(i => i.kind === 'track').map(i => [i.pts, i.width, i.uid]),
+    tracks.map(i => [i.pts, i.width, i.uid]),
+  )
+  assert.ok(events.indexOf(manual) < events.findIndex(e => e.name === 'place' && e.state === 'running'))
   assert.deepEqual(full.board.items.find(i => i.id === tracks[0].id)?.pts, tracks[0].pts, 'the compile lays the same piece under the same id')
+  const source = hash => ({ file: '/project/manual.pcb.tsx', line: 1, col: 1, hash })
+  const scene = (x, extra = true) =>
+    h(
+      PCB,
+      { name: 'ManualGraph' },
+      edge(),
+      smd('J1', x, 3, 'A'),
+      smd('J2', 17, 3, 'A'),
+      route(handle('J1.1'), handle('J2.1'), { __src: source('endpoint') })
+        .width(0.25)
+        .H(8)
+        .Z(),
+      extra
+        ? route('2 8', '8 8', { __src: source('independent') })
+            .net(null)
+            .width(0.2)
+            .Z()
+        : null,
+    )
+  const geometry = (root, revision) => {
+    let manual
+    compileStages(root, {
+      ...(revision ? { cache: { dir: null, entry: 'manual.pcb.tsx', files: { '/project/manual.pcb.tsx': revision }, env: '' } } : {}),
+      stage: e => {
+        if (e.name === 'manual' && e.board) manual = e.board
+      },
+    })
+    return { items: manual.items, footprints: manual.footprints }
+  }
+  const before = geometry(scene(3), 'one')
+  const moved = geometry(scene(4), 'two')
+  assert.deepEqual(moved, geometry(scene(4)), 'reused explicit products match fresh endpoint geometry, including ids and uids')
+  assert.notDeepEqual(
+    moved.items.filter(i => i.route === 'route:1'),
+    before.items.filter(i => i.route === 'route:1'),
+    'moving an endpoint updates its manual route',
+  )
+  assert.deepEqual(
+    moved.items.filter(i => i.route === 'route:2'),
+    before.items.filter(i => i.route === 'route:2'),
+    'independent copper remains unchanged',
+  )
+  assert.deepEqual(geometry(scene(4, false), 'three'), geometry(scene(4, false)), 'removing a route removes its previously held geometry')
 })
 
 test('demand: the schematic view runs evaluate, place and schematic only; no view list runs everything', () => {
-  const [r] = compileStages(board(), { want: ['sch'] })
+  const [r] = compileStages(board(), { want: ['meta', 'sch'] })
   assert.deepEqual(names(r), ['evaluate', 'place', 'schematic'])
   assert.ok(r.board.schematic.drawing)
   assert.equal(r.board.routing, undefined)
   assert.equal(r.board.items.filter(i => i.kind === 'track').length, 0)
   const [l] = compileStages(board(), { want: ['layers'] })
-  assert.deepEqual(names(l), ['evaluate', 'place', 'manualCopper', 'autoroute', 'placeFollowers', 'routeFollowers', 'tune', 'patches', 'finish'])
+  assert.deepEqual(names(l), ['evaluate', 'manual', 'place', 'manualCopper', 'autoroute', 'placeFollowers', 'routeFollowers', 'tune', 'patches', 'finish'])
   const [f] = compileStages(board(), { want: ['findings'] })
   assert.deepEqual(
     names(f),

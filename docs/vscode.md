@@ -46,7 +46,7 @@ The pcbjs activity icon opens five views:
 - Findings: under Errors, Warnings and Info, each under its exact id with its refs below. A click pans the panes to it and opens its code, a ref selects. A finding stays selected through a recompile that changes its id, findings.md.
 - Nets: with their pad counts; a click pins the net in every pane, again unpins it.
 - BOM: a row per line; a click opens the placement of its first part.
-- Agents: each agent of the session, of a worktree only while it is attached, its task, progress line and plan, the findings delta since its first edit and its last files changed; one that left stays, marked. Stop and tell, inline, sends it a note with the selection as Send to agent does; Reply on the notice of an agent's plan opens the same input.
+- Agents: each agent of the session, of a worktree only while it is attached, its task, progress line and plan, the findings delta since its first edit and its last files changed; one that left stays, marked. Stop and tell, inline, sends it a note with the selection as Send to agent does. Agent updates appear here without popups; the agent uses its main chat for user-facing communication.
 
 With more than one git worktree, Boards ends with a Worktrees node, collapsed by default and remembering explicit expansion during the session. Each worktree shows its agent, task, boards and files changed against main, a file opening its diff. Inline, Open diff shows all changes, Open board attaches it to the window's session and shows its board in every pane under a banner of the agent and task, Detach drops it, and Merge runs `git merge` of its branch in the main tree. The extension's sidebar heading is PCBJS.
 

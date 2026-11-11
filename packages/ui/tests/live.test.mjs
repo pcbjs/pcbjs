@@ -5,7 +5,8 @@ import assert from 'node:assert/strict'
 import { FACET_NAMES, facetHash, facetSet, joinSite, splitSite } from '@pcbjs/core/site-facets'
 import { pack } from '@pcbjs/core/site-shapes'
 import { remakes } from '../src/scene/remake.ts'
-import { compareState, drawnPose, holdOf, holding, liveOf, repeated, seqTracker, sketchIds, staleOf, takeFacet, takeInvalidate, unknownIn } from '../src/live.ts'
+import { checksPending, checkSummary, fabDownload } from '../src/variants.ts'
+import { compareState, drawnPose, holdOf, holding, liveOf, repeated, seqTracker, siteOfLive, sketchIds, staleOf, takeFacet, takeInvalidate, unknownIn } from '../src/live.ts'
 
 const meta = {
   name: 'B',
@@ -42,6 +43,42 @@ test('facets build the board from its first meta, the airwires standing in for t
   assert.deepEqual(site.drc, [])
   const done = takeFacet(held, msg('findings', { drc: [], erc: [], ratsnest: [], unconnected: 0 })).site
   assert.deepEqual(done.ratsnest, [])
+  assert.equal(checksPending(done), false)
+  const fab = { bom: [{ ref: 'R1' }], fab: { url: 'old.zip', name: 'old', files: ['old.zip'], status: 'orderable' }, svgUrl: 'old.svg' }
+  takeFacet(held, msg('fab', fab, 2))
+  takeFacet(held, msg('findings', { drc: [{ id: 'old-check' }], erc: [], ratsnest: [], unconnected: 1 }, 2))
+  const base = takeFacet(held, msg('layers', { ...layers, items: [{ id: 3, uid: 'manual', kind: 'track' }] }, 3)).site
+  assert.deepEqual(
+    base.items.map(it => it.uid),
+    ['manual'],
+    'the full manual base replaces previous copper',
+  )
+  assert.deepEqual(base.pending, ['findings', 'fab'])
+  assert.equal(checksPending(base), true)
+  assert.equal(checkSummary(base).label, 'DRC / ERC pending')
+  assert.equal(checkSummary(base).state, 'warn')
+  assert.deepEqual(base.drc, [], 'previous solved findings are unavailable')
+  assert.equal(base.fab.status, 'pending')
+  assert.equal(base.fab.url, '')
+  assert.deepEqual(base.bom, [])
+  assert.equal(base.svgUrl, '')
+  assert.equal(fabDownload(base), null, 'a pending static artifact is not downloadable')
+  assert.deepEqual(
+    fabDownload({ ...base, dev: {}, name: 'My board', variant: { name: '2 Layer' } }),
+    { url: '/__pcbjs/My%20board/2-layer/fab/latest.zip', label: 'Build fab', title: 'Build fabrication output from the current source' },
+    'the live action requests a fresh build without relying on the previous zip name',
+  )
+  const solved = takeFacet(held, msg('layers', layers, 3)).site
+  assert.equal(checksPending(solved), true, 'solved geometry alone does not complete checks')
+  const checked = takeFacet(held, msg('findings', { drc: [], erc: [], ratsnest: [], unconnected: 0 }, 3)).site
+  assert.equal(checksPending(checked), false, 'the same-run checks are authoritative')
+  assert.deepEqual(checked.pending, ['fab'])
+  const complete = takeFacet(held, msg('fab', { ...fab, fab: { ...fab.fab, url: 'new.zip' } }, 3)).site
+  assert.equal(complete.pending, undefined)
+  assert.equal(complete.fab.url, 'new.zip')
+  assert.equal(fabDownload(complete).url, 'new.zip')
+  const whole = liveOf(facetSet(complete), null)
+  assert.equal(checksPending(siteOfLive(whole)), false, 'complete static data needs no live run')
 })
 
 test('a facet older than the one of its kind held is dropped, one whose data is not its hash is bad', () => {
@@ -161,7 +198,11 @@ test('an edit makes every facet of a run up to its `edit` stale, whatever reache
   takeFacet(held, msg('meta', meta, 1))
   takeInvalidate(held, { board: 'B', run: 1, refs: [], uids: [], findings: [], edit: 3 })
   assert.equal(takeFacet(held, msg('layers', layers, 3)).dropped, true, 'the cancelled compile of run 3')
-  assert.ok(!takeFacet(held, msg('layers', layers, 4)).dropped, 'a compile after the edit')
+  const base = takeFacet(held, msg('layers', layers, 4))
+  assert.ok(!base.dropped, 'a compile after the edit')
+  assert.equal(checksPending(base.site), true)
+  assert.equal(takeFacet(held, msg('findings', { drc: [], erc: [], ratsnest: [], unconnected: 0 }, 3)).dropped, true, 'cancelled checks cannot mark the new base clean')
+  assert.equal(checksPending(takeFacet(held, msg('findings', { drc: [], erc: [], ratsnest: [], unconnected: 0 }, 4)).site), false)
 })
 
 test('a keystroke sketch draws the entity over the layers and hides what it replaces until a newer layers facet, the rest of the board not stale', () => {

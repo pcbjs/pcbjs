@@ -15,7 +15,8 @@ const { bom, bomLine, bomMissing, copied, copyBom } = useBom(ctx)
 </script>
 
 <template>
-  <div v-if="board" class="panel bom">
+  <div v-if="board?.pending?.includes('fab')" class="panel" role="status">BOM and fabrication output pending for the geometry shown.</div>
+  <div v-else-if="board" class="panel bom">
     <div class="bom-head">
       <div class="bom-meta">
         <span v-if="bomLine">{{ bomLine }}</span>

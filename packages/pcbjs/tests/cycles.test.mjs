@@ -38,6 +38,19 @@ test('cycles: an acyclic graph passes, and the components come out in graph orde
     }),
     [[0, 1], [2]],
   )
+  const outOfOrder = thrown({
+    nodes: g.nodes,
+    edges: [
+      [0, 2],
+      [2, 1],
+      [1, 0],
+    ],
+  })
+  assert.deepEqual(
+    outOfOrder.members.map(m => m.ref),
+    ['U1', 'J1', 'route:1'],
+    'the diagnostic follows real dependency edges, not node order',
+  )
 })
 
 test('grid-cycle: a part anchoring the grid it sits on', () => {

@@ -15,6 +15,7 @@ pcbjs mcp                     # what a harness runs, from the project folder
 - If the session disconnects, the MCP process looks for a returning session every two seconds, even with no resource subscriptions or tool calls, and restores its task/plan/progress. Background retries do not restart a deliberately stopped server; an explicit tool request may start one. Closing stdin cancels retries and detaches.
 - The connection has role `agent` and the name the harness gave in `clientInfo.name` of `initialize`, such as `claude-code`, and declares `findings`, so an edit compiles while the agent is attached. `session/clients` lists it with its folder and start time.
 - The server's instructions ask the agent to call `session` with its task and plan before its first edit and to update its progress, to check after each change, and never to overwrite an existing file whole.
+- Agents notify users of plans, meaningful progress, questions and completion in their main chat session. MCP task/progress updates populate agent activity without VS Code notifications. Workers report to the coordinator, who communicates with the user.
 
 The instructions also favor focused workers for independent tasks when the harness permits delegation. The coordinator owns task/progress and pending messages on a shared connection; workers return compact decisions and verification evidence. Documentation loads progressively: list topics first, then request the relevant topic or search within it. These are agent workflow instructions, not server-enforced scheduling.
 
@@ -37,7 +38,7 @@ Each description is one line; `pcbjs docs <topic>`, or the `docs` tool, has the 
 | `session` | `task?`, `plan?`, `progress?` | records what the agent does, then the session, its projects and clients |
 
 - `write` goes through `Sources` of session.md: the editor that holds the file applies it by `workspace/applyEdit`, else any editor of the project, and only with none attached is the file written on disk. The edit event names the agent and its task.
-- `session` takes a task of one line, a plan of up to five lines and a progress line. Each call is a `message` event to the editor, so the human sees the plan before the first edit and can redirect; `session/clients` and every event the agent causes carry the task as `by.task`.
+- `session` takes a task of one line, a plan of up to five lines and a progress line. Each update is a `message` event to the editor's Agents activity view, without a popup; `session/clients` and every event the agent causes carry the task as `by.task`. This records activity rather than delivering a chat message; the agent communicates with the user in its main chat, including replies to incoming MCP messages.
 - A tool that fails returns its message with `isError`; findings are no failure, the check's exit code says them.
 - `models` returns `{ stdout, exitCode, models }` in a snapshot envelope and sets `isError` when a model is flagged. It reads the same settled source as other session queries, including editor overlays. Use `render` to check appearance; mesh validation does not certify mechanical or electrical correctness.
 

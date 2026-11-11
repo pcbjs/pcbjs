@@ -1,4 +1,4 @@
-// The facets a compile streams as its stages end, see docs/viewer.md; a live rebuild draws the last compile's copper until the stage that remakes it.
+// The facets a compile streams as its stages end, see docs/viewer.md; current explicit geometry precedes solved geometry.
 // Free of Node: the CLI's compile threads and the browser compile worker stream through it alike.
 import type { Board, Item, Zone } from '@pcbjs/core/model'
 import { itemRev } from '@pcbjs/core/ref'
@@ -48,7 +48,7 @@ const BUILD: { [F in FacetName]: (e: Ended) => FacetData[F] | null } = {
   fab: e => (e.exports?.site ? splitSite(e.exports.site as SiteData).fab : null),
 }
 
-/** The facets of each stage that ends, as the stage table's `emits` names them; place and tune draw the last compile's copper and fills until finish remakes them. */
+/** The facets of each stage that ends, as the stage table's `emits` names them; tune marks carried fills until finish remakes them. */
 export function facetStream(root: string, rel: string, dev: boolean, generatedAt: string, out: (f: FacetOut) => void, meshBounds?: MeshBounds): (e: StageEvent) => void {
   return e => {
     if (e.state === 'running' || !e.board) return
@@ -56,13 +56,13 @@ export function facetStream(root: string, rel: string, dev: boolean, generatedAt
     if (!facets.length) return
     const target = e.variant?.name ?? e.target
     const prev = LAST.get(lastKey(root, rel, target))
-    const drawn = e.name === 'place' || e.name === 'tune' ? carry(e.board, prev, e.name === 'place') : { board: e.board, carried: [] }
+    const drawn = e.name === 'tune' ? carry(e.board, prev, false) : { board: e.board, carried: [] }
     let items: ShapedItem[] | undefined
     const ended: Ended = {
       board: e.board,
       drawn,
       items: () => (items ??= siteItems(drawn.board)),
-      opts: { root, dev, generatedAt, variant: e.variant, meshBounds },
+      opts: { root, dev, generatedAt, variant: e.variant, meshBounds, ...(e.name === 'manual' ? { airwires: false } : {}) },
       exports: e.exports,
     }
     for (const f of facets) {

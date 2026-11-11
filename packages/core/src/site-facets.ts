@@ -88,8 +88,8 @@ export type FacetData = {
 }
 export type Facets = { [F in FacetName]?: FacetData[F] }
 
-// every key of the board data in one facet, and no facet key outside it
-const covered: Record<Exclude<keyof SiteData, Owned> | Exclude<Owned, keyof SiteData>, never> = {}
+// Every serialized board key belongs to one facet; pending is derived by the live UI.
+const covered: Record<Exclude<keyof SiteData, Owned | 'pending'> | Exclude<Owned, keyof SiteData>, never> = {}
 void covered
 
 /** The facets a view draws. */

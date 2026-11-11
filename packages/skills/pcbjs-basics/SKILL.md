@@ -15,6 +15,7 @@ Give each worker a bounded outcome, owned files, relevant entry/board/target and
 
 ## Essential working loop
 
+- Notify the user of plans, meaningful progress, questions and completion in the main chat session. MCP task/progress updates populate agent activity, not VS Code notifications; workers report to the coordinator for user-facing updates.
 - Prefer pcbjs MCP tools when present: they see the live session and unsaved source. The connection owner calls `session` with the task and confirms the agent connection; keep that harness-owned process alive. On a shared connection, the coordinator owns task/progress and checks `events` before edits and after long shell-only work, relaying corrections to workers. Read [Live session](references/session.md) for setup, messaging or tool details; CLI commands do not establish an agent inbox.
 - Read current source and apply anchored edits. Do not replace an existing file with a whole-file Write. Give each file one writer at a time; coordinate changes to shared pinouts, nets, grids and configuration before workers depend on them.
 - Use `inspect` or `query` for positions and records, and `render` for a focused view. Avoid reading generated `board.json` or computing transformed pad positions by hand.

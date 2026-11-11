@@ -113,7 +113,7 @@ interface Envelope<T> { snapshot: string; stale: Stale | null; overlay: string[]
 
 ## Agents
 
-- An agent, `role: 'agent'`, states its task and plan with `session/describe` before its first edit, listed by `session/clients`, logged as a `message` to `editor`; the editor's messages reach it through `session/send`, mcp.md.
+- An agent, `role: 'agent'`, states its task and plan with `session/describe` before its first edit, listed by `session/clients`, logged as a `message` to `editor` for agent activity without a popup. User-facing updates belong in the agent's main chat; the editor's messages reach it through `session/send`, mcp.md.
 
 ## Stopping a session
 
@@ -124,6 +124,9 @@ interface Envelope<T> { snapshot: string; stale: Stale | null; overlay: string[]
 - Each project has its own compile thread, scheduler, snapshots and facets, so projects compile at once. A compile is one stream of `CompileEvent`, `@pcbjs/core/protocol`: the status, the heartbeats, the events log, the language servers and the dev log follow it.
 - Demand: a viewer declares `session/observe { board, target, scope, facets }`, and each board compiles the stages its own viewers need: `meta`, `model` and `sch` no copper, `layers` and `findings` through checks, `fab` everything. The status goes to its project's viewers, an invalidate to its board's, a facet to those naming its board, target and facet, `fab` always and every `meta` to all; one that never observed gets none. A changed `observe` sends what it lacks, by its hashes. Editors, language clients, followers, queries and one-shot runs want everything. A compile of some views mints no snapshot; a board no one observes compiles once one asks.
 - Cached facets can display while the interactive worker prepares current source, including editor drafts, before reporting editing readiness.
+- A PCB rebuild first streams explicit placements and manual route legs before solving placement or routing. Later geometry replaces that base in the same run; the base does not commit a snapshot or complete checks and fabrication outputs.
+- An edit supersedes the active compile and coalesces into the next run. The session rejects obsolete final results as well as streamed facets, including final reconciliation from earlier boards in a cancelled run. The worker client still decodes received responses to preserve its transport baseline before rejecting a cancelled result; reusable cached products are validated against the next run's inputs.
+- In dev, **Build fab** requests `fab/latest.zip` for the board and target, waits for current source to settle, and downloads the current named archive. Stale or timed-out outputs return HTTP 503.
 - The tiers are data, `tiers: { keystroke: 30, quiet: 300 }` ms in dev.json and the heartbeat, set by `PCBJS_KEYSTROKE_MS`, `PCBJS_QUIET_MS`: Syntax preparation starts immediately for observed edits and is reused by the keystroke tier. The first sketch starts immediately; subsequent keys coalesce at a minimum `keystroke` interval without postponing pending work. Each sketch sends `pcbjs:invalidate` of what the edit makes stale and a `layers` facet of the edited entity alone, never cached or type checked; `quiet` ms after the last key, 60 after a disk write, the compile of what is observed unless a block holds, editor.md; a query, every view at once. No facet of a run up to an invalidate's `edit` reaches a viewer, viewer.md.
 - A viewer out of sync asks for its facets again and the session writes `.pcbjs/log/<date>-desync.json`, ids, hashes and recent frames, never file content. `pcbjs doctor` counts them, `--desync` prints the last.
 

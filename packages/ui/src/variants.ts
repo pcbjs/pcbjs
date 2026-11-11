@@ -1,6 +1,9 @@
 // free of Vue and the DOM, written as erasable TypeScript so Node imports it in the tests
 import type { SiteData } from '@pcbjs/core/site-data'
 
+/** Complete static boards have no pending facets; live geometry can precede its checks. */
+export const checksPending = (site: Pick<SiteData, 'pending' | 'halted' | 'stale'>): boolean => !site.halted && !site.stale && !!site.pending?.includes('findings')
+
 /** One board and its entries, one per fab target in the order of its variants list; a board without variants has one. */
 export interface BoardGroup {
   name: string
@@ -13,6 +16,16 @@ export interface DrcSummary {
   errors: number
   warnings: number
   infos: number
+}
+
+/** A current artifact, or an explicit live request that settles and builds the current source. */
+export function fabDownload(site: Pick<SiteData, 'name' | 'variant' | 'dev' | 'transient' | 'pending' | 'fab'>): { url: string; label: string; title: string } | null {
+  if (site.pending?.includes('fab')) {
+    if (!site.dev || site.transient) return null
+    const target = site.variant ? `/${encodeURIComponent(variantSlug(site.variant.name))}` : ''
+    return { url: `/__pcbjs/${encodeURIComponent(site.name)}${target}/fab/latest.zip`, label: 'Build fab', title: 'Build fabrication output from the current source' }
+  }
+  return site.fab.url ? { url: site.fab.url, label: site.fab.name || 'Fab zip', title: site.fab.files.join('\n') } : null
 }
 
 /** The target name of an entry, null for a board without variants. */
@@ -53,14 +66,15 @@ export function upsertEntry<T extends Pick<SiteData, 'name' | 'variant'>>(boards
   return at
 }
 
-export function drcSummary(b: Pick<SiteData, 'drc' | 'unconnected' | 'halted' | 'stale'>): DrcSummary {
+export function drcSummary(b: Pick<SiteData, 'drc' | 'unconnected' | 'halted' | 'stale' | 'pending'>): DrcSummary {
+  if (checksPending(b)) return { state: 'warn', text: 'checks pending', errors: 0, warnings: 0, infos: 0 }
   if (b.halted || b.stale) return { state: 'warn', text: 'checks incomplete', errors: 0, warnings: 0, infos: 0 }
   const c = count(b.drc)
   return { state: c.errors || b.unconnected ? 'err' : c.warnings ? 'warn' : 'ok', text: words(c, b.unconnected), ...c }
 }
 
 /** What the checks of one entry read. */
-export type Checked = Pick<SiteData, 'drc' | 'erc' | 'unconnected' | 'halted' | 'stale'>
+export type Checked = Pick<SiteData, 'drc' | 'erc' | 'unconnected' | 'halted' | 'stale' | 'pending'>
 
 const rank: Record<DrcState, number> = { ok: 0, warn: 1, err: 2 }
 /** The target that fares worst on DRC and ERC together: errors first, then warnings, then unconnected; the earliest on a tie. */
@@ -123,7 +137,8 @@ const infoTail = (c: CheckCounts) => (c.infos ? `, ${plural(c.infos, 'info')}` :
 const allClean = (...cs: CheckCounts[]) => cs.every(c => !c.infos)
 
 /** The ERC alone in the shape of `drcSummary`. */
-export function ercSummary(b: Pick<Checked, 'erc' | 'halted' | 'stale'>): DrcSummary {
+export function ercSummary(b: Pick<Checked, 'erc' | 'halted' | 'stale' | 'pending'>): DrcSummary {
+  if (checksPending(b)) return { state: 'warn', text: 'checks pending', errors: 0, warnings: 0, infos: 0 }
   if (b.halted || b.stale) return { state: 'warn', text: 'checks incomplete', errors: 0, warnings: 0, infos: 0 }
   const c = count(b.erc)
   return { state: c.errors ? 'err' : c.warnings ? 'warn' : 'ok', text: words(c), ...c }
@@ -136,7 +151,8 @@ export function checkSummary(b: Checked): CheckSummary {
     unconnected = b.unconnected
   const errors = drc.errors + erc.errors,
     warnings = drc.warnings + erc.warnings
-  const state: CheckState = b.halted || b.stale ? 'warn' : errors || unconnected ? 'err' : warnings ? 'warn' : 'ok'
+  const pending = checksPending(b)
+  const state: CheckState = pending || b.halted || b.stale ? 'warn' : errors || unconnected ? 'err' : warnings ? 'warn' : 'ok'
   // the DRC list holds an `unconnected` error per gap already: only gaps it does not list add to the count
   const listed = b.drc.filter(d => (d as { rule?: string }).rule === 'unconnected').length
   const drcN = drc.errors + drc.warnings + Math.max(0, unconnected - listed)
@@ -148,10 +164,17 @@ export function checkSummary(b: Checked): CheckSummary {
     unconnected,
     drc,
     erc,
-    label: b.halted || b.stale ? 'DRC / ERC incomplete' : `DRC ${drcN} · ERC ${erc.errors + erc.warnings}`,
-    text: b.halted || b.stale ? 'checks incomplete' : state === 'ok' && allClean(drc, erc) ? 'clean' : `DRC ${words(drc, unconnected, ', ')} · ERC ${words(erc, 0, ', ')}`,
-    title:
-      b.halted || b.stale
+    label: pending ? 'DRC / ERC pending' : b.halted || b.stale ? 'DRC / ERC incomplete' : `DRC ${drcN} · ERC ${erc.errors + erc.warnings}`,
+    text: pending
+      ? 'checks pending'
+      : b.halted || b.stale
+        ? 'checks incomplete'
+        : state === 'ok' && allClean(drc, erc)
+          ? 'clean'
+          : `DRC ${words(drc, unconnected, ', ')} · ERC ${words(erc, 0, ', ')}`,
+    title: pending
+      ? 'DRC and ERC have not completed for the geometry shown.'
+      : b.halted || b.stale
         ? 'Compilation halted. DRC and ERC have not completed.'
         : `${drcTitle}\nERC: ${plural(erc.errors, 'error')}, ${plural(erc.warnings, 'warning')}${infoTail(erc)}`,
   }

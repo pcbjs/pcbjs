@@ -9,6 +9,8 @@ error    unconnected  at (9.41, 6.23)  net:GND, J1/1, D1/1  pcb.tsx:13:5: net GN
 
 DRC and ERC run when compilation reaches the checks stage. Live sketches and partial compiles do not establish fresh check results; use Check for a complete validation. A finding has a rule, a severity, refs, a message, a position and usually a layer, an exact id at the end of its line and a fingerprint in `--json`. `info` never counts against a board.
 
+During a live rebuild, manual geometry can appear before the solvers and checks finish. Earlier findings, BOM and bundled fabrication downloads are unavailable while their facets lag behind the geometry shown; the UI says checks or fabrication are pending. In a live session, Build fab requests a complete current-source build before downloading. A manual preview does not establish DRC/ERC success or an orderable build.
+
 Finding preview surfaces show concise rule names and structured context such as references and coordinates. Full diagnostic messages never render in 2D, 3D or schematic views, their finding lists, selected chips, hover labels or native titles. Full explanations are available only in the HTML details pane.
 
 The Checks viewer stays open as canonical focus changes. Previous and Next step through findings without wrapping; the list supports Up, Down, Home and End. Tab enters the current row, then moves on to the details. A newly focused finding starts at the top of its details and reveals its list row without stealing keyboard focus. Entity buttons support Enter or Space even when diagnostic text is selected.

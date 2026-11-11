@@ -115,6 +115,8 @@ export interface SiteData {
   references?: import('./reference.js').SiteReference[]
   /** each part with an auto slot as this compile placed it, see placement.md */
   placed?: import('./model.js').AutoPlaced[]
+  /** UI-derived live state: current geometry is available, but these facets have not caught up. Absent on complete static data. */
+  pending?: ('findings' | 'fab')[]
   /** the last compile failed: the data is the previous one, `staleError` says why */
   stale?: boolean
   staleError?: string

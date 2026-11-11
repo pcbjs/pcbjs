@@ -36,7 +36,11 @@ const design = (C, props = {}) =>
 const Multi = variants(JLC2, OSH2, HOUSE)
 
 test('variants: three targets compile into three boards with their names, stackups and rules', () => {
-  const boards = compileBoards(design(Multi))
+  const events = []
+  const boards = compileBoards(design(Multi), { stage: e => events.push(e) })
+  const bases = events.filter(e => e.name === 'manual' && e.board)
+  assert.equal(bases.length, 3)
+  assert.ok(events.indexOf(bases.at(-1)) < events.findIndex(e => e.name === 'place' && e.state === 'running'), 'all target bases precede placement')
   assert.deepEqual(
     boards.map(b => b.variant.name),
     ['JLCPCB 2-Layer', 'OSH Park 2-Layer', 'House'],

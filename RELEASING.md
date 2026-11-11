@@ -5,7 +5,7 @@ How the `@pcbjs/*` packages are versioned and published from this repository wit
 ## Version scheme
 
 - Every package carries in the tree the version of the last train that moved it, written by `release.yml`. `0.0.0` is the placeholder published once by hand to reserve each name on npm and let its trusted publishers be configured; it holds a package.json and a README.md, no code.
-- The next prepared release is **0.1.1**, under `latest`. The tree is on the stable 0.1 line, with pending patch changesets and no prerelease state. Keep manifests at their last released versions; the workflow calculates the patch train.
+- The next prepared release is **0.1.2**, under `latest`. The tree is on the stable 0.1 line, with pending patch changesets and no prerelease state. Keep manifests at their last released versions; the workflow calculates the patch train.
 - `pcbjs doctor` compares major.minor. Install the 0.1 components together through `@pcbjs/pcbjs`; its repair command uses `latest` for stable releases.
 
 ## Model
@@ -29,9 +29,9 @@ How the `@pcbjs/*` packages are versioned and published from this repository wit
 
 Every change to the behaviour of a published package adds one: `npm run changeset`, pick the packages, the bump and a one-line summary for the changelog. Commit the file in `.changeset/` with the change. A fix is a patch; a new feature or a breaking change before 1.0 is a minor. A change to `packages/vscode` names `@pcbjs/cli` too, since the cli ships the VSIX. Docs, tests, examples and CI need none.
 
-## The 0.1.1 patch
+## The next stable patch
 
-Pending patch changesets describe the changed packages. Before dispatch, inspect the Changesets release plan: affected linked packages and exact dependency dependents should select `0.1.1`; unaffected packages may remain at `0.1.0`. The private extension is versioned when selected, with train `0.1.1` mapped to Marketplace `0.1.1999` and `preRelease: false`. No beta exit or all-package minor changeset is needed.
+Pending patch changesets describe the changed packages. Before dispatch, inspect the Changesets release plan: affected linked packages and exact dependency dependents should select `0.1.2`; unaffected packages retain their last released versions. The private extension is versioned only when selected; an unchanged extension keeps its existing VSIX version. No beta exit or all-package minor changeset is needed.
 
 The publishing run validates the calculated tree and packed runtime. A separate dry run is optional when investigating packaging or release-workflow changes; it is not required for every patch. Local tarball overrides prove packaging, not registry availability or dist-tags. After publishing, install `@pcbjs/pcbjs@<train>` in a fresh folder without overrides, run `pcbjs create`, install that project and check and build it; verify `latest` names the intended stable train. New public packages still require placeholder/trusted-publisher setup first.
 
@@ -93,4 +93,4 @@ If a run failed before its version commit reached main, fix the failure and star
 
 The resume selector accepts version commits made by this release workflow. An old tag on a different kind of commit needs manual inspection and recovery. GitHub Release assets already present are kept; replace a corrupt asset only after inspecting it.
 
-The first train, 0.0.1-beta.0, used the former Version packages pull request. Later trains use this release round; choose the stable version explicitly as described above. After a train, check `npm view @pcbjs/pcbjs dist-tags` and the provenance badge on its npm page. For this patch, confirm `latest` points to the released `0.1.1` train.
+The first train, 0.0.1-beta.0, used the former Version packages pull request. Later trains use this release round; choose the stable version explicitly as described above. After a train, check `npm view @pcbjs/pcbjs dist-tags` and the provenance badge on its npm page. For this patch, confirm `latest` points to the released `0.1.2` train.

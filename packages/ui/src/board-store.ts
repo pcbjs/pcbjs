@@ -25,7 +25,7 @@ import {
 } from './selection'
 import { refocus, siteTarget, targetBox, type FindingFocus } from './refs'
 import { endIso, endsOf, type EndsCtx } from './ends'
-import { heldRun, keyOfSite, mergeLive, NONE, runN, siteOfLive, staleOf, takeFacet, takeInvalidate, type LiveBoard, type Stale } from './live'
+import { facetCurrent, heldRun, keyOfSite, mergeLive, NONE, runN, siteOfLive, staleOf, takeFacet, takeInvalidate, type LiveBoard, type Stale } from './live'
 import { pickTarget, sameEntry, upsertEntry } from './variants'
 import { boardIndex, type BoardIndex } from './scene/index'
 import type { EditClient } from './edit-client'
@@ -270,7 +270,11 @@ function makeBoard(name: string, edit: EditSession, stop: () => void): BoardStor
       void s.rev
       const b = s.site
       const h = b ? held.get(keyOfSite(b)) : undefined
-      return Object.fromEntries(Object.entries(h?.facets ?? {}).map(([f, x]) => [f, x!.data]))
+      return Object.fromEntries(
+        Object.entries(h?.facets ?? {})
+          .filter(([f]) => !h || (f !== 'findings' && f !== 'fab') || facetCurrent(h, f))
+          .map(([f, x]) => [f, x!.data]),
+      )
     }),
     /** what the selection draws, the anchor's part and group, and the whole nets it holds */
     drawn: computed(() => (s.site ? drawnOf(s.site, s.sel) : null)),

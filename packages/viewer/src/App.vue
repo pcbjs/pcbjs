@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // the shell around the board page of @pcbjs/ui: the top bar, the home and missing pages, the load line and screens, the sync notice
 import { computed } from 'vue'
-import { BoardPage, checkSummary, drcPill, mm, targetName, useShell, useStatus } from '@pcbjs/ui'
+import { BoardPage, checkSummary, drcPill, fabDownload, mm, targetName, useShell, useStatus } from '@pcbjs/ui'
 import Menu from './Menu.vue'
 import Home from './Home.vue'
 import LoadScreen from './LoadScreen.vue'
@@ -47,7 +47,7 @@ const failingNames = computed(() =>
     .map(t => `${t.name}: ${t.drc.text}`)
     .join('\n'),
 )
-const fabTitle = computed(() => (board.value ? (board.value.variant ? `${board.value.variant.name}\n` : '') + board.value.fab.files.join('\n') : ''))
+const fabLink = computed(() => (board.value ? fabDownload(board.value) : null))
 const { draftText } = useStatus(
   () => board.value,
   () => error.value,
@@ -157,9 +157,10 @@ const { load, loadStatus, holdText, covering, idleHint } = line
           holdText
         }}</span>
         <span v-if="draftText" class="pill dim" title="compiled from the editor's unsaved text; a save compiles the file">{{ draftText }}</span>
-        <a class="btn wide" :href="asset(board.svgUrl)" target="_blank" rel="noopener">{{ board.name }}.pcb.svg</a>
-        <a class="btn primary" :href="asset(board.fab.url)" :title="fabTitle" download>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M4.5 6.5L8 10l3.5-3.5M3 13h10" /></svg>{{ board.fab.name }}
+        <a v-if="!board.pending?.includes('fab') && board.svgUrl" class="btn wide" :href="asset(board.svgUrl)" target="_blank" rel="noopener">{{ board.name }}.pcb.svg</a>
+        <span v-if="board.pending?.includes('fab') && !fabLink" class="btn primary" aria-disabled="true" role="status">Fab pending</span>
+        <a v-else-if="fabLink" class="btn primary" :href="asset(fabLink.url)" :title="fabLink.title" download>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M4.5 6.5L8 10l3.5-3.5M3 13h10" /></svg>{{ fabLink.label }}
         </a>
       </template>
       <span v-else-if="error && !home && !missing" class="pill err">compile error</span>

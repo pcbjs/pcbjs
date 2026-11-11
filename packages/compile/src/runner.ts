@@ -10,7 +10,8 @@ import { partOf, type PartState } from '@pcbjs/core/internal/part'
 import { FONT_FILES } from '@pcbjs/core/internal/outline'
 import { platform } from '@pcbjs/core/platform'
 import { pulse } from './cancel.js'
-import { cacheDir, compileId, digest, dropIndexes, indexName, prune, sha1, writeMeta, StageStore } from './cache.js'
+import { buildGraph, cacheDir, compileId, digest, dropIndexes, indexName, prune, sha1, writeMeta, StageStore } from './cache.js'
+import type { BuildGraph } from './build-graph.js'
 import { applyDelta, canon, delta, FACET_NAMES, fieldsOf, snapshot, type Delta, type FacetName, type Snapshot } from './facets.js'
 import { CompileError, ROUTE_IDS, type CompileOptions, type Flat } from './flatten.js'
 import { modelFiles } from './models.js'
@@ -33,6 +34,8 @@ export type Found = FindingInput & { plugin?: string }
 /** What a stage body reports through. */
 export interface StageCtx {
   opts: CompileOptions
+  graph: BuildGraph
+  source: string
   /** the auto placement and references, off for the keystroke tier */
   placer: boolean
   report(...found: Found[]): void
@@ -126,6 +129,8 @@ export interface Target {
   name?: string
   flat: Flat
   board: Board
+  manual?: Board
+  graph?: BuildGraph
   deps: DepGraph
   route?: import('./stages.js').Router
   /** the router of the followers' own legs */
@@ -187,8 +192,9 @@ export function planOf(defs: readonly StageDef[], want?: readonly View[], more: 
     byName.get(s)!.after.forEach(add)
   }
   if (!want) defs.forEach(d => add(d.name))
-  else for (const v of want) defs.filter(d => d.emits?.includes(v)).forEach(d => add(d.name))
+  else for (const v of want) defs.filter(d => d.name !== 'manual' && d.emits?.includes(v)).forEach(d => add(d.name))
   more.forEach(add)
+  if (want?.some(v => v !== 'sch' && v !== 'meta')) add('manual')
   return out
 }
 
@@ -202,10 +208,25 @@ export function runEntry(run: Run, root: Child, open: Open, loaded = 0): Target[
   entryEvent(run, 'evaluate', 'done', evaluated.ms)
   const defs = run.defs.filter(d => run.plan.has(d.name))
   const span = (s: StageDef['span']) => defs.filter(d => d.span === s)
-  // the first stage across targets makes them: every target places first, so a shared routing knows all their rules
-  const [place, ...across] = span('targets')
-  const targets = Array.from({ length: ev.count }, (_, i) => placed(run, open, place, i, evaluated))
+  // Every target exposes its explicit base before any target starts solving.
+  const place = defs.find(d => d.name === 'place')!
+  const across = span('targets').filter(d => d.name !== 'place' && d.name !== 'manual')
+  const prepared = new Map<Target, number>()
+  const targets = Array.from({ length: ev.count }, (_, i) => {
+    pulse()
+    const t0 = performance.now()
+    const t = open.place(run, i)
+    const c = run.cache
+    t.graph = buildGraph(c?.entry ? JSON.stringify([run.opts.sourceRoot ?? platform().cwd(), c.dir, c.entry, c.cid, c.env, t.board.name, t.name ?? null]) : null)
+    t.graph.begin(pulse)
+    prepared.set(t, performance.now() - t0)
+    t.stages.push(evaluated)
+    return t
+  })
   try {
+    const manual = defs.find(d => d.name === 'manual')
+    if (manual && run.placer) for (const t of targets) stage(run, t, manual)
+    for (const t of targets) placed(run, t, place, prepared.get(t)!)
     for (const d of across) for (const t of targets) steps(run, t, [d])
     for (const d of defs) d.ready?.(targets, run)
     for (const t of targets) {
@@ -223,19 +244,16 @@ export function runEntry(run: Run, root: Child, open: Open, loaded = 0): Target[
   }
 }
 
-/** `place` for one target: flattened by the stage bodies, its cache started, then the stage with its units and hooks, timed from the flatten, its inputs frozen. */
-function placed(run: Run, open: Open, place: StageDef, i: number, evaluated: StageTime): Target {
+/** The prepared target through placement, with its cache started and its inputs frozen afterward. */
+function placed(run: Run, t: Target, place: StageDef, prepared: number): void {
   pulse()
   const t0 = performance.now()
-  const t = open.place(run, i)
-  t.stages.push(evaluated)
   if (run.cache) startCache(run.cache, t)
   stage(run, t, place)
   const st = t.stages.find(s => s.name === place.name)!
-  st.ms = performance.now() - t0
+  st.ms = prepared + performance.now() - t0
   if (run.cache) placeEntry(run.cache, t, st)
   if (run.freeze) [t.deps, t.flat.autoRoutes, t.flat.stitches].forEach(deepFreeze)
-  return t
 }
 
 /** Planned stages of one target in table order, consecutive stages of one unit run and stored as one. */
@@ -289,7 +307,14 @@ function stage(run: Run, t: Target, d: StageDef): void {
 function body(run: Run, t: Target, d: StageDef, u: UnitDef): void {
   const was = run.freeze ? snapshot(t.board).facets : null
   pulse()
-  u.run!(t, { opts: run.opts, placer: run.placer, report: (...found) => void t.found.push(...found), progress: (done, of) => emit(run, t, d.name, 'running', 0, [done, of]) })
+  u.run!(t, {
+    opts: run.opts,
+    graph: t.graph!,
+    source: run.cache?.evaluate ?? '',
+    placer: run.placer,
+    report: (...found) => void t.found.push(...found),
+    progress: (done, of) => emit(run, t, d.name, 'running', 0, [done, of]),
+  })
   pulse()
   // a step that writes nothing adds no item, and runs before place mints the first uids
   if (u.writes.length) mintUids(t.board)
@@ -608,7 +633,7 @@ function emit(run: Run, t: Target, name: StageName, state: StageEvent['state'], 
     ms,
     ...(t.name !== undefined ? { target: t.name } : {}),
     ...(t.variant ? { variant: t.variant } : {}),
-    ...(after ? { board: t.board } : {}),
+    ...(after ? { board: name === 'manual' ? t.manual : t.board } : {}),
     ...(after && name === 'exports' ? { exports: t.exports } : {}),
     ...(units ? { units } : {}),
   })

@@ -2,7 +2,7 @@
 // a workspace dev server with several projects lists the projects instead
 import { computed } from 'vue'
 import type { SiteData } from '@pcbjs/core/site-data'
-import { checkSummary, targetName, unsourcedCount, useShell, worstTarget } from '@pcbjs/ui'
+import { checkSummary, fabDownload, targetName, unsourcedCount, useShell, worstTarget } from '@pcbjs/ui'
 import Menu from './Menu.vue'
 
 const { asset, boardHref, cards, workspaceHome, scopeCards } = useShell()
@@ -33,11 +33,11 @@ const list = computed(() =>
   cards.value.map(c => {
     const multi = c.targets.length > 1
     const shown = multi ? worstTarget(c.targets) : c.board
-    const targets = multi ? c.targets.map(t => ({ name: targetName(t) ?? t.name, board: t, drc: checkSummary(t) })) : []
+    const targets = multi ? c.targets.map(t => ({ name: targetName(t) ?? t.name, board: t, drc: checkSummary(t), download: fabDownload(t) })) : []
     const drc = shown ? checkSummary(shown) : null
     const title = multi ? targets.map(t => `${t.name}: ${t.drc.text}`).join('\n') : (drc?.title ?? '')
     const unsourced = shown ? unsourcedCount(shown.bom) : 0
-    return { ...c, drc, targets, title, unsourced }
+    return { ...c, drc, targets, title, unsourced, download: c.board ? fabDownload(c.board) : null }
   }),
 )
 </script>
@@ -111,13 +111,21 @@ const list = computed(() =>
                   ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M4.5 6.5L8 10l3.5-3.5M3 13h10" /></svg>Fab zips<svg viewBox="0 0 16 16" aria-hidden="true">
                     <path d="M4.5 6.5L8 10l3.5-3.5" /></svg></span
               ></template>
-              <a v-for="t in c.targets" :key="t.name" role="menuitem" :href="asset(t.board.fab.url)" :title="t.board.fab.files.join('\n')" download
+              <a
+                v-for="t in c.targets"
+                :key="t.name"
+                role="menuitem"
+                :aria-disabled="!t.download || undefined"
+                :href="t.download ? asset(t.download.url) : undefined"
+                :title="t.download?.title"
+                download
                 ><span class="dot" :class="t.drc.state"></span><span class="name">{{ t.name }}</span
-                ><span class="dim">{{ t.board.fab.name }}</span></a
+                ><span class="dim">{{ t.download?.label ?? 'Fab pending' }}</span></a
               >
             </Menu>
-            <a v-else-if="c.board" class="btn primary" :href="asset(c.board.fab.url)" :title="c.board.fab.files.join('\n')" download>
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M4.5 6.5L8 10l3.5-3.5M3 13h10" /></svg>Fab zip
+            <span v-else-if="c.board?.pending?.includes('fab') && !c.download" class="btn primary" aria-disabled="true" role="status">Fab pending</span>
+            <a v-else-if="c.download" class="btn primary" :href="asset(c.download.url)" :title="c.download.title" download>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M4.5 6.5L8 10l3.5-3.5M3 13h10" /></svg>{{ c.download.label }}
             </a>
           </div>
         </div>

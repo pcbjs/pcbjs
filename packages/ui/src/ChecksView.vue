@@ -4,6 +4,7 @@ import { usePane, type BoardInput } from './board'
 import { setReady } from './ready'
 import { findingDetails } from './finding-details'
 import { findingText } from './finding-markdown'
+import { checksPending } from './variants'
 import type { SiteFinding } from '@pcbjs/core/site-data'
 
 const props = defineProps<{ board?: BoardInput }>()
@@ -219,7 +220,15 @@ onBeforeUnmount(() => {
     </div>
     <div class="checks-body">
       <nav v-show="listOpen" id="checks-list" aria-label="DRC and ERC findings">
-        <p v-if="!findings.length" class="dim checks-empty">{{ board?.halted ? 'DRC / ERC incomplete: compilation halted.' : 'No DRC or ERC findings for this target.' }}</p>
+        <p v-if="!findings.length" class="dim checks-empty">
+          {{
+            board?.halted
+              ? 'DRC / ERC incomplete: compilation halted.'
+              : board && checksPending(board)
+                ? 'DRC / ERC pending for the geometry shown.'
+                : 'No DRC or ERC findings for this target.'
+          }}
+        </p>
         <button
           v-for="(f, at) in findings"
           :key="f.id"

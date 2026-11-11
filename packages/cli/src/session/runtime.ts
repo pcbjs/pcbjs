@@ -369,6 +369,11 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
           // the stages stream their facets while the project has viewers; the finished board reaches the store whatever
           ...(hooks.viewers() > 0 ? { facet: f => live() && emit({ t: 'facet', project: root, facet: { ...f, run: id } }) } : {}),
         })
+        if (!live()) {
+          cancelled = true
+          left.push(...slots.slice(i).map(x => x.entry.file))
+          break
+        }
         lockModels.set(s.entry.file, { boards: out, views: viewsOf(want), inputs: { ...inputs, stamps: new Map([...stampFiles(out.flatMap(c => c.files)), ...inputs.stamps]) } })
         if (out[0]?.partial) {
           partial.set(s.entry.file, viewsOf(want))
@@ -389,12 +394,7 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
         done.push(s)
       } catch (e: any) {
         lockModels.delete(s.entry.file)
-        if (e?.name === 'CancelledError') {
-          cancelled = true
-          left.push(...slots.slice(i).map(x => x.entry.file))
-          break
-        }
-        if (!live()) {
+        if (e?.name === 'CancelledError' || !live()) {
           cancelled = true
           left.push(...slots.slice(i).map(x => x.entry.file))
           break
@@ -404,11 +404,12 @@ export function projectRuntime(scope: Scope, hooks: RuntimeHooks): ProjectRuntim
       }
     }
     markConflicts(state.slots)
-    for (const s of done) if (!s.conflict) for (const t of s.compiled!) for (const facet of facets.reconcile(t, id)) emit({ t: 'facet', project: root, facet })
+    if (live() && !cancelled)
+      for (const s of done) if (!s.conflict) for (const t of s.compiled!) for (const facet of facets.reconcile(t, id)) emit({ t: 'facet', project: root, facet })
     // a run of every view of its slots, with no other slot older than its files or never compiled, mints a snapshot
     const others = state.slots.filter(s => !slots.includes(s)).map(s => s.entry.file)
     const whole = r.tier.commits && !partial.size && others.every(k => !sched.unseen().has(k) && !sched.fresh().has(k))
-    const committed = !cancelled && whole && !hooks.closing()
+    const committed = live() && !cancelled && whole && !hooks.closing()
     if (committed) hooks.flushFeed()
     const snap = committed ? commit(inputs, id) : null
     track(snap?.stamps ?? inputs.stamps)

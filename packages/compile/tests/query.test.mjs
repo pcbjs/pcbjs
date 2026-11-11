@@ -4,8 +4,9 @@ import { fp, net } from './parts.mjs'
 import { test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import PCB, { h, resetDefaults, route } from '@pcbjs/core'
-import { compileBoard } from '../dist/index.js'
+import { compileBoard, CancelledError } from '../dist/index.js'
 import { boardApi } from '../dist/query.js'
+import { BuildGraph, BuildCycleError, BuildRevisionError } from '../dist/build-graph.js'
 
 afterEach(() => resetDefaults())
 
@@ -86,4 +87,130 @@ test('items near a target and on a layer, filtered by kind and net', () => {
   assert.equal(tracks[0].type, 'track')
   assert.equal(tracks[0].width, 0.4)
   assert.equal(b.items.on('B.Cu', { kinds: ['pad'] }).length, 0)
+})
+
+test('build graph: semantic geometry cutoff, dynamic branch deletion and refreshed definitions', () => {
+  const g = new BuildGraph()
+  const hash = JSON.stringify
+  const work = []
+  g.input('side', 'left', 'left')
+  g.input('left', { at: [2, 3], source: 1 }, 'left.1')
+  g.input('right', { at: [7, 3], source: 1 }, 'right.1')
+  const pads = tag => ctx => {
+    work.push(tag)
+    return { at: ctx.read(ctx.read('side')).at }
+  }
+  g.define('pads', 'pose-only', pads('old closure'), hash)
+  g.define(
+    'leg',
+    'manual-H',
+    ctx => {
+      work.push('leg')
+      return [ctx.read('pads').at, [12, 3]]
+    },
+    hash,
+  )
+  const first = g.read('leg')
+  assert.deepEqual(first, [
+    [2, 3],
+    [12, 3],
+  ])
+  assert.throws(() => {
+    first[0][0] = 99
+  }, TypeError)
+  work.length = 0
+  g.define('pads', 'pose-only', pads('current closure'), hash)
+  g.input('left', { at: [2, 3], source: 2 }, 'left.2')
+  assert.equal(g.read('leg'), first)
+  assert.deepEqual(work, ['current closure'], 'navigation changes stop before the manual leg')
+  work.length = 0
+  g.input('side', 'right', 'right')
+  g.remove('left')
+  assert.deepEqual(
+    g.read('leg'),
+    [
+      [7, 3],
+      [12, 3],
+    ],
+    'obsolete deleted inputs are not visited after a branch change',
+  )
+  assert.deepEqual(work, ['current closure', 'leg'])
+  work.length = 0
+  g.input('left', { at: [20, 3] }, 'left.3')
+  g.read('leg')
+  assert.deepEqual(work, [], 'successful branch changes replace the old subscriptions')
+})
+
+test('build graph: failed work cannot publish or strand the actual dependency cycle', () => {
+  const g = new BuildGraph()
+  g.input('pose', [2, 3], 'p1')
+  g.define('pads', 'v1', ctx => ctx.read('pose'), JSON.stringify)
+  g.define('root', 'v1', ctx => ctx.read('pads'), JSON.stringify)
+  assert.deepEqual(g.read('root'), [2, 3])
+  g.define(
+    'pads',
+    'v2',
+    ctx => {
+      ctx.read('pose')
+      throw new Error('invalid footprint')
+    },
+    JSON.stringify,
+  )
+  assert.throws(() => g.read('root'), /invalid footprint/)
+  g.define('pads', 'v3', ctx => ctx.read('leg'), JSON.stringify)
+  g.define('leg', 'v1', ctx => ctx.read('pads'), JSON.stringify)
+  assert.throws(
+    () => g.read('root'),
+    e => {
+      assert.ok(e instanceof BuildCycleError)
+      assert.deepEqual(e.path, ['pads', 'leg', 'pads'])
+      return true
+    },
+  )
+  g.define('pads', 'v4', ctx => ctx.read('pose'), JSON.stringify)
+  g.input('pose', [5, 3], 'p2')
+  assert.deepEqual(g.read('root'), [5, 3], 'failure and cycle leave the graph recoverable')
+  g.define(
+    'optional',
+    'v1',
+    ctx => {
+      try {
+        return ctx.read('missing')
+      } catch {
+        return [99, 99]
+      }
+    },
+    JSON.stringify,
+  )
+  assert.throws(() => g.read('optional'), /Unknown build input/, 'swallowing a failed read cannot publish untracked fallback geometry')
+  g.input('missing', [8, 3], 'p3')
+  assert.deepEqual(g.read('optional'), [8, 3])
+})
+
+test('build graph: superseded and cancelled computations never publish their result', () => {
+  const g = new BuildGraph()
+  g.input('pose', [2, 3], 'p1')
+  let supersede = true
+  g.define(
+    'pads',
+    'v1',
+    ctx => {
+      const pose = ctx.read('pose')
+      if (supersede) {
+        supersede = false
+        g.input('pose', [5, 3], 'p2')
+      }
+      return pose
+    },
+    JSON.stringify,
+  )
+  assert.throws(() => g.read('pads'), BuildRevisionError)
+  const current = g.read('pads')
+  assert.deepEqual(current, [5, 3])
+  g.begin(() => {
+    throw new CancelledError()
+  })
+  assert.throws(() => g.read('pads'), CancelledError)
+  g.begin()
+  assert.equal(g.read('pads'), current)
 })

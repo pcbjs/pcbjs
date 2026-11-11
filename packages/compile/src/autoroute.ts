@@ -36,7 +36,8 @@ import { joined } from './connectivity.js'
 import { copperLayers, isCopper, resolveLayer } from './layers.js'
 import { applyPrims, circleRing } from './path.js'
 import { at as parseAt, coordString, endAt, mm } from '@pcbjs/core/internal/units'
-import { RouteCache, ROUTER_VERSION, hash, type LegEntry } from './route-cache.js'
+import { RouteCache, ROUTER_VERSION, hash } from './route-cache.js'
+import { MazeReader, routingReads, routingValue, sameRoutingReads, type MazeReads } from './routing-reads.js'
 import { netLoops } from './loops.js'
 import { classOf, itemClearance, maxClearance, maxHoleClearance, notePair, overrideBetween, pairGapOf } from './netclass.js'
 import { PairGeometryError } from './pair.js'
@@ -45,9 +46,9 @@ import { neckLength, neckOf, neckPieces, neckPrims, neckStub, padMinor, padReach
 import { planCorner, primsOf, trackShape } from './round.js'
 import type { IsFree } from './length.js'
 import { itemLabel } from './route-findings.js'
-import { exemptKey, fill, fillAdd, isNpth, itemSig, keptSet, ObstacleWorld, outer, solidRings, viaKeptSet, type Grid } from './obstacles.js'
+import { exemptKey, fill, fillAdd, isNpth, keptSet, ObstacleWorld, outer, solidRings, viaKeptSet, type Grid } from './obstacles.js'
 import { boxOf, hitsEdge, inside, ringSet, segCross, segHits, type RingSet } from './spatial.js'
-import { pulse } from './cancel.js'
+import { CancelledError, pulse } from './cancel.js'
 import { changed, immutable } from './items.js'
 
 const MAX_STATES = 3e7
@@ -93,14 +94,14 @@ function padEnd(pad: Pad, defaultLayer: string): ResolvedPos {
 }
 
 /** Where each laid route's chain calls end on a board, `pt:0` its start, with the layer at each; route points resolve against it. */
-const ROUTE_PTS = new WeakMap<Board, Map<string, { pts: Pt[]; layers: string[] }>>()
+const ROUTE_PTS = new WeakMap<Board, Map<string, { pts: Pt[]; layers: string[]; incomplete?: boolean }>>()
 const routePts = (board: Board) => ROUTE_PTS.get(board) ?? ROUTE_PTS.set(board, new Map()).get(board)!
 
 /** A route point as the reference grammar names it, `CH2/route:vccTrunk/pt:2`; null until its route is laid. */
 export function pointRef(board: Board, p: RoutePoint): string | null {
   const id = ROUTE_IDS.get(p.route)
   const got = id && routePts(board).get(id)
-  if (!got) return null
+  if (!got || (p.pt === 'end' && got.incomplete)) return null
   return `${id}/pt:${p.pt === 'end' ? got.pts.length - 1 : p.pt}`
 }
 
@@ -110,16 +111,17 @@ function resolvePoint(board: Board, p: RoutePoint): ResolvedPos {
   const got = routePts(board).get(id)
   if (!got)
     throw new CompileError(`${id}/${p.pt === 'end' ? 'end' : `pt:${p.pt}`} is a route end, but ${id} is not laid before it; two routes that end on each other's points are a cycle`)
+  if (p.pt === 'end' && got.incomplete) throw new CompileError(`${id}/end is not resolved yet`)
   const k = p.pt === 'end' ? got.pts.length - 1 : p.pt
   if (k >= got.pts.length) throw new CompileError(`${id}/pt:${k} is a route end, but ${id} has points pt:0 to pt:${got.pts.length - 1}`)
   return { x: got.pts[k][0], y: got.pts[k][1], layer: got.layers[k] }
 }
 
 /** The routes whose points a job's ends name. */
-const pointDeps = (j: AutoRouteJob): string[] => [j.from, j.to, j.root, j.pair?.fromN, j.pair?.toN].flatMap(e => (isRoutePoint(e) ? [ROUTE_IDS.get(e.route) ?? ''] : []))
+export const pointDeps = (j: AutoRouteJob): string[] => [j.from, j.to, j.root, j.pair?.fromN, j.pair?.toN].flatMap(e => (isRoutePoint(e) ? [ROUTE_IDS.get(e.route) ?? ''] : []))
 
 /** The jobs with each route that ends on another's point after that route, document order kept otherwise; a cycle is a compile error. */
-function byPoints(jobs: AutoRouteJob[]): AutoRouteJob[] {
+export function byPoints(jobs: AutoRouteJob[]): AutoRouteJob[] {
   if (!jobs.some(j => pointDeps(j).length)) return jobs
   const deps = new Map<string, string[]>()
   for (const j of jobs) if (j.route) deps.set(j.route, [...(deps.get(j.route) ?? []), ...pointDeps(j)])
@@ -549,7 +551,11 @@ function searchBuffers(S: number) {
   return buffers
 }
 
-export const maze: RouteFn = (req, layout) => {
+export const maze: RouteFn = (req, layout) => runMaze(req, layout)
+
+function runMaze(req: RouteRequest, layout: RouteContext, reader?: MazeReader): RouteResult
+function runMaze(req: RouteRequest, layout: RouteContext, reader: MazeReader, expected: MazeReads): boolean
+function runMaze(req: RouteRequest, layout: RouteContext, reader?: MazeReader, expected?: MazeReads): RouteResult | boolean {
   const maxVias = req.maxVias ?? Infinity
   const layers = maxVias === 0 ? [req.start.layer] : req.layers.length ? req.layers : [req.start.layer]
   const endLayers = (e: typeof req.start) => [...new Set([e.layer, ...(e.layers ?? [])])].map(l => layers.indexOf(l)).filter(i => i >= 0)
@@ -673,10 +679,32 @@ export const maze: RouteFn = (req, layout) => {
   const srcHub = tm?.src ? hubs(tm.src) : null,
     dstHub = tm?.dst ? hubs(tm.dst) : null
   // an end may sit in other copper's clearance only on its own net's copper, or when only its grid cell is blocked
-  const q = queries(layout)
+  const baseQueries = queries(layout)
+  blocked.forEach((a, l) => reader?.bind(`blocked:${l}`, a))
+  viaBlocked.forEach((a, l) => reader?.bind(`via:${l}`, a))
+  soft.forEach((a, l) => reader?.bind(`soft:${l}`, a))
+  const globals = [req, g, K, tw, vw, vd, spans, layout.copperLayers]
+  if (expected) {
+    return reader!.validate(expected, globals, (kind, args) =>
+      kind === 'point' ? baseQueries.blockedAt(...(args as Parameters<typeof baseQueries.blockedAt>)) : baseQueries.segFree(...(args as Parameters<typeof baseQueries.segFree>)),
+    )
+  }
+  reader?.checkpoint(globals)
+  const read = (values: Uint8Array | null | undefined, cell: number): number => (reader ? reader.read(values, cell) : (values?.[cell] ?? 0))
+  const q = {
+    allowedSet: baseQueries.allowedSet,
+    blockedAt: (...args: Parameters<typeof baseQueries.blockedAt>) => {
+      const value = baseQueries.blockedAt(...args)
+      return reader ? reader.query('point', args, value) : value
+    },
+    segFree: (...args: Parameters<typeof baseQueries.segFree>) => {
+      const value = baseQueries.segFree(...args)
+      return reader ? reader.query('segment', args, value) : value
+    },
+  }
   const inn = internals.get(layout)
   const endOk = (e: ResolvedPos, c: number, l: number) => {
-    if (!blocked[l][c]) return true
+    if (!read(blocked[l], c)) return true
     const layer = layers[l],
       al = q.allowedSet(tw)
     if (!q.blockedAt(layer, req.net, tw, e.x, e.y) && (!al || inside(al, e.x, e.y))) return true
@@ -694,9 +722,9 @@ export const maze: RouteFn = (req, layout) => {
       throw new Error(`the ${e === req.start ? 'start' : 'end'} at (${fmt(e.x)}, ${fmt(e.y)}) is inside the clearance of other copper, and only a pad of the net may be`)
   const ei = ec % g.nx,
     ej = (ec / g.nx) | 0
-  const free = (l: number, c: number) => !blocked[l][c] || (c === sc && isStart[l] === 1) || (c === ec && isEnd[l] === 1)
-  const isSrc = (l: number, c: number) => (c === sc && isStart[l] === 1) || !!srcHub?.[l].has(c) || (!!srcAt?.[l]?.[c] && !blocked[l][c])
-  const isDst = (l: number, c: number) => (c === ec && isEnd[l] === 1) || !!dstHub?.[l].has(c) || (!!dstAt?.[l]?.[c] && !blocked[l][c])
+  const free = (l: number, c: number) => !read(blocked[l], c) || (c === sc && isStart[l] === 1) || (c === ec && isEnd[l] === 1)
+  const isSrc = (l: number, c: number) => (c === sc && isStart[l] === 1) || !!srcHub?.[l].has(c) || (!!srcAt?.[l]?.[c] && !read(blocked[l], c))
+  const isDst = (l: number, c: number) => (c === ec && isEnd[l] === 1) || !!dstHub?.[l].has(c) || (!!dstAt?.[l]?.[c] && !read(blocked[l], c))
   // the heuristic aims at the box of every target cell
   let ti0 = ei,
     ti1 = ei,
@@ -708,7 +736,7 @@ export const maze: RouteFn = (req, layout) => {
       const m = dstAt[l]
       if (m)
         for (let c = 0; c < N; c++)
-          if (m[c] && !blocked[l][c]) {
+          if (m[c] && !read(blocked[l], c)) {
             const i = c % g.nx,
               j = (c / g.nx) | 0
             if (i < ti0) ti0 = i
@@ -810,7 +838,7 @@ export const maze: RouteFn = (req, layout) => {
   if (srcAt)
     for (let l = 0; l < L; l++) {
       const m = srcAt[l]
-      if (m) for (let c = 0; c < N; c++) if (m[c] && !blocked[l][c]) seed(l, c)
+      if (m) for (let c = 0; c < N; c++) if (m[c] && !read(blocked[l], c)) seed(l, c)
     }
   if (srcHub)
     srcHub.forEach((m, l) => {
@@ -854,13 +882,13 @@ export const maze: RouteFn = (req, layout) => {
         nj = cj + DY[k]
       if (ni < 0 || nj < 0 || ni >= nx || nj >= g.ny) continue
       const nc = nj * nx + ni
-      if (bl[nc] && !(nc === sc && st) && !(nc === ec && en) && !dstHub?.[l].has(nc)) continue
+      if (read(bl, nc) && !(nc === sc && st) && !(nc === ec && en) && !dstHub?.[l].has(nc)) continue
       if ((sz?.[nc] && !inS) || (inD && !dz![nc])) continue
       if (k >= 4) {
         const a = cj * nx + ni,
           b = nj * nx + ci
-        if (bl[a] && !(a === sc && st) && !(a === ec && en)) continue
-        if (bl[b] && !(b === sc && st) && !(b === ec && en)) continue
+        if (read(bl, a) && !(a === sc && st) && !(a === ec && en)) continue
+        if (read(bl, b) && !(b === sc && st) && !(b === ec && en)) continue
       }
       const idx = base + nc
       if (closed[idx]) continue
@@ -875,7 +903,7 @@ export const maze: RouteFn = (req, layout) => {
       }
       let cost = len
       if (pl) cost *= k >= 4 ? (1 + PREFER_PENALTY) / 2 : (pl === 'h') === k < 2 ? 1 : PREFER_PENALTY
-      if (sl && sl[nc]) cost *= AVOID_PENALTY
+      if (sl && read(sl, nc)) cost *= AVOID_PENALTY
       const ng = gc + (occ ? cost * (1 + hist![nc]) * (1 + pres * occ[nc]) : cost)
       if (ng < gs[idx]) {
         gs[idx] = ng
@@ -889,12 +917,12 @@ export const maze: RouteFn = (req, layout) => {
     for (const nl of [l - 1, l + 1]) {
       if (nl < 0 || nl >= L) continue
       const span = Math.min(l, nl)
-      if (viaBlocked[span][c] || !free(nl, c)) continue
+      if (read(viaBlocked[span], c) || !free(nl, c)) continue
       // a via may touch the tracks of the leg's own ends only where the leg leaves or reaches them
       if ((srcVia?.[span][c] && !isSrc(l, c)) || (dstVia?.[span][c] && !isDst(nl, c))) continue
       const idx = nk * LN + nl * N + c
       if (closed[idx]) continue
-      const cost = viaCost * (soft[nl]?.[c] || sl?.[c] ? AVOID_PENALTY : 1)
+      const cost = viaCost * (read(soft[nl], c) || read(sl, c) ? AVOID_PENALTY : 1)
       const ng = gc + (F ? cost * (1 + Math.max(F.hist[l][c], F.hist[nl][c])) * (1 + pres * F.viaOcc[span][c]) : cost)
       if (ng < gs[idx]) {
         gs[idx] = ng
@@ -1589,24 +1617,29 @@ const pairFreesOf =
 export const padFreeOf = (world: ObstacleWorld): IsFree => lazyFree(() => buildLayout(world, new Set(world.items().flatMap(i => (i.kind !== 'pad' ? [i.id] : [])))))
 
 /** Every route's parameters, ends, nets and manual commands in document order, its manual copper in the world as it goes, since each route's corners, necks and pair stubs keep clear of the copper before it; the board's items written once at the end. */
-export function planRoutes(board: Board, jobs: AutoRouteJob[], defaults: AutoRouteParams = BASE_AUTOROUTE, opts: Pick<AutorouteOptions, 'rules' | 'strict'> = {}): RoutePlan {
+export function planRoutes(
+  board: Board,
+  jobs: AutoRouteJob[],
+  defaults: AutoRouteParams = BASE_AUTOROUTE,
+  opts: Pick<AutorouteOptions, 'rules' | 'strict'> & { explicit?: boolean } = {},
+): RoutePlan {
   const report: RoutingReport = { legs: 0, routed: 0, failed: 0, cached: 0, held: 0, ripped: 0 }
   const failures: RouteFailure[] = []
   const added: Item[] = []
   const rules = opts.rules ?? board.rules
-  const world = new ObstacleWorld(board, rules)
-  const cu = world.cu
+  const world = opts.explicit ? null : new ObstacleWorld(board, rules)
+  const cu = world?.cu ?? copperLayers(board.copper)
   let nextId = board.items.reduce((m, it) => Math.max(m, it.id), 0) + 1
   const order = (l: string) => cu.indexOf(l)
   const byStack = (ls: string[]) => [...new Set(ls)].sort((a, b) => order(a) - order(b))
   const push = (it: Item) => {
-    world.add([immutable(it)])
-    added.push(it)
+    world?.add([immutable(it)])
+    added.push(immutable(it))
   }
   /** `it` changed, in its place in the world and in `added`. */
   const swap = <T extends Item>(it: T, change: Partial<T>): T => {
     const next = changed(it, change)
-    world.replace(next)
+    world!.replace(next)
     const k = added.indexOf(it)
     if (k >= 0) added[k] = next
     return next
@@ -1614,15 +1647,33 @@ export function planRoutes(board: Board, jobs: AutoRouteJob[], defaults: AutoRou
   const runs: RouteRun[] = []
   let pairCount = 0
   // necks see the pads only
-  const padLayout = padFreeOf(world)
-  const padFree = () => padLayout
-  const pairFrees = pairFreesOf(world, padLayout)
+  const padLayout = world ? padFreeOf(world) : null
+  const padFree = () => padLayout!
+  const pairFrees = world ? pairFreesOf(world, padLayout!) : null
   // where each branch starts: the trunk's cursor, layer and net at its `B` step
   const forks = new Map<number, { x: number; y: number; layer: string; net?: string }>()
   // the automatic legs of each route before this run, so a patch's leg numbers count over the whole route
   const legBase = new Map<string, number>()
   // pass 1: parameters, ends, nets and manual commands, in document order
-  for (const job of byPoints(jobs).flatMap(j => (j.whole ? wholeNet(board, j) : [j]))) {
+  for (let job of byPoints(jobs).flatMap(j => (j.whole ? (opts.explicit ? [] : wholeNet(board, j)) : [j]))) {
+    let incomplete = false
+    if (opts.explicit) {
+      if (job.pair || (typeof job.corner === 'number' && job.corner > 0) || (job.fork !== undefined && !forks.has(job.fork))) continue
+      try {
+        if (job.from !== undefined) resolvePos(board, job.from, job.layer ?? 'F.Cu')
+      } catch {
+        continue
+      }
+      try {
+        if (job.toNet !== undefined) throw new Error('net endpoint pending')
+        if (job.to !== undefined) resolvePos(board, job.to, job.layer ?? 'F.Cu')
+      } catch {
+        const steps = job.steps ?? [{ op: 'XZ' as const }]
+        const stop = steps.findIndex(s => s.op === 'Z' || s.op === 'XZ')
+        incomplete = stop >= 0
+        job = { ...job, steps: stop < 0 ? steps : steps.slice(0, stop), to: undefined, toNet: undefined }
+      }
+    }
     pulse()
     const fail = (msg: string): never => {
       throw new CompileError(msg, job.src)
@@ -1656,6 +1707,7 @@ export function planRoutes(board: Board, jobs: AutoRouteJob[], defaults: AutoRou
     const padA = job.from !== undefined ? padOf(board, job.from) : null
     let padB = job.to !== undefined ? padOf(board, job.to) : null
     let net = job.net ?? fork?.net
+    if (opts.explicit && job.infer && !job.netless && net === undefined && !padA?.net && !padB?.net && job.toNet === undefined) continue
     const la = job.from !== undefined ? posLabel(board, job.from, padA) : 'its fork',
       lb = job.to !== undefined ? posLabel(board, job.to, padB) : job.toNet !== undefined ? `net ${job.toNet}` : 'its end'
     if (job.infer && !job.netless) {
@@ -1880,7 +1932,7 @@ export function planRoutes(board: Board, jobs: AutoRouteJob[], defaults: AutoRou
       ptLayers.push(st.op === 'XZ' ? legs[legs.length - 1].to.layer : layer)
       first = false
     }
-    if (job.route && !job.sub) routePts(board).set(job.route, { pts, layers: ptLayers })
+    if (job.route && !job.sub) routePts(board).set(job.route, { pts, layers: ptLayers, ...(incomplete ? { incomplete: true } : {}) })
     if (job.netless && legs.length) fail('a route on no net takes no automatic leg; draw it by hand')
     const cr = job.corner
     if (!pr && typeof cr === 'number' && cr > 0) {
@@ -1890,7 +1942,7 @@ export function planRoutes(board: Board, jobs: AutoRouteJob[], defaults: AutoRou
         cr,
         width,
         net,
-        lazyFree(() => buildLayout(world, mine)),
+        lazyFree(() => buildLayout(world!, mine)),
         swap,
       )
     }
@@ -1906,7 +1958,7 @@ export function planRoutes(board: Board, jobs: AutoRouteJob[], defaults: AutoRou
       }
       const first = pr.pieces[0],
         last = pr.pieces[pr.pieces.length - 1]
-      const pctx = pairFrees(net!, pr.netN, new Set(pr.ids))
+      const pctx = pairFrees!(net!, pr.netN, new Set(pr.ids))
       const fpOf = (pad: Pad | null): Pt | undefined => {
         const f = pad && board.footprints.find(f => f.ref === pad.ref)
         return f ? f.at : undefined
@@ -1958,10 +2010,10 @@ export function planRoutes(board: Board, jobs: AutoRouteJob[], defaults: AutoRou
           pr.crossed = `the pair would have to cross itself: P leaves its start pad on the ${hand(s0)} of the direction of travel, but its end pad at (${fmt(pr.endPads[0][0])}, ${fmt(pr.endPads[0][1])}) is on the ${hand(s1)} as the path arrives${odd ? ', after its crossover' : ''}; swap P and N at a via pair with .cross(layer) in the chain, or swap the pins at one end`
         }
       }
-    } else if (net !== undefined) {
+    } else if (net !== undefined && !opts.explicit) {
       // neck-down: a stub before an automatic leg, else the end manual tracks split where full width clears the pads
       const endAtLast = job.steps?.length ? job.steps[job.steps.length - 1].op : 'XZ'
-      const mine = () => world.net(net).filter((i): i is Track => i.kind === 'track' && job.route !== undefined && i.route === job.route)
+      const mine = () => world!.net(net).filter((i): i is Track => i.kind === 'track' && job.route !== undefined && i.route === job.route)
       for (const [pad, atStart] of [
         [padA, true],
         [padB, false],
@@ -2049,7 +2101,7 @@ export function planRoutes(board: Board, jobs: AutoRouteJob[], defaults: AutoRou
     })
   }
   const centres = new Set(runs.flatMap(r => r.pair?.ids ?? []))
-  board.items = world.items()
+  board.items = world ? world.items() : [...board.items, ...added]
   return {
     jobs: jobs.length,
     runs,
@@ -2159,8 +2211,6 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
     how?: 'cache' | 'hold' | 'route' | 'solver'
     /** `with`: the leg it collided with last */
     fail?: { reason: string; layers: string[]; key: string; with?: Task }
-    /** the failure came from the cache */
-    stored?: boolean
     /** the leg of higher priority that took this leg's place, when it did */
     displaced?: Task
     /** the result's grown copper by layers, width, drill and gap */
@@ -2191,7 +2241,6 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
   interface Ctx {
     placed: Set<number>
     viaCount: number
-    cacheable: boolean
     router: RouteFn
     nets: Set<string>
     twin?: { net: string; partner: string }
@@ -2200,26 +2249,9 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
     /** adds the widened trunk under a placed leg */
     attach(t: Task, strips: Strip[]): void
     failed(a: ResolvedPos, b: ResolvedPos, layers: string[], reason: string, label: string, leg: number, legs: number, o?: Origin): void
-    boxAround(a: ResolvedPos, b: ResolvedPos, res: RouteResult): Box
   }
   const ctxs = new Map<Run, Ctx>()
   const valid = (res: RouteResult | undefined | null): res is RouteResult => !!res && Array.isArray(res.tracks) && Array.isArray(res.vias)
-  // kind scoped class clearances change the gap to every item, so they are in every signature
-  const kindSig =
-    board.classes && Object.values(board.classes).some(c => c.clearanceTo)
-      ? JSON.stringify(['kinds', Object.entries(board.classes).flatMap(([n, c]) => (c.clearanceTo ? [[n, c.clearanceTo]] : []))])
-      : ''
-  const sigsIn = (box: Box, skip: (it: Item) => boolean): string => {
-    const sigs: string[] = kindSig ? [kindSig] : []
-    sigs.push(...world.signature(box, skip))
-    for (const k of board.keepouts ?? [])
-      if (boxHit(boxOf(k.outline.flat()), box))
-        sigs.push(JSON.stringify(['keepout', k.layers, k.tracks, k.vias, k.pours, k.outline.map(q => q.map(p => p.map(r4))), ...(k.except ? [k.except] : [])]))
-    return hash(sigs.sort().join('\n'))
-  }
-  /** A failed leg's box: any change may let it through. */
-  const EVERYWHERE: Box = [-1e6, -1e6, 1e6, 1e6]
-
   const open = (r: Run): Ctx => {
     const { job, P, net, width, via, fail } = r
     const twin = r.pair && net !== undefined ? { net, partner: r.pair.netN } : undefined
@@ -2245,7 +2277,6 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
     const c: Ctx = {
       placed,
       viaCount: 0,
-      cacheable,
       router,
       nets,
       twin,
@@ -2253,7 +2284,6 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
       place: null!,
       attach: null!,
       failed: null!,
-      boxAround: null!,
     }
     const request = (start: ResolvedPos, end: ResolvedPos, layers: string[], w: number): RouteRequest => ({
       net,
@@ -2347,11 +2377,6 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
       t.box = undefined
     }
     const reach = Math.max(rules.clearance, maxClearance(board)) + Math.max(width, via.size) + rules.minHoleToHole + rules.holeClearance + (P.clearance ?? 0) + 0.5
-    c.boxAround = (a, b, res) => {
-      const pts: Pt[] = [[a.x, a.y], [b.x, b.y], ...res.tracks.flatMap(t => t.pts), ...res.vias.map(v => [v.x, v.y] as Pt)]
-      const bx = boxOf(pts)
-      return [r4(bx[0] - reach), r4(bx[1] - reach), r4(bx[2] + reach), r4(bx[3] + reach)]
-    }
     const describe = (a: ResolvedPos, b: ResolvedPos, layers: string[]) =>
       `net ${net ?? '(no net)'} from (${fmt(a.x)}, ${fmt(a.y)}) on ${a.layer} to (${fmt(b.x)}, ${fmt(b.y)}) on ${b.layer}, layers ${layers.join(', ')}`
     c.failed = (a, b, layers, reason, label, leg, legs, o) => {
@@ -2560,7 +2585,8 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
         const w2 = widen(t, res2, e2, [w.narrow])
         return { res: res2, strips: w2.strips, on: depsOf(t, e2, res2, sides), narrow: { side: w.narrow, kept: false } }
       }
-    } catch {
+    } catch (e) {
+      if (e instanceof CancelledError) throw e
       /* joined, thin */
     }
     const w3 = widen(t, res, e, [w.narrow])
@@ -2655,26 +2681,6 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
       }
     }
   }
-  /** Whether a joining leg's result met its net's copper away from its pads, or found its ends joined already. */
-  const joinedIn = (t: Task, res: RouteResult): boolean => {
-    const points = resultEnds(res),
-      leg = legOf(t)
-    return !points || !same(points[0], [leg.from.x, leg.from.y]) || !same(points[1], [leg.to.x, leg.to.y])
-  }
-  /** The signature of the copper a leg sees: what is around it, and for a leg that joined its whole net up to its own turn. */
-  const obsOf = (t: Task, box: Box, skip: (it: Item) => boolean): string => {
-    const s = sigsIn(box, skip)
-    if (!t.r.join || !t.result || !joinedIn(t, t.result)) return s
-    const net = t.r.net,
-      sigs: string[] = []
-    for (const it of world.net(net)) {
-      if (skip(it) || (owner.get(it.id)?.seq ?? -1) > t.seq) continue
-      const g = itemSig(it, cu)
-      if (g) sigs.push(g.sig)
-    }
-    return hash(`${s}\n${sigs.sort().join('\n')}`)
-  }
-
   const prio = (t: Task) => t.r.P.priority ?? 0
   const softOk = (t: Task) => t.how !== 'hold' && t.how !== 'solver' && isMaze(t.r.P.algorithm) && ripupOf(t) > 0
   const sameNet = (a: Task, b: Task) => {
@@ -2698,7 +2704,6 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
   }
   const resvs = new Map<Run, Resv>()
   let resvId = -1
-  const resvIds = (r: Run) => new Set(resvs.get(r)?.items.map(it => it.id) ?? [])
   const objsOf = (t: Task): Item[] => {
     const own = t.placed.flatMap(p => p.objs),
       rv = resvs.get(t.r)
@@ -2844,7 +2849,7 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
         unplace(d)
         d.how = undefined
         d.fail = undefined
-        d.stored = false
+
         pending.push(d)
       }
   }
@@ -2855,7 +2860,7 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
     while (pending.length) {
       pulse()
       const o = pending.shift()!
-      if (!o.result && !o.fail && !o.stored) routeHard(o)
+      if (!o.result && !o.fail) routeHard(o)
     }
   }
   /** Unplaces the soft legs of lower priority, or with `any` of any priority not higher, that t's copper collides with. */
@@ -2868,7 +2873,7 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
       unplace(o)
       o.how = undefined
       o.fail = undefined
-      o.stored = false
+
       o.displaced = t
       out.push(o)
       pending.push(o)
@@ -2891,12 +2896,49 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
     const ts = c.tries(leg.from, leg.to, layersOf(t), leg.width)
     const lower = tasks.filter(o => o !== t && o.r !== t.r && o.result && prio(o) < prio(t) && softOk(o))
     let layout: RouteContext | undefined
+    const layoutOf = () => (layout ??= buildLayout(world, c.placed, lower.flatMap(objsOf), c.twin))
     for (const q of ts) {
       if (!q.req) continue
       let s: Solved
+      let invoked = 0,
+        reused = 0
+      const pureMaze = (req: RouteRequest): RouteResult => {
+        invoked++
+        if (!cache || !isMaze(t.r.P.algorithm) || t.r.fresh?.has(t.k) || congestionOf.has(req)) return c.router(req, layoutOf())
+        const terms = termsOf.get(req)
+        // Membership IDs are bound to exact geometry in the shared topology token.
+        // Synthetic endpoint exemption dots share id=-1 and must remain inline.
+        const members = (items: Item[] | null) => items?.map(it => (it.id >= 0 ? it.id : it)) ?? null
+        const inputs = routingValue([
+          req,
+          terms && { src: members(terms.src), dst: members(terms.dst), block: members(terms.block), exempt: members(terms.exempt), gap: terms.gap },
+          [...c.placed],
+          lower.flatMap(objsOf).map(it => it.id),
+        ])
+        const key = hash(JSON.stringify(['maze-reads', q.key, inputs]))
+        const local = routingReads(world, inputs, req.net, req.pair?.partner)
+        const stored = cache.leg(key)
+        if (
+          stored &&
+          stored.value === routingValue(stored.result) &&
+          sameRoutingReads(stored.reads, local) &&
+          runMaze(req, layoutOf(), new MazeReader(), stored.reads.maze) &&
+          valid(stored.result)
+        ) {
+          cache.putLeg(key, stored)
+          reused++
+          return stored.result
+        }
+        const reader = new MazeReader()
+        // Failed attempts run again; only a complete deterministic result is memoized.
+        const result = runMaze(req, layoutOf(), reader)
+        cache.putLeg(key, { reads: { ...local, maze: reader.finish() }, value: routingValue(result), result })
+        return result
+      }
       try {
-        s = solve(t, q.req, req => c.router(req, (layout ??= buildLayout(world, c.placed, lower.flatMap(objsOf), c.twin))))
+        s = solve(t, q.req, pureMaze)
       } catch (e) {
+        if (e instanceof CancelledError) throw e
         q.reason = (e as Error).message
         continue
       }
@@ -2905,7 +2947,7 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
         continue
       }
       c.place(t, s.res, q.key, leg.from, leg.to, leg.own, s.strips)
-      t.how = 'route'
+      t.how = invoked > 0 && reused === invoked ? 'cache' : 'route'
       t.fail = undefined
       t.on = s.on
       t.narrow = s.narrow
@@ -2960,84 +3002,27 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
     if (t.r.job.route) solved.set(t.r.job.route, [...(solved.get(t.r.job.route) ?? []), res])
   }
 
-  // stored results are placed first, then checked against the copper around them, the last compile's final copper
-  const entries = new Map<Task, LegEntry>()
+  // Explicit holds are inputs. Ordinary memos are validated sequentially where
+  // the cold solve would run, never preinstalled as previous final copper.
   for (const t of tasks) {
-    pulse()
-    const c = ctxOf(t.r),
-      leg = legOf(t)
     const kept = t.r.held?.[t.k]
-    if (t.how === 'solver') continue
-    if (valid(kept)) {
-      c.place(t, kept, '', leg.from, leg.to, leg.own)
-      t.how = 'hold'
-      continue
-    }
-    if (!c.cacheable || t.r.fresh?.has(t.k)) continue
-    for (const q of c.tries(leg.from, leg.to, layersOf(t), leg.width)) {
-      const e = q.req ? cache!.leg(q.key) : undefined
-      if (!e) continue
-      // a stored failure holds only under the same negotiation bound
-      if (e.result === null && e.fail) {
-        if (e.fail.ripup === ripupOf(t)) {
-          entries.set(t, e)
-          t.fail = { reason: e.fail.reason, layers: e.fail.layers, key: q.key }
-          t.stored = true
-        }
-      } else if (valid(e.result)) {
-        entries.set(t, e)
-        c.place(t, e.result, q.key, leg.from, leg.to, leg.own)
-        t.how = 'cache'
-        if (e.narrow) t.narrow = { ...e.narrow }
-      }
-      break
-    }
+    if (t.how === 'solver' || !valid(kept)) continue
+    const leg = legOf(t)
+    ctxOf(t.r).place(t, kept, '', leg.from, leg.to, leg.own)
+    t.how = 'hold'
   }
   for (const r of runs) if (r.pair) layResv(r)
-  if (entries.size) {
-    prune()
-    for (const t of tasks) {
-      pulse()
-      if (t.how === 'cache') restrip(t)
-    }
-    const stale = new Set<Task>()
-    for (const [t, e] of entries) {
-      pulse()
-      const own = ctxOf(t.r).placed,
-        rv = resvIds(t.r)
-      if (obsOf(t, e.box, it => own.has(it.id) || rv.has(it.id)) !== e.obs) stale.add(t)
-    }
-    // with maxVias each request counts the earlier legs' vias, so one stale leg makes the rest stale
-    for (const t of [...stale]) if (t.r.P.maxVias !== undefined) for (const o of entries.keys()) if (o.r === t.r) stale.add(o)
-    for (const t of stale) {
-      if (t.how === 'cache') unplace(t)
-      t.how = undefined
-      t.fail = undefined
-      t.stored = false
-    }
-  }
-  // a cached leg must also keep clear of the legs before it and the held ones
-  for (const t of tasks) {
-    pulse()
-    if (t.how !== 'cache') continue
-    for (const o of tasks) {
-      if (o === t || !o.result || (o.seq > t.seq && o.how !== 'hold' && o.how !== 'solver') || !clash(t, o)) continue
-      unplace(t)
-      t.how = undefined
-      break
-    }
-  }
   opts.progress?.({ done: 0, legs: tasks.length })
   for (const t of tasks) {
     pulse()
-    if (!t.result && !t.stored) routeHard(t)
+    if (!t.result) routeHard(t)
     opts.progress?.({ done: t.seq + 1, legs: tasks.length })
   }
   routePending()
   pulse()
 
   let rounds = 0
-  if (tasks.some(t => t.fail && !t.stored && softOk(t))) rounds = negotiate(tasks.filter(t => t.fail && softOk(t)))
+  if (tasks.some(t => t.fail && softOk(t))) rounds = negotiate(tasks.filter(t => t.fail && softOk(t)))
   pulse()
   rerouteDisplaced()
 
@@ -3267,7 +3252,7 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
       pending.sort(bySeq)
       while (pending.length) {
         const o = pending.shift()!
-        if (o.result || o.fail || o.stored) continue
+        if (o.result || o.fail) continue
         if (softOk(o) ? routeSoft(o, pres) : routeHard(o)) moved.push(o)
       }
       clashes = new Map()
@@ -3403,24 +3388,6 @@ export function routeLegs(plan: RoutePlan, world: ObstacleWorld, opts: Autoroute
         items: t.items,
       }),
     )
-  }
-
-  if (cache) {
-    // hashed over the final copper
-    for (const t of tasks) {
-      pulse()
-      const c = ctxOf(t.r)
-      if (!c.cacheable) continue
-      const rv = resvIds(t.r)
-      const skip = (it: Item) => c.placed.has(it.id) || rv.has(it.id)
-      for (const p of t.placed) {
-        if (!p.key) continue
-        const box = c.boxAround(p.a, p.b, p.result)
-        cache.putLeg(p.key, { obs: obsOf(t, box, skip), box, result: p.result, ...(t.narrow ? { narrow: t.narrow } : {}) })
-      }
-      if (!t.result && t.fail?.key)
-        cache.putLeg(t.fail.key, { obs: sigsIn(EVERYWHERE, skip), box: EVERYWHERE, result: null, fail: { reason: t.fail.reason, layers: t.fail.layers, ripup: ripupOf(t) } })
-    }
   }
 
   // the centre line placeholders leave; a pair whose legs all routed gets its two tracks

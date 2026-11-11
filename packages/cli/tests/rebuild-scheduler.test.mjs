@@ -77,3 +77,74 @@ test('explicit rebuilds serialize selected entries through scheduler and preserv
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('an edit rejects a late success and suppresses completed slots of a cancelled run', async () => {
+  for (const multiple of [false, true]) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'pcbjs-scheduler-cancel-')))
+    const files = (multiple ? ['a.tsx', 'b.tsx'] : ['a.tsx']).map(rel => join(root, rel))
+    files.forEach(f => writeFileSync(f, 'before'))
+    let snap = null,
+      seq = 0,
+      release,
+      began
+    const started = new Promise(resolve => (began = resolve))
+    const events = [],
+      calls = []
+    const compiler = {
+      graph: () => ({ getModulesByFile: () => undefined }),
+      imported: file => new Set([file]),
+      changed() {},
+      cancel() {},
+      close: async () => {},
+      async compile(entry) {
+        const run = seq
+        calls.push(entry.file)
+        const x = calls.filter(f => f === entry.file).length > 1 ? 2 : 1
+        if (run === 1 && entry.file === files.at(-1)) {
+          began()
+          await new Promise(resolve => (release = resolve))
+          if (multiple) throw Object.assign(new Error('edit cancelled'), { name: 'CancelledError' })
+        }
+        const footprints = [{ ref: 'R1', at: [x, 0] }]
+        return [
+          { entry, run, board: { name: entry.rel, drc: [], erc: [], footprints }, site: { name: entry.rel, footprints }, hashes: { meta: `meta-${run}` }, files: [entry.file] },
+        ]
+      },
+    }
+    const rt = projectRuntime(
+      { cfg: { root }, entries: [], files: [], stamps: new Map(), state: { slots: files.map(file => ({ entry: { file, rel: file.split('/').at(-1) } })), compiler } },
+      {
+        snaps: { reserve: () => ++seq, last: () => seq, current: () => snap, commit: (s, run) => (snap = { ...s, id: `test.${run}`, run }) },
+        tiers: { keystroke: 10, quiet: 20 },
+        drafts: () => null,
+        settle: async () => new Set(),
+        viewers: () => 0,
+        invalidated() {},
+        shadow() {},
+        watch() {},
+        flushFeed() {},
+        log() {},
+        closing: () => false,
+        clientDir: '/client',
+      },
+    )
+    rt.on(e => events.push(e))
+    try {
+      const initial = rt.compiledOnce()
+      await started
+      writeFileSync(files[0], 'after')
+      rt.edit(files[0], false)
+      release()
+      await initial
+      const stale = events.filter(e => e.run === 1 || e.facet?.run === 1)
+      assert.ok(stale.some(e => e.t === 'cancelled'))
+      assert.ok(!stale.some(e => e.t === 'facet' || e.t === 'committed'), 'no stale completion reaches viewers or snapshots')
+      assert.equal(rt.state.slots[0].compiled[0].site.footprints[0].at[0], 2, 'the edited earlier slot is compiled again')
+      assert.equal(snap.run, 2)
+    } finally {
+      release?.()
+      await rt.close()
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+})

@@ -36,5 +36,5 @@ export { lengthStatus, netLengths, pairNets, pairOf, routeHover, routesOf, targe
 export { highlightLabel, rangeFor, resolveCursor, sourceTarget } from './source'
 export { stackupRows } from './stackup'
 export { parseAgents, sendNotice } from './agents'
-export { targetName, worstTarget } from './variants'
+export { fabDownload, targetName, worstTarget } from './variants'
 export { unsourcedCount } from './sourcing'

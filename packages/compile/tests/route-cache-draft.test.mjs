@@ -6,7 +6,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RouteCache, clearRouteCache } from '../dist/route-cache.js'
 
-const leg = obs => ({ obs, box: [0, 0, 1, 1], result: null })
+const leg = token => ({
+  reads: { version: 2, globals: '', topology: 'shared exact topology', requests: token, maze: { global: '', fields: [], queries: [] } },
+  value: '{"tracks":[],"vias":[]}',
+  result: { tracks: [], vias: [] },
+})
 
 test('route cache: a draft keeps its legs in memory and leaves the file alone', () => {
   const dir = mkdtempSync(join(tmpdir(), 'pcbjs-draft-cache-'))
@@ -28,7 +32,14 @@ test('route cache: a draft keeps its legs in memory and leaves the file alone', 
     assert.deepEqual(next.leg('a'), leg('1'))
     assert.deepEqual(next.leg('b'), leg('2'))
     next.putLeg('a', leg('1'))
+    next.putLeg('b', leg('2'))
     next.commit()
+    clearRouteCache()
+    const disk = new RouteCache('B', '', dir)
+    assert.deepEqual(disk.leg('a'), leg('1'), 'dictionary references hydrate to the exact topology value')
+    assert.deepEqual(disk.leg('b'), leg('2'))
+    disk.putLeg('a', leg('1'))
+    disk.commit()
     assert.deepEqual(Object.keys(JSON.parse(readFileSync(file, 'utf8')).groups[''].legs), ['a'])
   } finally {
     clearRouteCache()

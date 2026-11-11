@@ -3,7 +3,7 @@ import type { Src } from './types.js'
 
 /** The built-in stages of a compile, in the order they run; see docs/design.md. */
 export type StageName =
-  'evaluate' | 'place' | 'schematic' | 'manualCopper' | 'autoroute' | 'placeFollowers' | 'routeFollowers' | 'tune' | 'patches' | 'finish' | 'checks' | 'exports'
+  'evaluate' | 'manual' | 'place' | 'schematic' | 'manualCopper' | 'autoroute' | 'placeFollowers' | 'routeFollowers' | 'tune' | 'patches' | 'finish' | 'checks' | 'exports'
 /** Where a plugin stage runs: after manual copper and before the router, or after finish and before the checks. */
 export type Slot = 'beforeRoute' | 'beforeChecks'
 /** A part of the board between two stages, each with its own content hash: a cached stage keys on the facets it reads, so `reads` lists them; see docs/plugins.md. */

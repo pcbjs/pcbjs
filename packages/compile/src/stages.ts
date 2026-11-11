@@ -33,6 +33,7 @@ import { copperPatches, moveRefAt, routeHash, routePatches } from './patches.js'
 import { applyPlacement, solvePlacement, type Placement } from './placer.js'
 import { followersOf, hideFollowers, placeFollowers, splitJobs } from './follow.js'
 import { mintUids } from './uid.js'
+import { explicitGeometry } from './explicit-geometry.js'
 import { context, peek, settle, unitReads, type Kept, type Open, type Run, type StageCtx, type StageDef, type Target, type UnitDef } from './runner.js'
 
 /** A target's router: the plan the manual copper stage lays, null for a target that copies its group's lead, then the legs; `hidden`: the followers, not placed yet */
@@ -58,11 +59,12 @@ const FILL: readonly FacetName[] = ['meta', 'rules', 'stackup', 'outline', 'keep
 /** Every stage of a compile in the order it runs, declared once; docs/design.md has the table. */
 export const STAGE_DEFS: readonly StageDef[] = [
   { name: 'evaluate', after: [], span: 'entry', hooks: [], writes: [] },
+  { name: 'manual', after: ['evaluate'], span: 'targets', emits: ['meta', 'layers', 'shapes'], hooks: [], writes: [], run: manualStage },
   {
     name: 'place',
     after: ['evaluate'],
     span: 'targets',
-    emits: ['meta', 'layers', 'shapes', 'model'],
+    emits: ['meta', 'model'],
     hooks: ['after'],
     writes: FACET_NAMES,
     units: (t, run) => (run.placer && t.flat.placeJobs.some(j => !j.follow) ? [placer] : []),
@@ -78,7 +80,17 @@ export const STAGE_DEFS: readonly StageDef[] = [
     phase: 'erc',
     run: schematicStage,
   },
-  { name: 'manualCopper', after: ['place'], span: 'target', unit: 'autoroute', reads: ROUTING, writes: ['copper', 'frame'], ready: routers, run: planStage },
+  {
+    name: 'manualCopper',
+    after: ['place'],
+    span: 'target',
+    emits: ['layers', 'shapes'],
+    unit: 'autoroute',
+    reads: ROUTING,
+    writes: ['copper', 'frame'],
+    ready: routers,
+    run: planStage,
+  },
   {
     name: 'autoroute',
     after: ['manualCopper'],
@@ -235,7 +247,13 @@ function facets(reads: unknown, what: string, bad: (msg: string) => never): void
 
 /** A target as `place` starts it: the design flattened and the board prepared, with its stage store when the compile has a cache. */
 function flattened(run: Run, node: ReturnType<typeof rootBoard>, target: VariantSpec | undefined, variant: Board['variant']): Target {
-  run.opts.stage?.({ name: 'place', state: 'running', ms: 0, ...(target ? { target: String(target.name) } : {}), ...(variant ? { variant } : {}) })
+  run.opts.stage?.({
+    name: run.placer && run.plan.has('manual') ? 'manual' : 'place',
+    state: 'running',
+    ms: 0,
+    ...(target ? { target: String(target.name) } : {}),
+    ...(variant ? { variant } : {}),
+  })
   const flat = flatten(node, target, run.opts)
   pulse()
   const board = prepare(flat)
@@ -257,6 +275,12 @@ function flattened(run: Run, node: ReturnType<typeof rootBoard>, target: Variant
     ...(c ? { store: new StageStore(c.dir, board.name, target ? variantSlug(String(target.name)) : '', c.draft) } : {}),
     ...(variant ? { variant } : {}),
   }
+}
+
+/** A coherent materialization of the current explicit geometry products, before solver work. */
+function manualStage(t: Target, ctx: StageCtx): void {
+  if (!ctx.opts.stage) return
+  t.manual = explicitGeometry(t.flat, t.board, ctx.graph, ctx.source)
 }
 
 /** `place:placer`: the auto placement solved, kept by its inputs, the parts as drawn without their sources, the outline and items around them, the jobs and the seed; `place` applies it. */

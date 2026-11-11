@@ -69,8 +69,8 @@ function board() {
 const boxGeo = new THREE.BoxGeometry(2, 1, 0.5),
   boxMat = new THREE.MeshStandardMaterial()
 const body = () => new THREE.Mesh(boxGeo, boxMat)
-function scene(b = board()) {
-  const s = new BoardScene({ css: (_n, f) => f, cache: new GeometryCache(), pool: null, body, changed: () => {} })
+function scene(b = board(), opts = {}) {
+  const s = new BoardScene({ css: (_n, f) => f, cache: new GeometryCache(), pool: null, body, changed: () => {}, ...opts })
   s.setFacets(b, new Set(['meta', 'layers', 'shapes']))
   s.root.updateMatrixWorld(true)
   return { s, b }
@@ -281,8 +281,12 @@ test('a ray from above picks the pad over the pour, a via’s plating, never a s
   assert.equal(side.info.id, 20)
 })
 
-test('a body a drag moves leaves its batch for its own mesh, which moves with the part', () => {
-  const { s } = scene()
+test('a body a drag moves leaves its batch for its own mesh, which moves with the part', async () => {
+  const source = board()
+  source.footprints.find(fp => fp.ref === 'R1').step = { file: 'body.step' }
+  const loads = []
+  let changed = 0
+  const { s, b } = scene(source, { step: () => new Promise(resolve => loads.push(resolve)), changed: () => changed++ })
   const mesh = bodyOf(s, 'R1')
   const where = () => {
     s.root.updateMatrixWorld(true)
@@ -298,6 +302,28 @@ test('a body a drag moves leaves its batch for its own mesh, which moves with th
   assert.equal(bodyHl(s, 'R1'), null)
   assert.equal(mesh.visible, false)
   assert.ok(where().distanceTo(at) < 1e-9)
+  const base = {
+    ...b,
+    footprints: b.footprints
+      .filter(fp => fp.ref !== 'R2')
+      .map(fp => (fp.ref === 'R1' ? { ...fp, at: [fp.at[0] + 3, fp.at[1]], rot: 90, body: { ...fp.body, x: fp.body.x + 3, rot: 90 } } : fp)),
+  }
+  s.setFacets(base, new Set(['meta']))
+  s.root.updateMatrixWorld(true)
+  const fresh = bodyOf(s, 'R1')
+  const placed = new THREE.Vector3().setFromMatrixPosition(fresh.matrixWorld)
+  assert.ok(Math.abs(placed.x - at.x - 3) < 1e-9, 'early meta places the body without a newer model facet')
+  const direction = new THREE.Vector3(1, 0, 0).transformDirection(fresh.matrixWorld)
+  assert.ok(Math.abs(direction.x) < 1e-9 && Math.abs(direction.y - 1) < 1e-9, 'early meta applies the current rotation')
+  assert.equal(bodyOf(s, 'R2'), undefined, 'a part absent from the manual base leaves no old body')
+  const before = changed
+  loads[0](new THREE.Group().add(new THREE.Mesh(boxGeo, boxMat)))
+  await Promise.resolve()
+  assert.equal(changed, before, 'a STEP load from the replaced body cannot repaint or rebatch stale placement')
+  assert.equal(bodyOf(s, 'R1'), fresh, 'the current body survives the delayed old model')
+  loads[1](new THREE.Group().add(new THREE.Mesh(boxGeo, boxMat)))
+  await Promise.resolve()
+  assert.equal(changed, before + 1, 'the current body still accepts its own STEP model')
 })
 
 test('a pose draws its parts’ pads and its items of no part again where it goes, an instance’s route and via among them, while it holds layers', () => {

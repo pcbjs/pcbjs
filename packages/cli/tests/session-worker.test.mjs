@@ -162,3 +162,37 @@ export default <PCB name="Prepared"><rect layer="Edge.Cuts" x={0} y={0} w={10} h
     else process.env.PCBJS_TEST_EDITABLE_FAIL = before
   }
 })
+
+test('a cancel at final exports rejects the result while preserving the next transport baseline', { timeout: 30000 }, async () => {
+  const root = tmp('pcbjs-late-cancel-')
+  linkPackages(root)
+  writeFileSync(join(root, 'pcb.config.ts'), "import { defineConfig } from '@pcbjs/core'\nexport default defineConfig({ entries: ['pcb.tsx'] })\n")
+  const file = join(root, 'pcb.tsx')
+  writeFileSync(file, 'import PCB from \'@pcbjs/core\'\nexport default <PCB name="Late"><rect layer="Edge.Cuts" x={0} y={0} w={10} h={10}/></PCB>')
+  const c = workerCompiler({ root, configFile: join(root, 'pcb.config.ts'), log() {} })
+  const entry = { file, rel: 'pcb.tsx' }
+  try {
+    // Warm the source loader so final exports are followed only by transport work.
+    await c.compile(entry, { draft: true })
+    c.draft(file, { code: readFileSync(file, 'utf8').replace('name="Late"', 'name="Current"'), limit: null })
+    let cancelled = false
+    await assert.rejects(
+      c.compile(entry, {
+        draft: true,
+        stage: s => {
+          if (s.name === 'exports' && s.state === 'done') {
+            cancelled = true
+            c.cancel()
+          }
+        },
+      }),
+      e => e.name === 'CancelledError',
+    )
+    assert.equal(cancelled, true)
+    const [next] = await c.compile(entry, { draft: true })
+    assert.equal(next.board.name, 'Current')
+    assert.equal(next.site.name, 'Current')
+  } finally {
+    await c.close()
+  }
+})

@@ -38,6 +38,7 @@ A part carries `MPN` and `MPN:<tag>`; a board or fab target has an ordered tag l
 | Stage | Reads | Writes | Code |
 | --- | --- | --- | --- |
 | `evaluate` | | the root, its targets checked, the plugins | `stages.ts`, `pipeline.ts` |
+| `manual` | flattened declarations | a separate solver-free projection of fixed placements and resolvable authored copper for live meta, layers and shapes | `explicit-geometry.ts`, `autoroute.ts` |
 | `place` | | parts, pads, nets, netlist and its ERC, jobs, outline, references, patches, the dependency graph; unit `placer`, keyed on what it places | `flatten.ts`, `placer.ts`, `reference.ts`, `deps.ts` |
 | `schematic` | meta, parts, pads, nets, netlist, rest, `jobs.sch` | the drawing, `sch-*` findings | `sch.ts` |
 | `manualCopper` | as `autoroute` | each route's manual copper, `planRoutes` | `autoroute.ts` |
@@ -49,6 +50,7 @@ A part carries `MPN` and `MPN:<tag>`; a board or fab target has an ordered tag l
 | `exports` | every facet, the formats' keys and model files | the formats the caller passes | `stages.ts`, formats in `cli/src/project/project.ts` |
 
 - `beforeRoute` runs inside the routing unit before `autoroute`, `beforeChecks` before `checks`, each of its stages a unit of its own.
+- Live PCB geometry: flatten all targets and emit `manual` before any placement, reference child compilation, schematic solver or router. The projection shares the manual route command walker and leaves authoritative boards and stage outputs unchanged. Unresolved placements, endpoint-dependent commands, differential pairs and rounded corner jobs wait for their normal stages; early airwires are empty. Neck-down processing also waits, so early copper near narrow pads can appear wider than the finished route. Model assets update at place. Schematic-only demand keeps its existing plan.
 - Variants: `evaluate` once per entry; `place` and `schematic` for every target first; `autoroute` and `tune` once per routing group, its other targets copying the lead's tuned copper; later stages per target.
 - Flatten calls components, composes `at` and side flips, resolves layers, maps nets to pads by number then pin name, and gives refs, the netlist and its ERC; errors carry the source.
 - The schematic places symbols, checks hand wires and wires the rest in the router's square mode, `sch-route.ts`; see schematic-graphic.md.
@@ -65,7 +67,7 @@ A part carries `MPN` and `MPN:<tag>`; a board or fab target has an ordered tag l
 Routing details:
 
 - A failed leg is a `route-failed` finding with its nearest obstacles, so it hides no other leg; `<PCB strict>` throws instead.
-- Legs are cached by request and nearby obstacles in `.pcbjs/cache/route/<board>.json`; a hold patch freezes a route, patches.md.
+- Pure maze searches are cached by request and validated search reads in `.pcbjs/cache/route/<board>.json`; joins and negotiation still run against the current board. A hold patch freezes a route, patches.md.
 - A pair routes its centre line as one wide track, which `compile/pair.ts` offsets into two tracks with fans and via pairs; `compile/tune.ts` then tunes skew, `.length()` and `.match()`.
 - autorouter.md has the rest.
 
@@ -74,6 +76,10 @@ Routing details:
 `place` builds the dependency graph: a route to the parts it ends on, a part to its grid, a grid to its anchor, a follower to its route, a solver to what it reads, a `reference()` to its entry across processes through `PCBJS_REFERENCE_CHAIN`. A cycle or a self edge is a compile error naming each member: `grid-cycle`, `follow-cycle`, `solver-order` or `reference-cycle`. Nets, pours and `at:cost` are no edges; nothing iterates to a fixpoint.
 
 ## The stage cache
+
+Explicit preview geometry uses a demand graph within the existing cache lifetime. Nodes hold immutable values, semantic identities and tracked reads. An input change marks consumers suspect; an unchanged result stops propagation. Failed or cancelled work cannot publish, and dependency records change only after successful evaluation. Graphs are isolated by project, entry and target and bounded in memory; source evaluation and flattening remain coarse inputs.
+
+The `manual` stage materializes these products into a fresh board for streaming. Independent manual routes read their endpoint geometry; branches and route-point relationships stay coupled and use the same route interpreter. Transient item IDs belong to the materialized board, not cached products. Navigation metadata and shared routing declarations remain conservative dependencies, so some non-geometric edits also recompute products. Existing stage units remain responsible for coupled solvers, plugins, checks and exports.
 
 - `.pcbjs/cache` holds `meta.json` with `format` and `compileId`, Vite's cache in `vite/`, `index/<board>[~<slug>].json`, outputs as `objects/<hh>/<sha1>.json.gz` and binary exports as `.bin`, named by content and written by rename, the route memos in `route/<board>.json` and `references/`. `compileId` hashes `@pcbjs/compile` and `@pcbjs/core`, each with its `dist` hash in a workspace link.
 - A unit is a stage, a run of stages stored as one such as routing, or a unit of a stage such as `checks:clearance`. Its key is the sha1 of its name, `compileId`, its plugins, the hash of each facet it reads and its own inputs; a hook in it makes it read every facet. Its output is the board's delta, its findings and what it keeps, the zone state or the tuning hand-off. `evaluate`, `place` and `patches` always run.

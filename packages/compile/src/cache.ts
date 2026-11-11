@@ -2,6 +2,7 @@
 // An object is a stage output as JSON, named by the sha1 of that JSON; an index names the stage keys and objects of a board's last two compiles.
 // On a platform without a store, a browser's, every stage output stays in this realm's memory.
 import { platform, type Platform } from '@pcbjs/core/platform'
+import { BuildGraph } from './build-graph.js'
 
 /** Bumped when the layout or the meaning of an index or object changes; another format makes every index unread. */
 export const CACHE_FORMAT = 1
@@ -142,6 +143,7 @@ interface Memory {
   blobs: Map<string, Uint8Array>
   /** every entry this process recorded or read, by key */
   entries: Map<string, StageEntry>
+  graphs?: Map<string, BuildGraph>
 }
 const memory = (): Memory => ((globalThis as any)[MEMORY] ??= { objects: new Map(), blobs: new Map(), entries: new Map() })
 const KEEP_OBJECTS = 96
@@ -160,6 +162,16 @@ export function clearStageCache(): void {
   m.objects.clear()
   m.blobs.clear()
   m.entries.clear()
+  m.graphs?.clear()
+}
+
+/** In-memory products of one entry and target; no identity means a fresh graph. */
+export function buildGraph(identity: string | null): BuildGraph {
+  if (identity === null) return new BuildGraph()
+  const graphs = (memory().graphs ??= new Map())
+  const graph = graphs.get(identity) ?? new BuildGraph()
+  remember(graphs, identity, graph, 32)
+  return graph
 }
 
 export const indexName = (board: string, slug?: string): string => `${(slug ? `${board}~${slug}` : board).replace(/[^A-Za-z0-9._~-]+/g, '_')}.json`
