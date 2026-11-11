@@ -262,19 +262,39 @@ test('pair router: an automatic leg routes the centre line around other copper, 
   assert.equal(b.pairs[0].id, 'pair:1')
 })
 
-test('pair router: the cache replays a pair leg, and an edit elsewhere keeps it', () => {
+test('pair router: warm routes and unrelated edits preserve fresh pair geometry', () => {
   clearRouteCache()
-  const parts = () => [smd('X1', 10, 10, 'B', 3), pair()]
+  const parts = (gap = 0.2) => [smd('X1', 10, 10, 'B', 3), pair(undefined, 0.2, gap)]
   const first = compileBoard(board({}, ...parts()))
-  const again = compileBoard(board({}, ...parts(), h('text', { layer: 'F.SilkS', at: '25 18', size: 1 }, 'rev 2')))
-  assert.equal(again.routing.cached, 1)
+  const again = compileBoard(board({}, ...parts()))
+  assert.deepEqual(again.items, first.items)
+  clean(again)
+  const edited = () => board({}, ...parts(), h('text', { layer: 'F.SilkS', at: '25 18', size: 1 }, 'rev 2'))
+  const elsewhere = compileBoard(edited())
+  const fresh = compileBoard(edited(), opts)
+  assert.deepEqual(elsewhere.items, fresh.items)
+  assert.deepEqual(elsewhere.drc, fresh.drc)
   assert.deepEqual(
-    tracks(again).map(t => t.pts),
+    tracks(elsewhere).map(t => t.pts),
     tracks(first).map(t => t.pts),
   )
-  // the key holds w and g: another gap routes again
-  const other = compileBoard(board({}, smd('X1', 10, 10, 'B', 3), pair(undefined, 0.2, 0.25)))
-  assert.equal(other.routing.cached, 0)
+  clean(elsewhere)
+  const other = compileBoard(board({}, ...parts(0.25)))
+  const freshGap = compileBoard(board({}, ...parts(0.25)), opts)
+  assert.deepEqual(other.items, freshGap.items)
+  near(
+    coupledGap(
+      pairsOf(other)[0],
+      0.25,
+      other.items.filter(i => i.kind === 'pad').map(i => i.at),
+    ).gap,
+    0.25,
+    1e-6,
+  )
+  assert.notDeepEqual(
+    tracks(other).map(t => t.pts),
+    tracks(first).map(t => t.pts),
+  )
   clean(other)
   clearRouteCache()
 })

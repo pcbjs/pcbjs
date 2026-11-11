@@ -78,8 +78,23 @@ test('browser compile: a fake worker streams every facet in stage order and the 
     assert.equal(r.check.ok, true)
     assert.deepEqual(
       r.facets.map(f => `${f.facet}@${f.stage}`),
-      ['meta@place', 'layers@place', 'shapes@place', 'model@place', 'sch@schematic', 'layers@tune', 'shapes@tune', 'layers@finish', 'shapes@finish', 'findings@checks'],
+      [
+        'meta@manual',
+        'layers@manual',
+        'shapes@manual',
+        'meta@place',
+        'model@place',
+        'sch@schematic',
+        'layers@manualCopper',
+        'shapes@manualCopper',
+        'layers@tune',
+        'shapes@tune',
+        'layers@finish',
+        'shapes@finish',
+        'findings@checks',
+      ],
     )
+    assert.ok(stages.indexOf('manual:done') < stages.indexOf('place:running'))
     assert.ok(stages.indexOf('place:done') < stages.indexOf('checks:done'))
     assert.equal(r.boards.length, 1)
     const board = JSON.parse(r.boards[0].json)

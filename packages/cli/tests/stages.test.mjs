@@ -35,6 +35,7 @@ test('plugins: the config registers before <PCB plugins>, check --verbose prints
     .filter(n => !n.includes(':'))
   assert.deepEqual(stages, [
     'evaluate',
+    'manual',
     'place',
     'schematic',
     'manualCopper',
