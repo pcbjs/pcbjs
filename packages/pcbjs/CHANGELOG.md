@@ -1,5 +1,18 @@
 # @pcbjs/pcbjs
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [[`ea71679`](https://github.com/pcbjs/pcbjs/commit/ea7167971cd85c63b373a36f5b4ac586bb11f355), [`ea71679`](https://github.com/pcbjs/pcbjs/commit/ea7167971cd85c63b373a36f5b4ac586bb11f355)]:
+  - @pcbjs/cli@0.1.2
+  - @pcbjs/skills@0.1.2
+  - @pcbjs/core@0.1.2
+  - @pcbjs/compile@0.1.2
+  - @pcbjs/export@0.1.2
+  - @pcbjs/ui@0.1.2
+  - @pcbjs/viewer@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes

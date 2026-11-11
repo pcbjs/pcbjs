@@ -1,5 +1,15 @@
 # @pcbjs/core
 
+## 0.1.2
+
+### Patch Changes
+
+- [`ea71679`](https://github.com/pcbjs/pcbjs/commit/ea7167971cd85c63b373a36f5b4ac586bb11f355) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Stream explicit placements and resolvable manual copper before solver work, then replace them with the completed geometry in the same run. Keep checks and fabrication results pending until they match the current geometry.
+  
+  Build explicit geometry through tracked immutable products, and validate reusable routing searches against their original inputs, including rejected paths and empty space. Keep coupled solver work coherent and report dependency cycles along their actual edges.
+  
+  Reject late results from superseded edits and suppress final preview updates from cancelled multi-board builds while preserving worker response decoding.
+
 ## 0.1.1
 
 ### Patch Changes

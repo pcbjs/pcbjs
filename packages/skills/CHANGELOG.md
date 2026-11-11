@@ -1,5 +1,11 @@
 # @pcbjs/skills
 
+## 0.1.2
+
+### Patch Changes
+
+- [`ea71679`](https://github.com/pcbjs/pcbjs/commit/ea7167971cd85c63b373a36f5b4ac586bb11f355) Thanks [@zhangyx1998](https://github.com/zhangyx1998)! - Remove VS Code popups for agent plans while retaining Agents activity and Send to agent. Direct MCP agents to communicate plans, progress, questions and completion through their main chat session.
+
 ## 0.1.1
 
 ### Patch Changes

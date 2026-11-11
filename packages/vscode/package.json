@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/vscode",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "displayName": "pcbjs",
   "description": "Runs the pcbjs dev server for the workspace, previews boards beside the editor, links code and board both ways, and shows the language server of the dev server: hovers, lenses, findings and inline value editors.",
@@ -44,8 +44,8 @@
     "@pcbjs/ts-plugin": "0.1.0"
   },
   "devDependencies": {
-    "@pcbjs/core": "0.1.1",
-    "@pcbjs/viewer": "0.1.0",
+    "@pcbjs/core": "0.1.2",
+    "@pcbjs/viewer": "0.1.2",
     "@types/node": "^24.0.0",
     "@types/vscode": "~1.90.0",
     "@types/ws": "^8.18.0",

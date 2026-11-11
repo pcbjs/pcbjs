@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/compile",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "pcbjs compiler: flattening, routing, length tuning, zones, connectivity, DRC and ERC.",
   "type": "module",
   "license": "MIT",
@@ -192,7 +192,7 @@
     "typescript": "~5.9.0"
   },
   "peerDependencies": {
-    "@pcbjs/core": "^0.1.1"
+    "@pcbjs/core": "^0.1.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0"

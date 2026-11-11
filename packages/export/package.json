@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/export",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "pcbjs export: Gerber, Excellon, BOM, placement, SVG, the fab set and its findings, and the site data.",
   "type": "module",
   "license": "MIT",
@@ -116,7 +116,7 @@
     "postpack": "node ../../scripts/pack-files.mjs post"
   },
   "dependencies": {
-    "@pcbjs/compile": "^0.1.1",
+    "@pcbjs/compile": "^0.1.2",
     "@pcbjs/step": "^0.1.1",
     "clipper-lib": "^6.4.2",
     "fflate": "^0.8.2",
@@ -124,7 +124,7 @@
     "three": "^0.182.0"
   },
   "peerDependencies": {
-    "@pcbjs/core": "^0.1.1"
+    "@pcbjs/core": "^0.1.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0"

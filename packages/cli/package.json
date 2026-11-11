@@ -1,6 +1,6 @@
 {
   "name": "@pcbjs/cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "pcbjs command line: check, build, dev, preview, inspect, shot, docs, ide and create, with the Vite plugin, the editor bridge and the project templates. The pcbjs bin is in @pcbjs/pcbjs.",
   "type": "module",
   "license": "MIT",
@@ -120,15 +120,15 @@
   },
   "dependencies": {
     "@jridgewell/sourcemap-codec": "^1.5.0",
-    "@pcbjs/compile": "^0.1.1",
-    "@pcbjs/export": "^0.1.1",
+    "@pcbjs/compile": "^0.1.2",
+    "@pcbjs/export": "^0.1.2",
     "@pcbjs/fab": "^0.1.1",
     "@pcbjs/kicad": "^0.1.0",
     "@pcbjs/lib": "^0.1.0",
     "@pcbjs/renderer": "^0.1.1",
     "@pcbjs/step": "^0.1.1",
-    "@pcbjs/ui": "^0.1.1",
-    "@pcbjs/viewer": "^0.1.0",
+    "@pcbjs/ui": "^0.1.2",
+    "@pcbjs/viewer": "^0.1.2",
     "@vitejs/plugin-vue": "^6.0.0",
     "cac": "^7.0.0",
     "esbuild": "^0.28.0",
@@ -141,7 +141,7 @@
     "ws": "^8.18.0"
   },
   "peerDependencies": {
-    "@pcbjs/core": "^0.1.1",
+    "@pcbjs/core": "^0.1.2",
     "@pcbjs/lsp": "^0.1.1"
   },
   "peerDependenciesMeta": {
